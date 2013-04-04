@@ -18,51 +18,103 @@
 
 #pragma warning(disable : 4512)		//assignment op could not be genereated
 
-class CConstructBoneList
+class CQuickOverride
 {
+	int mOverride[512];
+	int mAt[512];
+	int mCurrentTouch;
 public:
-	int				surfaceNum;
-	int				*boneUsedList;
-	const surfaceInfo_v	&rootSList;
-	const model_t	*currentModel;
-	const boneInfo_v		&boneList; 
-
-	CConstructBoneList(
-		int				initsurfaceNum,
-		int				*initboneUsedList,
-		const surfaceInfo_v	&initrootSList,
-		const model_t	*initcurrentModel,
-		const boneInfo_v		&initboneList):
-
-	surfaceNum(initsurfaceNum),
-	boneUsedList(initboneUsedList),
-	rootSList(initrootSList),
-	currentModel(initcurrentModel),
-	boneList(initboneList) { }
-};
-
-extern void G2_ConstructUsedBoneList(CConstructBoneList &CBL);
-
-
-//=====================================================================================================================
-// Surface List handling routines - so entities can determine what surfaces attached to a model are operational or not.
-
-// find a particular surface in the surface override list
-const surfaceInfo_t *G2_FindOverrideSurface(int surfaceNum, const surfaceInfo_v &surfaceList)
-{
-	int i; 
-	
-	// look through entire list
-	for(i=0; i<surfaceList.size(); i++)
+	CQuickOverride()
 	{
-		if (surfaceList[i].surface == surfaceNum)
+		mCurrentTouch=1;
+		int i;
+		for (i=0;i<512;i++)
 		{
-			return &surfaceList[i];
+			mOverride[i]=0;
 		}
 	}
-	// didn't find it.
-	return NULL;
+	void Invalidate()
+	{
+		mCurrentTouch++;
+	}
+	void Set(int index,int pos)
+	{
+		if (index==10000)
+		{
+			return;
+		}
+		assert(index>=0&&index<512);
+		mOverride[index]=mCurrentTouch;
+		mAt[index]=pos;
+	}
+	int Test(int index)
+	{
+		assert(index>=0&&index<512);
+		if (mOverride[index]!=mCurrentTouch)
+		{
+			return -1;
+		}
+		else
+		{
+			return mAt[index];
+		}
+	}
+};
+
+static CQuickOverride QuickOverride;
+
+
+// find a particular surface in the surface override list
+const surfaceInfo_t *G2_FindOverrideSurface(int surfaceNum,const surfaceInfo_v &surfaceList)
+{
+	
+	if (surfaceNum<0)
+	{
+		// starting a new lookup
+		QuickOverride.Invalidate();
+		int i; 
+		for(i=0; i<surfaceList.size(); i++)
+		{
+			if (surfaceList[i].surface>=0)
+			{
+				QuickOverride.Set(surfaceList[i].surface,i);
+			}
+		}
+		return NULL;
+	}
+	int idx=QuickOverride.Test(surfaceNum);
+	if (idx<0)
+	{
+		int i; 
+		if (surfaceNum==10000)
+		{
+			for(i=0; i<surfaceList.size(); i++)
+			{
+				if (surfaceList[i].surface == surfaceNum)
+				{
+					return &surfaceList[i];
+				}
+			}
+		}
+#if _DEBUG
+		// look through entire list
+		for(i=0; i<surfaceList.size(); i++)
+		{
+			if (surfaceList[i].surface == surfaceNum)
+			{
+				break;
+			}
+		}
+		// didn't find it.
+		assert(i==surfaceList.size()); // our quickoverride is not working right
+#endif
+		return NULL;
+	}
+	assert(idx>=0&&idx<surfaceList.size());
+	assert(surfaceList[idx].surface == surfaceNum);
+	return &surfaceList[idx];
 }
+
 
 // given a surface name, lets see if it's legal in the model
 int G2_IsSurfaceLegal(const void *mod, const char *surfaceName, int *flags)
@@ -302,11 +354,10 @@ void G2_RemoveRedundantGeneratedSurfaces(surfaceInfo_v &slist, int *activeSurfac
 
 qboolean G2_SetRootSurface( CGhoul2Info_v &ghoul2, const int modelIndex, const char *fileName, const char *surfaceName)
 {
-	const model_t		*mod_m = R_GetModelByHandle(RE_RegisterModel(fileName));
-	const model_t		*mod_a = R_GetModelByHandle(mod_m->mdxm->animIndex); 
+	model_t				*mod_m = R_GetModelByHandle(RE_RegisterModel(fileName));
 	int					surf;
 	int					flags;
-	int					*activeSurfaces, *activeBones;
+	int					*activeSurfaces;
 
 	// did we find a ghoul 2 model or not?
 	if (!mod_m->mdxm)
@@ -331,53 +382,18 @@ qboolean G2_SetRootSurface( CGhoul2Info_v &ghoul2, const int modelIndex, const c
 		// firstly, generate a list of active / on surfaces below the root point
 
 		// gimme some space to put this list into
-		activeSurfaces = (int *)Z_Malloc(mod_m->mdxm->numSurfaces * 4, TAG_GHOUL2, qfalse);
+		activeSurfaces = (int *)Z_Malloc(mod_m->mdxm->numSurfaces * 4, TAG_GHOUL2,qfalse);
 		memset(activeSurfaces, 0, (mod_m->mdxm->numSurfaces * 4));
-		activeBones = (int *)Z_Malloc(mod_a->mdxa->numBones * 4, TAG_GHOUL2, qfalse);
-		memset(activeBones, 0, (mod_a->mdxa->numBones * 4));
+
+		G2_FindOverrideSurface(-1,ghoul2[modelIndex].mSlist); //reset the quick surface override lookup;
 
 		G2_FindRecursiveSurface(mod_m, surf, ghoul2[modelIndex].mSlist, activeSurfaces);
-
-		// now generate the used bone list
-		CConstructBoneList	CBL(ghoul2[modelIndex].mSurfaceRoot, 
-							activeBones,
-							ghoul2[modelIndex].mSlist,
-							mod_m,
-							ghoul2[modelIndex].mBlist);
-
-		G2_ConstructUsedBoneList(CBL);
 
 		// now remove all procedural or override surfaces that refer to surfaces that arent on this list
 		G2_RemoveRedundantGeneratedSurfaces(ghoul2[modelIndex].mSlist, activeSurfaces);
 
-		// now remove all bones that are pointing at bones that aren't active
-		G2_RemoveRedundantBoneOverrides(ghoul2[modelIndex].mBlist, activeBones);
-
-		// then remove all bolts that point at surfaces or bones that *arent* active.
-		G2_RemoveRedundantBolts(ghoul2[modelIndex].mBltlist, ghoul2[modelIndex].mSlist, activeSurfaces, activeBones);
-
-		// then remove all models on this ghoul2 instance that use those bolts that are being removed.
-		for (int i=0; i<ghoul2.size(); i++)
-		{
-			// are we even bolted to anything?
-			if (ghoul2[i].mModelBoltLink != -1)
-			{
-				int	boltMod = (ghoul2[i].mModelBoltLink >> MODEL_SHIFT) & MODEL_AND;
-				int	boltNum = (ghoul2[i].mModelBoltLink >> BOLT_SHIFT) & BOLT_AND;
-				// if either the bolt list is too small, or the bolt we are pointing at references nothing, remove this model
-				if ((ghoul2[boltMod].mBltlist.size() <= boltNum) || 
-					((ghoul2[boltMod].mBltlist[boltNum].boneNumber == -1) && 
-					 (ghoul2[boltMod].mBltlist[boltNum].surfaceNumber == -1)))
-				{
-					G2API_RemoveGhoul2Model(ghoul2, i);
-				}
-			}
-		}
-
 		// remember to free what we used
 		Z_Free(activeSurfaces);
-		Z_Free(activeBones);
-
 		return (qtrue);
 	}
 	assert(0);

@@ -10,7 +10,7 @@
 
 // Open AL
 void S_PreProcessLipSync(sfx_t *sfx);
-
+extern int s_UseOpenAL;
 /*
 ===============================================================================
 
@@ -748,7 +748,7 @@ static qboolean S_LoadSound_Actual( sfx_t *sfx )
 			{
 //				Com_DPrintf("(Keeping file \"%s\" as MP3)\n",sLoadName);
 
-				if (extern s_UseOpenAL)
+				if (s_UseOpenAL)
 				{
 					// Create space for lipsync data (4 lip sync values per streaming AL buffer)
 					if (strstr(sfx->sSoundName, "chars"))
@@ -790,7 +790,7 @@ static qboolean S_LoadSound_Actual( sfx_t *sfx )
 						S_LoadSound_Finalize(&info,sfx,pbUnpackBuffer);
 
 						// Open AL
-						if (extern s_UseOpenAL)
+						if (s_UseOpenAL)
 						{
 							if (strstr(sfx->sSoundName, "chars"))
 							{
@@ -860,7 +860,7 @@ static qboolean S_LoadSound_Actual( sfx_t *sfx )
 		ResampleSfx( sfx, info.rate, info.width, data + info.dataofs );
 
 		// Open AL
-		if (extern s_UseOpenAL)
+		if (s_UseOpenAL)
 		{
 			if (strstr(sfx->sSoundName, "char"))
 			{

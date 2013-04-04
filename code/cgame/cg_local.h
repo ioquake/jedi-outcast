@@ -250,13 +250,23 @@ typedef struct {
 } powerupInfo_t;
 
 
+#define	CG_OVERRIDE_3RD_PERSON_ENT	0x00000001
+#define	CG_OVERRIDE_3RD_PERSON_RNG	0x00000002
+#define	CG_OVERRIDE_3RD_PERSON_ANG	0x00000004
+#define	CG_OVERRIDE_3RD_PERSON_VOF	0x00000008
+#define	CG_OVERRIDE_3RD_PERSON_POF	0x00000010
+#define	CG_OVERRIDE_3RD_PERSON_CDP	0x00000020
+#define	CG_OVERRIDE_FOV				0x00000040
+
 typedef struct {
 	//NOTE: these probably get cleared in save/load!!!
+	int				active;	//bit-flag field of which overrides are active
 	int				thirdPersonEntity;	//who to center on
 	float			thirdPersonRange;	//how far to be from them
 	float			thirdPersonAngle;	//what angle to look at them from
 	float			thirdPersonVertOffset;	//how high to be above them
 	float			thirdPersonPitchOffset;	//what offset pitch to apply the the camera view
+	float			thirdPersonCameraDamp;	//how tightly to move the camera pos behind the player
 	float			fov;				//what fov to use
 	//NOTE: could put Alpha and HorzOffset and the target & camera damps, but no-one is trying to override those, so...
 } overrides_t;
@@ -1099,7 +1109,7 @@ void CG_CreateBBRefEnts(entityState_t *s1, vec3_t origin );
 /*
 Ghoul2 Insert End
 */
-
+void	trap_Com_SetOrgAngles(vec3_t org,vec3_t angles);
 void	trap_R_GetLightStyle(int style, color4ub_t color);
 void	trap_R_SetLightStyle(int style, int color);
 

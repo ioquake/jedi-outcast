@@ -23,6 +23,7 @@ cvar_t	*cl_maxpackets;
 cvar_t	*cl_packetdup;
 cvar_t	*cl_timeNudge;
 cvar_t	*cl_showTimeDelta;
+cvar_t	*cl_newClock=0;
 
 cvar_t	*cl_shownet;
 cvar_t	*cl_avidemo;
@@ -39,6 +40,7 @@ cvar_t	*cl_showMouseRate;
 cvar_t  *cl_VideoQuality;
 cvar_t	*cl_VidFadeUp;	// deliberately kept as "Vid" rather than "Video" so tab-matching matches only VideoQuality
 cvar_t	*cl_VidFadeDown;
+cvar_t	*cl_framerate;
 
 cvar_t	*m_pitch;
 cvar_t	*m_pitchOverride;
@@ -427,9 +429,6 @@ void CL_Snd_Restart_f( void ) {
 
 	S_Init();
 
-	S_FreeAllSFXMem();
-	S_UnCacheDynamicMusic();
-
 //	CL_Vid_Restart_f();
 
 	extern qboolean	s_soundMuted;
@@ -758,7 +757,10 @@ CL_Frame
 
 ==================
 */
-void CL_Frame ( int msec ) {
+extern cvar_t	*cl_newClock;
+static unsigned int frameCount;
+float avgFrametime=0.0;
+void CL_Frame ( int msec,float fractionMsec ) {
 	if ( !com_cl_running->integer ) {
 		return;
 	}
@@ -798,7 +800,30 @@ void CL_Frame ( int msec ) {
 
 	// decide the simulation time
 	cls.frametime = msec;
+	if(cl_framerate->integer)
+	{
+		avgFrametime+=msec;
+		char mess[256];
+		if(!(frameCount&0x1f))
+		{
+			sprintf(mess,"Frame rate=%f\n\n",1000.0f*(1.0/(avgFrametime/32.0f)));
+	//		OutputDebugString(mess);
+			Com_Printf(mess);
+			avgFrametime=0.0f;
+		}
+		frameCount++;
+	}
+	cls.frametimeFraction=fractionMsec;
 	cls.realtime += msec;
+	cls.realtimeFraction+=fractionMsec;
+	if (cls.realtimeFraction>=1.0f)
+	{
+		if (cl_newClock&&cl_newClock->integer)
+		{
+			cls.realtime++;
+		}
+		cls.realtimeFraction-=1.0f;
+	}
 	if ( cl_timegraph->integer ) {
 		SCR_DebugGraph ( cls.realFrametime * 0.25, 0 );
 	}
@@ -1044,6 +1069,7 @@ void CL_Init( void ) {
 	cls.state = CA_DISCONNECTED;	// no longer CA_UNINITIALIZED
 	cls.keyCatchers = KEYCATCH_CONSOLE;
 	cls.realtime = 0;
+	cls.realtimeFraction=0.0f;	// fraction of a msec accumulated
 
 	CL_InitInput ();
 
@@ -1057,6 +1083,7 @@ void CL_Init( void ) {
 	cl_timeNudge = Cvar_Get ("cl_timeNudge", "0", CVAR_TEMP );
 	cl_shownet = Cvar_Get ("cl_shownet", "0", CVAR_TEMP );
 	cl_showTimeDelta = Cvar_Get ("cl_showTimeDelta", "0", CVAR_TEMP );
+	cl_newClock = Cvar_Get ("cl_newClock", "1", 0);
 	cl_activeAction = Cvar_Get( "activeAction", "", CVAR_TEMP );
 	
 	cl_avidemo = Cvar_Get ("cl_avidemo", "0", 0);
@@ -1082,6 +1109,7 @@ void CL_Init( void ) {
 	cl_VideoQuality = Cvar_Get ("cl_VideoQuality", "0", CVAR_ARCHIVE);
 	cl_VidFadeUp	= Cvar_Get ("cl_VidFadeUp", "1", CVAR_TEMP);
 	cl_VidFadeDown	= Cvar_Get ("cl_VidFadeDown", "1", CVAR_TEMP);
+	cl_framerate	= Cvar_Get ("cl_framerate", "0", CVAR_TEMP);
 
 	// init autoswitch so the ui will have it correctly even
 	// if the cgame hasn't been started
@@ -1116,7 +1144,7 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("cinematic", CL_PlayCinematic_f);
 	Cmd_AddCommand ("ingamecinematic", CL_PlayInGameCinematic_f);
 	Cmd_AddCommand ("setenv", CL_Setenv_f );
-	Cmd_AddCommand ("genericmenu", CL_GenericMenu_f);
+	Cmd_AddCommand ("uimenu", CL_GenericMenu_f);
 	Cmd_AddCommand ("datapad", CL_DataPad_f);
 	Cmd_AddCommand ("endscreendissolve", CL_EndScreenDissolve_f);
 

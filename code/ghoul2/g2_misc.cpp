@@ -27,6 +27,8 @@
 extern mdxaBone_t		worldMatrix;
 extern mdxaBone_t		worldMatrixInv;
 
+const mdxaBone_t &EvalBoneCache(int index,CBoneCache *boneCache);
+
 #pragma warning(disable : 4512)		//assignment op could not be genereated
 class CTraceSurface
 {
@@ -203,7 +205,8 @@ int G2_DecideTraceLod(CGhoul2Info &ghoul2, int useLod, const model_t *mod)
 	return returnLod;
 }
 
-void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHeap *G2VertSpace, int *TransformedVertsArray, mdxaBone_v &bonePtr) {
+void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHeap *G2VertSpace, int *TransformedVertsArray,CBoneCache *boneCache) 
+{
 	int				 j, k;
 	mdxmVertex_t 	*v;
 	float			*TransformedVerts;
@@ -211,6 +214,7 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 	//
 	// deform the vertexes by the lerped bones
 	//
+	int *piBoneReferences = (int*) ((byte*)surface + surface->ofsBoneReferences);
    
 	// alloc some space for the transformed verts to get put in
 	TransformedVerts = (float *)G2VertSpace->MiniHeapAlloc(surface->numVerts * 5 * 4);
@@ -221,7 +225,6 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 	}
 
 	// whip through and actually transform each vertex
-	const int *piBoneRefs = (int*) ((byte*)surface + surface->ofsBoneReferences);		
 	const int numVerts = surface->numVerts;
 	v = (mdxmVertex_t *) ((byte *)surface + surface->ofsVerts);
 	// optimisation issue
@@ -237,15 +240,15 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 			w = v->weights;
 			for ( k = 0 ; k < v->numWeights ; k++, w++ ) 
 			{
-				//bone = bonePtr + piBoneRefs[w->boneIndex];
+				const mdxaBone_t &bone=EvalBoneCache(piBoneReferences[w->boneIndex],boneCache);
 
-				tempVert[0] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[0][3] );
-				tempVert[1] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[1][3] );
-				tempVert[2] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[2][3] );
+				tempVert[0] += w->boneWeight * ( DotProduct( bone.matrix[0], v->vertCoords ) + bone.matrix[0][3] );
+				tempVert[1] += w->boneWeight * ( DotProduct( bone.matrix[1], v->vertCoords ) + bone.matrix[1][3] );
+				tempVert[2] += w->boneWeight * ( DotProduct( bone.matrix[2], v->vertCoords ) + bone.matrix[2][3] );
 
-				tempNormal[0] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[0], v->normal );
-				tempNormal[1] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[1], v->normal );
-				tempNormal[2] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[2], v->normal );
+				tempNormal[0] += w->boneWeight * DotProduct( bone.matrix[0], v->normal );
+				tempNormal[1] += w->boneWeight * DotProduct( bone.matrix[1], v->normal );
+				tempNormal[2] += w->boneWeight * DotProduct( bone.matrix[2], v->normal );
 			}
 			int pos = j * 5;
 
@@ -273,15 +276,15 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 			w = v->weights;
 			for ( k = 0 ; k < v->numWeights ; k++, w++ ) 
 			{
-				//bone = bonePtr + piBoneRefs[w->boneIndex];
+				const mdxaBone_t &bone=EvalBoneCache(piBoneReferences[w->boneIndex],boneCache);
 
-				tempVert[0] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[0][3] );
-				tempVert[1] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[1][3] );
-				tempVert[2] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[2][3] );
+				tempVert[0] += w->boneWeight * ( DotProduct( bone.matrix[0], v->vertCoords ) + bone.matrix[0][3] );
+				tempVert[1] += w->boneWeight * ( DotProduct( bone.matrix[1], v->vertCoords ) + bone.matrix[1][3] );
+				tempVert[2] += w->boneWeight * ( DotProduct( bone.matrix[2], v->vertCoords ) + bone.matrix[2][3] );
 
-				tempNormal[0] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[0], v->normal );
-				tempNormal[1] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[1], v->normal );
-				tempNormal[2] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[2], v->normal );
+				tempNormal[0] += w->boneWeight * DotProduct( bone.matrix[0], v->normal );
+				tempNormal[1] += w->boneWeight * DotProduct( bone.matrix[1], v->normal );
+				tempNormal[2] += w->boneWeight * DotProduct( bone.matrix[2], v->normal );
 			}
 
 			// copy tranformed verts into temp space
@@ -298,7 +301,7 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 }
 
 void G2_TransformSurfaces(int surfaceNum, surfaceInfo_v &rootSList, 
-					mdxaBone_v &bonePtr, const model_t *currentModel, int lod, vec3_t scale, CMiniHeap *G2VertSpace, int *TransformedVertArray, bool secondTimeAround)
+					CBoneCache *boneCache, const model_t *currentModel, int lod, vec3_t scale, CMiniHeap *G2VertSpace, int *TransformedVertArray, bool secondTimeAround)
 {
 	int	i;
 	// back track and get the surfinfo struct for this surface
@@ -320,7 +323,7 @@ void G2_TransformSurfaces(int surfaceNum, surfaceInfo_v &rootSList,
 	if (!offFlags)
 	{
 
-		R_TransformEachSurface(surface, scale, G2VertSpace, TransformedVertArray, bonePtr);
+		R_TransformEachSurface(surface, scale, G2VertSpace, TransformedVertArray, boneCache);
 	}
 
 	// if we are turning off all descendants, then stop this recursion now
@@ -332,7 +335,7 @@ void G2_TransformSurfaces(int surfaceNum, surfaceInfo_v &rootSList,
 	// now recursively call for the children
 	for (i=0; i< surfInfo->numChildren; i++)
 	{
-		G2_TransformSurfaces(surfInfo->childIndexes[i], rootSList, bonePtr, currentModel, lod, scale, G2VertSpace, TransformedVertArray, secondTimeAround);
+		G2_TransformSurfaces(surfInfo->childIndexes[i], rootSList, boneCache, currentModel, lod, scale, G2VertSpace, TransformedVertArray, secondTimeAround);
 	}
 }
 
@@ -388,8 +391,9 @@ void G2_TransformModel(CGhoul2Info_v &ghoul2, const int frameNum, vec3_t scale, 
 		// did we get enough space?
 		assert(ghoul2[i].mTransformedVertsArray);
 
+		G2_FindOverrideSurface(-1,ghoul2[i].mSlist); //reset the quick surface override lookup;
 		// recursively call the model surface transform
-		G2_TransformSurfaces(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist, ghoul2[i].mTempBoneList,  currentModel, lod, correctScale, G2VertSpace, ghoul2[i].mTransformedVertsArray, false);
+		G2_TransformSurfaces(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist, ghoul2[i].mBoneCache,  currentModel, lod, correctScale, G2VertSpace, ghoul2[i].mTransformedVertsArray, false);
 	}
 }
 
@@ -964,6 +968,9 @@ void G2_TraceModels(CGhoul2Info_v &ghoul2, vec3_t rayStart, vec3_t rayEnd, CColl
 
 		lod = G2_DecideTraceLod(ghoul2[i],useLod, currentModel);
 
+		//reset the quick surface override lookup
+		G2_FindOverrideSurface(-1, ghoul2[i].mSlist); 
+
 		CTraceSurface TS(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist,  currentModel, lod, rayStart, rayEnd, collRecMap, entNum, i, skin, cust_shader, ghoul2[i].mTransformedVertsArray, eG2TraceType, fRadius);
 		// start the surface recursion loop
 		G2_TraceSurfaces(TS);
@@ -1062,6 +1069,7 @@ void *G2_FindSurface(const void *mod_t, int index, int lod)
 	int i;
 
 	//walk the lods
+	assert(lod>=0&&lod<mod->mdxm->numLODs);
 	for (i=0; i<lod; i++)
 	{
 		mdxmLOD_t *lodData = (mdxmLOD_t *)current;
@@ -1073,13 +1081,14 @@ void *G2_FindSurface(const void *mod_t, int index, int lod)
 
 	mdxmLODSurfOffset_t *indexes = (mdxmLODSurfOffset_t *)current;
 	// we are now looking at the offset array
+	assert(index>=0&&index<mod->mdxm->numSurfaces);
 	current += indexes->offsets[index];
 
 	return (void *)current;
 }
 
 #define SURFACE_SAVE_BLOCK_SIZE	sizeof(surfaceInfo_t)
-#define BOLT_SAVE_BLOCK_SIZE (sizeof(boltInfo_t) - sizeof(mdxaBone_t))
+#define BOLT_SAVE_BLOCK_SIZE sizeof(boltInfo_t)
 #define BONE_SAVE_BLOCK_SIZE sizeof(boneInfo_t)
 
 qboolean G2_SaveGhoul2Models(CGhoul2Info_v &ghoul2, char **buffer, int *size)
@@ -1263,5 +1272,6 @@ void G2_LoadGhoul2Model(CGhoul2Info_v &ghoul2, char *buffer)
 			memcpy(&ghoul2[i].mBltlist[x], buffer, BOLT_SAVE_BLOCK_SIZE);
 			buffer += BOLT_SAVE_BLOCK_SIZE;
 		}
+		ghoul2[i].mSkelFrameNum = 0;
 	}
 }

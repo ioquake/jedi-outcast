@@ -7,7 +7,7 @@
 #define	MAX_ENTITIES	1023		// can't be increased without changing drawsurf bit packing
 
 // renderfx flags
-#define	RF_MINLIGHT			0x00001	// allways have some light (viewmodel, some items)
+#define	RF_MORELIGHT		0x00001	// allways have some light (viewmodel, some items)
 #define	RF_THIRD_PERSON		0x00002	// don't draw through eyes, only mirrors (player bodies, chat sprites)
 #define	RF_FIRST_PERSON		0x00004	// only draw through eyes (view weapon, damage blood blob)
 #define	RF_DEPTHHACK		0x00008	// for view weapon Z crunching

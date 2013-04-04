@@ -11,6 +11,7 @@
 
 #define GLYPH_MAX_KOREAN_SHADERS 3
 #define GLYPH_MAX_TAIWANESE_SHADERS 4
+#define GLYPH_MAX_JAPANESE_SHADERS 3
 #define GLYPH_MAX_ASIAN_SHADERS 4	// this MUST equal the larger of the above defines
 
 class CFontInfo

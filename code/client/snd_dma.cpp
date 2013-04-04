@@ -42,7 +42,6 @@ typedef struct
 	sfx_t		sfxMP3_Bgrnd;
 	MP3STREAM	streamMP3_Bgrnd;	// this one is pointed at by the sfx_t's ptr, and is NOT the one the decoder uses every cycle
 	channel_t	chMP3_Bgrnd;		// ... but the one in this struct IS.	
-	MP3STREAM*	pFrozenMP3;
 	//
 	// MP3 disk streamer stuff... (if music is non-dynamic)
 	//
@@ -234,6 +233,12 @@ void UpdateEAXListener(bool bUseDefault, bool bUseMorphing);
 void UpdateEAXBuffer(channel_t *ch);
 void EALFileInit(char *level);
 void EAXMorph();
+void Clamp(EAXVECTOR *eaxVector);
+bool CheckEAX3LP(LPEAXLISTENERPROPERTIES lpEAX3LP);
+bool EAX3ListenerInterpolate(EAXLISTENERPROPERTIES *lpStartEAX3LP, EAXLISTENERPROPERTIES *lpFinishEAX3LP,
+			float flRatio, EAXLISTENERPROPERTIES *lpResultEAX3LP, bool bCheckValues = false);
+
+
 
 // EAX 3.0 GUIDS ... confidential information ...
 
@@ -249,6 +254,18 @@ const GUID DSPROPSETID_EAX30_BufferProperties
 *
 \**************************************************************************************************/
 
+// instead of clearing a whole channel_t struct, we're going to skip the MP3SlidingDecodeBuffer[] buffer in the middle...
+//
+static inline void Channel_Clear(channel_t *ch)
+{
+	// memset (ch, 0, sizeof(*ch));
+
+	memset(ch,0,offsetof(channel_t,MP3SlidingDecodeBuffer));
+
+	byte *const p = (byte *)ch + offsetof(channel_t,MP3SlidingDecodeBuffer) + sizeof(ch->MP3SlidingDecodeBuffer);
+
+	memset(p,0,(sizeof(*ch) - offsetof(channel_t,MP3SlidingDecodeBuffer)) - sizeof(ch->MP3SlidingDecodeBuffer));
+}
 
 // ====================================================================
 // User-setable variables
@@ -459,15 +476,23 @@ void S_Init( void ) {
 		// clear out the lip synching override array
 		memset(s_entityWavVol, 0, sizeof(s_entityWavVol));
 
-
+/*
 		if (s_khz->integer == 44)
 			dma.speed = 44100;
 		else if (s_khz->integer == 22)
 			dma.speed = 22050;
 		else
 			dma.speed = 11025;
+*/
+		// Always at 22KHz for OpenAL
+		dma.speed = 22050;
 
-		return;
+		// These aren't really relevant for Open AL, but for completeness ...
+		dma.channels = 2;
+		dma.samplebits = 16;
+		dma.samples = 0;
+		dma.submission_chunk = 0;
+		dma.buffer = NULL;			 
 	}
 	else
 	{
@@ -510,6 +535,9 @@ void S_Shutdown( void )
 		return;
 	}
 
+	S_FreeAllSFXMem();
+	S_UnCacheDynamicMusic();
+
 	if (s_UseOpenAL)
 	{
 		// Release all the AL Sources (including Music channel (Source 0))
@@ -517,9 +545,6 @@ void S_Shutdown( void )
 		{
 			alDeleteSources(1, &(s_channels[i].alSource));
 		}
-
-//		// Release all the AL Buffers here or not ?
-//		S_FreeAllSFXMem();
 
 		// Release Streaming AL Buffers
 		ch = s_channels + 1;
@@ -568,6 +593,32 @@ void S_Shutdown( void )
 	Cmd_RemoveCommand("s_dynamic");
 	AS_Free();
 }
+
+
+
+/*
+	Mutes / Unmutes all OpenAL sound
+*/
+void S_AL_MuteAllSounds(qboolean bMute)
+{
+     if (!s_soundStarted)
+          return;
+
+     if (!s_UseOpenAL)
+          return;
+
+     if (bMute)
+     {
+          alListenerf(AL_GAIN, 0.0f);
+     }
+     else
+     {
+          alListenerf(AL_GAIN, 1.0f);
+     }
+}
+
+
+
 
 
 // =======================================================================
@@ -950,7 +1001,7 @@ channel_t *S_PickChannel(int entnum, int entchannel)
 		Com_Printf( S_COLOR_RED"***kicking %s\n", firstToDie->thesfx->sSoundName );
 	}
 
-	memset(firstToDie, 0, sizeof(*firstToDie));
+	Channel_Clear(firstToDie);	// memset(firstToDie, 0, sizeof(*firstToDie));
     
 	return firstToDie;
 }
@@ -1096,7 +1147,7 @@ void S_SpatializeOrigin (const vec3_t origin, float master_vol, int *left_vol, i
 	dist = VectorNormalize(source_vec);
 	if ( channel == CHAN_VOICE )
 	{
-		dist -= SOUND_FULLVOLUME * 4.0f;
+		dist -= SOUND_FULLVOLUME * 3.0f;
 	}
 	else if ( channel == CHAN_VOICE_ATTEN )
 	{
@@ -1371,15 +1422,18 @@ void S_ClearSoundBuffer( void ) {
 #endif
 	s_rawend = 0;
 
-	if (dma.samplebits == 8)
-		clear = 0x80;
-	else
-		clear = 0;
+	if (!s_UseOpenAL)
+	{
+		if (dma.samplebits == 8)
+			clear = 0x80;
+		else
+			clear = 0;
 
-	SNDDMA_BeginPainting ();
-	if (dma.buffer)
-		memset(dma.buffer, clear, dma.samples * dma.samplebits/8);
-	SNDDMA_Submit ();
+		SNDDMA_BeginPainting ();
+		if (dma.buffer)
+			memset(dma.buffer, clear, dma.samples * dma.samplebits/8);
+		SNDDMA_Submit ();
+	}
 }
 
 
@@ -1904,10 +1958,8 @@ void S_UpdateEntityPosition( int entityNum, const vec3_t origin )
 			}
 		}
 	}
-	else
-	{
-		VectorCopy( origin, s_entityPosition[entityNum] );
-	}
+
+	VectorCopy( origin, s_entityPosition[entityNum] );
 }
 
 
@@ -2143,7 +2195,7 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], qboolean 
 				continue;
 			}
 			if ( ch->loopSound ) {	// loopSounds are regenerated fresh each frame
-				memset (ch, 0, sizeof(*ch));
+				Channel_Clear(ch);	// memset (ch, 0, sizeof(*ch));
 				continue;
 			}
 
@@ -2164,7 +2216,7 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], qboolean 
 			//NOTE: Made it so that voice sounds keep playing, even out of range
 			//		so that tasks waiting for sound completion keep proper timing
 			if ( !( ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL ) && !ch->leftvol && !ch->rightvol ) {
-				memset (ch, 0, sizeof(*ch));
+				Channel_Clear(ch);	// memset (ch, 0, sizeof(*ch));
 				continue;
 			}
 		}
@@ -2372,8 +2424,8 @@ void S_Update_(void) {
 
 		ch = s_channels;
 		for ( i = 0; i < MAX_CHANNELS ; i++, ch++ )
-		{		
-			if ( !ch->thesfx || (ch->leftvol<0.25 && ch->rightvol<0.25 ) || (ch->bPlaying))
+		{	
+			if ( !ch->thesfx || (ch->bPlaying))
 				continue;
 	
 //			if ( ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL )
@@ -2837,12 +2889,6 @@ void UpdateLoopingSounds()
 					ch->master_vol = loop->volume;
 					alSourcef(s_channels[i].alSource, AL_GAIN, (float)(ch->master_vol) / 255.f);
 
-//#ifdef _DEBUG
-//			char szString[256];
-//			sprintf(szString, "Updating position of Looping %s on channel %d to %.3f, %.3f, %.3f\n", ch->thesfx->sSoundName, i, pos[0], pos[1], pos[2]);
-//			OutputDebugString(szString);
-//#endif
-
 					if (s_bEALFileLoaded)
 						UpdateEAXBuffer(ch);
 
@@ -2868,12 +2914,6 @@ void UpdateLoopingSounds()
 				sprintf(szString, "OAL Error - S_Update - failed to stop looping sound on Source %d\n", i);
 				OutputDebugString(szString);
 			}
-
-//#ifdef _DEBUG
-//			char szString[256];
-//			sprintf(szString, "Stopped looping %s on channel %d\n", ch->thesfx->sSoundName, i);
-//			OutputDebugString(szString);
-//#endif
 
 			ch->thesfx = NULL;
 			ch->bPlaying = false;
@@ -2934,12 +2974,6 @@ void UpdateLoopingSounds()
 			alSourcePlay(s_channels[source].alSource);
 			if (alGetError() == AL_NO_ERROR)
 				s_channels[source].bPlaying = true;
-
-//#ifdef _DEBUG
-//			char szString[256];
-//			sprintf(szString, "Looping %s on channel %d at %.3f, %.3f, %.3f\n", ch->thesfx->sSoundName, source, pos[0], pos[1], pos[2]);
-//			OutputDebugString(szString);
-//#endif
 		}
 	}
 }
@@ -3039,9 +3073,24 @@ void UpdateRawSamples()
 		alGetSourcei(s_channels[0].alSource, AL_SOURCE_STATE, &state);
 		if (state != AL_PLAYING)
 		{
-//#ifdef _DEBUG
-//			OutputDebugString("Restarting / Starting playback of Raw Samples\n");
-//#endif
+			// Stopped playing ... due to buffer underrun
+			// Unqueue any buffers still on the Source (they will be PROCESSED), and restart playback
+			alGetSourcei(s_channels[0].alSource, AL_BUFFERS_PROCESSED, &processed);
+			while (processed)
+			{
+				alSourceUnqueueBuffers(s_channels[0].alSource, 1, &buffer);
+				processed--;
+				alGetBufferi(buffer, AL_SIZE, &size);
+				alDeleteBuffers(1, &buffer);
+		
+				// Update sg.soundtime (+= number of samples played (number of bytes / 4))
+				s_soundtime += (size >> 2);
+			}
+
+#ifdef _DEBUG
+			OutputDebugString("Restarting / Starting playback of Raw Samples\n");
+#endif
+
 			alSourcePlay(s_channels[0].alSource);
 		}
 	}
@@ -3291,9 +3340,15 @@ void S_SoundList_f( void ) {
 	int		iTotalBytes = 0;
 
 	qboolean bWavOnly = qfalse;
+	qboolean bShouldBeMP3 = qfalse;
 
 	if ( Cmd_Argc() == 2 ) 
 	{
+		if (!stricmp(Cmd_Argv(1), "shouldbeMP3"))
+		{
+			bShouldBeMP3 = qtrue;
+		}
+		else
 		if (!stricmp(Cmd_Argv(1), "wavonly"))
 		{
 			bWavOnly = qtrue;
@@ -3318,7 +3373,7 @@ void S_SoundList_f( void ) {
 	}
 	else
 	{
-		Com_Printf("( additional option available: 'wavonly', or '1'/'2'/'3' for %%d-variant capping )\n" );
+		Com_Printf("( additional (mutually exclusive) options available:\n'wavonly', 'ShouldBeMP3', '1'/'2'/'3' for %%d-variant capping )\n" );
 	}
 
 
@@ -3336,7 +3391,10 @@ void S_SoundList_f( void ) {
 
 	for (sfx=s_knownSfx, i=0 ; i<s_numSfx ; i++, sfx++) 
 	{
-		if (!bWavOnly || sfx->eSoundCompressionMethod == ct_16)
+		extern cvar_t *cv_MP3overhead;
+		qboolean bMP3DumpOverride = bShouldBeMP3 && cv_MP3overhead && !sfx->bDefaultSound && !sfx->pMP3StreamHeader && sfx->pSoundData && (Z_Size(sfx->pSoundData) > cv_MP3overhead->integer);
+
+		if (bMP3DumpOverride || (!bShouldBeMP3 && (!bWavOnly || sfx->eSoundCompressionMethod == ct_16)))
 		{
 			qboolean bDumpThisOne = qtrue;
 			if (iVariantCap >= 1 && iVariantCap <= 3)
@@ -3538,7 +3596,7 @@ static void FreeMusic( MusicInfo_t *pMusicInfo )
 	}
 }
 
-// called only by snd_restart
+// called only by snd_shutdown (from snd_restart or app exit)
 //
 void S_UnCacheDynamicMusic( void )
 {
@@ -3548,7 +3606,7 @@ void S_UnCacheDynamicMusic( void )
 	}
 }
 
-static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbDynamic, const char *intro, const char *loop )
+static qboolean S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbDynamic, const char *intro, const char *loop )
 {
 	int		len;
 	char	dump[16];
@@ -3569,7 +3627,7 @@ static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbD
 	pMusicInfo->bIsMP3 = qfalse;
 
 	if ( !intro[0] ) {
-		return;
+		return qfalse;
 	}
 
 	// new bit, if file requested is not same any loaded one (if prev was in-mem), ditch it...
@@ -3593,7 +3651,7 @@ static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbD
 		if (!pMusicInfo->s_backgroundFile)
 		{
 			Com_Printf( S_COLOR_RED"Couldn't open music file %s\n", name );
-			return;
+			return qfalse;
 		}
 
 		MP3MusicStream_Reset( pMusicInfo );
@@ -3602,7 +3660,7 @@ static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbD
 		int iInitialMP3ReadSize = 8192;		// fairly arbitrary, whatever size this is then the decoder is allowed to
 											// scan up to halfway of it to find floating headers, so don't make it 
 											// too small. 8k works fine.
-
+		qboolean bMusicSucceeded = qfalse;
 		if (qbDynamic)
 		{	
 			if (!pMusicInfo->pLoadedData)
@@ -3672,6 +3730,7 @@ static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbD
 				}
 				
 				pMusicInfo->bIsMP3 = qtrue;
+				bMusicSucceeded = qtrue;
 			}
 			else
 			{
@@ -3694,7 +3753,7 @@ static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbD
 			pMusicInfo->s_backgroundFile = 0;
 		}
 		
-		return;
+		return bMusicSucceeded;
 	}
 	else	// not an mp3 file
 	{
@@ -3704,7 +3763,7 @@ static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbD
 		FS_FOpenFileRead( name, &pMusicInfo->s_backgroundFile, qtrue );
 		if ( !pMusicInfo->s_backgroundFile ) {
 			Com_Printf( S_COLOR_YELLOW "WARNING: couldn't open music file %s\n", name );
-			return;
+			return qfalse;
 		}
 
 		// skip the riff wav header
@@ -3715,7 +3774,7 @@ static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbD
 			Com_Printf( S_COLOR_YELLOW "WARNING: No fmt chunk in %s\n", name );
 			FS_FCloseFile( pMusicInfo->s_backgroundFile );
 			pMusicInfo->s_backgroundFile = 0;
-			return;
+			return qfalse;
 		}
 
 		// save name for soundinfo
@@ -3730,7 +3789,7 @@ static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbD
 			FS_FCloseFile( pMusicInfo->s_backgroundFile );
 			pMusicInfo->s_backgroundFile = 0;
 			Com_Printf(S_COLOR_YELLOW "WARNING: Not a microsoft PCM format wav: %s\n", name);
-			return;
+			return qfalse;
 		}
 
 		if ( pMusicInfo->s_backgroundInfo.channels != 2 || pMusicInfo->s_backgroundInfo.rate != 22050 ) {
@@ -3741,7 +3800,7 @@ static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbD
 			FS_FCloseFile( pMusicInfo->s_backgroundFile );
 			pMusicInfo->s_backgroundFile = 0;
 			Com_Printf(S_COLOR_YELLOW "WARNING: No data chunk in %s\n", name);
-			return;
+			return qfalse;
 		}
 
 		pMusicInfo->s_backgroundInfo.samples = len / (pMusicInfo->s_backgroundInfo.width * pMusicInfo->s_backgroundInfo.channels);
@@ -3753,6 +3812,8 @@ static void S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean qbD
 		//
 		Sys_BeginStreamedFile( pMusicInfo->s_backgroundFile, 0x10000 );
 	}
+
+	return qtrue;
 }
 
 
@@ -4001,9 +4062,6 @@ void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCall
 	char sName[MAX_QPATH];
 	Q_strncpyz(sName,intro,sizeof(sName));
 
-	if (!sName[0])
-		return;	// no music specified
-
 	COM_DefaultExtension( sName, sizeof( sName ), ".mp3" );
 
 	// if low physical memory, then just stream the explore music instead of playing dynamic...
@@ -4016,7 +4074,6 @@ void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCall
 			Q_strncpyz(sName,psMusicName,sizeof(sName));
 		}
 	}
-
 
 	// conceptually we always play the 'intro'[/sName] track, intro-to-loop transition is handled in UpdateBackGroundTrack().
 	//
@@ -4031,15 +4088,18 @@ void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCall
 		{
 			for (int i = eBGRNDTRACK_DATABEGIN; i != eBGRNDTRACK_DATAEND; i++)
 			{
+				qboolean bOk = qfalse;
 				LPCSTR psMusicName = Music_GetFileNameForState( (MusicState_e) i);
 				if (psMusicName && (!Q_stricmp(tMusic_Info[i].sLoadedDataName, psMusicName) || S_FileExists( psMusicName )) )
 				{
-					S_StartBackgroundTrack_Actual( &tMusic_Info[i], qtrue, psMusicName, loop );
-					tMusic_Info[i].bExists = qtrue;
+					bOk = S_StartBackgroundTrack_Actual( &tMusic_Info[i], qtrue, psMusicName, loop );
 				}
-				else
+				
+				tMusic_Info[i].bExists = bOk;
+
+				if (!tMusic_Info[i].bExists)
 				{
-					tMusic_Info[i].bExists = qfalse;
+					FreeMusic( &tMusic_Info[i] );
 				}
 			}
 
@@ -4049,7 +4109,6 @@ void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCall
 			for (i=0; i<eBGRNDTRACK_NUMBEROF; i++)
 			{
 				tMusic_Info[i].bActive				= qfalse;
-				tMusic_Info[i].pFrozenMP3			= NULL;
 				tMusic_Info[i].bTrackSwitchPending	= qfalse;
 				tMusic_Info[i].fSmoothedOutVolume	= 0.25f;
 			}
@@ -4085,13 +4144,11 @@ void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCall
 		}
 		else
 		{
-			// unfortunately I can't tell the difference between when I'm being asked to play nothing, 
-			//	or when we're supposed to be playing dynamic music for a level, since both strings are blank, 
-			//	so I can't conditionally print a proper error without it showing up all the time, 
-			//	so I'll just leave it as a debug thing...
-			//
-			Com_Printf( S_COLOR_RED "Unable to find music \"%s\" as explicit track or dynamic music entry!\n",sName);
-			S_StopBackgroundTrack();
+			if (sName[0]!='.')	// blank name with ".mp3" or whatever attached - no error print out
+			{
+				Com_Printf( S_COLOR_RED "Unable to find music \"%s\" as explicit track or dynamic music entry!\n",sName);
+				S_StopBackgroundTrack();
+			}
 		}
 	}	
 
@@ -4636,7 +4693,7 @@ int SND_FreeOldestSound(sfx_t *pButNotThisOne /* = NULL */)
 
 		if (sfx != pButNotThisOne)
 		{
-			if (sfx->bInMemory && sfx->iLastTimeUsed < iOldest) 
+			if (!sfx->bDefaultSound && sfx->bInMemory && sfx->iLastTimeUsed < iOldest) 
 			{
 				// new bit, we can't throw away any sfx_t struct in use by a channel, else the paint code will crash...
 				//
@@ -4957,8 +5014,8 @@ void UpdateEAXBuffer(channel_t *ch)
 	if (ch->fixed_origin)
 	{
 		EMSourcePoint.fX = ch->origin[0];
-		EMSourcePoint.fY = ch->origin[1];
-		EMSourcePoint.fZ = -ch->origin[2];
+		EMSourcePoint.fY = ch->origin[2];
+		EMSourcePoint.fZ = ch->origin[1];
 	}
 	else
 	{
@@ -4967,15 +5024,16 @@ void UpdateEAXBuffer(channel_t *ch)
 			// Source at same position as listener
 			// Probably won't be any Occlusion / Obstruction effect -- unless the listener is underwater
 			EMSourcePoint.fX = listener_pos[0];
-			EMSourcePoint.fY = listener_pos[1];
-			EMSourcePoint.fZ = -listener_pos[2];
+			EMSourcePoint.fY = listener_pos[2];
+			EMSourcePoint.fZ = listener_pos[1];
 		}
 		else
 		{
 			// Get position of Entity
 			EMSourcePoint.fX = loopSounds[ ch->entnum ].origin[0];
-			EMSourcePoint.fY = loopSounds[ ch->entnum ].origin[1];
-			EMSourcePoint.fZ = -loopSounds[ ch->entnum ].origin[2];
+			EMSourcePoint.fY = loopSounds[ ch->entnum ].origin[2];
+			EMSourcePoint.fZ = loopSounds[ ch->entnum ].origin[1];
+
 		}
 	}
 
@@ -5034,5 +5092,330 @@ void EAXMorph()
 			s_eaxMorphCount = curPos;
 		}
 	}
+}
+
+
+/***********************************************************************************************\
+*
+* Definition of the EAXMorph function - EAX3ListenerInterpolate
+*
+\***********************************************************************************************/
+
+/*
+	EAX3ListenerInterpolate
+	lpStart			- Initial EAX 3 Listener parameters
+	lpFinish		- Final EAX 3 Listener parameters
+	flRatio			- Ratio Destination : Source (0.0 == Source, 1.0 == Destination)
+	lpResult		- Interpolated EAX 3 Listener parameters
+	bCheckValues	- Check EAX 3.0 parameters are in range, default = false (no checking)
+*/
+bool EAX3ListenerInterpolate(LPEAXLISTENERPROPERTIES lpStart, LPEAXLISTENERPROPERTIES lpFinish,
+						float flRatio, LPEAXLISTENERPROPERTIES lpResult, bool bCheckValues)
+{
+	EAXVECTOR StartVector, FinalVector;
+
+	float flInvRatio;
+
+	if (bCheckValues)
+	{
+		if (!CheckEAX3LP(lpStart))
+			return false;
+
+		if (!CheckEAX3LP(lpFinish))
+			return false;
+	}
+
+	if (flRatio >= 1.0f)
+	{
+		memcpy(lpResult, lpFinish, sizeof(EAXLISTENERPROPERTIES));
+		return true;
+	}
+	else if (flRatio <= 0.0f)
+	{
+		memcpy(lpResult, lpStart, sizeof(EAXLISTENERPROPERTIES));
+		return true;
+	}
+
+	flInvRatio = (1.0f - flRatio);
+
+	// Environment
+	lpResult->ulEnvironment = 26;	// (UNDEFINED environment)
+
+	// Environment Size
+	if (lpStart->flEnvironmentSize == lpFinish->flEnvironmentSize)
+		lpResult->flEnvironmentSize = lpStart->flEnvironmentSize;
+	else
+		lpResult->flEnvironmentSize = (float)exp( (log(lpStart->flEnvironmentSize) * flInvRatio) + (log(lpFinish->flEnvironmentSize) * flRatio) );
+	
+	// Environment Diffusion
+	if (lpStart->flEnvironmentDiffusion == lpFinish->flEnvironmentDiffusion)
+		lpResult->flEnvironmentDiffusion = lpStart->flEnvironmentDiffusion;
+	else
+		lpResult->flEnvironmentDiffusion = (lpStart->flEnvironmentDiffusion * flInvRatio) + (lpFinish->flEnvironmentDiffusion * flRatio);
+	
+	// Room
+	if (lpStart->lRoom == lpFinish->lRoom)
+		lpResult->lRoom = lpStart->lRoom;
+	else
+		lpResult->lRoom = (int)( ((float)lpStart->lRoom * flInvRatio) + ((float)lpFinish->lRoom * flRatio) );
+	
+	// Room HF
+	if (lpStart->lRoomHF == lpFinish->lRoomHF)
+		lpResult->lRoomHF = lpStart->lRoomHF;
+	else
+		lpResult->lRoomHF = (int)( ((float)lpStart->lRoomHF * flInvRatio) + ((float)lpFinish->lRoomHF * flRatio) );
+	
+	// Room LF
+	if (lpStart->lRoomLF == lpFinish->lRoomLF)
+		lpResult->lRoomLF = lpStart->lRoomLF;
+	else
+		lpResult->lRoomLF = (int)( ((float)lpStart->lRoomLF * flInvRatio) + ((float)lpFinish->lRoomLF * flRatio) );
+	
+	// Decay Time
+	if (lpStart->flDecayTime == lpFinish->flDecayTime)
+		lpResult->flDecayTime = lpStart->flDecayTime;
+	else
+		lpResult->flDecayTime = (float)exp( (log(lpStart->flDecayTime) * flInvRatio) + (log(lpFinish->flDecayTime) * flRatio) );
+	
+	// Decay HF Ratio
+	if (lpStart->flDecayHFRatio == lpFinish->flDecayHFRatio)
+		lpResult->flDecayHFRatio = lpStart->flDecayHFRatio;
+	else
+		lpResult->flDecayHFRatio = (float)exp( (log(lpStart->flDecayHFRatio) * flInvRatio) + (log(lpFinish->flDecayHFRatio) * flRatio) );
+	
+	// Decay LF Ratio
+	if (lpStart->flDecayLFRatio == lpFinish->flDecayLFRatio)
+		lpResult->flDecayLFRatio = lpStart->flDecayLFRatio;
+	else
+		lpResult->flDecayLFRatio = (float)exp( (log(lpStart->flDecayLFRatio) * flInvRatio) + (log(lpFinish->flDecayLFRatio) * flRatio) );
+	
+	// Reflections
+	if (lpStart->lReflections == lpFinish->lReflections)
+		lpResult->lReflections = lpStart->lReflections;
+	else
+		lpResult->lReflections = (int)( ((float)lpStart->lReflections * flInvRatio) + ((float)lpFinish->lReflections * flRatio) );
+	
+	// Reflections Delay
+	if (lpStart->flReflectionsDelay == lpFinish->flReflectionsDelay)
+		lpResult->flReflectionsDelay = lpStart->flReflectionsDelay;
+	else
+		lpResult->flReflectionsDelay = (float)exp( (log(lpStart->flReflectionsDelay+0.0001) * flInvRatio) + (log(lpFinish->flReflectionsDelay+0.0001) * flRatio) );
+
+	// Reflections Pan
+
+	// To interpolate the vector correctly we need to ensure that both the initial and final vectors vectors are clamped to a length of 1.0f
+	StartVector = lpStart->vReflectionsPan;
+	FinalVector = lpFinish->vReflectionsPan;
+
+	Clamp(&StartVector);
+	Clamp(&FinalVector);
+
+	if (lpStart->vReflectionsPan.x == lpFinish->vReflectionsPan.x)
+		lpResult->vReflectionsPan.x = lpStart->vReflectionsPan.x;
+	else
+		lpResult->vReflectionsPan.x = FinalVector.x + (flInvRatio * (StartVector.x - FinalVector.x));
+	
+	if (lpStart->vReflectionsPan.y == lpFinish->vReflectionsPan.y)
+		lpResult->vReflectionsPan.y = lpStart->vReflectionsPan.y;
+	else
+		lpResult->vReflectionsPan.y = FinalVector.y + (flInvRatio * (StartVector.y - FinalVector.y));
+	
+	if (lpStart->vReflectionsPan.z == lpFinish->vReflectionsPan.z)
+		lpResult->vReflectionsPan.z = lpStart->vReflectionsPan.z;
+	else
+		lpResult->vReflectionsPan.z = FinalVector.z + (flInvRatio * (StartVector.z - FinalVector.z));
+	
+	// Reverb
+	if (lpStart->lReverb == lpFinish->lReverb)
+		lpResult->lReverb = lpStart->lReverb;
+	else
+		lpResult->lReverb = (int)( ((float)lpStart->lReverb * flInvRatio) + ((float)lpFinish->lReverb * flRatio) );
+	
+	// Reverb Delay
+	if (lpStart->flReverbDelay == lpFinish->flReverbDelay)
+		lpResult->flReverbDelay = lpStart->flReverbDelay;
+	else
+		lpResult->flReverbDelay = (float)exp( (log(lpStart->flReverbDelay+0.0001) * flInvRatio) + (log(lpFinish->flReverbDelay+0.0001) * flRatio) );
+	
+	// Reverb Pan
+
+	// To interpolate the vector correctly we need to ensure that both the initial and final vectors are clamped to a length of 1.0f	
+	StartVector = lpStart->vReverbPan;
+	FinalVector = lpFinish->vReverbPan;
+
+	Clamp(&StartVector);
+	Clamp(&FinalVector);
+
+	if (lpStart->vReverbPan.x == lpFinish->vReverbPan.x)
+		lpResult->vReverbPan.x = lpStart->vReverbPan.x;
+	else
+		lpResult->vReverbPan.x = FinalVector.x + (flInvRatio * (StartVector.x - FinalVector.x));
+	
+	if (lpStart->vReverbPan.y == lpFinish->vReverbPan.y)
+		lpResult->vReverbPan.y = lpStart->vReverbPan.y;
+	else
+		lpResult->vReverbPan.y = FinalVector.y + (flInvRatio * (StartVector.y - FinalVector.y));
+	
+	if (lpStart->vReverbPan.z == lpFinish->vReverbPan.z)
+		lpResult->vReverbPan.z = lpStart->vReverbPan.z;
+	else
+		lpResult->vReverbPan.z = FinalVector.z + (flInvRatio * (StartVector.z - FinalVector.z));
+	
+	// Echo Time
+	if (lpStart->flEchoTime == lpFinish->flEchoTime)
+		lpResult->flEchoTime = lpStart->flEchoTime;
+	else
+		lpResult->flEchoTime = (float)exp( (log(lpStart->flEchoTime) * flInvRatio) + (log(lpFinish->flEchoTime) * flRatio) );
+	
+	// Echo Depth
+	if (lpStart->flEchoDepth == lpFinish->flEchoDepth)
+		lpResult->flEchoDepth = lpStart->flEchoDepth;
+	else
+		lpResult->flEchoDepth = (lpStart->flEchoDepth * flInvRatio) + (lpFinish->flEchoDepth * flRatio);
+
+	// Modulation Time
+	if (lpStart->flModulationTime == lpFinish->flModulationTime)
+		lpResult->flModulationTime = lpStart->flModulationTime;
+	else
+		lpResult->flModulationTime = (float)exp( (log(lpStart->flModulationTime) * flInvRatio) + (log(lpFinish->flModulationTime) * flRatio) );
+	
+	// Modulation Depth
+	if (lpStart->flModulationDepth == lpFinish->flModulationDepth)
+		lpResult->flModulationDepth = lpStart->flModulationDepth;
+	else
+		lpResult->flModulationDepth = (lpStart->flModulationDepth * flInvRatio) + (lpFinish->flModulationDepth * flRatio);
+	
+	// Air Absorption HF
+	if (lpStart->flAirAbsorptionHF == lpFinish->flAirAbsorptionHF)
+		lpResult->flAirAbsorptionHF = lpStart->flAirAbsorptionHF;
+	else
+		lpResult->flAirAbsorptionHF = (lpStart->flAirAbsorptionHF * flInvRatio) + (lpFinish->flAirAbsorptionHF * flRatio);
+	
+	// HF Reference
+	if (lpStart->flHFReference == lpFinish->flHFReference)
+		lpResult->flHFReference = lpStart->flHFReference;
+	else
+		lpResult->flHFReference = (float)exp( (log(lpStart->flHFReference) * flInvRatio) + (log(lpFinish->flHFReference) * flRatio) );
+	
+	// LF Reference
+	if (lpStart->flLFReference == lpFinish->flLFReference)
+		lpResult->flLFReference = lpStart->flLFReference;
+	else
+		lpResult->flLFReference = (float)exp( (log(lpStart->flLFReference) * flInvRatio) + (log(lpFinish->flLFReference) * flRatio) );
+	
+	// Room Rolloff Factor
+	if (lpStart->flRoomRolloffFactor == lpFinish->flRoomRolloffFactor)
+		lpResult->flRoomRolloffFactor = lpStart->flRoomRolloffFactor;
+	else
+		lpResult->flRoomRolloffFactor = (lpStart->flRoomRolloffFactor * flInvRatio) + (lpFinish->flRoomRolloffFactor * flRatio);
+	
+	// Flags
+	lpResult->ulFlags = (lpStart->ulFlags & lpFinish->ulFlags);
+
+	// Clamp Delays
+	if (lpResult->flReflectionsDelay > EAXLISTENER_MAXREFLECTIONSDELAY)
+		lpResult->flReflectionsDelay = EAXLISTENER_MAXREFLECTIONSDELAY;
+
+	if (lpResult->flReverbDelay > EAXLISTENER_MAXREVERBDELAY)
+		lpResult->flReverbDelay = EAXLISTENER_MAXREVERBDELAY;
+
+	return true;
+}
+
+
+/*
+	CheckEAX3LP
+	Checks that the parameters in the EAX 3 Listener Properties structure are in-range
+*/
+bool CheckEAX3LP(LPEAXLISTENERPROPERTIES lpEAX3LP)
+{
+	if ( (lpEAX3LP->lRoom < EAXLISTENER_MINROOM) || (lpEAX3LP->lRoom > EAXLISTENER_MAXROOM) )
+		return false;
+
+	if ( (lpEAX3LP->lRoomHF < EAXLISTENER_MINROOMHF) || (lpEAX3LP->lRoomHF > EAXLISTENER_MAXROOMHF) )
+		return false;
+
+	if ( (lpEAX3LP->lRoomLF < EAXLISTENER_MINROOMLF) || (lpEAX3LP->lRoomLF > EAXLISTENER_MAXROOMLF) )
+		return false;
+
+	if ( (lpEAX3LP->ulEnvironment < EAXLISTENER_MINENVIRONMENT) || (lpEAX3LP->ulEnvironment > EAXLISTENER_MAXENVIRONMENT) )
+		return false;
+
+	if ( (lpEAX3LP->flEnvironmentSize < EAXLISTENER_MINENVIRONMENTSIZE) || (lpEAX3LP->flEnvironmentSize > EAXLISTENER_MAXENVIRONMENTSIZE) )
+		return false;
+
+	if ( (lpEAX3LP->flEnvironmentDiffusion < EAXLISTENER_MINENVIRONMENTDIFFUSION) || (lpEAX3LP->flEnvironmentDiffusion > EAXLISTENER_MAXENVIRONMENTDIFFUSION) )
+		return false;
+
+	if ( (lpEAX3LP->flDecayTime < EAXLISTENER_MINDECAYTIME) || (lpEAX3LP->flDecayTime > EAXLISTENER_MAXDECAYTIME) )
+		return false;
+
+	if ( (lpEAX3LP->flDecayHFRatio < EAXLISTENER_MINDECAYHFRATIO) || (lpEAX3LP->flDecayHFRatio > EAXLISTENER_MAXDECAYHFRATIO) )
+		return false;
+
+	if ( (lpEAX3LP->flDecayLFRatio < EAXLISTENER_MINDECAYLFRATIO) || (lpEAX3LP->flDecayLFRatio > EAXLISTENER_MAXDECAYLFRATIO) )
+		return false;
+
+	if ( (lpEAX3LP->lReflections < EAXLISTENER_MINREFLECTIONS) || (lpEAX3LP->lReflections > EAXLISTENER_MAXREFLECTIONS) )
+		return false;
+
+	if ( (lpEAX3LP->flReflectionsDelay < EAXLISTENER_MINREFLECTIONSDELAY) || (lpEAX3LP->flReflectionsDelay > EAXLISTENER_MAXREFLECTIONSDELAY) )
+		return false;
+
+	if ( (lpEAX3LP->lReverb < EAXLISTENER_MINREVERB) || (lpEAX3LP->lReverb > EAXLISTENER_MAXREVERB) )
+		return false;
+
+	if ( (lpEAX3LP->flReverbDelay < EAXLISTENER_MINREVERBDELAY) || (lpEAX3LP->flReverbDelay > EAXLISTENER_MAXREVERBDELAY) )
+		return false;
+
+	if ( (lpEAX3LP->flEchoTime < EAXLISTENER_MINECHOTIME) || (lpEAX3LP->flEchoTime > EAXLISTENER_MAXECHOTIME) )
+		return false;
+
+	if ( (lpEAX3LP->flEchoDepth < EAXLISTENER_MINECHODEPTH) || (lpEAX3LP->flEchoDepth > EAXLISTENER_MAXECHODEPTH) )
+		return false;
+
+	if ( (lpEAX3LP->flModulationTime < EAXLISTENER_MINMODULATIONTIME) || (lpEAX3LP->flModulationTime > EAXLISTENER_MAXMODULATIONTIME) )
+		return false;
+
+	if ( (lpEAX3LP->flModulationDepth < EAXLISTENER_MINMODULATIONDEPTH) || (lpEAX3LP->flModulationDepth > EAXLISTENER_MAXMODULATIONDEPTH) )
+		return false;
+
+	if ( (lpEAX3LP->flAirAbsorptionHF < EAXLISTENER_MINAIRABSORPTIONHF) || (lpEAX3LP->flAirAbsorptionHF > EAXLISTENER_MAXAIRABSORPTIONHF) )
+		return false;
+
+	if ( (lpEAX3LP->flHFReference < EAXLISTENER_MINHFREFERENCE) || (lpEAX3LP->flHFReference > EAXLISTENER_MAXHFREFERENCE) )
+		return false;
+
+	if ( (lpEAX3LP->flLFReference < EAXLISTENER_MINLFREFERENCE) || (lpEAX3LP->flLFReference > EAXLISTENER_MAXLFREFERENCE) )
+		return false;
+
+	if ( (lpEAX3LP->flRoomRolloffFactor < EAXLISTENER_MINROOMROLLOFFFACTOR) || (lpEAX3LP->flRoomRolloffFactor > EAXLISTENER_MAXROOMROLLOFFFACTOR) )
+		return false;
+
+	if (lpEAX3LP->ulFlags & EAXLISTENERFLAGS_RESERVED)
+		return false;
+
+	return true;
+}
+
+/*
+	Clamp
+	Clamps the length of the vector to 1.0f
+*/
+void Clamp(EAXVECTOR *eaxVector)
+{
+	float flMagnitude;
+	float flInvMagnitude;
+
+	flMagnitude = (float)sqrt((eaxVector->x*eaxVector->x) + (eaxVector->y*eaxVector->y) + (eaxVector->z*eaxVector->z));
+
+	if (flMagnitude <= 1.0f)
+		return;
+
+	flInvMagnitude = 1.0f / flMagnitude;
+
+	eaxVector->x *= flInvMagnitude;
+	eaxVector->y *= flInvMagnitude;
+	eaxVector->z *= flInvMagnitude;
 }
 

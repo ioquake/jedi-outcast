@@ -28,9 +28,88 @@ void CG_ParseServerinfo( void ) {
 	cgs.maxclients = 1;
 	mapname = Info_ValueForKey( info, "mapname" );
 	Com_sprintf( cgs.mapname, sizeof( cgs.mapname ), "maps/%s.bsp", mapname );
-	strcpy( cgs.stripLevelName, mapname );
-	strupr( cgs.stripLevelName );
-	cgi_SP_Register(cgs.stripLevelName, qfalse);	//do not keep around after level
+	strcpy( cgs.stripLevelName[0], mapname );
+	strupr( cgs.stripLevelName[0] );
+	for (int i=1; i<STRIPED_LEVELNAME_VARIATIONS; i++)	// clear retry-array
+	{
+		cgs.stripLevelName[i][0]='\0';
+	}
+	if (!cgi_SP_Register(cgs.stripLevelName[0], qfalse))
+	{
+		// failed to load SP file, maybe it's one of the ones they renamed?...
+		//
+		if (!stricmp(cgs.stripLevelName[0],"YAVIN_FINAL")
+			||
+			!stricmp(cgs.stripLevelName[0],"YAVIN_SWAMP")
+			)
+		{
+			strcpy( cgs.stripLevelName[0], "YAVIN_CANYON" );
+			if (!cgi_SP_Register(cgs.stripLevelName[0], qfalse))
+			{
+				// failed again, give up for now...
+				//
+			}
+		}
+		else
+		if (!stricmp(cgs.stripLevelName[0],"YAVIN_TRIAL"))
+		{
+			strcpy( cgs.stripLevelName[0], "YAVIN_TEMPLE" );
+			if (!cgi_SP_Register(cgs.stripLevelName[0], qfalse))
+			{
+				// failed again, give up for now...
+				//
+			}
+		}
+		else
+		if (!stricmp(cgs.stripLevelName[0],"VALLEY"))
+		{
+			strcpy( cgs.stripLevelName[0], "ARTUS_TOPSIDE" );
+			if (!cgi_SP_Register(cgs.stripLevelName[0], qfalse))
+			{
+				// failed again, give up for now...
+				//
+			}
+		}
+	}
+	else
+	{
+		// additional SP files needed for some levels...
+		//
+		if (!stricmp(cgs.stripLevelName[0],"KEJIM_BASE"))
+		{
+			strcpy( cgs.stripLevelName[1], "ARTUS_MINE" );
+			if (!cgi_SP_Register(cgs.stripLevelName[1], qfalse))
+			{
+				// failed again, give up for now...
+				//
+			}
+		}
+		if (!stricmp(cgs.stripLevelName[0],"DOOM_DETENTION"))
+		{
+			strcpy( cgs.stripLevelName[1], "DOOM_COMM" );
+			if (!cgi_SP_Register(cgs.stripLevelName[1], qfalse))
+			{
+				// failed again, give up for now...
+				//
+			}
+		}
+		if (!stricmp(cgs.stripLevelName[0],"NS_STARPAD"))
+		{
+			strcpy( cgs.stripLevelName[1], "ARTUS_TOPSIDE" );	// for dream sequence...
+			if (!cgi_SP_Register(cgs.stripLevelName[1], qfalse))
+			{
+				// failed again, give up for now...
+				//
+			}
+
+			strcpy( cgs.stripLevelName[2], "BESPIN_UNDERCITY" );	// for dream sequence...
+			if (!cgi_SP_Register(cgs.stripLevelName[2], qfalse))
+			{
+				// failed again, give up for now...
+				//
+			} 
+		}
+	}
 }
 
 

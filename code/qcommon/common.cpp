@@ -33,6 +33,7 @@ int		com_argc;
 char	*com_argv[MAX_NUM_ARGVS+1];
 
 static fileHandle_t	logfile;
+static fileHandle_t	speedslog;
 static fileHandle_t	camerafile;
 fileHandle_t	com_journalFile;
 fileHandle_t	com_journalDataFile;		// config files are written here
@@ -54,6 +55,7 @@ cvar_t	*com_FirstTime;
 cvar_t	*cl_paused;
 cvar_t	*sv_paused;
 cvar_t	*com_skippingcin;
+cvar_t	*com_speedslog;		// 1 = buffer log, 2 = flush after each print
 
 // com_speeds times
 int		time_game;
@@ -758,6 +760,16 @@ void *Z_Malloc(int iSize, memtag_t eTag, qboolean bZeroit)
 			{
 				gbMemFreeupOccured = qtrue;
 				continue;		// we've dropped at least one sound, so try again with the malloc
+			}
+
+
+			// ditch any image_t's (and associated GL texture mem) not used on this level...
+			//
+			extern qboolean RE_RegisterImages_LevelLoadEnd(void);
+			if (RE_RegisterImages_LevelLoadEnd())
+			{
+				gbMemFreeupOccured = qtrue;
+				continue;		// we've dropped at least one image, so try again with the malloc
 			}
 
 
@@ -1836,6 +1848,7 @@ void Com_Init( char *commandLine ) {
 		
 		com_developer = Cvar_Get ("developer", "0", CVAR_TEMP );
 		com_logfile = Cvar_Get ("logfile", "0", CVAR_TEMP );
+		com_speedslog = Cvar_Get ("speedslog", "0", CVAR_TEMP );
 		
 		com_timescale = Cvar_Get ("timescale", "1", CVAR_CHEAT );
 		com_fixedtime = Cvar_Get ("fixedtime", "0", CVAR_CHEAT);
@@ -1981,21 +1994,34 @@ void Com_WriteConfig_f( void ) {
 Com_ModifyMsec
 ================
 */
-int Com_ModifyMsec( int msec ) {
+
+
+int Com_ModifyMsec( int msec, float &fraction ) 
+{
 	int		clampTime;
+
+	fraction=0.0f;
 
 	//
 	// modify time for debugging values
 	//
-	if ( com_fixedtime->integer ) {
+	if ( com_fixedtime->integer ) 
+	{
 		msec = com_fixedtime->integer;
-	} else if ( com_timescale->value ) {
-		msec *= com_timescale->value;
+	} 
+	else if ( com_timescale->value ) 
+	{
+		fraction=(float)msec;
+		fraction*=com_timescale->value;
+		msec=(int)floor(fraction);
+		fraction-=(float)msec;
 	}
 	
 	// don't let it scale below 1 msec
-	if ( msec < 1 ) {
+	if ( msec < 1 ) 
+	{
 		msec = 1;
+		fraction=0.0f;
 	}
 
 	if ( com_skippingcin->integer ) {
@@ -2010,6 +2036,7 @@ int Com_ModifyMsec( int msec ) {
 
 	if ( msec > clampTime ) {
 		msec = clampTime;
+		fraction=0.0f;
 	}
 
 	return msec;
@@ -2020,6 +2047,15 @@ int Com_ModifyMsec( int msec ) {
 Com_Frame
 =================
 */
+static vec3_t corg;
+static vec3_t cangles;
+static bool bComma;
+void Com_SetOrgAngles(vec3_t org,vec3_t angles)
+{
+	VectorCopy(org,corg);
+	VectorCopy(angles,cangles);
+}
+
 #pragma warning (disable: 4701)	//local may have been used without init (timing info vars)
 void Com_Frame( void ) {
 try 
@@ -2027,6 +2063,7 @@ try
 	int		timeBeforeFirstEvents, timeBeforeServer, timeBeforeEvents, timeBeforeClient, timeAfter;
 	int		msec, minMsec;
 	static int	lastTime;
+	char		msg[MAXPRINTMSG];
 
 	// write config file if anything changed
 	Com_WriteConfiguration(); 
@@ -2063,7 +2100,8 @@ try
 
 	// mess with msec if needed
 	com_frameMsec = msec;
-	msec = Com_ModifyMsec( msec );
+	float fractionMsec=0.0f;
+	msec = Com_ModifyMsec( msec, fractionMsec);
 	
 	//
 	// server side
@@ -2072,7 +2110,7 @@ try
 		timeBeforeServer = Sys_Milliseconds ();
 	}
 
-	SV_Frame (msec);
+	SV_Frame (msec, fractionMsec);
 
 
 	//
@@ -2098,7 +2136,7 @@ try
 			timeBeforeClient = Sys_Milliseconds ();
 		}
 
-		CL_Frame (msec);
+		CL_Frame (msec, fractionMsec);
 
 		if ( com_speeds->integer ) {
 			timeAfter = Sys_Milliseconds ();
@@ -2119,8 +2157,42 @@ try
 		sv -= time_game;
 		cl -= time_frontend + time_backend;
 
-		Com_Printf ("fr:%i all:%3i sv:%3i ev:%3i cl:%3i gm:%3i tr:%3i pvs:%3i rf:%3i bk:%3i\n", 
-					 com_frameNumber, all, sv, ev, cl, time_game, timeInTrace, timeInPVSCheck, time_frontend, time_backend );
+		Com_Printf("fr:%i all:%3i sv:%3i ev:%3i cl:%3i gm:%3i tr:%3i pvs:%3i rf:%3i bk:%3i\n", 
+					com_frameNumber, all, sv, ev, cl, time_game, timeInTrace, timeInPVSCheck, time_frontend, time_backend);
+
+		// speedslog
+		if ( com_speedslog && com_speedslog->integer )
+		{
+			if(!speedslog)
+			{
+				speedslog = FS_FOpenFileWrite("speeds.log");
+				FS_Write("data={\n", strlen("data={\n"), speedslog);
+				bComma=false;
+				if ( com_speedslog->integer > 1 ) 
+				{
+					// force it to not buffer so we get valid
+					// data even if we are crashing
+					FS_ForceFlush(logfile);
+				}
+			}
+			if (speedslog)
+			{
+				if(bComma)
+				{
+					FS_Write(",\n", strlen(",\n"), speedslog);
+					bComma=false;
+				}
+				FS_Write("{", strlen("{"), speedslog);
+				Com_sprintf(msg,sizeof(msg),
+							"%8.4f,%8.4f,%8.4f,%8.4f,%8.4f,%8.4f,",corg[0],corg[1],corg[2],cangles[0],cangles[1],cangles[2]);
+				FS_Write(msg, strlen(msg), speedslog);
+				Com_sprintf(msg,sizeof(msg),
+					"%i,%3i,%3i,%3i,%3i,%3i,%3i,%3i,%3i,%3i}", 
+					com_frameNumber, all, sv, ev, cl, time_game, timeInTrace, timeInPVSCheck, time_frontend, time_backend);
+				FS_Write(msg, strlen(msg), speedslog);
+				bComma=true;
+			}
+		}
 
 		timeInTrace = timeInPVSCheck = 0;
 	}
@@ -2164,6 +2236,12 @@ void Com_Shutdown (void) {
 	if (logfile) {
 		FS_FCloseFile (logfile);
 		logfile = 0;
+	}
+
+	if (speedslog) {
+		FS_Write("\n};", strlen("\n};"), speedslog);
+		FS_FCloseFile (speedslog);
+		speedslog = 0;
 	}
 
 	if (camerafile) {

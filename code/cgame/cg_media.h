@@ -177,8 +177,14 @@ typedef struct {
 	qhandle_t	HUDArmorTic;
 	qhandle_t	HUDInnerLeft;
 
+	qhandle_t	HUDSaberStyle1;
+	qhandle_t	HUDSaberStyle2;
+	qhandle_t	HUDSaberStyle3;
+
 	qhandle_t	HUDRightFrame;
 	qhandle_t	HUDInnerRight;
+
+	qhandle_t	dataPadFrame;
 
 	qhandle_t	talkingtop;
 	qhandle_t	talkingbot;
@@ -287,6 +293,7 @@ typedef struct
 // loaded or calculated from the gamestate.  It will NOT
 // be cleared when a tournement restart is done, allowing
 // all clients to begin playing instantly
+#define STRIPED_LEVELNAME_VARIATIONS 3	// sigh, to cope with levels that use text from >1 SP file
 typedef struct {
 	gameState_t		gameState;			// gamestate from server
 	glconfig_t		glconfig;			// rendering configuration
@@ -299,7 +306,7 @@ typedef struct {
 	int				timelimit;
 	int				maxclients;
 	char			mapname[MAX_QPATH];
-	char			stripLevelName[MAX_QPATH];
+	char			stripLevelName[STRIPED_LEVELNAME_VARIATIONS][MAX_QPATH];
 
 	//
 	// locally derived information from gamestate

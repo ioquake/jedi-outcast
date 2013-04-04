@@ -16,7 +16,6 @@ void CG_UseInventory_f( void );
 void CG_NextForcePower_f( void );
 void CG_PrevForcePower_f( void );
 void CG_LoadHud_f( void );
-void CG_ToggleThirdPersonView_f( void );
 
 
 /*
@@ -88,7 +87,7 @@ void CG_ToggleBinoculars( void )
 			// when you have batteries, you can actually zoom in
 			cg_zoomFov = 40.0f;
 		}
-		else if ( cg.overrides.fov )
+		else if ( cg.overrides.active & CG_OVERRIDE_FOV )
 		{
 			cg_zoomFov = cg.overrides.fov;
 		}
@@ -130,7 +129,7 @@ void CG_ToggleLAGoggles( void )
 
 		cg.zoomMode = 3;
 		cg.zoomLocked = qfalse;
-		if ( cg.overrides.fov )
+		if ( cg.overrides.active & CG_OVERRIDE_FOV )
 		{
 			cg_zoomFov = cg.overrides.fov;
 		}
@@ -201,7 +200,6 @@ Ghoul2 Insert End
 	{ "forcenext", CG_NextForcePower_f },
 	{ "forceprev", CG_PrevForcePower_f },
 	{ "loadhud", CG_LoadHud_f },
-	{ "thirdperson", CG_ToggleThirdPersonView_f },
 	{ "dpweapnext", CG_DPNextWeapon_f },
 	{ "dpweapprev", CG_DPPrevWeapon_f },
 	{ "dpinvnext", CG_DPNextInventory_f },

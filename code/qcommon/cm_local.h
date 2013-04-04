@@ -162,6 +162,7 @@ void CM_StoreBrushes( leafList_t *ll, int nodenum );
 void CM_BoxLeafnums_r( leafList_t *ll, int nodenum );
 
 cmodel_t	*CM_ClipHandleToModel( clipHandle_t handle );
+void CM_CleanLeafCache(void);
 
 // cm_patch.c
 

@@ -58,6 +58,13 @@ static int Korean_CollapseKSC5601HangulCode(unsigned int uiCode)
 	return 0;
 }
 
+static int Korean_InitFields(int &iGlyphTPs, LPCSTR &psLang)
+{
+	psLang		= "kor";
+	iGlyphTPs	= GLYPH_MAX_KOREAN_SHADERS;
+	return 32;	// m_iAsianGlyphsAcross
+}
+
 // ======================== some taiwanese stuff ==============================
 
 // (all ranges inclusive for Big5)...
@@ -76,8 +83,9 @@ extern qboolean Language_IsTaiwanese( void );
 
 static bool Taiwanese_ValidBig5Code( unsigned int uiCode )
 {
-	if (	(uiCode >= ((BIG5_HIBYTE_START0<<8)|BIG5_LOBYTE_LOBOUND0) && uiCode <= ((BIG5_HIBYTE_STOP0<<8)|BIG5_LOBYTE_HIBOUND0))
-		||	(uiCode >= ((BIG5_HIBYTE_START1<<8)|BIG5_LOBYTE_LOBOUND0) && uiCode <= ((BIG5_HIBYTE_STOP1<<8)|0xD5))	// no meaningful equate for this, it's just end-of-glyphs for highest row
+	const byte _iHi = (uiCode >> 8)&0xFF;
+	if (	(_iHi >= BIG5_HIBYTE_START0 && _iHi <= BIG5_HIBYTE_STOP0)
+		||	(_iHi >= BIG5_HIBYTE_START1 && _iHi <= BIG5_HIBYTE_STOP1)
 		)
 	{
 		const byte _iLo = uiCode & 0xFF;
@@ -98,10 +106,10 @@ static bool Taiwanese_ValidBig5Code( unsigned int uiCode )
 //
 static bool Taiwanese_IsTrailingPunctuation( unsigned int uiCode )
 {
-	// so far I'm just counting the first 20 chars, those seem to be all the basic punctuation...
+	// so far I'm just counting the first 21 chars, those seem to be all the basic punctuation...
 	//
 	if (	uiCode >= ((BIG5_HIBYTE_START0<<8)|BIG5_LOBYTE_LOBOUND0) && 
-			uiCode <= ((BIG5_HIBYTE_START0<<8)|BIG5_LOBYTE_LOBOUND0+20)
+			uiCode <  ((BIG5_HIBYTE_START0<<8)|BIG5_LOBYTE_LOBOUND0+20)
 		)
 	{
 		return true;
@@ -131,8 +139,111 @@ static int Taiwanese_CollapseBig5Code( unsigned int uiCode )
 	return 0;
 }
 
+static int Taiwanese_InitFields(int &iGlyphTPs, LPCSTR &psLang)
+{
+	psLang		= "tai";
+	iGlyphTPs	= GLYPH_MAX_TAIWANESE_SHADERS;
+	return 64;	// m_iAsianGlyphsAcross
+}
+
+// ======================== some Japanese stuff ==============================
+
+
+// ( all ranges inclusive for Shift-JIS )
+//
+#define SHIFTJIS_HIBYTE_START0	0x81
+#define SHIFTJIS_HIBYTE_STOP0	0x9F
+#define SHIFTJIS_HIBYTE_START1	0xE0
+#define SHIFTJIS_HIBYTE_STOP1	0xEF
+//
+#define SHIFTJIS_LOBYTE_START0	0x40
+#define SHIFTJIS_LOBYTE_STOP0	0x7E
+#define SHIFTJIS_LOBYTE_START1	0x80
+#define SHIFTJIS_LOBYTE_STOP1	0xFC
+#define SHIFTJIS_CODES_PER_ROW	(((SHIFTJIS_LOBYTE_STOP0-SHIFTJIS_LOBYTE_START0)+1)+((SHIFTJIS_LOBYTE_STOP1-SHIFTJIS_LOBYTE_START1)+1))
+
+
+extern qboolean Language_IsJapanese( void );
+
+static bool Japanese_ValidShiftJISCode( byte _iHi, byte _iLo )
+{
+	if (	(_iHi >= SHIFTJIS_HIBYTE_START0 && _iHi <= SHIFTJIS_HIBYTE_STOP0)
+		||	(_iHi >= SHIFTJIS_HIBYTE_START1 && _iHi <= SHIFTJIS_HIBYTE_STOP1)
+		)
+	{
+		if ( (_iLo >= SHIFTJIS_LOBYTE_START0 && _iLo <= SHIFTJIS_LOBYTE_STOP0) ||
+			 (_iLo >= SHIFTJIS_LOBYTE_START1 && _iLo <= SHIFTJIS_LOBYTE_STOP1)
+			)
+		{
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+static inline bool Japanese_ValidShiftJISCode( unsigned int uiCode )
+{
+	return Japanese_ValidShiftJISCode( uiCode >> 8, uiCode & 0xFF );
+}
+
+
+// only call this when Japanese_ValidShiftJISCode() has already returned true...
+//
+static bool Japanese_IsTrailingPunctuation( unsigned int uiCode )
+{
+	// so far I'm just counting the first 18 chars, those seem to be all the basic punctuation...
+	//
+	if (	uiCode >= ((SHIFTJIS_HIBYTE_START0<<8)|SHIFTJIS_LOBYTE_START0) && 
+			uiCode <  ((SHIFTJIS_HIBYTE_START0<<8)|SHIFTJIS_LOBYTE_START0+18)
+		)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+// takes a ShiftJIS double-byte code and collapse down to a 0..n glyph index...
+//
+// (invalid codes will return 0)
+//
+static int Japanese_CollapseShiftJISCode( unsigned int uiCode )
+{
+	if (Japanese_ValidShiftJISCode( uiCode ))
+	{	
+		uiCode -= ((SHIFTJIS_HIBYTE_START0<<8)|SHIFTJIS_LOBYTE_START0);	// sneaky maths on both bytes, reduce to 0x0000 onwards
+		
+		if ( (uiCode & 0xFF) >= (SHIFTJIS_LOBYTE_START1)-SHIFTJIS_LOBYTE_START0)
+		{
+			uiCode -= ((SHIFTJIS_LOBYTE_START1)-SHIFTJIS_LOBYTE_STOP0)-1;
+		}
+
+		if ( ((uiCode>>8)&0xFF) >= (SHIFTJIS_HIBYTE_START1)-SHIFTJIS_HIBYTE_START0)
+		{
+			uiCode -= ((SHIFTJIS_HIBYTE_START1)-SHIFTJIS_HIBYTE_STOP0)-1;
+		}
+
+		uiCode = ((uiCode >> 8) * SHIFTJIS_CODES_PER_ROW) + (uiCode & 0xFF);
+
+		return uiCode;
+	}
+	return 0;
+}
+
+
+static int Japanese_InitFields(int &iGlyphTPs, LPCSTR &psLang)
+{
+	psLang		= "jap";
+	iGlyphTPs	= GLYPH_MAX_JAPANESE_SHADERS;
+	return 64;	// m_iAsianGlyphsAcross
+}
 
 // ============================================================================
+
+
+
 
 
 // takes char *, returns integer char at that point, and advances char * on by enough bytes to move
@@ -181,6 +292,24 @@ unsigned int AnyLanguage_ReadCharFromString( const char **ppsText, qboolean *pbI
 			return uiLetter;
 		}
 	}
+	else
+	if ( Language_IsJapanese() )
+	{
+		if ( Japanese_ValidShiftJISCode( psString[0], psString[1] ))
+		{
+			uiLetter = (psString[0] * 256) + psString[1];
+			*ppsText += 2;
+
+			// need to ask if this is a trailing (ie like a comma or full-stop) punctuation?...
+			//
+			if ( pbIsTrailingPunctuation)
+			{
+				*pbIsTrailingPunctuation = Japanese_IsTrailingPunctuation( uiLetter );
+			}
+
+			return uiLetter;
+		}
+	}
 
 	// ... must not have been an MBCS code...
 	//
@@ -206,7 +335,7 @@ unsigned int AnyLanguage_ReadCharFromString( const char **ppsText, qboolean *pbI
 //
 qboolean Language_IsAsian(void)
 {
-	return (Language_IsKorean() || Language_IsTaiwanese());
+	return (Language_IsKorean() || Language_IsTaiwanese() || Language_IsJapanese());
 }
 
 
@@ -253,6 +382,44 @@ CFontInfo::CFontInfo(const char *fontName)
 	// finished...
 	fontArray.resize(fontIndex + 1);
 	fontArray[fontIndex++] = this;
+
+
+	extern cvar_t *com_buildScript;
+	if (com_buildScript->integer)
+	{
+		static qboolean bDone = qfalse;	// Do this once only (for speed)...
+		if (!bDone)
+		{
+			bDone = qtrue;
+
+			char sTemp[MAX_QPATH];
+			int iGlyphTPs = 0;
+			const char *psLang = NULL;
+			int iAsianGlyphsAcross;
+
+			for (int iLang=0; iLang<3; iLang++)
+			{
+				switch (iLang)
+				{
+					case 0:	iAsianGlyphsAcross = Korean_InitFields		(iGlyphTPs, psLang);	break;
+					case 1: iAsianGlyphsAcross = Taiwanese_InitFields	(iGlyphTPs, psLang);	break;
+					case 2: iAsianGlyphsAcross = Japanese_InitFields	(iGlyphTPs, psLang);	break;
+				}
+
+				for (int i=0; i<iGlyphTPs; i++)
+				{
+					Com_sprintf(sTemp,sizeof(sTemp), "fonts/%s_%d_1024_%d", psLang, 1024/m_iAsianGlyphsAcross, i);
+
+					// RE_RegisterShaderNoMip( sTemp );	// don't actually need to load it, so...
+					fileHandle_t f;
+					FS_FOpenFileRead( sTemp, &f, qfalse );
+					if (f) {
+						FS_FCloseFile( f );
+					}					
+				}
+			}
+		}
+	}
 }
 
 void CFontInfo::UpdateAsianIfNeeded( bool bForceReEval /* = false */ )
@@ -263,8 +430,9 @@ void CFontInfo::UpdateAsianIfNeeded( bool bForceReEval /* = false */ )
 	{
 		qboolean bKorean	= Language_IsKorean();
 		qboolean bTaiwanese	= Language_IsTaiwanese();
+		qboolean bJapanese	= Language_IsJapanese();
 
-		if (bKorean || bTaiwanese)
+		if (bKorean || bTaiwanese || bJapanese)
 		{
 			const int iThisLanguage = Language_GetIntegerValue();
 
@@ -279,16 +447,17 @@ void CFontInfo::UpdateAsianIfNeeded( bool bForceReEval /* = false */ )
 
 				if (bKorean)
 				{
-					iGlyphTPs		= GLYPH_MAX_KOREAN_SHADERS;
-					psLang			= "kor";
-					m_iAsianGlyphsAcross = 32;							// hardwired for now (only one glyph set), may change later
+					m_iAsianGlyphsAcross = Korean_InitFields(iGlyphTPs, psLang);
 				}
 				else 
 				if (bTaiwanese)
 				{
-					iGlyphTPs		= GLYPH_MAX_TAIWANESE_SHADERS;
-					psLang			= "tai";
-					m_iAsianGlyphsAcross = 64;							// hardwired for now (only one glyph set), may change later
+					m_iAsianGlyphsAcross = Taiwanese_InitFields(iGlyphTPs, psLang);
+				}
+				else 
+				if (bJapanese)
+				{
+					m_iAsianGlyphsAcross = Japanese_InitFields(iGlyphTPs, psLang);
 				}
 
 
@@ -350,7 +519,7 @@ void CFontInfo::UpdateAsianIfNeeded( bool bForceReEval /* = false */ )
 }
 
 // needed to add *piShader param because of multiple TPs, 
-//	if not passed in, then I also skip S,T calculations for re-usable static korean glyphinfo struct...
+//	if not passed in, then I also skip S,T calculations for re-usable static asian glyphinfo struct...
 //
 const glyphInfo_t *CFontInfo::GetLetter(const unsigned int uiLetter, int *piShader /* = NULL */)
 { 	
@@ -358,7 +527,19 @@ const glyphInfo_t *CFontInfo::GetLetter(const unsigned int uiLetter, int *piShad
 	{
 		int iCollapsedAsianCode = 0;
 
-		qboolean bTaiHack = qfalse;
+		// small definition private to this module, I don't normally use language numbers in this module but switch-case is more useful.
+		// This is for a small set of hacks to do with onconsistant windows glyph placement...(sigh)
+		//
+		typedef enum
+		{
+			eDefault,
+			//eKorean,
+			eTaiwanese,	// 15x15 glyphs tucked against BR of 16x16 space
+			eJapanese	// 15x15 glyphs tucked against TL of 16x16 space
+		} Language_e;
+
+		Language_e eLanguage = eDefault;
+
 		if ( Language_IsKorean() )
 		{
 			iCollapsedAsianCode = Korean_CollapseKSC5601HangulCode( uiLetter );
@@ -367,7 +548,13 @@ const glyphInfo_t *CFontInfo::GetLetter(const unsigned int uiLetter, int *piShad
 		if ( Language_IsTaiwanese() )
 		{
 			iCollapsedAsianCode = Taiwanese_CollapseBig5Code( uiLetter );
-			bTaiHack = qtrue;
+			eLanguage = eTaiwanese;
+		}
+		else
+		if ( Language_IsJapanese() )
+		{
+			iCollapsedAsianCode = Japanese_CollapseShiftJISCode( uiLetter );
+			eLanguage = eJapanese;
 		}
 
 		if (iCollapsedAsianCode)
@@ -392,23 +579,37 @@ const glyphInfo_t *CFontInfo::GetLetter(const unsigned int uiLetter, int *piShad
 				const bool bHalfT	= (iTexturePageIndex == (m_iAsianPagesLoaded - 1) && m_bAsianLastPageHalfHeight);
 				const int iAsianGlyphsDown = (bHalfT) ? m_iAsianGlyphsAcross / 2 : m_iAsianGlyphsAcross;
 
-				if (!bTaiHack)
+				switch (eLanguage)
 				{
-					// standard...
-					//
-					m_AsianGlyph.s  = (float)( iColumn    ) / (float)m_iAsianGlyphsAcross;
-					m_AsianGlyph.t  = (float)( iRow       ) / (float)  iAsianGlyphsDown;
-				}
-				else
-				{
-					// special hack for Taiwanese stuff to avoid GL-bleed...
-					//
-					m_AsianGlyph.s  = (float)(((1024 / m_iAsianGlyphsAcross) * ( iColumn    ))+1) / 1024.0f;
-					m_AsianGlyph.t  = (float)(((1024 / iAsianGlyphsDown    ) * ( iRow       ))+1) / 1024.0f;
-				}
-				m_AsianGlyph.s2 = (float)( iColumn + 1) / (float)m_iAsianGlyphsAcross;				
-				m_AsianGlyph.t2 = (float)( iRow + 1   ) / (float)  iAsianGlyphsDown;
+					default:					
+					{
+						// standard (also Korean)...
+						//
+						m_AsianGlyph.s  = (float)( iColumn    ) / (float)m_iAsianGlyphsAcross;
+						m_AsianGlyph.t  = (float)( iRow       ) / (float)  iAsianGlyphsDown;
+						m_AsianGlyph.s2 = (float)( iColumn + 1) / (float)m_iAsianGlyphsAcross;				
+						m_AsianGlyph.t2 = (float)( iRow + 1   ) / (float)  iAsianGlyphsDown;
+					}
+					break;
 
+					case eTaiwanese:
+					{
+						m_AsianGlyph.s  = (float)(((1024 / m_iAsianGlyphsAcross) * ( iColumn    ))+1) / 1024.0f;
+						m_AsianGlyph.t  = (float)(((1024 / iAsianGlyphsDown    ) * ( iRow       ))+1) / 1024.0f;
+						m_AsianGlyph.s2 = (float)(((1024 / m_iAsianGlyphsAcross) * ( iColumn+1  ))  ) / 1024.0f;
+						m_AsianGlyph.t2 = (float)(((1024 / iAsianGlyphsDown    ) * ( iRow+1     ))  ) / 1024.0f;
+					}
+					break;
+
+					case eJapanese:
+					{
+						m_AsianGlyph.s  = (float)(((1024 / m_iAsianGlyphsAcross) * ( iColumn    ))  ) / 1024.0f;
+						m_AsianGlyph.t  = (float)(((1024 / iAsianGlyphsDown    ) * ( iRow       ))  ) / 1024.0f;
+						m_AsianGlyph.s2 = (float)(((1024 / m_iAsianGlyphsAcross) * ( iColumn+1  ))-1) / 1024.0f;
+						m_AsianGlyph.t2 = (float)(((1024 / iAsianGlyphsDown    ) * ( iRow+1     ))-1) / 1024.0f;
+					}
+					break;
+				}
 				*piShader = m_hAsianShaders[ iTexturePageIndex ];
 			}
 			return &m_AsianGlyph;
@@ -437,6 +638,11 @@ const int CFontInfo::GetAsianCode(ulong uiLetter) const
 		if ( Language_IsTaiwanese() )
 		{
 			iCollapsedAsianCode = Taiwanese_CollapseBig5Code( uiLetter );
+		}
+		else
+		if ( Language_IsJapanese() )
+		{
+			iCollapsedAsianCode = Japanese_CollapseShiftJISCode( uiLetter );
 		}
 	}
 
@@ -570,7 +776,16 @@ void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, c
 	{
 		psText = "Wp:¼îÅ¸ÀÓÀÌ´Ù ¸Ö¸°. ±×µéÀÌ ¸»ÇÑ´ë·Î ³×°¡ ÀßÇÒÁö ±â´ëÇÏ°Ú´Ù.";
 	}
+	else
+	if (Language_IsJapanese())
+	{
+		char sBlah[200];
+		sprintf(sBlah,va("%c%c %c%c %c%c %c%c",0x82,0xA9,0x82,0xC8,0x8A,0xBF,0x8E,0x9A));
+		psText = &sBlah[0];
+		//psText = ¡@¡A¡B¡C¡D¡E¡F¡G¡H¡I¡J¡K¡L¡M¡N¡O¡P¡Q¡R¡S¡T¡U¡V¡W¡X¡Y¡Z¡[¡\¡]¡^¡_¡`¡a¡b¡c¡d¡e¡f¡g¡h¡i¡j¡k¡l¡m¡n¡o¡p¡q¡r¡s¡t¡u¡v¡w¡x¡y¡z¡{¡|¡}¡~    ¡¡¡¢¡£¡¤¡¥¡¦¡§¡¨¡©¡ª¡«¡¬¡­¡®¡¯¡°¡±¡²¡³¡´¡µ¡¶¡·¡¸¡¹¡º¡»¡¼¡½¡¾¡¿¡À¡Á¡Â¡Ã¡Ä¡Å¡Æ¡Ç¡È¡É¡Ê¡Ë¡Ì¡Í¡Î¡Ï¡Ð¡Ñ¡Ò¡Ó¡Ô¡Õ¡Ö¡×¡Ø¡Ù¡Ú¡Û¡Ü¡Ý¡Þ¡ß¡à¡á¡â¡ã¡ä¡å¡æ¡ç¡è¡é¡ê¡ë¡ì¡í¡î¡ï¡ð¡ñ¡ò¡ó¡ô¡õ¡ö¡÷¡ø¡ù¡ú¡û¡ü¡ý¡þ 1¢@¢A¢B¢C¢D¢E¢F¢G¢H¢I¢J¢K¢L¢M¢N¢O¢P¢Q¢R¢S¢T¢U¢V¢W¢X¢Y¢Z¢[¢\¢]¢^¢_¢`¢a¢b¢c¢d¢e¢f¢g¢h¢i¢j¢k¢l¢m¢n¢o¢p¢q¢r¢s¢t¢u¢v¢w¢x¢y¢z¢{¢|¢}¢~    ¢¡¢¢¢£¢¤¢¥¢¦¢§¢¨¢©¢ª¢«¢¬¢­¢®¢¯¢°¢±¢²¢³¢´¢µ¢¶¢·¢¸¢¹¢º¢»¢¼¢½¢¾¢¿¢À¢Á¢Â¢Ã¢Ä¢Å¢Æ¢Ç¢È¢É¢Ê¢Ë¢Ì¢Í¢Î¢Ï¢Ð¢Ñ¢Ò¢Ó¢Ô¢Õ¢Ö¢×¢Ø¢Ù¢Ú¢Û¢Ü¢Ý¢Þ¢ß¢à¢á¢â¢ã¢ä¢å¢æ¢ç¢è¢é¢ê¢ë¢ì¢í¢î¢ï¢ð¢ñ¢ò¢ó¢ô¢õ¢ö¢÷¢ø¢ù¢ú¢û¢ü¢ý¢þ 2£@£A£B£C£D£E£F£G£H£I£J£K£L£M£N£O£P£Q£R£S£T£U£V£W£X£Y£Z£[£\£]£^£_£`£a£b£c£d£e£f£g£h£i£j£k£l£m£n£o£p£q£r£s£t£u£v£w£x£y£z£{£|£}£~    £¡£¢£££¤£¥£¦£§£¨£©£ª£«£¬£­£®£¯£°£±£²£³£´£µ£¶£·£¸£¹£º£»£¼£½£¾£¿£À£Á£Â£Ã£Ä£Å£Æ£Ç£È£É£Ê£Ë£Ì£Í£Î£Ï£Ð£Ñ£Ò£Ó£Ô£Õ£Ö£×£Ø£Ù£Ú£Û£Ü£Ý£Þ£ß£à£á£â£ã£ä£å£æ£ç£è£é£ê£ë£ì£í£î£ï£ð£ñ£ò£ó£ô£õ£ö£÷£ø£ù£ú£û£ü£ý£þ 3¤@¤A¤B¤C¤D¤E¤F¤G¤H¤I¤J¤K¤L¤M¤N¤O¤P¤Q¤R¤S¤T¤U¤V¤W¤X¤Y¤Z¤[¤\¤]¤^¤
+	}
 */
+
 	CFontInfo *curfont = GetFont(iFontHandle);
 	if(!curfont)
 	{

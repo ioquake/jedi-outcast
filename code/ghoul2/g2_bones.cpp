@@ -21,6 +21,8 @@
 	#include "G2.h"
 #endif
 
+
+void G2_Bone_Not_Found(const char *boneName,const char *modName);
 	 
 //=====================================================================================================================
 // Bone List handling routines - so entities can override bone info on a bone by bone level, and also interrogate this info
@@ -53,7 +55,9 @@ int G2_Find_Bone(const model_t *mod, boneInfo_v &blist, const char *boneName)
 			return i;
 		}
 	}
-
+#if _DEBUG
+	G2_Bone_Not_Found(boneName,mod->name);
+#endif	
 	// didn't find it
 	return -1;
 }
@@ -577,10 +581,10 @@ qboolean G2_Set_Bone_Anim_Index(boneInfo_v &blist, const int index, const int st
 	//assert(startFrame < 1000);//do we really need this???
 	//assert((animSpeed > 0.01) && (animSpeed < 20.0));
 
-	if ((index >= blist.size()) || (blist[index].boneNumber == -1))
+	if (index<0||index >= blist.size()||blist[index].boneNumber<0)
 	{
 		// we are attempting to set a bone override that doesn't exist
-		assert(0);
+//		assert(0);
 		return qfalse;
 	}
 
@@ -591,104 +595,105 @@ qboolean G2_Set_Bone_Anim_Index(boneInfo_v &blist, const int index, const int st
 	}
 
 
-		// since we already existed, we can check to see if we want to start some blending
-		if (flags & (BONE_ANIM_BLEND|BONE_ANIM_BLEND_TO_PARENT))
+	// since we already existed, we can check to see if we want to start some blending
+	if (flags & (BONE_ANIM_BLEND|BONE_ANIM_BLEND_TO_PARENT))
+	{
+		float	currentFrame, animSpeed; 
+		int 	startFrame, endFrame, flags;
+		// figure out where we are now
+		if (G2_Get_Bone_Anim_Index(blist, index, currentTime, &currentFrame, &startFrame, &endFrame, &flags, &animSpeed, NULL, 0))
 		{
-			float	currentFrame, animSpeed; 
-			int 	startFrame, endFrame, flags;
-			// figure out where we are now
-			if (G2_Get_Bone_Anim_Index(blist, index, currentTime, &currentFrame, &startFrame, &endFrame, &flags, &animSpeed, NULL, 0))
+			if (blist[index].blendStart == currentTime)	//we're replacing a blend in progress which hasn't started
 			{
-				if (blist[index].blendStart == currentTime)	//we're replacing a blend in progress which hasn't started
-				{
-					// set the amount of time it's going to take to blend this anim with the last frame of the last one
-					blist[index].blendTime = blendTime;
-				}
-				else
-				{
-					blist[index].blendFrame = currentFrame;
-					blist[index].blendLerpFrame = currentFrame+1;
-					
-					// cope with if the lerp frame is actually off the end of the anim
-					if (blist[index].blendFrame >= blist[index].endFrame )
-					{
-						// we only want to lerp with the first frame of the anim if we are looping 
-						if (blist[index].flags & BONE_ANIM_OVERRIDE_LOOP)
-						{
-							blist[index].blendFrame = blist[index].startFrame;
-						}
-						// if we intend to end this anim or freeze after this, then just keep on the last frame
-						else
-						{
-							blist[index].blendFrame = blist[index].endFrame -1;
-						}
-					}
-					
-					// cope with if the lerp frame is actually off the end of the anim
-					if (blist[index].blendLerpFrame >= blist[index].endFrame )
-					{
-						// we only want to lerp with the first frame of the anim if we are looping 
-						if (blist[index].flags & BONE_ANIM_OVERRIDE_LOOP)
-						{
-							blist[index].blendLerpFrame = blist[index].startFrame;
-						}
-						// if we intend to end this anim or freeze after this, then just keep on the last frame
-						else
-						{
-							blist[index].blendLerpFrame = blist[index].endFrame - 1;
-						}
-					}
-					// set the amount of time it's going to take to blend this anim with the last frame of the last one
-					blist[index].blendTime = blendTime;
-					blist[index].blendStart = currentTime;
-				}
+				// set the amount of time it's going to take to blend this anim with the last frame of the last one
+				blist[index].blendTime = blendTime;
 			}
-			// hmm, we weren't animating on this bone. In which case disable the blend
 			else
 			{
-				blist[index].blendFrame = blist[index].blendLerpFrame = 0;
-				blist[index].blendTime = 0;
-				// we aren't blending, so remove the option to do so
-				modFlags &= ~(BONE_ANIM_BLEND|BONE_ANIM_BLEND_TO_PARENT);
+				blist[index].blendFrame = currentFrame;
+				blist[index].blendLerpFrame = currentFrame+1;
+				
+				// cope with if the lerp frame is actually off the end of the anim
+				if (blist[index].blendFrame >= blist[index].endFrame )
+				{
+					// we only want to lerp with the first frame of the anim if we are looping 
+					if (blist[index].flags & BONE_ANIM_OVERRIDE_LOOP)
+					{
+						blist[index].blendFrame = blist[index].startFrame;
+					}
+					// if we intend to end this anim or freeze after this, then just keep on the last frame
+					else
+					{
+						blist[index].blendFrame = blist[index].endFrame -1;
+					}
+				}
+				
+				// cope with if the lerp frame is actually off the end of the anim
+				if (blist[index].blendLerpFrame >= blist[index].endFrame )
+				{
+					// we only want to lerp with the first frame of the anim if we are looping 
+					if (blist[index].flags & BONE_ANIM_OVERRIDE_LOOP)
+					{
+						blist[index].blendLerpFrame = blist[index].startFrame;
+					}
+					// if we intend to end this anim or freeze after this, then just keep on the last frame
+					else
+					{
+						blist[index].blendLerpFrame = blist[index].endFrame - 1;
+					}
+				}
+				// set the amount of time it's going to take to blend this anim with the last frame of the last one
+				blist[index].blendTime = blendTime;
+				blist[index].blendStart = currentTime;
 			}
 		}
-		else
-		// if we are doing it from parent, then we only care about blendtime and blend start, since the rest gets constructed in the renderer
-		if (flags & BONE_ANIM_BLEND_FROM_PARENT)
-		{
-			// if we hit this, someone put a BLEND_FROM_PARENT on a root bone - that's a no no
-			assert(blist[index].boneNumber);
-			// set the amount of time it's going to take to blend this anim with the last frame of the last one
-			blist[index].blendTime = blendTime;
-			blist[index].blendStart = currentTime;
-		}
+		// hmm, we weren't animating on this bone. In which case disable the blend
 		else
 		{
 			blist[index].blendFrame = blist[index].blendLerpFrame = 0;
-			blist[index].blendTime = blist[index].blendStart = 0;
-		  	// we aren't blending, so remove the option to do so
-		  	modFlags &= ~(BONE_ANIM_BLEND|BONE_ANIM_BLEND_TO_PARENT);
+			blist[index].blendTime = 0;
+			// we aren't blending, so remove the option to do so
+			modFlags &= ~(BONE_ANIM_BLEND|BONE_ANIM_BLEND_TO_PARENT);
+			return qfalse;
 		}
+	}
+	else
+	// if we are doing it from parent, then we only care about blendtime and blend start, since the rest gets constructed in the renderer
+	if (flags & BONE_ANIM_BLEND_FROM_PARENT)
+	{
+		// if we hit this, someone put a BLEND_FROM_PARENT on a root bone - that's a no no
+		assert(blist[index].boneNumber);
+		// set the amount of time it's going to take to blend this anim with the last frame of the last one
+		blist[index].blendTime = blendTime;
+		blist[index].blendStart = currentTime;
+	}
+	else
+	{
+		blist[index].blendFrame = blist[index].blendLerpFrame = 0;
+		blist[index].blendTime = blist[index].blendStart = 0;
+		// we aren't blending, so remove the option to do so
+		modFlags &= ~(BONE_ANIM_BLEND|BONE_ANIM_BLEND_TO_PARENT);
+	}
 
-		// yes, so set the anim data and flags correctly
-		blist[index].endFrame = endFrame;
-		blist[index].startFrame = startFrame;
-		blist[index].animSpeed = animSpeed;
-		blist[index].pauseTime = 0;
-		// start up the animation:)
-		if (setFrame != -1)
-		{
-			blist[index].lastTime = blist[index].startTime = (currentTime - (((setFrame - (float)startFrame) * 50.0)/ animSpeed));
-		}
-		else
-		{
-			blist[index].lastTime = blist[index].startTime = currentTime;
-		}
-		blist[index].flags &= ~(BONE_ANIM_TOTAL);
-		blist[index].flags |= modFlags;
+	// yes, so set the anim data and flags correctly
+	blist[index].endFrame = endFrame;
+	blist[index].startFrame = startFrame;
+	blist[index].animSpeed = animSpeed;
+	blist[index].pauseTime = 0;
+	// start up the animation:)
+	if (setFrame != -1)
+	{
+		blist[index].lastTime = blist[index].startTime = (currentTime - (((setFrame - (float)startFrame) * 50.0)/ animSpeed));
+	}
+	else
+	{
+		blist[index].lastTime = blist[index].startTime = currentTime;
+	}
+	blist[index].flags &= ~(BONE_ANIM_TOTAL);
+	blist[index].flags |= modFlags;
 
 //		assert(blist[index].startTime <= currentTime);
-		return qtrue;
+	return qtrue;
 
 }
 
@@ -789,93 +794,30 @@ qboolean G2_Get_Bone_Anim_Range(const char *fileName, boneInfo_v &blist, const c
 // given a model, bonelist and bonename, return the current frame, startframe and endframe of the current animation
 // NOTE if we aren't running an animation, then qfalse is returned
 qboolean G2_Get_Bone_Anim_Index( boneInfo_v &blist, const int index, const int currentTime, 
-						  float *currentFrame, int *startFrame, int *endFrame, int *flags, float *retAnimSpeed, qhandle_t *modelList, int modelIndex)
+						  float *retcurrentFrame, int *startFrame, int *endFrame, int *flags, float *retAnimSpeed, qhandle_t *modelList, int modelIndex)
 {
   
 	// did we find it?
 	if ((index != -1) && !((index >= blist.size()) || (blist[index].boneNumber == -1)))
 	{ 
+
 		// are we an animating bone?
 		if (blist[index].flags & (BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_OVERRIDE))
 		{
-			// yes - add in animation speed to current frame
-			float	animSpeed = blist[index].animSpeed;
-			float	time = (currentTime - blist[index].startTime) / 50.0f;
-			float	mendFrame = (float)blist[index].endFrame ;
+			int currentFrame,newFrame,numFrames;
+			numFrames=30000; // I don't have this number, but it will eventually assert if the start and end frame are invalid
+			float lerp;
+			G2_TimingModel(blist[index],currentTime,numFrames,currentFrame,newFrame,lerp);
 
-			// are we a paused anim?
-			if (blist[index].pauseTime)
-			{
-				time = (blist[index].pauseTime - blist[index].startTime) / 50.0f;
-			}
-
-			float	newFrame_g = blist[index].startFrame + (time * animSpeed);
-			*currentFrame = newFrame_g;
-
-			int		animSize = blist[index].endFrame - blist[index].startFrame;
-			// we are supposed to be animating right?
-			if (animSize)
-			{ 
-				// did we run off the end?
-				if (((animSpeed > 0.0f) && (newFrame_g > mendFrame)) || 
-					((animSpeed < 0.0f) && (newFrame_g < mendFrame)))
-				{
-					// yep - decide what to do
-					if (blist[index].flags & BONE_ANIM_OVERRIDE_LOOP)
-					{
-
-						// get our new animation frame back within the bounds of the animation set
-						if (animSpeed < 0.0f)
-						{
-							while (newFrame_g <= mendFrame)
-							{
-								newFrame_g -= animSize;
-							}
-						}
-						else
-						{
-							while (newFrame_g >= mendFrame)
-							{
-								newFrame_g -= animSize;
-							}
-						}
-
-						*currentFrame = newFrame_g;
-					}
-					else
-					{
-						// nope, we ran off the end of the current anim
-						if (blist[index].flags & BONE_ANIM_OVERRIDE_FREEZE)
-						{
-							if (animSpeed > 0.0f)
-							{
-								*currentFrame = blist[index].endFrame -1;
-							}
-							else
-							{
-								*currentFrame = blist[index].endFrame +1;
-							}
-						}
-						else
-						{
-							*currentFrame = -1;
-						}
-					}
-				}
-			}
-			else
-			{
-				*currentFrame = blist[index].startFrame;
-			}
-
+			*retcurrentFrame =float(currentFrame)+lerp;
 			*startFrame = blist[index].startFrame;
 			*endFrame = blist[index].endFrame;
 			*flags = blist[index].flags;
-			*retAnimSpeed = animSpeed;
+			*retAnimSpeed = blist[index].animSpeed;
 			return qtrue;
 		}
 	}
-	*startFrame = *endFrame = *currentFrame = -1;
+	*startFrame = *endFrame = *retcurrentFrame = -1;
 	*flags = 0;/*-1;*/ //cheesees fudging cripes i hate -1 
 	return qfalse;
 }
@@ -906,7 +848,7 @@ qboolean G2_Get_Bone_Anim(const char *fileName, boneInfo_v &blist, const char *b
 // given a model, bonelist and bonename, lets pause an anim if it's playing.
 qboolean G2_Pause_Bone_Anim_Index( boneInfo_v &blist, const int boneIndex, const int currentTime)
 {
-	if (boneIndex != -1)
+	if (boneIndex>=0&&boneIndex<blist.size())
 	{
 		// are we pausing or un pausing?
 		if (blist[boneIndex].pauseTime)
@@ -915,11 +857,17 @@ qboolean G2_Pause_Bone_Anim_Index( boneInfo_v &blist, const int boneIndex, const
 			float	currentFrame, animSpeed;
 
 			// figure out what frame we are on now
-			G2_Get_Bone_Anim_Index( blist, boneIndex, blist[boneIndex].pauseTime, &currentFrame, &startFrame, &endFrame, &flags, &animSpeed, NULL, 0);
-			// reset start time so we are actually on this frame right now
-			G2_Set_Bone_Anim_Index( blist, boneIndex, startFrame, endFrame, flags, animSpeed, currentTime, currentFrame, 0);
-			// no pausing anymore
-			blist[boneIndex].pauseTime = 0;
+			if	(G2_Get_Bone_Anim_Index( blist, boneIndex, blist[boneIndex].pauseTime, &currentFrame, &startFrame, &endFrame, &flags, &animSpeed, NULL, 0))
+			{
+				// reset start time so we are actually on this frame right now
+				G2_Set_Bone_Anim_Index( blist, boneIndex, startFrame, endFrame, flags, animSpeed, currentTime, currentFrame, 0);
+				// no pausing anymore
+				blist[boneIndex].pauseTime = 0;
+			}
+			else
+			{
+				return qfalse;
+			}
 		}
 		// ahh, just pausing, the easy bit
 		else
@@ -930,7 +878,6 @@ qboolean G2_Pause_Bone_Anim_Index( boneInfo_v &blist, const int boneIndex, const
 		return qtrue;
 	}
 	assert(0);
-
 	return qfalse;
 }
 qboolean G2_Pause_Bone_Anim(const char *fileName, boneInfo_v &blist, const char *boneName, const int currentTime)
@@ -1041,92 +988,6 @@ void G2_Animate_Bone_List(CGhoul2Info_v &ghoul2, const int currentTime, const in
 	int i;
 	boneInfo_v &blist = ghoul2[index].mBlist;
 
-
-#if 0	
-		// look through entire list
-	for(i=0; i<blist.size(); i++)
-	{
-		// we we a valid bone override?
-		if (blist[i].boneNumber != -1)
-		{
-			// are we animating?
-			if (blist[i].flags & (BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_OVERRIDE))
-			{
-				// yes - add in animation speed to current frame
-				int callbackCurrentTime = currentTime;
-
-				// cope with note tracks here
-				// do we have a note track?
-				if (blist[i].boneMap)
-				{
-					// are we a paused anim?
-					if (blist[i].pauseTime)
-					{
-						callbackCurrentTime  = (blist[i].pauseTime - blist[i].startTime);
-					}
-
-					// yes. Ok, lets see if we can find the correct entry for the last time we checked
-					int adjustedLastTime = (blist[i].lastTime - blist[i].startTime);
-					int adjustedCurrentTime = (callbackCurrentTime - blist[i].startTime);
-
-					CWInstBoneMap::TBoneMapIter itCur = blist[i].boneMap->mMap.lower_bound(adjustedLastTime);
-					CWInstBoneMap::TBoneMapIter itStop = blist[i].boneMap->mMap.upper_bound(adjustedCurrentTime);
-					vector<WraithCallInstID>			callbacksToFire;
-
-					boneInfo_t	*bone = &blist[i];
-
-					// walk through the map list of call backs we should hit this frame
-					while (itCur != itStop)
-					{
-
-						int	calltime = (*itCur).first;
-
-						// push it into the list ready to fire off later.
-						callbacksToFire.push_back((*itCur).second);
-
-						// did we hit an exact match?
-						if ((*itCur).first == adjustedCurrentTime)
-						{
-							// adjust the next time by the anim speed, so if we are running fast we won't lose this jumping of one millisecond
-							int adjuster = 1;
-							if (blist[i].animSpeed > 1)
-							{
-								adjuster = blist[i].animSpeed + 1;
-							}
-							callbackCurrentTime += adjuster;
-						}
-						// select next call back to check against
-						itCur++;
-
-						// have we run off the end of the map?
-						if (itCur == blist[i].boneMap->mMap.end())
-						{
-							// does the map loop back to the beginning?
-							if (itCur != itStop)
-							{
-								itCur = blist[i].boneMap->mMap.begin();
-							}
-						}
-					}
-
-					// fire off all the call backs we have selected for this bone.
-					for (int cllbks = 0; cllbks < callbacksToFire.size(); cllbks++)
-					{
-						TheGhoul2Wraith()->FireCallback(ghoul2, index, callbacksToFire[cllbks], callbackCurrentTime);
-					}
-					callbacksToFire.clear();
-
-					// assuming the bone is still here, set the last time to current time
-					if (blist[i].boneNumber != -1)
-					{
-						blist[i].lastTime = callbackCurrentTime;
-					}
-			 	}
-			}
-		}
-	}
-#endif
-
 	// look through entire list
 	for(i=0; i<blist.size(); i++)
 	{
@@ -1145,6 +1006,14 @@ void G2_Animate_Bone_List(CGhoul2Info_v &ghoul2, const int currentTime, const in
 				{
 					time = (blist[i].pauseTime - blist[i].startTime) / 50.0f;
 				}
+				else
+				{			
+					time = (currentTime - blist[i].startTime) / 50.0f;
+				}
+				if (time<0.0f)
+				{
+					time=0.0f;
+				}
 				float	newFrame_g = blist[i].startFrame + (time * animSpeed);
 
 				int		animSize = endFrame - blist[i].startFrame;
@@ -1152,8 +1021,8 @@ void G2_Animate_Bone_List(CGhoul2Info_v &ghoul2, const int currentTime, const in
 				if (animSize)
 				{
 					// did we run off the end?
-					if (((animSpeed > 0.0f) && (newFrame_g > endFrame )) || 
-						((animSpeed < 0.0f) && (newFrame_g < endFrame )))
+					if (((animSpeed > 0.0f) && (newFrame_g > endFrame - 1)) || 
+						((animSpeed < 0.0f) && (newFrame_g < endFrame + 1)))
 					{
 						// yep - decide what to do
 						if (blist[i].flags & BONE_ANIM_OVERRIDE_LOOP)
@@ -1161,27 +1030,34 @@ void G2_Animate_Bone_List(CGhoul2Info_v &ghoul2, const int currentTime, const in
 							// get our new animation frame back within the bounds of the animation set
 							if (animSpeed < 0.0f)
 							{
-								while (newFrame_g <= endFrame)
+								if (newFrame_g <= endFrame)
 								{
-									newFrame_g -= animSize;
+									newFrame_g=endFrame+fmod(newFrame_g-endFrame,animSize)-animSize;
 								}
+								// figure out new start time
+								float frameTime =  newFrame_g - blist[i].startFrame ;
+								blist[i].startTime = currentTime - (int)((frameTime / animSpeed) * 50.0f);
+								assert(blist[i].startTime <= currentTime);
+								blist[i].lastTime = blist[i].startTime;
 							}
 							else
 							{
-								while (newFrame_g >= endFrame)
+								if (newFrame_g >= endFrame)
 								{
-									newFrame_g -= animSize;
+									newFrame_g=endFrame+fmod(newFrame_g-endFrame,animSize)-animSize;
 								}
+								// figure out new start time
+								float frameTime =  newFrame_g - blist[i].startFrame ;
+								blist[i].startTime = currentTime - (int)((frameTime / animSpeed) * 50.0f);
+								assert(blist[i].startTime <= currentTime);
+								blist[i].lastTime = blist[i].startTime;
 							}
-							// figure out new start time
-							float frameTime =  newFrame_g - blist[i].startFrame ;
-							blist[i].startTime = currentTime - (int)((frameTime / animSpeed) * 50.0f);
-							assert(blist[i].startTime <= currentTime);
-							blist[i].lastTime = blist[i].startTime;
 						}
 						else
 						{
 							if ((blist[i].flags & (BONE_ANIM_OVERRIDE_FREEZE)) != (BONE_ANIM_OVERRIDE_FREEZE))
+//							if (((blist[i].flags & (BONE_ANIM_OVERRIDE_DEFAULT)) == (BONE_ANIM_OVERRIDE_DEFAULT))||
+//								((blist[i].flags & (BONE_ANIM_OVERRIDE_FREEZE)) == (BONE_ANIM_OVERRIDE_FREEZE)))
 							{
 								// if we are supposed to reset the default anim, then do so
 								if (blist[i].flags & (BONE_ANIM_OVERRIDE_DEFAULT))

@@ -108,7 +108,7 @@ sFlagPair LanguagePairs[] =
 	{ TK_TEXT_LANGUAGE6,	SP_LANGUAGE_TAIWANESE },
 	{ TK_TEXT_LANGUAGE7,	SP_LANGUAGE_ITALIAN },
 	{ TK_TEXT_LANGUAGE8,	SP_LANGUAGE_SPANISH },
-	{ TK_TEXT_LANGUAGE9,	SP_LANGUAGE_9 },
+	{ TK_TEXT_LANGUAGE9,	SP_LANGUAGE_JAPANESE },
 	{ TK_TEXT_LANGUAGE10,	SP_LANGUAGE_10},
 	{ TK_INVALID,		0 }
 };
@@ -738,10 +738,10 @@ map<byte, cStringPackageSingle *>		SP_ListByID;
  *	Registration flag
  *
  * Return:
- *	pointer to desired String Package
+ *	success/fail
  *
  ************************************************************************************************/
-void SP_Register(const char *inPackage, unsigned char Registration)
+qboolean SP_Register(const char *inPackage, unsigned char Registration)
 {
 	char											*buffer;
 	char											Package[MAX_QPATH];
@@ -770,7 +770,7 @@ void SP_Register(const char *inPackage, unsigned char Registration)
 			{
 				Com_Error(ERR_FATAL, "Could not open string package '%s'", Package);
 			}
-			return;
+			return qfalse;
 		}
 		
 		// Create the new string package
@@ -796,6 +796,7 @@ void SP_Register(const char *inPackage, unsigned char Registration)
 	new_sp->Register(Registration);
 
 //	return new_sp;
+	return qtrue;
 }
 
 
@@ -947,7 +948,7 @@ void SP_Init(void)
 	sp_language = Cvar_Get("sp_language", va("%d", SP_LANGUAGE_ENGLISH), CVAR_ARCHIVE | CVAR_NORESTART);
 	sp_show_strip = Cvar_Get ("sv_show_strip", "0", 0);
 
-//	Cvar_Set("sp_language", va("%d", SP_LANGUAGE_KOREAN));	// stetest, do NOT leave in
+//	Cvar_Set("sp_language", va("%d", SP_LANGUAGE_JAPANESE));	// stetest, do NOT leave in
 
 	SP_UpdateLanguage();
 	sp_language->modified = false;

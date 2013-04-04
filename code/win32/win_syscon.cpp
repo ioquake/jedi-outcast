@@ -434,8 +434,10 @@ char *Sys_ConsoleInput( void )
 void Conbuf_AppendText( const char *pMsg )
 {
 #define CONSOLE_BUFFER_SIZE		16384
-
-	char buffer[CONSOLE_BUFFER_SIZE*2];
+	if ( !s_wcd.hWnd ) {
+		return;
+	}
+	char buffer[CONSOLE_BUFFER_SIZE*4];
 	char *b = buffer;
 	const char *msg;
 	int bufLen;

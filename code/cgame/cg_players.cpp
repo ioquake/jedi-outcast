@@ -35,6 +35,7 @@ extern int PM_AnimLength( int index, animNumber_t anim );
 extern qboolean PM_InRoll( playerState_t *ps );
 
 //Basic set of custom sounds that everyone needs
+// (keep numbers in ascending order in order for variant-capping to work)
 const char	*cg_customBasicSoundNames[MAX_CUSTOM_BASIC_SOUNDS] = 
 {
 	"*death1.wav",
@@ -54,6 +55,7 @@ const char	*cg_customBasicSoundNames[MAX_CUSTOM_BASIC_SOUNDS] =
 };
 
 //Used as a supplement to the basic set for enemies and hazard team
+// (keep numbers in ascending order in order for variant-capping to work)
 const char	*cg_customCombatSoundNames[MAX_CUSTOM_COMBAT_SOUNDS] = 
 {
 	"*anger1.wav",	//Say when acquire an enemy when didn't have one before
@@ -74,6 +76,7 @@ const char	*cg_customCombatSoundNames[MAX_CUSTOM_COMBAT_SOUNDS] =
 };
 
 //Used as a supplement to the basic set for stormtroopers
+// (keep numbers in ascending order in order for variant-capping to work)
 const char	*cg_customExtraSoundNames[MAX_CUSTOM_EXTRA_SOUNDS] = 
 {
 	"*chase1.wav",
@@ -115,6 +118,7 @@ const char	*cg_customExtraSoundNames[MAX_CUSTOM_EXTRA_SOUNDS] =
 };
 
 //Used as a supplement to the basic set for jedi
+// (keep numbers in ascending order in order for variant-capping to work)
 const char	*cg_customJediSoundNames[MAX_CUSTOM_JEDI_SOUNDS] = 
 {
 	"*combat1.wav",
@@ -140,6 +144,70 @@ const char	*cg_customJediSoundNames[MAX_CUSTOM_JEDI_SOUNDS] =
 	"*gloat3.wav",
 	"*pushfail.wav",
 };
+
+
+// done at registration time only...
+//
+// cuts down on sound-variant registration for low end machines, 
+//		eg *gloat1.wav (plus...2,...3) can be capped to all be just *gloat1.wav
+//
+static const char *GetCustomSound_VariantCapped(const char *ppsTable[], int iEntryNum)
+{
+	extern vmCvar_t	cg_VariantSoundCap;
+		
+//	const int iVariantCap = 2;	// test
+	const int &iVariantCap = cg_VariantSoundCap.integer;
+
+	if (iVariantCap)
+	{
+		char *p = strchr(ppsTable[iEntryNum],'.');
+		if (p && p-2 > ppsTable[iEntryNum] && isdigit(p[-1]) && !isdigit(p[-2]))
+		{
+			int iThisVariant = p[-1]-'0';
+
+			if (iThisVariant > iVariantCap)
+			{
+				// ok, let's not load this variant, so pick a random one below the cap value...
+				//
+				for (int i=0; i<2; i++)	// 1st pass, choose random, 2nd pass (if random not in list), choose xxx1, else fall through...
+				{
+					char sName[MAX_QPATH];
+
+					Q_strncpyz(sName, ppsTable[iEntryNum], sizeof(sName));
+					p = strchr(sName,'.');
+					if (p)
+					{
+						*p = '\0';
+						sName[strlen(sName)-1] = '\0';	// strip the digit
+
+						int iRandom = !i ? Q_irand(1,iVariantCap) : 1;
+
+						strcat(sName,va("%d.wav",iRandom));
+
+						// does this exist in the entries before the original one?...
+						//
+						for (int iScanNum=0; iScanNum<iEntryNum; iScanNum++)
+						{
+							if (!stricmp(ppsTable[iScanNum], sName))
+							{
+								// yeah, this entry is also present in the table, so ok to return it
+								//
+								return ppsTable[iScanNum];
+							}
+						}
+					}
+				}
+
+				// didn't find an entry corresponding to either the random name, or the xxxx1 version, 
+				//	so give up and drop through to return the original...
+				//
+			}
+		}
+	}
+
+	return ppsTable[iEntryNum];
+}
+
 
 /*
 ================
@@ -349,7 +417,7 @@ void CG_NewClientinfo( int clientNum )
 	//player uses only the basic custom sound set, not the combat or extra
 	for ( i = 0 ; i < MAX_CUSTOM_BASIC_SOUNDS ; i++ ) 
 	{
-		s = cg_customBasicSoundNames[i];
+		s = GetCustomSound_VariantCapped(cg_customBasicSoundNames,i);	// s = cg_customBasicSoundNames[i];
 		if ( !s ) 
 		{
 			break;
@@ -374,7 +442,7 @@ void CG_RegisterNPCCustomSounds( clientInfo_t *ci )
 	{
 		for ( i = 0 ; i < MAX_CUSTOM_BASIC_SOUNDS ; i++ ) 
 		{
-			s = cg_customBasicSoundNames[i];
+			s = GetCustomSound_VariantCapped(cg_customBasicSoundNames,i);	// s = cg_customBasicSoundNames[i];
 			if ( !s ) 
 			{
 				break;
@@ -391,7 +459,7 @@ void CG_RegisterNPCCustomSounds( clientInfo_t *ci )
 	{
 		for ( i = 0 ; i < MAX_CUSTOM_COMBAT_SOUNDS ; i++ ) 
 		{
-			s = cg_customCombatSoundNames[i];
+			s = GetCustomSound_VariantCapped(cg_customCombatSoundNames,i);	// s = cg_customCombatSoundNames[i];
 			if ( !s ) 
 			{
 				break;
@@ -408,7 +476,7 @@ void CG_RegisterNPCCustomSounds( clientInfo_t *ci )
 	{
 		for ( i = 0 ; i < MAX_CUSTOM_EXTRA_SOUNDS ; i++ ) 
 		{
-			s = cg_customExtraSoundNames[i];
+			s = GetCustomSound_VariantCapped(cg_customExtraSoundNames,i);	// s = cg_customExtraSoundNames[i];
 			if ( !s ) 
 			{
 				break;
@@ -425,7 +493,7 @@ void CG_RegisterNPCCustomSounds( clientInfo_t *ci )
 	{
 		for ( i = 0 ; i < MAX_CUSTOM_JEDI_SOUNDS ; i++ ) 
 		{
-			s = cg_customJediSoundNames[i];
+			s = GetCustomSound_VariantCapped(cg_customJediSoundNames,i);	// s = cg_customJediSoundNames[i];
 			if ( !s ) 
 			{
 				break;
@@ -1679,11 +1747,15 @@ void CG_G2ClientSpineAngles( centity_t *cent, vec3_t viewAngles, const vec3_t an
 	{//FIXME: no need to do this if legs and torso on are same frame
 		//adjust for motion offset
 		mdxaBone_t	boltMatrix;
-		vec3_t		motionFwd, motionAngles;
+		vec3_t		motionFwd, motionRt, motionAngles, tempAng;
 
 		gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->motionBolt, &boltMatrix, vec3_origin, cent->lerpOrigin, cg.time, cgs.model_draw, cent->currentState.modelScale );
 		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, motionFwd );
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_X, motionRt );
 		vectoangles( motionFwd, motionAngles );
+		vectoangles( motionRt, tempAng );
+		motionAngles[ROLL] = -tempAng[PITCH];
+
 		for ( int ang = 0; ang < 3; ang++ )
 		{
 			viewAngles[ang] = AngleNormalize180( viewAngles[ang] - AngleNormalize180( motionAngles[ang] ) );
@@ -1957,6 +2029,9 @@ void CG_G2PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t angles )
 		}
 		else
 		{
+			//FIXME: we need to override the hips bone with a turn anim when turning
+			//		and clear it when we're not... does beld from and to parent actually work?
+
 			//FIXME: this needs to properly set the legs.yawing field so we don't erroneously play the turning anim, but we do play it when turning in place
 			if ( angles[YAW] == cent->pe.legs.yawAngle )
 			{
@@ -4700,6 +4775,10 @@ void CG_Player( centity_t *cent ) {
 			ent.renderfx |= RF_SHADOW_PLANE;
 		}
 		ent.renderfx |= RF_LIGHTING_ORIGIN;			// use the same origin for all
+		if ( cent->gent->NPC->scriptFlags & SCF_MORELIGHT )
+		{
+			ent.renderfx |= RF_MORELIGHT;			//bigger than normal min light
+		}
 
 		VectorCopy( cent->lerpOrigin, ent.origin );
 		VectorCopy( cent->lerpOrigin, ent.oldorigin );
@@ -4844,8 +4923,11 @@ Ghoul2 Insert Start
 		{
 			ent.renderfx |= RF_SHADOW_PLANE;
 		}
-
 		ent.renderfx |= RF_LIGHTING_ORIGIN;			// use the same origin for all
+		if ( cent->gent->NPC && cent->gent->NPC->scriptFlags & SCF_MORELIGHT )
+		{
+			ent.renderfx |= RF_MORELIGHT;			//bigger than normal min light
+		}
 
 		CG_RegisterWeapon( cent->currentState.weapon );
 
@@ -5408,6 +5490,10 @@ Ghoul2 Insert End
 		renderfx |= RF_SHADOW_PLANE;
 	}
 	renderfx |= RF_LIGHTING_ORIGIN;			// use the same origin for all
+	if ( cent->gent->NPC->scriptFlags & SCF_MORELIGHT )
+	{
+		renderfx |= RF_MORELIGHT;			//bigger than normal min light
+	}
 
 	if ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD && cg.snap->ps.viewEntity == cent->currentState.clientNum )
 	{//player is in an entity camera view, ME

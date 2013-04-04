@@ -509,12 +509,9 @@ const weaponData_t  *wData = NULL;
 
 			if ( !( cc->currentState.eFlags & EF_FIRING ) && !( cc->currentState.eFlags & EF_ALT_FIRING ))
 			{
-				// not animating
-				gi.G2API_PauseBoneAnim( &cent->gent->ghoul2[cent->gent->playerModel], "model_root", cg.time );
-				/*
+				// not animating..pausing was leaving the barrels in a bad state
 				gi.G2API_SetBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->rootBone, 
-						0, 0, BONE_ANIM_OVERRIDE_LOOP, 1, cg.time, -1, 0 );
-				*/
+						0, 0, BONE_ANIM_OVERRIDE, 1.0f, cg.time );
 			}
 
 			// get alternating muzzle end bolts
@@ -559,7 +556,7 @@ const weaponData_t  *wData = NULL;
 				if ( cc->currentState.eFlags & EF_FIRING || cc->currentState.eFlags & EF_ALT_FIRING )
 				{
 					gi.G2API_SetBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->rootBone, 
-						0, 2, BONE_ANIM_OVERRIDE_LOOP, 1.0f, cg.time, -1, 0 );
+						0, 3, BONE_ANIM_OVERRIDE_FREEZE, 0.6f, cg.time );
 		
 					if ( effect )
 					{
@@ -636,7 +633,7 @@ const weaponData_t  *wData = NULL;
 				if ( cent->gent->owner->health )
 				{
 					//make sure we can always be seen
-					ent.renderfx |= RF_MINLIGHT | RF_PULSATE;
+					ent.renderfx |= RF_PULSATE;
 				}
 			}
 		}
@@ -671,7 +668,7 @@ const weaponData_t  *wData = NULL;
 			if ( cent->gent->owner->health )
 			{
 				//make sure we can always be seen
-				ent.renderfx |= RF_MINLIGHT | RF_PULSATE;
+				ent.renderfx |= RF_PULSATE;
 			}
 		}
 	}
@@ -956,11 +953,11 @@ Ghoul2 Insert End
 
 	// items without glow textures need to keep a minimum light value
 	// so they are always visible
-	if (( item->giType == IT_WEAPON ) || ( item->giType == IT_ARMOR )) 
+/*	if (( item->giType == IT_WEAPON ) || ( item->giType == IT_ARMOR )) 
 	{
 		ent.renderfx |= RF_MINLIGHT;
 	}
-
+*/
 	// increase the size of the weapons when they are presented as items
 //	if ( item->giType == IT_WEAPON ) {
 //		VectorScale( ent.axis[0], 1.5f, ent.axis[0] );
@@ -1617,12 +1614,30 @@ Ghoul2 Insert End
 			cent->lerpOrigin[2] = current[2] + f * ( next[2] - current[2] );
 
 			/*
-			if(cent->gent && cent->currentState.eFlags & EF_NPC && !VectorCompare(current, next))
+			if ( cent->gent && cent->currentState.eFlags & EF_NPC )
 			{
 				Com_Printf("%s last/next/lerp pos %s/%s/%s, f = %4.2f\n", cent->gent->script_targetname, vtos(current), vtos(next), vtos(cent->lerpOrigin), f);
 			}
 			*/
 			return;//FIXME: should this be outside this if?
+		}
+	}
+	else
+	{
+		if ( cent->currentState.apos.trType == TR_INTERPOLATE )
+		{
+			EvaluateTrajectory( &cent->currentState.apos, cg.snap->serverTime, cent->lerpAngles );
+		}
+		if ( cent->currentState.pos.trType == TR_INTERPOLATE ) 
+		{
+			EvaluateTrajectory( &cent->currentState.pos, cg.snap->serverTime, cent->lerpOrigin );
+			/*
+			if(cent->gent && cent->currentState.eFlags & EF_NPC )
+			{
+				Com_Printf("%s last/next/lerp pos %s, f = 1.0\n", cent->gent->script_targetname, vtos(cent->lerpOrigin) );
+			}
+			*/
+			return;
 		}
 	}
 	
@@ -1818,9 +1833,11 @@ void CG_MatrixEffect ( centity_t *cent )
 	float totalElapsedTime = (float)(cg.time - cent->currentState.time);
 	float elapsedTime = totalElapsedTime;
 	if ( totalElapsedTime > cent->currentState.eventParm //MATRIX_EFFECT_TIME
-		|| (cent->currentState.weapon&&g_entities[cent->currentState.otherEntityNum].client&&g_entities[cent->currentState.otherEntityNum].client->ps.groundEntityNum!=ENTITYNUM_NONE) )
-	{//time is up or this is a falling spin and they hit the ground
-		cg.overrides.thirdPersonEntity = 0;
+		|| (cent->currentState.weapon&&g_entities[cent->currentState.otherEntityNum].client&&g_entities[cent->currentState.otherEntityNum].client->ps.groundEntityNum!=ENTITYNUM_NONE) 
+		|| cg.missionStatusShow )
+	{//time is up or this is a falling spin and they hit the ground or mission end screen is up
+		cg.overrides.active &= ~(/*CG_OVERRIDE_3RD_PERSON_ENT|*/CG_OVERRIDE_3RD_PERSON_RNG|CG_OVERRIDE_3RD_PERSON_ANG|CG_OVERRIDE_3RD_PERSON_POF);
+		//cg.overrides.thirdPersonEntity = 0;
 		cg.overrides.thirdPersonAngle = 0;
 		cg.overrides.thirdPersonPitchOffset = 0;
 		cg.overrides.thirdPersonRange = 0;
@@ -1840,9 +1857,11 @@ void CG_MatrixEffect ( centity_t *cent )
 	MatrixMode = qtrue;
 
 	//FIXME: move the position towards them and back?
+	//cg.overrides.active |= CG_OVERRIDE_3RD_PERSON_ENT;
 	//cg.overrides.thirdPersonEntity = cent->currentState.otherEntityNum;
 
 	//rotate
+	cg.overrides.active |= CG_OVERRIDE_3RD_PERSON_ANG;
 	cg.overrides.thirdPersonAngle = 360.0f*elapsedTime/MATRIX_EFFECT_TIME;
 
 	if ( !cent->currentState.weapon ) 
@@ -1857,6 +1876,7 @@ void CG_MatrixEffect ( centity_t *cent )
 
 		//pitch
 		//dip - FIXME: use pitchOffet?
+		cg.overrides.active |= CG_OVERRIDE_3RD_PERSON_POF;
 		cg.overrides.thirdPersonPitchOffset = cg_thirdPersonPitchOffset.value;
 		if ( elapsedTime < MATRIX_EFFECT_TIME*0.33f )
 		{
@@ -1872,6 +1892,7 @@ void CG_MatrixEffect ( centity_t *cent )
 		}
 
 		//pull back
+		cg.overrides.active |= CG_OVERRIDE_3RD_PERSON_RNG;
 		cg.overrides.thirdPersonRange = cg_thirdPersonRange.value;
 		if ( elapsedTime < MATRIX_EFFECT_TIME*0.33 )
 		{
@@ -1886,7 +1907,11 @@ void CG_MatrixEffect ( centity_t *cent )
 			cg.overrides.thirdPersonRange += 80.0f;
 		}
 	}
-	//else FIXME: if they're on the ground, stop spinning...
+	else
+	{//FIXME: if they're on the ground, stop spinning and stop timescale
+		//FIXME: if they go to the menu, restore timescale
+		cgi_Cvar_Set( "timescale", "0.25f" );
+	}
 }
 
 static void CG_Think ( centity_t *cent )
@@ -2037,18 +2062,27 @@ void CG_AddPacketEntities( void ) {
 	playerState_t		*ps;
 
 	// set cg.frameInterpolation
-	if ( cg.nextSnap ) {
+	if ( cg.nextSnap ) 
+	{
 		int		delta;
 
 		delta = (cg.nextSnap->serverTime - cg.snap->serverTime);
-		if ( delta == 0 ) {
+		if ( delta == 0 ) 
+		{
 			cg.frameInterpolation = 0;
-		} else {
+//			Com_Printf("identical frames\n");
+		} 
+		else 
+		{
 			cg.frameInterpolation = (float)( cg.time - cg.snap->serverTime ) / delta;
+//			Com_Printf("interp %6.4f\n",cg.frameInterpolation);
 		}
-	} else {
+	} 
+	else 
+	{
 		cg.frameInterpolation = 0;	// actually, it should never be used, because 
 									// no entities should be marked as interpolating
+//		Com_Printf("no next snap!\n");   
 	}
 
 	// the auto-rotating items will all have the same axis

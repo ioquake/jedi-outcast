@@ -297,7 +297,7 @@ void CL_GenericMenu_f(void)
 {		
 	char *arg = Cmd_Argv( 1 );
 
-	UI_SetActiveMenu("genericmenu",arg);
+	UI_SetActiveMenu("ingame",arg);
 }
 
 

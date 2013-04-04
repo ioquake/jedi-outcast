@@ -15,6 +15,8 @@ HRESULT (WINAPI *pDirectSoundCreate)(GUID FAR *lpGUID, LPDIRECTSOUND FAR *lplpDS
 #define SECONDARY_BUFFER_SIZE	0x10000
 
 
+extern int s_UseOpenAL;
+
 static qboolean	dsound_init;
 static int		sample16;
 static DWORD	gSndBufSize;
@@ -365,7 +367,13 @@ SNDDMA_Activate
 When we change windows we need to do this
 =================
 */
-void SNDDMA_Activate( void ) {
+void SNDDMA_Activate( qboolean bAppActive )
+{
+	if (s_UseOpenAL)
+	{
+		S_AL_MuteAllSounds(!bAppActive);
+	}
+
 	if ( !pDS ) {
 		return;
 	}
@@ -375,6 +383,7 @@ void SNDDMA_Activate( void ) {
 		SNDDMA_Shutdown ();
 	}
 }
+
 
 
 // I know this is a bit horrible, but I need to pass our LPDIRECTSOUND ptr to Bink for video playback,

@@ -251,7 +251,7 @@ bool CParticle::UpdateOrigin()
 		else
 		{
 			// if this returns solid, we need to do a trace
-			solid = !!(CG_PointContents( new_origin, ENTITYNUM_WORLD ) & MASK_SHOT);
+			solid = !!(CG_PointContents( new_origin, ENTITYNUM_WORLD ) & ( MASK_SHOT | CONTENTS_WATER ));
 		}
 
 		if ( solid )
@@ -261,11 +261,11 @@ bool CParticle::UpdateOrigin()
 
 			if ( mFlags & FX_USE_BBOX )
 			{
-				theFxHelper.Trace( &trace, mOrigin1, mMin, mMax, new_origin, -1, MASK_SHOT );
+				theFxHelper.Trace( &trace, mOrigin1, mMin, mMax, new_origin, -1, ( MASK_SHOT | CONTENTS_WATER ) );
 			}
 			else
 			{
-				theFxHelper.Trace( &trace, mOrigin1, NULL, NULL, new_origin, -1, MASK_SHOT );
+				theFxHelper.Trace( &trace, mOrigin1, NULL, NULL, new_origin, -1, ( MASK_SHOT | CONTENTS_WATER ) );
 			}
 
 			// Hit something
@@ -1204,7 +1204,7 @@ void CEmitter::Draw()
 					}
 
 					// Hit something
-					if ( trace.fraction < 1.0f )//|| trace.startsolid || trace.allsolid )
+					if ( trace.fraction < 1.0f || trace.startsolid || trace.allsolid )
 					{
 						return;
 					}

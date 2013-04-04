@@ -405,7 +405,7 @@ LONG WINAPI MainWndProc (
 			fMinimized = (BOOL) HIWORD(wParam);
 
 			VID_AppActivate( fActive != WA_INACTIVE, fMinimized);
-			SNDDMA_Activate();
+			SNDDMA_Activate( fActive != WA_INACTIVE && !fMinimized );
 		}
 		break;
 

@@ -57,6 +57,9 @@ void UI_SetActiveMenu( const char* menuname,const char *menuID )
 		return;
 	}
 
+	//make sure force-speed and slowmodeath doesn't slow down menus - NOTE: they should reset the timescale when the game un-pauses
+	Cvar_SetValue( "timescale", 1.0f );
+
 	UI_Cursor_Show(qtrue);
 
 	// enusure minumum menu data is cached

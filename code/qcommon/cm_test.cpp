@@ -1,5 +1,46 @@
 #include "cm_local.h"
+#pragma warning (push, 3)	//go back down to 3 for the stl include
+#include "hstring.h"
+#pragma warning (pop)
+using namespace std;
 
+class CPoint
+{
+public:
+	float x,y,z;
+	CPoint(float _x,float _y,float _z):
+		x(_x),
+		y(_y),
+		z(_z)
+	{
+	}
+	bool operator== (const CPoint& _P) const {return((x==_P.x)&&(y==_P.y)&&(z==_P.z));}
+};
+/*
+class CPointComparator
+{
+public:
+	bool operator()(const CPoint& _A,const CPoint& _B) const {return((_A.x==_B.x)&&(_A.y==_B.y)&&(_A.z==_B.z));}
+};
+*/
+//static map<CPoint,int,CPointComparator>	pointToLeaf;
+static hlist<pair<CPoint,int> >				pointToLeaf;
+//static hlist<pair<CPoint,int> >				pointToContents;
+
+void CM_CleanLeafCache(void)
+{
+	hlist<pair<CPoint,int> >::iterator l;
+	for(l=pointToLeaf.begin();l!=pointToLeaf.end();l++)
+	{
+		pointToLeaf.erase(l);
+	}
+/*
+	for(l=pointToContents.begin();l!=pointToContents.end();l++)
+	{
+		pointToContents.erase(l);
+	}
+*/
+}
 
 /*
 ==================
@@ -148,7 +189,7 @@ void CM_BoxLeafnums_r( leafList_t *ll, int nodenum ) {
 CM_BoxLeafnums
 ==================
 */
-int	CM_BoxLeafnums( const vec3_t mins, const vec3_t maxs, int *list, int listsize, int *lastLeaf) {
+int	CM_BoxLeafnums( const vec3_t mins, const vec3_t maxs, int *List, int listsize, int *lastLeaf) {
 	leafList_t	ll;
 
 	cm.checkcount++;
@@ -157,7 +198,7 @@ int	CM_BoxLeafnums( const vec3_t mins, const vec3_t maxs, int *list, int listsiz
 	VectorCopy( maxs, ll.bounds[1] );
 	ll.count = 0;
 	ll.maxcount = listsize;
-	ll.list = list;
+	ll.list = List;
 	ll.storeLeafs = CM_StoreLeafs;
 	ll.lastLeaf = 0;
 	ll.overflowed = qfalse;
@@ -173,7 +214,7 @@ int	CM_BoxLeafnums( const vec3_t mins, const vec3_t maxs, int *list, int listsiz
 CM_BoxBrushes
 ==================
 */
-int CM_BoxBrushes( const vec3_t mins, const vec3_t maxs, cbrush_t **list, int listsize ) {
+int CM_BoxBrushes( const vec3_t mins, const vec3_t maxs, cbrush_t **List, int listsize ) {
 	leafList_t	ll;
 
 	cm.checkcount++;
@@ -182,7 +223,7 @@ int CM_BoxBrushes( const vec3_t mins, const vec3_t maxs, cbrush_t **list, int li
 	VectorCopy( maxs, ll.bounds[1] );
 	ll.count = 0;
 	ll.maxcount = listsize;
-	ll.list = (int *)list;
+	ll.list = (int *)List;
 	ll.storeLeafs = CM_StoreBrushes;
 	ll.lastLeaf = 0;
 	ll.overflowed = qfalse;
@@ -202,8 +243,11 @@ CM_PointContents
 
 ==================
 */
+
+#if 1
+
 int CM_PointContents( const vec3_t p, clipHandle_t model ) {
-	int			leafnum;
+	int			leafnum=0;
 	int			i, k;
 	int			brushnum;
 	cLeaf_t		*leaf;
@@ -219,8 +263,44 @@ int CM_PointContents( const vec3_t p, clipHandle_t model ) {
 	if ( model ) {
 		clipm = CM_ClipHandleToModel( model );
 		leaf = &clipm->leaf;
-	} else {
-		leafnum = CM_PointLeafnum_r (p, 0);
+	} 
+	else
+	{
+		CPoint pt(p[0],p[1],p[2]);
+/*		map<CPoint,int,CPointComparator>::iterator l=pointToLeaf.find(pt);
+		if(l!=pointToLeaf.end())
+		{
+			leafnum=(*l).second;
+		}
+		else
+		{
+			if(pointToLeaf.size()>=64)
+			{
+				pointToLeaf.clear();
+				Com_Printf("Cleared cache\n");
+			}
+			leafnum=CM_PointLeafnum_r(p, 0);
+			pointToLeaf[pt]=leafnum;
+		}*/
+		hlist<pair<CPoint,int> >::iterator l;
+		for(l=pointToLeaf.begin();l!=pointToLeaf.end();l++)
+		{
+			if((*l).first==pt)
+			{
+				leafnum=(*l).second;
+				break;
+			}
+		}
+		if(l==pointToLeaf.end())
+		{
+			if(pointToLeaf.size()>=64)
+			{
+				pointToLeaf.pop_back();
+			}
+			leafnum=CM_PointLeafnum_r(p, 0);
+			pointToLeaf.push_front(pair<CPoint,int>(pt,leafnum));
+		}
+
 		leaf = &cm.leafs[leafnum];
 	}
 
@@ -247,6 +327,82 @@ int CM_PointContents( const vec3_t p, clipHandle_t model ) {
 	return contents;
 }
 
+#else
+
+int CM_PointContents( const vec3_t p, clipHandle_t model ) {
+	int			leafnum=0;
+	int			i, k;
+	int			brushnum;
+	cLeaf_t		*leaf;
+	cbrush_t	*b;
+	int			contents;
+	float		d;
+	cmodel_t	*clipm;
+
+	if (!cm.numNodes) {	// map not loaded
+		return 0;
+	}
+
+	CPoint pt(p[0],p[1],p[2]);
+	if ( model ) 
+	{
+		clipm = CM_ClipHandleToModel( model );
+		leaf = &clipm->leaf;
+	} 
+	else
+	{
+		hlist<pair<CPoint,int> >::iterator l;
+		for(l=pointToContents.begin();l!=pointToContents.end();l++)
+		{
+			if((*l).first==pt)
+			{
+				// Breakout early.
+				return((*l).second);
+			}
+		}
+
+		leafnum=CM_PointLeafnum_r(p, 0);
+		leaf = &cm.leafs[leafnum];
+	}
+
+	contents = 0;
+	for (k=0 ; k<leaf->numLeafBrushes ; k++) 
+	{
+		brushnum = cm.leafbrushes[leaf->firstLeafBrush+k];
+		b = &cm.brushes[brushnum];
+
+		// see if the point is in the brush
+		for ( i = 0 ; i < b->numsides ; i++ ) 
+		{
+			d = DotProduct( p, b->sides[i].plane->normal );
+			// FIXME test for Cash
+//			if ( d >= b->sides[i].plane->dist ) {
+			if ( d > b->sides[i].plane->dist ) 
+			{
+				break;
+			}
+		}
+
+		if ( i == b->numsides ) 
+		{
+			contents |= b->contents;
+		}
+	}
+
+	// Cache the result for next time.
+	if(!model)
+	{
+		if(pointToContents.size()>=64)
+		{
+			pointToContents.pop_back();
+		}
+		pointToContents.push_front(pair<CPoint,int>(pt,contents));
+	}
+
+	return contents;
+}
+
+#endif
 /*
 ==================
 CM_TransformedPointContents

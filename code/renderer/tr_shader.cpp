@@ -581,6 +581,7 @@ static void ParseTexMod( const char *_text, shaderStage_t *stage )
 
 
 /*
+/////===== Part of the VERTIGON system =====/////
 ===================
 ParseSurfaceSprites
 ===================
@@ -722,6 +723,7 @@ static void ParseSurfaceSprites(const char *_text, shaderStage_t *stage )
 
 
 /*
+/////===== Part of the VERTIGON system =====/////
 ===========================
 ParseSurfaceSpritesOptional
 ===========================
@@ -743,7 +745,7 @@ ParseSurfaceSpritesOptional
 //
 // Optional parameters that will override the defaults set in the surfacesprites command above.
 //
-void ParseSurfaceSpritesOptional( const char *param, const char *_text, shaderStage_t *stage )
+static void ParseSurfaceSpritesOptional( const char *param, const char *_text, shaderStage_t *stage )
 {
 	const char *token;
 	const char **text = &_text;
@@ -2552,7 +2554,8 @@ static shader_t *GeneratePermanentShader( void ) {
 	int			size, hash;
 
 	if ( tr.numShaders == MAX_SHADERS ) {
-		ri.Printf( PRINT_WARNING, "WARNING: GeneratePermanentShader - MAX_SHADERS hit\n");
+		tr.iNumDeniedShaders++;
+		ri.Printf( PRINT_WARNING, "WARNING: GeneratePermanentShader - MAX_SHADERS (%d) hit (overflowed by %d)\n", MAX_SHADERS, tr.iNumDeniedShaders);
 		return tr.defaultShader;
 	}
 
@@ -3473,6 +3476,7 @@ CreateInternalShaders
 */
 static void CreateInternalShaders( void ) {
 	tr.numShaders = 0;
+	tr.iNumDeniedShaders = 0;
 
 	// init the default shader
 	memset( &shader, 0, sizeof( shader ) );

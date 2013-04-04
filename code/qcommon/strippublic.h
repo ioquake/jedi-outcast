@@ -8,16 +8,6 @@
 #define MAX_STRINGS		256
 #define MAX_ID			255
 
-/*
-ENGLISH
-FRENCH
-GERMAN
-BRITISH
-KOREAN
-TAIWANESE
-ITALIAN
-SPANISH
-*/
 enum
 {
 	SP_LANGUAGE_ENGLISH = 0,
@@ -28,7 +18,7 @@ enum
 	SP_LANGUAGE_TAIWANESE,
 	SP_LANGUAGE_ITALIAN,
 	SP_LANGUAGE_SPANISH,
-	SP_LANGUAGE_9,
+	SP_LANGUAGE_JAPANESE,
 	SP_LANGUAGE_10,
 	SP_LANGUGAGE_MAX,
 	SP_LANGUAGE_ALL = 255
@@ -60,7 +50,7 @@ enum
 
 
 // Registration
-void					SP_Register(const char *Package, unsigned char Registration);
+qboolean				SP_Register(const char *Package, unsigned char Registration);
 void					SP_Unload(unsigned char Registration);
 
 // Direct string functions
@@ -87,6 +77,11 @@ inline qboolean Language_IsKorean(void)
 inline qboolean Language_IsTaiwanese(void)
 {
 	return (sp_language && sp_language->integer == SP_LANGUAGE_TAIWANESE);
+}
+
+inline qboolean Language_IsJapanese(void)
+{
+	return (sp_language && sp_language->integer == SP_LANGUAGE_JAPANESE);
 }
 
 inline int Language_GetIntegerValue(void)

@@ -418,6 +418,7 @@ public:
 		MemPoolSetSmallBlockAllocator(MyPool,MEM_SMALL_BLOCK_SH3);
 #if MEM_DEBUG
 		dbgMemSetGuardSize(2);
+		EnableChecking(100000);
 #endif
 	}
 

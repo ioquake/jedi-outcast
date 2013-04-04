@@ -212,6 +212,72 @@ void CG_SetClientViewAngles( vec3_t angles )
 	}
 	cgi_SetUserCmdAngles( angles[PITCH], angles[YAW], angles[ROLL] );
 }
+
+extern qboolean PM_AdjustAnglesToGripper( gentity_t *gent, usercmd_t *cmd );
+extern qboolean PM_AdjustAngleForWallRun( gentity_t *ent, usercmd_t *ucmd, qboolean doMove );
+extern qboolean PM_AdjustAnglesForSpinningFlip( gentity_t *ent, usercmd_t *ucmd, qboolean anglesOnly );
+extern qboolean PM_AdjustAnglesForBackAttack( gentity_t *ent, usercmd_t *ucmd );
+extern qboolean PM_AdjustAnglesForSaberLock( gentity_t *ent, usercmd_t *ucmd );
+extern qboolean PM_AdjustAnglesForKnockdown( gentity_t *ent, usercmd_t *ucmd, qboolean angleClampOnly );
+extern qboolean G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd );
+qboolean CG_CheckModifyUCmd( usercmd_t *cmd, vec3_t viewangles )
+{
+	qboolean overridAngles = qfalse;
+	if ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )
+	{//controlling something else
+		memset( cmd, 0, sizeof( usercmd_t ) );
+		//to keep pointing in same dir, need to set cmd.angles
+		cmd->angles[PITCH] = cmd->angles[ROLL] = 0;
+		cmd->angles[YAW] = ANGLE2SHORT( cg.snap->ps.viewangles[YAW] ) - cg.snap->ps.delta_angles[YAW];
+		//CG_SetClientViewAngles( cg.snap->ps.viewangles );
+	}
+	else if ( cg.snap->ps.vehicleModel != 0 )
+	{//in vehicle flight mode
+		float speed = VectorLength( cg.snap->ps.velocity );
+		if ( !speed || cg.snap->ps.groundEntityNum != ENTITYNUM_NONE )
+		{
+			cmd->rightmove = 0;
+			cmd->angles[PITCH] = 0;
+			cmd->angles[YAW] = ANGLE2SHORT( cg.snap->ps.viewangles[YAW] ) - cg.snap->ps.delta_angles[YAW];
+			CG_SetClientViewAngles( cg.snap->ps.viewangles );
+		}
+	}
+
+	if ( &g_entities[0] && g_entities[0].client )
+	{
+		if ( !PM_AdjustAnglesToGripper( &g_entities[0], cmd ) )
+		{
+			if ( PM_AdjustAnglesForSpinningFlip( &g_entities[0], cmd, qtrue ) )
+			{
+				CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
+				if ( viewangles )
+				{
+					VectorCopy( g_entities[0].client->ps.viewangles, viewangles );
+					overridAngles = qtrue;
+				}
+			}
+		}
+		else
+		{
+			CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
+			if ( viewangles )
+			{
+				VectorCopy( g_entities[0].client->ps.viewangles, viewangles );
+				overridAngles = qtrue;
+			}
+		}
+		if ( G_CheckClampUcmd( &g_entities[0], cmd ) )
+		{
+			CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
+			if ( viewangles )
+			{
+				VectorCopy( g_entities[0].client->ps.viewangles, viewangles );
+				overridAngles = qtrue;
+			}
+		}
+	}
+	return overridAngles;
+}
 /*
 ========================
 CG_InterpolatePlayerState
@@ -220,17 +286,12 @@ Generates cg.predicted_player_state by interpolating between
 cg.snap->player_state and cg.nextFrame->player_state
 ========================
 */
-extern qboolean PM_AdjustAnglesToGripper( gentity_t *gent, usercmd_t *cmd );
-extern qboolean PM_AdjustAngleForWallRun( gentity_t *ent, usercmd_t *ucmd, qboolean doMove );
-extern qboolean PM_AdjustAnglesForSpinningFlip( gentity_t *ent, usercmd_t *ucmd, qboolean anglesOnly );
-extern qboolean PM_AdjustAnglesForBackAttack( gentity_t *ent, usercmd_t *ucmd );
-extern qboolean PM_AdjustAnglesForSaberLock( gentity_t *ent, usercmd_t *ucmd );
-extern qboolean PM_AdjustAnglesForKnockdown( gentity_t *ent, usercmd_t *ucmd, qboolean angleClampOnly );
 void CG_InterpolatePlayerState( qboolean grabAngles ) {
 	float			f;
 	int				i;
 	playerState_t	*out;
 	snapshot_t		*prev, *next;
+	qboolean		skip = qfalse;
 
 	out = &cg.predicted_player_state;
 	prev = cg.snap;
@@ -246,71 +307,13 @@ void CG_InterpolatePlayerState( qboolean grabAngles ) {
 		cmdNum = cgi_GetCurrentCmdNumber();
 		cgi_GetUserCmd( cmdNum, &cmd );
 
-		if ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )
-		{//controlling something else
-			memset( &cmd, 0, sizeof( usercmd_t ) );
-			//to keep pointing in same dir, need to set cmd.angles
-			cmd.angles[PITCH] = cmd.angles[ROLL] = 0;
-			cmd.angles[YAW] = ANGLE2SHORT( cg.snap->ps.viewangles[YAW] ) - cg.snap->ps.delta_angles[YAW];
-			//CG_SetClientViewAngles( cg.snap->ps.viewangles );
-		}
-		else if ( cg.snap->ps.vehicleModel != 0 )
-		{//in vehicle flight mode
-			float speed = VectorLength( cg.snap->ps.velocity );
-			if ( !speed || cg.snap->ps.groundEntityNum != ENTITYNUM_NONE )
-			{
-				cmd.rightmove = 0;
-				cmd.angles[PITCH] = 0;
-				cmd.angles[YAW] = ANGLE2SHORT( cg.snap->ps.viewangles[YAW] ) - cg.snap->ps.delta_angles[YAW];
-				CG_SetClientViewAngles( cg.snap->ps.viewangles );
-			}
-		}
+		skip = CG_CheckModifyUCmd( &cmd, out->viewangles );
 
-		if ( &g_entities[0] && g_entities[0].client )
+		if ( !skip )
 		{
-			if ( !PM_AdjustAnglesToGripper( &g_entities[0], &cmd ) )
-			{
-				if ( !PM_AdjustAnglesForSaberLock( &g_entities[0], &cmd ) )
-				{
-					if ( !PM_AdjustAnglesForSpinningFlip( &g_entities[0], &cmd, qtrue ) )
-					{
-						if ( !PM_AdjustAnglesForBackAttack( &g_entities[0], &cmd ) )
-						{
-							if ( !PM_AdjustAngleForWallRun( &g_entities[0], &cmd, qfalse ) )
-							{
-								if ( PM_AdjustAnglesForKnockdown( &g_entities[0], &cmd, qtrue ) )
-								{
-									CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
-								}
-							}
-							else
-							{
-								CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
-							}
-						}
-						else
-						{
-							CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
-						}
-					}
-					else
-					{
-						CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
-					}
-				}
-				else
-				{
-					CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
-				}
-			}
-			else
-			{
-				CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
-			}
+			//NULL so that it doesn't execute a block of code that must be run from game
+			PM_UpdateViewAngles( out, &cmd, NULL );
 		}
-
-		//NULL so that it doesn't execute a block of code that must be run from game
-		PM_UpdateViewAngles( out, &cmd, NULL );
 	}
 
 	// if the next frame is a teleport, we can't lerp to it
@@ -599,6 +602,7 @@ void CG_PredictPlayerState( void ) {
 			cg_pmove.cmd.buttons = 0;
 			cg_pmove.cmd.upmove = 0;
 		}
+		CG_CheckModifyUCmd( &cg_pmove.cmd, NULL );
 		//FIXME: prediction on clients in timescale results in jerky positional translation
 		Pmove( &cg_pmove );
 		

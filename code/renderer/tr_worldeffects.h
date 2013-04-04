@@ -77,6 +77,7 @@ public:
 
 	virtual	int			GetIntVariable(int which) { return 0; }
 	virtual	SParticle	*GetParticleVariable(int which) { return 0; }
+	virtual float		GetFloatVariable(int which) { return 0.0; }
 	virtual	float		*GetVecVariable(int which) { return 0; }
 
 	virtual	bool	Command(const char *command);
@@ -95,5 +96,9 @@ void R_WorldEffectCommand(const char *command);
 void R_WorldEffect_f(void);
 
 bool R_GetWindVector(vec3_t windVector);
+bool R_GetWindSpeed(float &windSpeed);
+
+bool R_IsRaining();
+bool R_IsSnowing();
 
 #endif // __TR_WORLDEFFECTS_H

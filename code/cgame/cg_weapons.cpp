@@ -206,6 +206,10 @@ void CG_RegisterWeapon( int weaponNum ) {
 		cgs.effects.forceLightning		= theFxScheduler.RegisterEffect( "force/lightning" );
 		cgs.effects.forceLightningWide	= theFxScheduler.RegisterEffect( "force/lightningwide" );
 
+		cgs.media.HUDSaberStyle1 = cgi_R_RegisterShader( "gfx/hud/saber_styles1" );
+		cgs.media.HUDSaberStyle2 = cgi_R_RegisterShader( "gfx/hud/saber_styles2" );
+		cgs.media.HUDSaberStyle3 = cgi_R_RegisterShader( "gfx/hud/saber_styles3" );
+
 		//saber sounds
 		cgi_S_RegisterSound( "sound/weapons/saber/saberon.wav" );
 		cgi_S_RegisterSound( "sound/weapons/saber/enemy_saber_on.wav" );
@@ -287,7 +291,7 @@ void CG_RegisterWeapon( int weaponNum ) {
 		cgs.media.purpleSaberGlowShader		= cgi_R_RegisterShader( "gfx/effects/sabers/purple_glow" );
 		cgs.media.purpleSaberCoreShader		= cgi_R_RegisterShader( "gfx/effects/sabers/purple_line" );
 
-		cgs.media.forceCoronaShader			= cgi_R_RegisterShader( "gfx/2d/corona" );
+		cgs.media.forceCoronaShader			= cgi_R_RegisterShaderNoMip( "gfx/2d/corona" );
 		break;
 
 	case WP_BRYAR_PISTOL:
@@ -855,7 +859,7 @@ void CG_AddViewWeapon( playerState_t *ps )
 	}
 
 	// drop gun lower at higher fov
-	float actualFOV = cg.overrides.fov ? cg.overrides.fov : cg_fov.value;
+	float actualFOV = (cg.overrides.active&CG_OVERRIDE_FOV) ? cg.overrides.fov : cg_fov.value;
 	if ( actualFOV > 80 ) 
 	{
 		fovOffset = -0.1 * ( actualFOV - 80 );
@@ -914,7 +918,7 @@ void CG_AddViewWeapon( playerState_t *ps )
 	AnglesToAxis( angles, gun.axis );
 	CG_PositionEntityOnTag( &gun, &hand, weapon->handsModel, "tag_weapon");
 
-	gun.renderfx = RF_MINLIGHT | RF_DEPTHHACK | RF_FIRST_PERSON;
+	gun.renderfx = RF_DEPTHHACK | RF_FIRST_PERSON;
 
 //---------
 	// OK, we are making an assumption here that if we have the phaser that it is always on....
@@ -1246,22 +1250,21 @@ void CG_DrawIconBackground(void)
 
 int cgi_UI_GetItemText(char *menuFile,char *itemName, char *text);
 
-
 char *weaponDesc[13] = 
 {
-"Lightsaber -\nAn elegant weapon for a more civilized age, the lightsaber is the preferred weapon of the Jedi Knight.  The lightsaber is an energy blade of great power that can be used by the wielder for both attack and defense.\nPrimary Fire - Slashing and swinging attacks\nSecondary Fire - Force powered saber throw\nDefensive Ability - Deflects blaster and energy weapon fire, parries enemy lightsaber attacks\nAmmo Type - N/A",
-"Bryar Blaster Pistol \nKyle Katarn's weapon of choice, the Bryar Blaster Pistol is a common hand-held energy weapon with a slow rate of fire and incredible accuracy.\nPrimary Fire - Slow, single shot with great accuracy and damage.\nSecondary Fire - Charged energy buildup for increased damage blast attack.\nAmmo Type - Blaster Pack",
-"E-11 Blaster Rifle \nThe primary weapon of the Imperial forces, the E-11 is a sturdy and deadly blaster rifle capable of inflicting great damage despite its small size.  The E-11's compact design makes it easy to carry and conceal.\nPrimary Fire - Slow, single shot with moderate accuracy and great damage.\nSecondary Fire - Rapid, burst fire with low accuracy and expanded firing area.\nAmmo Type - Blaster Pack",
-"Tenloss DXR-6 Disruptor rifle \nThis nefarious weapon affects matter at the molecular level, ripping apart living material with ease.   Because of the weapon's inhumane nature, the DXR-6 is outlawed throughout the galaxy and is generally only used by scattered droid and Remnant forces.\nPrimary Fire - Single shot with slow fire rate, fast projectile and small radius damage.\nSecondary Fire - Scoped mode: Single shot with slow fire rate, increased damage and high weapon energy consumption\nAmmo Type - Power cell",
-"Wookiee Bowcaster\nThis archaic-looking weapon fires powerful bolts of metal enveloped in pockets of energy.  Capable of inflicting incredible damage, the bowcaster requires tremendous physical strength to fire.  Most bowcasters sold outside the Wookiee home world come equipped with self-cocking actions that allow physically weaker creatures to fire them.\nPrimary Fire - Extremely accurate and powerful single shot with radius damage\nSecondary Fire - Charged energy buildup for multiple shots with radius damage \nAmmo Type - Power cell",
-"Imperial Heavy Repeater with Concussion Launcher\nThis destructive projectile weapon is extremely deadly, firing rapid streams of metal bullets.  Imperial forces use the Heavy Repeater's deadly suppressive fire and concussion launcher for crowd control and to spread heavy fire over large areas.\nPrimary Fire - Fully automatic projectile fire \nSecondary Fire - Single shot, concussion explosive round.\nAmmo type - Metallic bolts",
-"Destructive Electro-Magnetic Pulse 2 Gun\nCommonly referred to as the DEMP 2, this pulse rifle is primarily used against droids and electrical devices.  The DEMP 2 fires high-powered ion bursts that disrupt electrical systems.  Unlike previous incarnations of the weapon, the DEMP 2's ion charges are capable of damaging living material.\nPrimary Fire - Single shot, stuns humans, damages droids\nSecondary Fire - Chain lightning arcs from the weapon and moves from target to target and is deadly to both droids and humanoid enemies. \nAmmo Type - Power cell",
-"Golan Arms FC1 Flechette Weapon \nWidely used by the Corporate Sector Authority's police squads, the FC1 fires shards of metal in a widespread pattern.   The weapon is designed to hit multiple targets in close proximity, but great care must be taken to avoid ricochet damage.\nPrimary Fire - Single shot, spread fire\nSecondary Fire -Launches a self-adhesive, explosive proximity mine\nAmmo Type - Metallic Bolts",
-"Merr-Sonn PLX-2M Portable Missile System   \nThe PLX-2M is an extremely powerful weapon that fires Arakyd 3T3 missiles.  The sheer explosive power of the PLL-2M makes it dangerous to fire blindly in close quarters, but is extremely effective when used as a 'smart' tracking weapon.\nPrimary Fire - Fires a single, forward-firing explosive missile\nSecondary Fire - Fires a single 'smart' missile that tracks acquired and locked targets.\nAmmo Type - Rockets",
-"Thermal Detonator \nThe thermal detonator is a radius-damage grenade that releases a barrage of thermal energy capable of disintegrating all matter around it.\nPrimary Fire - Long distance throw, grenade explodes on contact\nSecondary Fire - Short distance roll, grenade bounces and explodes",
-"Trip Mines \nTrip mines consist of a beam projector affixed to a shaped explosive casing.  The laser activates when the mine is placed and extends a beam from the charge to the nearest surface that intersects its path.  If the beam is broken or the charge is fired upon, the mine detonates and causes radius damage to anything in range.\nPrimary Fire  - Once placed, acts as proximity mine with attached laser.\nSecondary Fire - Once placed, explodes after two seconds.  No laser.",
-"Detonation Packs \nA detonation pack is essentially a small explosive device with a remote detonation trigger.  The pack is placed or thrown and can be detonated at will by the user.  Detonation packs are commonly used to ambush enemies or open sealed doors.\nPrimary Fire - Sets charge at the user's feet\nSecondary Fire - Explodes all set charges",
-"Stun Baton \nCommonly used to subdue unruly prisoners, the stun baton was designed for use in melee combat where killing your opponent is not necessarily the desired outcome.\nPrimary Fire - Slashing and swinging attacks.\nSecondary Fire - Special slashing and swinging attacks.",
+"SABER_DESC",
+"BLASTER_PISTOL_DESC",
+"BLASTER_RIFLE_DESC",
+"DISRUPTOR_RIFLE_DESC",
+"BOWCASTER_DESC",
+"HEAVYREPEATER_DESC",
+"DEMP2_DESC",
+"FLECHETTE_DESC",
+"MERR_SONN_DESC",
+"THERMAL_DETONATOR_DESC",
+"TRIP_MINE_DESC",
+"DET_PACK_DESC",
+"STUN_BATON_DESC",
 };
 
 
@@ -1281,6 +1284,7 @@ void CG_DrawDataPadWeaponSelect( void )
 	int				sideMax,holdCount,iconCnt;
 	int				height;
 	vec4_t			calcColor;
+	char			text[1024]={0};
 
 	// showing weapon select clears pickup item display, but not the blend blob
 	cg.itemPickupTime = 0;
@@ -1452,11 +1456,23 @@ void CG_DrawDataPadWeaponSelect( void )
 	x= 40;
 	y= 70;
 
-	CG_DisplayBoxedText(70,50,500,300,weaponDesc[cg.DataPadWeaponSelect-1],
+	cgi_SP_GetStringTextString( va("INGAME_%s",weaponDesc[cg.DataPadWeaponSelect-1]), text, sizeof(text) );
+
+	if (text)
+	{
+		CG_DisplayBoxedText(70,50,500,300,text,
 												cgs.media.qhFontSmall,
 												0.7f,
 												colorTable[CT_WHITE]	
 												);
+	}
+
+/*	CG_DisplayBoxedText(70,50,500,300,weaponDesc[cg.DataPadWeaponSelect-1],
+												cgs.media.qhFontSmall,
+												0.7f,
+												colorTable[CT_WHITE]	
+												);
+*/
 
 	cgi_R_SetColor( NULL );
 }
@@ -1618,6 +1634,7 @@ void CG_DrawWeaponSelect( void )
 	int				sideMax,holdCount,iconCnt;
 	int				height;
 	vec4_t			calcColor;
+	vec4_t			textColor = { .875f, .718f, .121f, 1.0f };
 
 	if (!cgi_UI_GetMenuInfo("weaponselecthud",&x2,&y2))
 	{
@@ -1808,7 +1825,7 @@ void CG_DrawWeaponSelect( void )
 //#ifdef _DEBUG
 			int w = cgi_R_Font_StrLenPixels(name, cgs.media.qhFontSmall, 1.0f);	
 			int x = ( SCREEN_WIDTH - w ) / 2;
-			cgi_R_Font_DrawString(x, y + 48, name, colorTable[CT_ICON_BLUE], cgs.media.qhFontSmall, -1, 1.0f);
+			cgi_R_Font_DrawString(x, (SCREEN_HEIGHT - 24), name, textColor, cgs.media.qhFontSmall, -1, 1.0f);
 //#endif
 		}
 	}

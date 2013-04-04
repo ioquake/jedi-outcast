@@ -225,8 +225,8 @@ void Text_Paint(float x, float y, float scale, vec4_t color, const char *text, i
 	int iStyleOR = 0;
 	switch (style)
 	{
-	case  ITEM_TEXTSTYLE_NORMAL:			iStyleOR = 0;break;					// JK2 normal text
-	case  ITEM_TEXTSTYLE_BLINK:				iStyleOR = STYLE_BLINK;break;		// JK2 fast blinking
+//	case  ITEM_TEXTSTYLE_NORMAL:			iStyleOR = 0;break;					// JK2 normal text
+//	case  ITEM_TEXTSTYLE_BLINK:				iStyleOR = STYLE_BLINK;break;		// JK2 fast blinking
 	case  ITEM_TEXTSTYLE_PULSE:				iStyleOR = STYLE_BLINK;break;		// JK2 slow pulsing
 	case  ITEM_TEXTSTYLE_SHADOWED:			iStyleOR = STYLE_DROPSHADOW;break;	// JK2 drop shadow ( need a color for this )
 	case  ITEM_TEXTSTYLE_OUTLINED:			iStyleOR = STYLE_DROPSHADOW;break;	// JK2 drop shadow ( need a color for this )
@@ -435,11 +435,8 @@ static void UI_RunMenuScript(const char **args)
 		} 
 		else if (Q_stricmp(name, "loadAuto") == 0) 
 		{
-			if (s_savedata[s_savegame.currentLine].currentSaveFileName)// && (*s_file_desc_field.field.buffer))
-			{
-				Menus_CloseAll();
-				ui.Cmd_ExecuteText( EXEC_APPEND, "load auto\n");
-			}
+			Menus_CloseAll();
+			ui.Cmd_ExecuteText( EXEC_APPEND, "load auto\n");
 		}
 		else if (Q_stricmp(name, "loadgame") == 0) 
 		{
@@ -828,7 +825,12 @@ void _UI_Init( qboolean inGameLoad )
 	Menus_CloseAll();
 
 	// sets defaults for ui temp cvars
-	uiInfo.effectsColor = gamecodetoui[(int)trap_Cvar_VariableValue("color")-1];
+	uiInfo.effectsColor = (int)trap_Cvar_VariableValue("color")-1;
+	if (uiInfo.effectsColor < 0)
+	{
+		uiInfo.effectsColor = 0;
+	}
+	uiInfo.effectsColor = gamecodetoui[uiInfo.effectsColor];
 	uiInfo.currentCrosshair = (int)trap_Cvar_VariableValue("cg_drawCrosshair");
 	Cvar_Set("ui_mousePitch", (trap_Cvar_VariableValue("m_pitch") >= 0) ? "0" : "1");
 
@@ -1198,7 +1200,11 @@ qboolean Asset_Parse(char **buffer)
 
 			Q_strncpyz( uiInfo.uiDC.Assets.stripedFile, tempStr,  sizeof(uiInfo.uiDC.Assets.stripedFile) );
 
-			ui.SP_Register(uiInfo.uiDC.Assets.stripedFile, SP_REGISTER_REQUIRED|SP_REGISTER_MENU);
+			if (!ui.SP_Register(uiInfo.uiDC.Assets.stripedFile, SP_REGISTER_REQUIRED|SP_REGISTER_MENU))
+			{
+				PC_ParseWarning(va("(.SP file \"%s\" not found)",uiInfo.uiDC.Assets.stripedFile));
+				//return qfalse;	// hmmm... dunno about this, don't want to break scripts for just missing subtitles
+			}
 
 			continue;
 		}
@@ -1352,7 +1358,14 @@ static void UI_Update(const char *name)
 {
 	int	val = trap_Cvar_VariableValue(name);
 
- 	if (Q_stricmp(name, "ui_SetName") == 0) 
+
+	if (Q_stricmp(name, "s_khz") == 0) 
+	{
+		ui.Cmd_ExecuteText( EXEC_APPEND, "snd_restart\n" );
+		return;
+	}
+
+	if (Q_stricmp(name, "ui_SetName") == 0) 
 	{
 		Cvar_Set( "name", UI_Cvar_VariableString("ui_Name"));
  	} 
@@ -1603,11 +1616,11 @@ static void UI_DrawKeyBindStatus(rectDef_t *rect, float scale, vec4_t color, int
 {
 	if (Display_KeyBindPending()) 
 	{
-		Text_Paint(rect->x, rect->y, scale, color, ui.SP_GetStringTextString(va("%s_WAITINGFORKEY",uiInfo.uiDC.Assets.stripedFile)), 0, textStyle, iFontIndex);
+		Text_Paint(rect->x, rect->y, scale, color, ui.SP_GetStringTextString("MENUS_WAITINGFORKEY"), 0, textStyle, iFontIndex);
 	} 
 	else 
 	{
-		Text_Paint(rect->x, rect->y, scale, color, ui.SP_GetStringTextString(va("%s_ENTERTOCHANGE",uiInfo.uiDC.Assets.stripedFile)), 0, textStyle, iFontIndex);
+		Text_Paint(rect->x, rect->y, scale, color, ui.SP_GetStringTextString("MENUS_ENTERTOCHANGE"), 0, textStyle, iFontIndex);
 	}
 }
 
@@ -1726,23 +1739,23 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
 			break;
 
 		case UI_DATAPAD_MISSION:
-			ui.Draw_DataPad(DP_OBJECTIVES);
 			ui.Draw_DataPad(DP_HUD);
+			ui.Draw_DataPad(DP_OBJECTIVES);
 			break;
 
 		case UI_DATAPAD_WEAPONS:
-			ui.Draw_DataPad(DP_WEAPONS);
 			ui.Draw_DataPad(DP_HUD);
+			ui.Draw_DataPad(DP_WEAPONS);
 			break;
 
 		case UI_DATAPAD_INVENTORY:
-			ui.Draw_DataPad(DP_INVENTORY);
 			ui.Draw_DataPad(DP_HUD);
+			ui.Draw_DataPad(DP_INVENTORY);
 			break;
 
 		case UI_DATAPAD_FORCEPOWERS:
-			ui.Draw_DataPad(DP_FORCEPOWERS);
 			ui.Draw_DataPad(DP_HUD);
+			ui.Draw_DataPad(DP_FORCEPOWERS);
 			break;
 
 		case UI_ALLMAPS_SELECTION://saved game thumbnail
@@ -1989,11 +2002,11 @@ int UI_OwnerDrawWidth(int ownerDraw, float scale)
 	case UI_KEYBINDSTATUS:
 		if (Display_KeyBindPending()) 
 		{
-			s = ui.SP_GetStringTextString(va("%s_WAITINGFORKEY",uiInfo.uiDC.Assets.stripedFile));
+			s = ui.SP_GetStringTextString("MENUS_WAITINGFORKEY");
 		} 
 		else 
 		{
-			s = ui.SP_GetStringTextString(va("%s_ENTERTOCHANGE",uiInfo.uiDC.Assets.stripedFile));
+			s = ui.SP_GetStringTextString("MENUS_ENTERTOCHANGE");
 		}
 		break;
 	
@@ -2154,13 +2167,20 @@ void UI_DataPadMenu(void)
 UI_InGameMenu
 =================
 */
-void UI_InGameMenu(const char*holoFlag)
+void UI_InGameMenu(const char*menuID)
 {
 	ui.PrecacheScreenshot();
 
 	Menus_CloseByName("mainhud");
 
-	Menus_ActivateByName("ingameMainMenu");
+	if (menuID)
+	{
+		Menus_ActivateByName(menuID);
+	}
+	else
+	{
+		Menus_ActivateByName("ingameMainMenu");
+	}
 	ui.Key_SetCatcher( KEYCATCH_UI );
 }
 
@@ -2266,7 +2286,7 @@ void UI_GetVid1Data(void)
 	gl_extensions->value = ui.Cvar_VariableValue("r_allowExtensions");
 
 	// Video mode info
-	video_mode->value = ui.Cvar_VariableValue( "r_mode" ) - 2;
+	video_mode->value = ui.Cvar_VariableValue( "r_mode" ) - 3;
 	if ( video_mode->value < 0 )
 	{
 		video_mode->value = 1;
@@ -2398,9 +2418,9 @@ void UI_SetVid1Data(const char *menuName)
 	// GL Extensions
 	ui.Cvar_SetValue( "r_allowExtensions", gl_extensions->value );
 	
-	// Adding 2 because we don't show 320x200 and MNT_400X300
+	// Adding 3 because we don't show 320x200 , 400X300, or 512x384
 	// Video Resolution Setting
-	ui.Cvar_SetValue( "r_mode", (video_mode->value + 2) );
+	ui.Cvar_SetValue( "r_mode", (video_mode->value + 3) );
 
 	// Color Depth
 	switch ( color_depth->value )
@@ -2661,24 +2681,23 @@ void ReadSaveDirectory (void)
 			if (Q_stricmp("auto",holdChar)==0)
 			{
 				Cvar_Set("ui_ResumeOK", "1" );
-				continue;
 			}
-			
-			s_savedata[s_savegame.saveFileCnt].currentSaveFileName = holdChar;
-			
-			// Is this a valid file??? & Get comment of file
-			result = ui.SG_GetSaveGameComment(s_savedata[s_savegame.saveFileCnt].currentSaveFileName, s_savedata[s_savegame.saveFileCnt].currentSaveFileComments, s_savedata[s_savegame.saveFileCnt].currentSaveFileMap);
-			if (result != 0) // ignore Bad save game 
-			{
-				s_savedata[s_savegame.saveFileCnt].currentSaveFileDateTime = result;
-
-				struct tm *localTime;
-				localTime = localtime( &result );
-				strcpy(s_savedata[s_savegame.saveFileCnt].currentSaveFileDateTimeString,asctime( localTime ) );
-				s_savegame.saveFileCnt++;
-				if (s_savegame.saveFileCnt == MAX_SAVELOADFILES)
+			else
+			{	// Is this a valid file??? & Get comment of file
+				result = ui.SG_GetSaveGameComment(holdChar, s_savedata[s_savegame.saveFileCnt].currentSaveFileComments, s_savedata[s_savegame.saveFileCnt].currentSaveFileMap);
+				if (result != 0) // ignore Bad save game 
 				{
-					break;
+					s_savedata[s_savegame.saveFileCnt].currentSaveFileName = holdChar;
+					s_savedata[s_savegame.saveFileCnt].currentSaveFileDateTime = result;
+					
+					struct tm *localTime;
+					localTime = localtime( &result );
+					strcpy(s_savedata[s_savegame.saveFileCnt].currentSaveFileDateTimeString,asctime( localTime ) );
+					s_savegame.saveFileCnt++;
+					if (s_savegame.saveFileCnt == MAX_SAVELOADFILES)
+					{
+						break;
+					}
 				}
 			}
 		}

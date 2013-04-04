@@ -75,7 +75,7 @@ void CG_TestG2Model_f (void) {
 	Q_strncpyz (cg.testModelName, CG_Argv( 1 ), MAX_QPATH );
 	cg.testModelEntity.hModel = cgi_R_RegisterModel( cg.testModelName );
 
-	cg.testModel = gi.G2API_InitGhoul2Model(*((CGhoul2Info_v *)cg.testModelEntity.ghoul2), cg.testModelName, cg.testModelEntity.hModel, NULL, NULL, WF_CLIENTONLY);
+	cg.testModel = gi.G2API_InitGhoul2Model(*((CGhoul2Info_v *)cg.testModelEntity.ghoul2), cg.testModelName, cg.testModelEntity.hModel, NULL, NULL,0);
 	cg.testModelEntity.radius = 100.0f;
 
 	if ( cgi_Argc() == 3 ) {
@@ -226,7 +226,7 @@ Replaces the current view weapon with the given model
 void CG_TestGun_f (void) {
 	CG_TestModel_f();
 	cg.testGun = qtrue;
-	cg.testModelEntity.renderfx = RF_MINLIGHT | RF_DEPTHHACK | RF_FIRST_PERSON;
+	cg.testModelEntity.renderfx = RF_DEPTHHACK | RF_FIRST_PERSON;
 }
 
 
@@ -355,7 +355,7 @@ static void CG_CalcIdealThirdPersonViewTarget(void)
 	{
 		VectorCopy( cameraFocusLoc, cameraIdealTarget );
 	}
-	else if ( cg.overrides.thirdPersonVertOffset != cg_thirdPersonVertOffset.value )
+	else if ( cg.overrides.active & CG_OVERRIDE_3RD_PERSON_VOF )
 	{
 		// Add in a vertical offset from the viewpoint, which puts the actual target above the head, regardless of angle.
 		VectorCopy( cameraFocusLoc, cameraIdealTarget );
@@ -381,7 +381,7 @@ CG_CalcTargetThirdPersonViewLocation
 */
 static void CG_CalcIdealThirdPersonViewLocation(void)
 {
-	if ( cg.overrides.thirdPersonRange )
+	if ( cg.overrides.active & CG_OVERRIDE_3RD_PERSON_RNG )
 	{
 		VectorMA(cameraIdealTarget, -(cg.overrides.thirdPersonRange), camerafwd, cameraIdealLoc);
 	}
@@ -504,6 +504,7 @@ static void CG_UpdateThirdPersonTargetDamp(void)
 }
 
 // This can be called every interval, at the user's discretion.
+static int camWaterAdjust = 0;
 static void CG_UpdateThirdPersonCameraDamp(void)
 {
 	trace_t trace;
@@ -516,7 +517,23 @@ static void CG_UpdateThirdPersonCameraDamp(void)
 	
 	// First thing we do is calculate the appropriate damping factor for the camera.
 	dampfactor=0.0;
-	if (cg_thirdPersonCameraDamp.value != 0.0)
+	if ( cg.overrides.active & CG_OVERRIDE_3RD_PERSON_CDP )
+	{
+		if ( cg.overrides.thirdPersonCameraDamp != 0.0f )
+		{
+			double pitch;
+
+			// Note that the camera pitch has already been capped off to 89.
+			pitch = Q_fabs(cameraFocusAngles[PITCH]);
+
+			// The higher the pitch, the larger the factor, so as you look up, it damps a lot less.
+			pitch /= 89.0;	
+			dampfactor = (1.0-cg.overrides.thirdPersonCameraDamp)*(pitch*pitch);
+
+			dampfactor += cg.overrides.thirdPersonCameraDamp;
+		}
+	}
+	else if ( cg_thirdPersonCameraDamp.value != 0.0f )
 	{
 		double pitch;
 
@@ -554,8 +571,8 @@ static void CG_UpdateThirdPersonCameraDamp(void)
 	}
 
 	// Now we trace from the new target location to the new view location, to make sure there is nothing in the way.
-	CG_Trace(&trace, cameraCurTarget, cameramins, cameramaxs, cameraCurLoc, cg.predicted_player_state.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP);
-	if (trace.fraction < 1.0)
+	CG_Trace( &trace, cameraCurTarget, cameramins, cameramaxs, cameraCurLoc, cg.predicted_player_state.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP );
+	if ( trace.fraction < 1.0f )
 	{
 		VectorCopy( trace.endpos, cameraCurLoc );
 		//FIXME: when the trace hits movers, it gets very very jaggy... ?
@@ -598,6 +615,7 @@ static void CG_OffsetThirdPersonView( void )
 {
 	vec3_t diff;
 
+	camWaterAdjust = 0;
 	// Set camera viewing direction.
 	VectorCopy( cg.refdefViewAngles, cameraFocusAngles );
 
@@ -606,7 +624,7 @@ static void CG_OffsetThirdPersonView( void )
 	{
 		if ( MatrixMode )
 		{
-			if ( cg.overrides.thirdPersonAngle )
+			if ( cg.overrides.active & CG_OVERRIDE_3RD_PERSON_ANG )
 			{
 				cameraFocusAngles[YAW] += cg.overrides.thirdPersonAngle;
 			}
@@ -623,7 +641,7 @@ static void CG_OffsetThirdPersonView( void )
 	}
 	else
 	{	// Add in the third Person Angle.
-		if ( cg.overrides.thirdPersonAngle )
+		if ( cg.overrides.active & CG_OVERRIDE_3RD_PERSON_ANG )
 		{
 			cameraFocusAngles[YAW] += cg.overrides.thirdPersonAngle;
 		}
@@ -631,7 +649,7 @@ static void CG_OffsetThirdPersonView( void )
 		{
 			cameraFocusAngles[YAW] += cg_thirdPersonAngle.value;
 		}
-		if ( cg.overrides.thirdPersonPitchOffset )
+		if ( cg.overrides.active & CG_OVERRIDE_3RD_PERSON_POF )
 		{
 			cameraFocusAngles[PITCH] += cg.overrides.thirdPersonPitchOffset;
 		}
@@ -702,6 +720,11 @@ static void CG_OffsetThirdPersonView( void )
 	// ...and of course we should copy the new view location to the proper spot too.
 	VectorCopy(cameraCurLoc, cg.refdef.vieworg);
 
+	//if we hit the water, do a last-minute adjustment
+	if ( camWaterAdjust )
+	{
+		cg.refdef.vieworg[2] += camWaterAdjust;
+	}
 	cameraLastFrame=cg.time;
 }
 
@@ -1035,7 +1058,7 @@ void CG_ZoomDown_f( void )
 	{
 		cg.zoomLocked = qfalse;
 		cg.zoomMode = 1;
-		if ( cg.overrides.fov )
+		if ( cg.overrides.active & CG_OVERRIDE_FOV )
 		{
 			cg_zoomFov = cg.overrides.fov;
 		}
@@ -1150,7 +1173,8 @@ static qboolean	CG_CalcFov( void ) {
 		// if in intermission, use a fixed value
 		fov_x = 80;
 	}
-	else if ( cg.snap && cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD && !cg.renderingThirdPerson ) {
+	else if ( cg.snap && cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD && !cg.renderingThirdPerson )
+	{
 		// if in entity camera view, use a special FOV
 		if ( &g_entities[cg.snap->ps.viewEntity] &&
 			g_entities[cg.snap->ps.viewEntity].NPC )
@@ -1168,7 +1192,7 @@ static qboolean	CG_CalcFov( void ) {
 		}
 		else
 		{
-			if ( cg.overrides.fov ) // allow overriding the fov with a viewent
+			if ( cg.overrides.active & CG_OVERRIDE_FOV )
 			{
 				fov_x = cg.overrides.fov;
 			}
@@ -1197,7 +1221,7 @@ static qboolean	CG_CalcFov( void ) {
 		}
 	} else {
 		// user selectable
-		if ( cg.overrides.fov )
+		if ( cg.overrides.active & CG_OVERRIDE_FOV )
 		{
 			fov_x = cg.overrides.fov;
 		}
@@ -1228,7 +1252,7 @@ static qboolean	CG_CalcFov( void ) {
 				}
 
 				// Clamp zoomFov
-				float actualFOV = cg.overrides.fov ? cg.overrides.fov : cg_fov.value;
+				float actualFOV = (cg.overrides.active&CG_OVERRIDE_FOV) ? cg.overrides.fov : cg_fov.value;
 				if ( cg_zoomFov < MAX_ZOOM_FOV )
 				{
 					cg_zoomFov = MAX_ZOOM_FOV;
@@ -1396,6 +1420,10 @@ static qboolean CG_CalcViewValues( void ) {
 
 	ps = &cg.predicted_player_state;
 
+#if _DEBUG
+	trap_Com_SetOrgAngles(ps->origin,ps->viewangles);
+#endif
+
 	// intermission view
 	if ( ps->pm_type == PM_INTERMISSION ) {
 		VectorCopy( ps->origin, cg.refdef.vieworg );
@@ -1412,14 +1440,21 @@ static qboolean CG_CalcViewValues( void ) {
 
 	if ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )
 	{//in an entity camera view
-		VectorCopy( cg_entities[cg.snap->ps.viewEntity].lerpOrigin, cg.refdef.vieworg );
+		if ( g_entities[cg.snap->ps.viewEntity].client && cg.renderingThirdPerson )
+		{
+			VectorCopy( g_entities[cg.snap->ps.viewEntity].client->renderInfo.eyePoint, cg.refdef.vieworg );
+		}
+		else
+		{
+			VectorCopy( cg_entities[cg.snap->ps.viewEntity].lerpOrigin, cg.refdef.vieworg );
+		}
 		VectorCopy( cg_entities[cg.snap->ps.viewEntity].lerpAngles, cg.refdefViewAngles );
 		if ( !Q_stricmp( "misc_camera", g_entities[cg.snap->ps.viewEntity].classname ))
 		{
 			viewEntIsCam = qtrue;
 		}
 	}
-	else if ( cg.renderingThirdPerson && !cg.zoomMode && cg.overrides.thirdPersonEntity )
+	else if ( cg.renderingThirdPerson && !cg.zoomMode && (cg.overrides.active&CG_OVERRIDE_3RD_PERSON_ENT) )
 	{//different center, same angle
 		VectorCopy( cg_entities[cg.overrides.thirdPersonEntity].lerpOrigin, cg.refdef.vieworg );
 		VectorCopy( ps->viewangles, cg.refdefViewAngles );
@@ -1680,6 +1715,31 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 		inwater = CG_CalcViewValues();
 	}
 
+	//check for opaque water
+	if ( 1 )
+	{
+		vec3_t	camTest;
+		VectorCopy( cg.refdef.vieworg, camTest );
+		camTest[2] += 6;
+		if ( !(CG_PointContents( camTest, ENTITYNUM_NONE )&CONTENTS_SOLID) && !gi.inPVS( cg.refdef.vieworg, camTest ) )
+		{//crossed visible line into another room
+			cg.refdef.vieworg[2] -= 6;
+		}
+		else
+		{
+			VectorCopy( cg.refdef.vieworg, camTest );
+			camTest[2] -= 6;
+			if ( !(CG_PointContents( camTest, ENTITYNUM_NONE )&CONTENTS_SOLID) && !gi.inPVS( cg.refdef.vieworg, camTest ) )
+			{
+				cg.refdef.vieworg[2] += 6;
+			}
+		}
+		/*
+		if ( (trace.contents&(CONTENTS_WATER|CONTENTS_OPAQUE)) )
+		{//opaque water
+		}
+		*/
+	}
 	//This is done from the vieworg to get origin for non-attenuated sounds
 	cgi_S_UpdateAmbientSet( CG_ConfigString( CS_AMBIENT_SET ), cg.refdef.vieworg );
 

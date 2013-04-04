@@ -3139,9 +3139,7 @@ qboolean ItemParse_stripedFile( itemDef_t *item)
 
 	Q_strncpyz( uiInfo.uiDC.Assets.stripedFile, tempStr,  sizeof(uiInfo.uiDC.Assets.stripedFile) );
 
-	ui.SP_Register(uiInfo.uiDC.Assets.stripedFile, SP_REGISTER_REQUIRED|SP_REGISTER_MENU);
-
-	return qtrue;
+	return ui.SP_Register(uiInfo.uiDC.Assets.stripedFile, SP_REGISTER_REQUIRED|SP_REGISTER_MENU);
 }
 
 /*
@@ -3909,32 +3907,31 @@ typedef struct {
 
 static bind_t g_bindings[] = 
 {
-	{"+scores",			K_TAB,				-1,		-1,		-1},
-	{"+button1",		K_F1,				-1,		-1,		-1},
 	{"invuse",			K_ENTER,			-1,		-1,		-1},
 	{"force_throw",		K_F1,				-1,		-1,		-1},
 	{"force_pull",		K_F2,				-1,		-1,		-1},
-	{"force_speed",		K_F5,				-1,		-1,		-1},
-	{"force_heal",		K_F3,				-1,		-1,		-1},
-	{"+force_grip",		K_F5,				-1,		-1,		-1},
+	{"force_speed",		K_F3,				-1,		-1,		-1},
 	{"force_distract",	K_F4,				-1,		-1,		-1},
-	{"+force_lightning",K_F6,				-1,		-1,		-1},
+	{"force_heal",		K_F5,				-1,		-1,		-1},
+	{"+force_grip",		K_F6,				-1,		-1,		-1},
+	{"+force_lightning",K_F7,				-1,		-1,		-1},
+	{"+useforce",		'f',				-1,		-1,		-1},
+	{"forceprev",		'z',				-1,		-1,		-1},
+	{"forcenext",		'x',				-1,		-1,		-1},
 	{"use_bacta",		-1,					-1,		-1,		-1},
-	{"use_electrobinoculars",-1,			-1,		-1,		-1},
-	{"use_inquisitor",	-1,					-1,		-1,		-1},
-	{"use_lightamp_goggles",-1,				-1,		-1,		-1},
+	{"use_seeker",		-1,					-1,		-1,		-1},
 	{"use_sentry",		-1,					-1,		-1,		-1},
+	{"use_lightamp_goggles",-1,				-1,		-1,		-1},
+	{"use_electrobinoculars",-1,			-1,		-1,		-1},
 	{"invnext",			-1,					-1,		-1,		-1},
 	{"invprev",			-1,					-1,		-1,		-1},
 	{"invuse",			-1,					-1,		-1,		-1},
-	{"forcenext",		K_F6,				-1,		-1,		-1},
-	{"forceprev",		K_F6,				-1,		-1,		-1},
 	{"+speed", 			K_SHIFT,			-1,		-1,		-1},
 	{"+forward", 		K_UPARROW,			-1,		-1,		-1},
 	{"+back", 			K_DOWNARROW,		-1,		-1,		-1},
 	{"+moveleft", 		',',				-1,		-1,		-1},
 	{"+moveright",		'.',				-1,		-1,		-1},
-	{"+moveup",			K_SPACE,			-1,		-1,		-1},
+	{"+moveup",			'v',				-1,		-1,		-1},
 	{"+movedown",		'c',				-1,		-1,		-1},
 	{"+left", 			K_LEFTARROW,		-1,		-1,		-1},
 	{"+right", 			K_RIGHTARROW,		-1,		-1,		-1},
@@ -3944,6 +3941,7 @@ static bind_t g_bindings[] =
 	{"+mlook", 			 '/',				-1,		-1,		-1},
 	{"centerview",		K_END,				-1,		-1,		-1},
 	{"zoom", 			-1,					-1,		-1,		-1},
+	{"weapon 0",		-1,					-1,		-1,		-1},
 	{"weapon 1",		'1',				-1,		-1,		-1},
 	{"weapon 2",		'2',				-1,		-1,		-1},
 	{"weapon 3",		'3',				-1,		-1,		-1},
@@ -3961,38 +3959,17 @@ static bind_t g_bindings[] =
 	{"+altattack", 		-1,					-1,		-1,		-1},
 	{"weapprev",		'[',				-1,		-1,		-1},
 	{"weapnext", 		']',				-1,		-1,		-1},
-	{"+button3", 		K_MOUSE3,			-1,		-1,		-1},
-	{"prevTeamMember",	'w',				-1,		-1,		-1},
-	{"nextTeamMember",	'r',				-1,		-1,		-1},
-	{"nextOrder",		't',				-1,		-1,		-1},
-	{"confirmOrder",	'y',				-1,		-1,		-1},
-	{"denyOrder",		'n',				-1,		-1,		-1},
-	{"taskOffense",		'o',				-1,		-1,		-1},
-	{"taskDefense",		'd',				-1,		-1,		-1},
-	{"taskPatrol",		'p',				-1,		-1,		-1},
-	{"taskCamp",		'c',				-1,		-1,		-1},
-	{"taskFollow",		'f',				-1,		-1,		-1},
-	{"taskRetrieve",	'v',				-1,		-1,		-1},
-	{"taskEscort",		'e',				-1,		-1,		-1},
-	{"taskOwnFlag",		'i',				-1,		-1,		-1},
-	{"taskSuicide",		'k',				-1,		-1,		-1},
-	{"tauntKillInsult",	K_F1,				-1,		-1,		-1},
-	{"tauntPraise",		K_F2,				-1,		-1,		-1},
-	{"tauntTaunt",		K_F3,				-1,		-1,		-1},
-	{"tauntDeathInsult", K_F4,				-1,		-1,		-1},
-	{"tauntGauntlet",	K_F5,				-1,		-1,		-1},
-	{"scoresUp",		K_KP_PGUP,			-1,		-1,		-1},
-	{"scoresDown",		K_KP_PGDN,			-1,		-1,		-1},
-	{"messagemode",		'-1',				-1,		-1,		-1},
-	{"messagemode2",	-1,					-1,		-1,		-1},
-	{"messagemode3",	-1,					-1,		-1,		-1},
-	{"messagemode4",	-1,					-1,		-1,		-1},
-	{"+use",			-1,					-1,		-1,		-1},
-	{"+useforce",		-1,					-1,		-1,		-1},
-	{"datapad",			-1,					-1,		-1,		-1},
+	{"+block", 			-1,					-1,		-1,		-1},
+	{"+use",			K_SPACE,			-1,		-1,		-1},
+	{"datapad",			K_TAB,				-1,		-1,		-1},
 	{"save quik*",		-1,					-1,		-1,		-1},
-	{"thirdperson",		-1,					-1,		-1,		-1},
-	{"exitview",		-1,					-1,		-1,		-1}	
+	{"load quik",		-1,					-1,		-1,		-1},
+	{"load auto",		-1,					-1,		-1,		-1},
+	{"cg_thirdperson !",-1,					-1,		-1,		-1},
+	{"exitview",		-1,					-1,		-1,		-1},
+	{"uimenu loadmenu",	-1,					-1,		-1,		-1},
+	{"uimenu savemenu",	-1,					-1,		-1,		-1},
+	{"saberAttackCycle",-1,					-1,		-1,		-1},
 };
 
 
@@ -5151,7 +5128,7 @@ void BindingFromName(const char *cvar)
 				DC->keynumToStringBuf( b2, g_nameBind2, 32 );
 				Q_strupr(g_nameBind2);
 
-				strcat( g_nameBind1, va(" %s ",ui.SP_GetStringTextString(va("%s_OR",uiInfo.uiDC.Assets.stripedFile))) );
+				strcat( g_nameBind1, va(" %s ",ui.SP_GetStringTextString("MENUS_OR")) );
 				strcat( g_nameBind1, g_nameBind2 );
 			}
 			return;
@@ -5209,11 +5186,11 @@ void Item_Bind_Paint(itemDef_t *item)
 	{
 		Item_Text_Paint(item);
 		BindingFromName(item->cvar);
-		DC->drawText(item->textRect.x + item->textRect.w + 8, item->textRect.y, item->textscale, newColor, g_nameBind1, /*maxChars*/item->textRect.w, item->textStyle, item->font);
+		DC->drawText(item->textRect.x + item->textRect.w + 8, item->textRect.y, item->textscale, newColor, g_nameBind1, maxChars/*item->textRect.w*/, item->textStyle, item->font);
 	} 
 	else 
 	{
-		DC->drawText(item->textRect.x, item->textRect.y, item->textscale, newColor, (value != 0) ? "FIXME 1" : "FIXME 0", /*maxChars*/item->textRect.w, item->textStyle, item->font);
+		DC->drawText(item->textRect.x, item->textRect.y, item->textscale, newColor, (value != 0) ? "FIXME 1" : "FIXME 0", maxChars/*item->textRect.w*/, item->textStyle, item->font);
 	}
 }
 
@@ -6889,6 +6866,10 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down)
 			}
 
 		}
+		else if (down && (key == K_ESCAPE))
+		{
+			return qfalse;
+		}
 		return qtrue;
 	}
 	else
@@ -8118,7 +8099,7 @@ qboolean Item_Slider_HandleKey(itemDef_t *item, int key, qboolean down)
 			}
 		}
 	}
-	DC->Print("slider handle key exit\n");
+	//DC->Print("slider handle key exit\n");
 	return qfalse;
 }
 

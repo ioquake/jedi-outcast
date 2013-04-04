@@ -13,7 +13,10 @@
 #include "openal\alc.h"
 #include "eax\eax.h"
 #include "eax\eaxman.h"
-#include "eax\eax-util.h"
+
+// Added for Open AL to know when to mute all sounds (e.g when app. loses focus)
+void S_AL_MuteAllSounds(qboolean bMute);
+
 
 //from SND_AMBIENT
 extern void AS_Init( void );

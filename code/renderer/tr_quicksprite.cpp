@@ -60,8 +60,8 @@ void CQuickSpriteSystem::Flush(void)
 	//
 	// set arrays and lock
 	//
-	qglTexCoordPointer( 2, GL_FLOAT, 0, mTextureCoords );
 	qglEnableClientState( GL_TEXTURE_COORD_ARRAY);
+	qglTexCoordPointer( 2, GL_FLOAT, 0, mTextureCoords );
 
 	qglEnableClientState( GL_COLOR_ARRAY);
 	qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, mColors );

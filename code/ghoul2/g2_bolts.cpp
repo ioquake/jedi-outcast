@@ -118,6 +118,7 @@ int G2_Add_Bolt_Surf_Num(const char *fileName, boltInfo_v &bltlist, surfaceInfo_
 
 }
 
+void G2_Bolt_Not_Found(const char *boneName,const char *modName);
 int G2_Add_Bolt(const char *fileName, boltInfo_v &bltlist, surfaceInfo_v &slist, const char *boneName)
 {
 	model_t		*mod_m = R_GetModelByHandle(RE_RegisterModel(fileName)); 
@@ -191,6 +192,9 @@ int G2_Add_Bolt(const char *fileName, boltInfo_v &bltlist, surfaceInfo_v &slist,
 	{
 		// didn't find it? Error
 		//assert(0&&x == mod_a->mdxa->numBones);
+#if _DEBUG
+		G2_Bolt_Not_Found(boneName,fileName);
+#endif
 		return -1;
 	}
 
@@ -283,6 +287,7 @@ void G2_Init_Bolt_List(boltInfo_v &bltlist)
 // remove any bolts that reference original surfaces, generated surfaces, or bones that aren't active anymore 
 void G2_RemoveRedundantBolts(boltInfo_v &bltlist, surfaceInfo_v &slist, int *activeSurfaces, int *activeBones)
 {
+	G2_FindOverrideSurface(-1, slist); //reset the quick surface override lookup;
 	// walk the bolt list
 	for (int i=0; i<bltlist.size(); i++)
 	{

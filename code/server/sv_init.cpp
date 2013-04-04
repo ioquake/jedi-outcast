@@ -17,6 +17,7 @@ Ghoul2 Insert Start
 	#include "../qcommon/miniheap.h"
 #endif
 
+void CM_CleanLeafCache(void);
 
 CMiniHeap *G2VertSpaceServer = NULL;
 /*
@@ -249,6 +250,8 @@ void SV_SpawnServer( char *server, ForceReload_e eForceReload, qboolean bAllowSc
 	}
 
 	sv.time = 1000;
+	G2API_SetTime(sv.time,G2T_SV_TIME);
+
 	CM_LoadMap( va("maps/%s.bsp", server), qfalse, &checksum );
 
 	// set serverinfo visible name
@@ -275,6 +278,7 @@ void SV_SpawnServer( char *server, ForceReload_e eForceReload, qboolean bAllowSc
 	for ( i = 0 ;i < 3 ; i++ ) {
 		ge->RunFrame( sv.time );
 		sv.time += 100;
+		G2API_SetTime(sv.time,G2T_SV_TIME);
 	}
 
 	// create a baseline for more efficient communications
@@ -307,6 +311,7 @@ void SV_SpawnServer( char *server, ForceReload_e eForceReload, qboolean bAllowSc
 	// run another frame to allow things to look at all connected clients
 	ge->RunFrame( sv.time );
 	sv.time += 100;
+	G2API_SetTime(sv.time,G2T_SV_TIME);
 
 
 	// save systeminfo and serverinfo strings
@@ -433,6 +438,9 @@ void SV_Shutdown( char *finalmsg ) {
 		Z_Free( svs.clients );
 	}
 	memset( &svs, 0, sizeof( svs ) );
+
+	// Ensure we free any memory used by the leaf cache.
+	CM_CleanLeafCache();
 
 	Cvar_Set( "sv_running", "0" );
 

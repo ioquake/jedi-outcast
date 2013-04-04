@@ -107,7 +107,7 @@ typedef struct {
 	int			(*Key_GetCatcher)( void );
 	void		(*Key_SetCatcher)( int catcher );
 
-	void		(*SP_Register)( const char *Package, unsigned char Registration );
+	qboolean	(*SP_Register)( const char *Package, unsigned char Registration );
 	const char *(*SP_GetStringText)(unsigned short ID);
 	const char *(*SP_GetStringTextString)(const char *Reference);
 

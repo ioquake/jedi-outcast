@@ -285,13 +285,58 @@ long RllDecodeStereoToStereo(unsigned char *from,unsigned int size,char signedOu
 	extern cvar_t *s_volume;
 	int iVolume = 1/*bMixedWithCurrentAudio*/ ? ((int) (256.0f * (s_volume?s_volume->value:1.0f))) : 256;
 
-	for (z=0;z<size;z+=2) {
-		dst = s_rawend&(MAX_RAW_SAMPLES-1);
-		s_rawend++;
-		prevL = (short)(prevL + cin.sqrTable[*zz++]); 
-		prevR = (short)(prevR + cin.sqrTable[*zz++]);
-		samps[dst].left  = prevL*iVolume;
-		samps[dst].right = prevR*iVolume;
+	switch (dma.speed)
+	{
+		case 11025:
+		{
+			for (z=0;z<size;z+=2) {
+				prevL = (short)(prevL + cin.sqrTable[*zz++]); 
+				prevR = (short)(prevR + cin.sqrTable[*zz++]);
+
+				if (z&2)
+				{
+					dst = s_rawend&(MAX_RAW_SAMPLES-1);
+					s_rawend++;
+					samps[dst].left  = prevL*iVolume;
+					samps[dst].right = prevR*iVolume;
+				}
+			}
+		}
+		break;
+
+		case 22050:
+		{
+			// 1:1 case...
+			//
+			for (z=0;z<size;z+=2) {
+				dst = s_rawend&(MAX_RAW_SAMPLES-1);
+				s_rawend++;
+				prevL = (short)(prevL + cin.sqrTable[*zz++]); 
+				prevR = (short)(prevR + cin.sqrTable[*zz++]);
+				samps[dst].left  = prevL*iVolume;
+				samps[dst].right = prevR*iVolume;
+			}
+		}
+		break;
+
+		case 44100:
+		{
+			for (z=0;z<size;z+=2) {
+				prevL = (short)(prevL + cin.sqrTable[*zz++]); 
+				prevR = (short)(prevR + cin.sqrTable[*zz++]);
+
+				dst = s_rawend&(MAX_RAW_SAMPLES-1);
+				s_rawend++;
+				samps[dst].left  = prevL*iVolume;
+				samps[dst].right = prevR*iVolume;
+
+				dst = s_rawend&(MAX_RAW_SAMPLES-1);
+				s_rawend++;
+				samps[dst].left  = prevL*iVolume;
+				samps[dst].right = prevR*iVolume;
+			}
+		}
+		break;
 	}
 	
 	return (size>>1);	//*sizeof(short));

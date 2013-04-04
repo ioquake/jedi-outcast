@@ -1387,7 +1387,7 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 				}
 			}
 
-			theFxHelper.Trace( &tr, org, NULL, NULL, temp, -1, MASK_SHOT );
+			theFxHelper.Trace( &tr, org, NULL, NULL, temp, -1, CONTENTS_SOLID | CONTENTS_SHOTCLIP );//MASK_SHOT );
 
 			if ( tr.startsolid || tr.allsolid )
 			{

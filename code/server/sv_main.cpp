@@ -447,7 +447,8 @@ Player movement occurs as a result of packet events, which
 happen before SV_Frame is called
 ==================
 */
-void SV_Frame( int msec ) {
+extern cvar_t	*cl_newClock;
+void SV_Frame( int msec,float fractionMsec ) {
 	int		frameMsec;
 	int		startTime=0;
 
@@ -483,6 +484,15 @@ void SV_Frame( int msec ) {
 	frameMsec = 1000 / sv_fps->integer ;
 
 	sv.timeResidual += msec;
+	sv.timeResidualFraction+=fractionMsec;
+	if (sv.timeResidualFraction>=1.0f)
+	{
+		sv.timeResidualFraction-=1.0f;
+		if (cl_newClock&&cl_newClock->integer)
+		{
+			sv.timeResidual++;
+		}
+	}
 	if ( sv.timeResidual < frameMsec ) {
 		return;
 	}
@@ -517,6 +527,7 @@ void SV_Frame( int msec ) {
 	while ( sv.timeResidual >= frameMsec ) {
 		sv.timeResidual -= frameMsec;
 		sv.time += frameMsec;
+		G2API_SetTime(sv.time,G2T_SV_TIME);
 
 		// let everything in the world think and move
 		ge->RunFrame( sv.time );

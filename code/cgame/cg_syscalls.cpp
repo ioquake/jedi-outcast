@@ -385,6 +385,11 @@ void		trap_G2_SetGhoul2ModelIndexes(CGhoul2Info_v &ghoul2, qhandle_t *modelList,
 Ghoul2 Insert End
 */
 
+void	trap_Com_SetOrgAngles(vec3_t org,vec3_t angles)
+{
+	syscall(COM_SETORGANGLES,org,angles);
+}
+
 void	trap_R_GetLightStyle(int style, color4ub_t color)
 {
 	syscall(CG_R_GET_LIGHT_STYLE, style, color);
@@ -506,7 +511,7 @@ int cgi_UI_GetItemText(char *menuFile,char *itemName, char* text)
 
 int cgi_SP_Register(const char *text, qboolean persist )
 {
-	syscall( CG_SP_REGISTER, text, persist );
+	return syscall( CG_SP_REGISTER, text, persist );
 }
 
 int cgi_SP_GetStringTextString(const char *text, char *buffer, int bufferLength)

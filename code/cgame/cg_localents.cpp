@@ -206,6 +206,9 @@ void CG_AddFragment( localEntity_t *le )
 	// calculate new position
 	EvaluateTrajectory( &le->pos, cg.time, newOrigin );
 
+	le->refEntity.renderfx |= RF_LIGHTING_ORIGIN;
+	VectorCopy( newOrigin, le->refEntity.lightingOrigin );
+	
 	// trace a line from previous position to new position
 	CG_Trace( &trace, le->refEntity.origin, NULL, NULL, newOrigin, le->ownerGentNum, CONTENTS_SOLID );
 	if ( trace.fraction == 1.0 ) {

@@ -6,6 +6,7 @@
 
 
 #include "tr_QuickSprite.h"
+#include "tr_worldeffects.h"
 
 
 /////===== Part of the VERTIGON system =====/////
@@ -56,10 +57,11 @@ const float randomchart[256] = {
 #define WIND_DAMP_INTERVAL 50
 #define WIND_GUST_TIME 2500.0
 #define WIND_GUST_DECAY (1.0 / WIND_GUST_TIME)
-extern bool R_GetWindVector(vec3_t windVector);
 
 int		lastSSUpdateTime = 0;
 float	curWindSpeed=0;
+float	curWindGust=5;
+float	curWeatherAmount=1;
 vec3_t	curWindBlowVect={0,0,0}, targetWindBlowVect={0,0,0};
 vec3_t	curWindGrassDir={0,0,0}, targetWindGrassDir={0,0,0};
 int		totalsurfsprites=0, sssurfaces=0;
@@ -70,7 +72,8 @@ vec3_t curWindPoint;
 int nextGustTime=0;
 float gustLeft=0;
 
-float	standardfovx = -1, standardscalex = 1.0;
+qboolean standardfovinitialized=qfalse;
+float	standardfovx = 90, standardscalex = 1.0;
 float	rangescalefactor=1.0;
 
 vec3_t  ssrightvectors[4];
@@ -93,7 +96,8 @@ static void R_SurfaceSpriteFrameUpdate(void)
 		return;
 
 	if (backEnd.refdef.time < lastSSUpdateTime)
-	{
+	{	// Time is BEFORE the last update time, so reset everything.
+		curWindGust = 5;
 		curWindSpeed = r_windSpeed->value;
 		nextGustTime = 0;
 		gustLeft = 0;
@@ -105,22 +109,35 @@ static void R_SurfaceSpriteFrameUpdate(void)
 	// Adjust for an FOV.  If things look twice as wide on the screen, pretend the shaders have twice the range.
 	// ASSUMPTION HERE IS THAT "standard" fov is the first one rendered.
 	
-	if (standardfovx < 0)
+	if (!standardfovinitialized)
 	{	// This isn't initialized yet.
-		if (backEnd.refdef.fov_x > 0.01)
+		if (backEnd.refdef.fov_x > 50 && backEnd.refdef.fov_x < 135)		// I don't consider anything below 50 or above 135 to be "normal".
 		{
 			standardfovx = backEnd.refdef.fov_x;
-			standardscalex = tan(standardfovx * (M_PI/180.0f));
+			standardscalex = tan(standardfovx * 0.5 * (M_PI/180.0f));
+			standardfovinitialized = qtrue;
+		}
+		else
+		{
+			standardfovx = 90;
+			standardscalex = tan(standardfovx * 0.5 * (M_PI/180.0f));
 		}
 		rangescalefactor = 1.0;		// Don't multiply the shader range by anything.
 	}
 	else if (standardfovx == backEnd.refdef.fov_x)
-	{	// This is the standard FOV, don't multiply the shader range.
+	{	// This is the standard FOV (or higher), don't multiply the shader range.
 		rangescalefactor = 1.0;
 	}
 	else
 	{	// We are using a non-standard FOV.  We need to multiply the range of the shader by a scale factor.
-		rangescalefactor = standardscalex / tan(backEnd.refdef.fov_x * (M_PI/180.0f));
+		if (backEnd.refdef.fov_x > 135)
+		{
+			rangescalefactor = standardscalex / tan(135.0f * 0.5f * (M_PI/180.0f));
+		}
+		else
+		{
+			rangescalefactor = standardscalex / tan(backEnd.refdef.fov_x * 0.5 * (M_PI/180.0f));
+		}
 	}
 
 	// Create a set of four right vectors so that vertical sprites aren't always facing the same way.
@@ -147,9 +164,36 @@ static void R_SurfaceSpriteFrameUpdate(void)
 
 
 	// Update the wind.
-	targetspeed = r_windSpeed->value;	// Minimum gust delay, in seconds.
+	// If it is raining, get the windspeed from the rain system rather than the cvar
+	if (R_IsRaining() || R_IsSnowing())
+	{
+		curWeatherAmount = 1.0;
+	}
+	else
+	{
+		curWeatherAmount = r_surfaceWeather->value;
+	}
+
+	if (R_GetWindSpeed(targetspeed))
+	{	// We successfully got a speed from the rain system.
+		// Set the windgust to 5, since that looks pretty good.
+		targetspeed *= 0.3f;
+		if (targetspeed >= 1.0)
+		{
+			curWindGust = 300/targetspeed;
+		}
+		else
+		{
+			curWindGust = 0;
+		}
+	}
+	else
+	{	// Use the cvar.
+		targetspeed = r_windSpeed->value;	// Minimum gust delay, in seconds.
+		curWindGust = r_windGust->value;
+	}
 	
-	if (targetspeed > 0 && r_windGust->value)
+	if (targetspeed > 0 && curWindGust)
 	{
 		if (gustLeft > 0)
 		{	// We are gusting
@@ -159,7 +203,7 @@ static void R_SurfaceSpriteFrameUpdate(void)
 			gustLeft -= (float)(backEnd.refdef.time - lastSSUpdateTime)*WIND_GUST_DECAY;
 			if (gustLeft <= 0)
 			{
-				nextGustTime = backEnd.refdef.time + (r_windGust->value*1000)*ri.flrand(1.0f,4.0f);
+				nextGustTime = backEnd.refdef.time + (curWindGust*1000)*ri.flrand(1.0f,4.0f);
 			}
 		}
 		else if (backEnd.refdef.time >= nextGustTime)
@@ -1131,15 +1175,14 @@ static void RB_DrawEffectSurfaceSprites( shaderStage_t *stage, shaderCommands_t 
 	float alpha, alphapos, thisspritesfadestart, light;
 	byte randomindex2;
 	
-	float cutdist=stage->ss.fadeMax, cutdist2=cutdist*cutdist;
-	float fadedist=stage->ss.fadeDist, fadedist2=fadedist*fadedist;
+	float cutdist=stage->ss.fadeMax*rangescalefactor, cutdist2=cutdist*cutdist;
+	float fadedist=stage->ss.fadeDist*rangescalefactor, fadedist2=fadedist*fadedist;
 
 	float fxalpha = stage->ss.fxAlphaEnd - stage->ss.fxAlphaStart;
+	qboolean fadeinout=qfalse;
 	
 	assert(cutdist2 != fadedist2);
 	float inv_fadediff = 1.0/(cutdist2-fadedist2);
-
-	qboolean fadeinout=qfalse;
 
 	// The faderange is the fraction amount it takes for these sprites to fade out, assuming an ideal fade range of 250
 	float faderange = FADE_RANGE/(cutdist-fadedist);
@@ -1165,13 +1208,13 @@ static void RB_DrawEffectSurfaceSprites( shaderStage_t *stage, shaderCommands_t 
 
 	if (stage->ss.surfaceSpriteType == SURFSPRITE_WEATHERFX)
 	{	// This effect is affected by weather settings.
-		if (r_surfaceWeather->value < 0.01)
+		if (curWeatherAmount < 0.01)
 		{	// Don't show these effects
 			return;
 		}
 		else
 		{
-			density = stage->ss.density / r_surfaceWeather->value;
+			density = stage->ss.density / curWeatherAmount;
 		}
 	}
 	else
@@ -1183,7 +1226,7 @@ static void RB_DrawEffectSurfaceSprites( shaderStage_t *stage, shaderCommands_t 
 	for (curvert=0; curvert<input->numVertexes; curvert++)
 	{
 		// Calc alpha at each point
-		VectorSubtract(backEnd.viewParms.or.origin, input->xyz[curvert], dist);
+		VectorSubtract(ssViewOrigin, input->xyz[curvert], dist);
 		SSVertAlpha[curvert] = 1.0f - (VectorLengthSquared(dist) - fadedist2) * inv_fadediff;
 
 	// Note this is the proper equation, but isn't used right now because it would be just a tad slower.
@@ -1357,7 +1400,7 @@ void RB_DrawSurfaceSprites( shaderStage_t *stage, shaderCommands_t *input)
 	//
 	// Check fog
 	//
-	if ( tess.fogNum && tess.shader->fogPass)// && r_drawfog->value) 
+	if ( tess.fogNum && tess.shader->fogPass && r_drawfog->value) 
 	{
 		fog = tr.world->fogs + tess.fogNum;
 		SSUsingFog = qtrue;

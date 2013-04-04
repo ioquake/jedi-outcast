@@ -195,8 +195,10 @@ typedef struct {
 
 	int			framecount;
 	int			frametime;			// msec since last frame
+	float		frametimeFraction;	// fraction of a msec since last frame
 
 	int			realtime;			// ignores pause
+	float		realtimeFraction;	// fraction of a msec accumulated
 	int			realFrametime;		// ignoring pause, so console always works
 
 	// update server info

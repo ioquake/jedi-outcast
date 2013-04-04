@@ -259,7 +259,7 @@ const char *CG_DisplayBoxedText(int iBoxX, int iBoxY, int iBoxWidth, int iBoxHei
 {
 	cgi_R_SetColor( v4Color );
 
-	// Setup a reasonable vertical spacing (taiwanese needs 1.5 fontheight, so use that for all)...
+	// Setup a reasonable vertical spacing (taiwanese & japanese need 1.5 fontheight, so use that for all)...
 	//
 	const int iFontHeight		 = cgi_R_Font_HeightPixels(iFontHandle, fScale);
 	const int iFontHeightAdvance = (int) (1.5f * (float) iFontHeight);
@@ -375,6 +375,29 @@ void CG_CaptionTextStop(void)
 	cg.captionTextTime = 0;
 }
 
+// try and get the correct StripEd text (with retry) for a given reference...
+//
+// returns 0 if failed, else strlen...
+//
+static int cg_SP_GetStringTextStringWithRetry( LPCSTR psReference, char *psDest, int iSizeofDest)
+{
+	int iReturn;
+
+	for (int i=0; i<STRIPED_LEVELNAME_VARIATIONS; i++)
+	{
+		if (cgs.stripLevelName[i][0])	// entry present?
+		{
+			iReturn = cgi_SP_GetStringTextString( va("%s_%s",cgs.stripLevelName[i],psReference), psDest, iSizeofDest );
+			if (iReturn)
+			{
+				return iReturn;
+			}
+		}
+	}
+
+	return 0;
+}
+
 // slightly confusingly, the char arg for this function is an audio filename of the form "path/path/filename",
 //	the "filename" part of which should be the same as the StripEd reference we're looking for in the current 
 //	level's string package...
@@ -396,7 +419,7 @@ void CG_CaptionText( const char *str, int sound, int y )
 #endif
 		return; 
 	}
-	i = cgi_SP_GetStringTextString( va("%s_%s",cgs.stripLevelName,holds+1), text, sizeof(text) );
+	i = cg_SP_GetStringTextStringWithRetry( holds+1, text, sizeof(text) );
 	//ensure we found a match
 	if (!i) 
 	{	
@@ -406,7 +429,7 @@ void CG_CaptionText( const char *str, int sound, int y )
 		return; 
 	}
 
-	const int fontHeight = (int) ((cgi_Language_IsAsian() ? 1.4f : 1.0f) * (float) cgi_R_Font_HeightPixels(cgs.media.qhFontMedium, fFontScale));	// taiwanese needs 1.5 fontheight spacing
+	const int fontHeight = (int) ((cgi_Language_IsAsian() ? 1.4f : 1.0f) * (float) cgi_R_Font_HeightPixels(cgs.media.qhFontMedium, fFontScale));	// taiwanese & japanese need 1.5 fontheight spacing
 
 	cg.captionTextTime = cg.time;
 	if (in_camera) {
@@ -616,7 +639,8 @@ void CG_ScrollText( const char *str, int iPixelWidth )
 
 	// first, ask the strlen of the final string...
 	//	
-	i = cgi_SP_GetStringTextString( str, NULL,0 );
+	i = cg_SP_GetStringTextStringWithRetry( str, NULL, 0 );
+
 	//ensure we found a match
 	if (!i)
 	{
@@ -632,7 +656,7 @@ void CG_ScrollText( const char *str, int iPixelWidth )
 	//
 	// now get the string...
 	//
-	i = cgi_SP_GetStringTextString( str, psText, i+1 );
+	i = cg_SP_GetStringTextStringWithRetry( str, psText, i+1 );
 	//ensure we found a match
 	if (!i)
 	{
@@ -727,7 +751,7 @@ void CG_DrawScrollText(void)
 	char	*start;
 	int		i;
 	int		x,y;	
-	const int fontHeight = (int) (1.5f * (float) cgi_R_Font_HeightPixels(cgs.media.qhFontMedium, 1.0f));	// taiwanese needs 1.5 fontheight spacing
+	const int fontHeight = (int) (1.5f * (float) cgi_R_Font_HeightPixels(cgs.media.qhFontMedium, 1.0f));	// taiwanese & japanese need 1.5 fontheight spacing
 
 	if ( !cg.scrollTextTime ) 
 	{
@@ -802,7 +826,8 @@ void CG_CenterPrint( const char *str, int y) {
 	{
 		int i;
 
-		i = cgi_SP_GetStringTextString( va("%s_%s", cgs.stripLevelName, str+1), cg.centerPrint, sizeof(cg.centerPrint) );
+		i = cg_SP_GetStringTextStringWithRetry( str+1, cg.centerPrint, sizeof(cg.centerPrint) );
+
 		if (!i)
 		{
 			Com_Printf ("CG_CenterPrint: bad key for precached Text '%s'\n",str);	

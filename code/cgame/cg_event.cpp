@@ -760,8 +760,8 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		}
 		else
 		{
-			VectorCopy( es->angles, axis[0] );
-			VectorCopy( es->angles2, axis[1] );
+			VectorCopy( cent->gent->pos3, axis[0] );
+			VectorCopy( cent->gent->pos4, axis[1] );
 			CrossProduct( axis[0], axis[1], axis[2] );
 
 			// the entNum the effect may be attached to

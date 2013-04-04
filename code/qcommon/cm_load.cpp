@@ -233,6 +233,11 @@ void CMod_LoadBrushes( lump_t *l ) {
 			Com_Error( ERR_DROP, "CMod_LoadBrushes: bad shaderNum: %i", out->shaderNum );
 		}
 		out->contents = cm.shaders[out->shaderNum].contentFlags;
+		//TEMP HACK: for water that cuts vis but is not solid!!!
+		if ( cm.shaders[out->shaderNum].surfaceFlags & SURF_SLICK )
+		{
+			out->contents &= ~CONTENTS_SOLID;
+		}
 
 		CM_BoundBrush( out );
 	}
@@ -740,6 +745,7 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 		Q_strncpyz( cm.name, name, sizeof( cm.name ) );
 		Q_strncpyz( gsCachedMapDiskImage, name, sizeof(gsCachedMapDiskImage) );	// so the renderer can check it
 	}
+	CM_CleanLeafCache();
 }
 
 // need a wrapper function around this because of multiple returns, need to ensure bool is correct...

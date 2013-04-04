@@ -135,6 +135,7 @@ typedef enum {
 	CG_AS_ADDENTRY,
 	CG_AS_GETBMODELSOUND,
 	CG_S_GETSAMPLELENGTH,
+	COM_SETORGANGLES,
 /*
 Ghoul2 Insert Start
 */

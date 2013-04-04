@@ -604,6 +604,9 @@ int CL_CgameSystemCalls( int *args ) {
 	case CG_SETUSERCMDANGLES:
 		CL_SetUserCmdAngles( VMF(1), VMF(2), VMF(3) );
 		return 0;
+	case COM_SETORGANGLES:
+		Com_SetOrgAngles((float *)VMA(1),(float *)VMA(2));
+		return 0;
 /*
 Ghoul2 Insert Start
 */
@@ -753,9 +756,7 @@ Ghoul2 Insert End
 		return result;
 
 	case CG_SP_REGISTER:
-		SP_Register( (const char *) VMA(1), args[2]?(SP_REGISTER_MENU|SP_REGISTER_REQUIRED):SP_REGISTER_CLIENT );
-		return 0;
-		break;
+		return SP_Register( (const char *) VMA(1), args[2]?(SP_REGISTER_MENU|SP_REGISTER_REQUIRED):SP_REGISTER_CLIENT );
 		
 	case CG_SP_GETSTRINGTEXTSTRING:
 	case CG_SP_GETSTRINGTEXT:
@@ -875,6 +876,7 @@ void CL_CGameRendering( stereoFrame_t stereo ) {
 		}
 	}
 #endif
+	G2API_SetTime(cl.serverTime,G2T_CG_TIME);
 	VM_Call( CG_DRAW_ACTIVE_FRAME, cl.serverTime, stereo, qfalse );
 //	VM_Debug( 0 );
 }

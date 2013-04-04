@@ -54,7 +54,15 @@ char *inv_names[] =
 "LIGHT AMP GOGGLES",
 "ASSAULT SENTRY",
 "GOODIE KEY",
-"SECURITY KEY"
+"GOODIE KEY",
+"GOODIE KEY",
+"GOODIE KEY",
+"GOODIE KEY",
+"SECURITY KEY",
+"SECURITY KEY",
+"SECURITY KEY",
+"SECURITY KEY",
+"SECURITY KEY",
 };
 
 int	force_icons[NUM_FORCE_POWERS];
@@ -272,6 +280,8 @@ vmCvar_t	cg_debugBB;
 Ghoul2 Insert End
 */
 
+vmCvar_t	cg_VariantSoundCap;	// 0 = no capping, else cap to (n) max (typically just 1, but allows more)
+
 typedef struct {
 	vmCvar_t	*vmCvar;
 	char		*cvarName;
@@ -361,7 +371,7 @@ Ghoul2 Insert Start
 /*
 Ghoul2 Insert End
 */
-
+	{ &cg_VariantSoundCap, "cg_VariantSoundCap", "0" },
 };
 
 int		cvarTableSize = sizeof( cvarTable ) / sizeof( cvarTable[0] );
@@ -1165,6 +1175,7 @@ static void CG_RegisterGraphics( void ) {
 	cgs.media.forceIconBackground	= cgi_R_RegisterShaderNoMip( "gfx/hud/background_f");
 	cgs.media.inventoryIconBackground= cgi_R_RegisterShaderNoMip( "gfx/hud/background_i");
 	cgs.media.inventoryProngsOn		= cgi_R_RegisterShaderNoMip( "gfx/hud/prong_on_i");
+	cgs.media.dataPadFrame			= cgi_R_RegisterShaderNoMip( "gfx/hud/datapad2");
 
 	cg.loadLCARSStage = 5;
 	CG_LoadingString( "game media models" );
@@ -1204,7 +1215,7 @@ static void CG_RegisterGraphics( void ) {
 	cgs.media.HUDArmor2= cgi_R_RegisterShaderNoMip( "gfx/hud/armor2" );
 	cgs.media.HUDHealth= cgi_R_RegisterShaderNoMip( "gfx/hud/health" );
 	cgs.media.HUDHealthTic= cgi_R_RegisterShaderNoMip( "gfx/hud/health_tic" );
-	cgs.media.HUDArmorTic= cgi_R_RegisterShaderNoMip( "gfx/hud/armor_tic" );
+//	cgs.media.HUDArmorTic= cgi_R_RegisterShaderNoMip( "gfx/hud/armor_tic" );
 
 	cgs.media.HUDRightFrame= cgi_R_RegisterShaderNoMip( "gfx/hud/hudrightframe" );
 	cgs.media.HUDInnerRight = cgi_R_RegisterShaderNoMip( "gfx/hud/hudright_innerframe" );
@@ -1843,6 +1854,13 @@ void CG_DrawEdge( vec3_t start, vec3_t end, int type )
 	case EDGE_FAILED:
 		{
 			vec3_t	color = { 255, 0, 0 };
+
+			FX_AddLine( start, end, 8.0f, 4.0f, 0.0f, 0.5f, 0.5f, color, color, 51, cgi_R_RegisterShader( "gfx/misc/nav_line" ), 0 );
+		}
+		break;
+	case EDGE_MOVEDIR:
+		{
+			vec3_t	color = { 0, 255, 0 };
 
 			FX_AddLine( start, end, 8.0f, 4.0f, 0.0f, 0.5f, 0.5f, color, color, 51, cgi_R_RegisterShader( "gfx/misc/nav_line" ), 0 );
 		}
@@ -2695,8 +2713,9 @@ void CG_DrawInventorySelect( void )
 	int				count;
 	int				holdX,x,y,pad;
 	int				height;
-	int				tag;
+//	int				tag;
 	float			addX;
+	vec4_t			textColor = { .312f, .75f, .621f, 1.0f };
 
 	// don't display if dead
 	if ( cg.predicted_player_state.stats[STAT_HEALTH] <= 0 ) 
@@ -2818,11 +2837,15 @@ void CG_DrawInventorySelect( void )
 		if (inv_names[cg.inventorySelect])
 		{
 			// FIXME :this has to use the bg_itemlist pickup name
-			tag = FindInventoryItemTag(cg.inventorySelect);
+//			tag = FindInventoryItemTag(cg.inventorySelect);
+
+			int w = cgi_R_Font_StrLenPixels(inv_names[cg.inventorySelect], cgs.media.qhFontSmall, 1.0f);	
+			int x = ( SCREEN_WIDTH - w ) / 2;
+			cgi_R_Font_DrawString(x, (SCREEN_HEIGHT - 24), inv_names[cg.inventorySelect], textColor, cgs.media.qhFontSmall, -1, 1.0f);
 
 //			if (tag)
 //			{
-				CG_DrawProportionalString(320, y + 53, inv_names[cg.inventorySelect], CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);		
+//				CG_DrawProportionalString(320, y + 53, inv_names[cg.inventorySelect], CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);		
 //				CG_DrawProportionalString(320, y + 53, bg_itemlist[i].pickup_name, CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);		
 //			}
 		}
@@ -2871,22 +2894,23 @@ int cgi_UI_GetItemText(char *menuFile,char *itemName, char *text);
 
 char *inventoryDesc[15] = 
 {
-"Neuro-Saav Model TD2.3 Electrobinoculars\nElectrobinoculars operate in low-light and normal light conditions to magnify distant objects and provide a heads-up display that features detailed information on the area viewed.  The heads-up display measures distances and offers various telemetry readouts on the object or area in view. Powered by normal battery cells that drain power at a minimal rate, Electrobinoculars also feature an optional, infrared mode.",
-"BioTech Bacta Canister\nBacta canisters are portable, disposable packs of bacta ointments and emergency care tools.  Designed for use in the field, bacta canisters can be used to heal wounds and restore vitality during medical recovery.  No field medic should be without them.",
-"Arakyd Mark VII Inquisitor \nAn attack drone similar to the training drones used by Jedi to practice their lightsaber skills, the Inquisitor hovers around its user and attacks any enemy the user fires upon.  The drone operates automatically for a limited time and then self-destructs when its power is depleted.",
-"Light Amplification Goggles\nAlso known as infra-goggles, this helpful creates a balance of light levels that allows the user to see well in most situations. The resulting effect enhances the overall brightness but casts everything in a greenish hue. The goggles require batteries to function, draining them at roughly the same rate as Electrobinoculars.   Light Amplification Goggles can be worn during combat, but will not function without an available power source.",
-"Portable Assault Sentry  \nThis deadly weapon is roughly the size of a large backpack, but don't let its size fool you.    Once activated, the weapon unfurls and is set to auto-target any enemy threat.  The Sentry drains battery life at an accelerated rate and, once it's deployed, can't be restored to its original portable condition. ",
-"Security Key",
-"Security Key",
-"Security Key",
-"Security Key",
-"Security Key",
-"Security Key",
-"Security Key",
-"Security Key",
-"Security Key",
-"Security Key",
+"NEURO_SAAV_DESC",
+"BACTA_DESC",
+"INQUISITOR_DESC",
+"LA_GOGGLES_DESC",
+"PORTABLE_SENTRY_DESC",
+"SECURITY_KEY_DESC",
+"SECURITY_KEY_DESC",
+"SECURITY_KEY_DESC",
+"SECURITY_KEY_DESC",
+"SECURITY_KEY_DESC",
+"SECURITY_KEY_DESC",
+"SECURITY_KEY_DESC",
+"SECURITY_KEY_DESC",
+"SECURITY_KEY_DESC",
+"SECURITY_KEY_DESC",
 };
+
 
 /*
 ===================
@@ -2903,6 +2927,7 @@ void CG_DrawDataPadInventorySelect( void )
 	int				holdX,x,y,pad;
 	int				height;
 	float			addX;
+	char			text[1024]={0};
 
 
 	// count the number of items owned
@@ -2918,7 +2943,8 @@ void CG_DrawDataPadInventorySelect( void )
 
 	if (!count)
 	{
-		CG_DrawProportionalString(320, 300 + 22, "EMPTY INVENTORY", CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);
+		cgi_SP_GetStringTextString("INGAME_EMPTY_INV",text, sizeof(text) );
+		CG_DrawProportionalString(320, 300 + 22, text, CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);
 		return;
 	}
 
@@ -3060,11 +3086,16 @@ void CG_DrawDataPadInventorySelect( void )
 
 	if ((cg.DataPadInventorySelect>=0) && (cg.DataPadInventorySelect<13))
 	{
-		CG_DisplayBoxedText(70,50,500,300,inventoryDesc[cg.DataPadInventorySelect],
-													cgs.media.qhFontSmall,
-													0.7f,
-													colorTable[CT_WHITE]	
-													);
+		cgi_SP_GetStringTextString( va("INGAME_%s",inventoryDesc[cg.DataPadInventorySelect]), text, sizeof(text) );
+
+		if (text)
+		{
+			CG_DisplayBoxedText(70,50,500,300,text,
+														cgs.media.qhFontSmall,
+														0.7f,
+														colorTable[CT_WHITE]	
+														);
+		}
 	}
 }
 
@@ -3145,16 +3176,16 @@ void CG_NextForcePower_f( void )
 		return;
 	}
 
+	SetForcePowerTime();
+
 	if ((cg.forcepowerSelectTime + WEAPON_SELECT_TIME) < cg.time)
 	{
-		SetForcePowerTime();
 		return;
 	}
-	SetForcePowerTime();
 
 	const int original = cg.forcepowerSelect;
 
-	for ( i = 0 ;showPowers[i]!=NUM_FORCE_POWERS ; i++ ) 
+	for ( i = 0; i < MAX_SHOWPOWERS; i++ ) 
 	{
 		cg.forcepowerSelect++;
 
@@ -3163,7 +3194,7 @@ void CG_NextForcePower_f( void )
 			cg.forcepowerSelect = 0; 
 		}
 
-		if (ForcePower_Valid(i))	// Does he have the force power?
+		if (ForcePower_Valid(cg.forcepowerSelect))	// Does he have the force power?
 		{
 			return;
 		}
@@ -3186,16 +3217,16 @@ void CG_PrevForcePower_f( void )
 		return;
 	}
 
+	SetForcePowerTime();
+
 	if ((cg.forcepowerSelectTime + WEAPON_SELECT_TIME) < cg.time)
 	{
-		SetForcePowerTime();
 		return;
 	}
-	SetForcePowerTime();
 
 	const int original = cg.forcepowerSelect;
 
-	for ( i = 0 ;showPowers[i]!=NUM_FORCE_POWERS ; i++ ) 
+	for ( i = 0; i < MAX_SHOWPOWERS; i++ ) 
 	{
 		cg.forcepowerSelect--;
 
@@ -3204,7 +3235,7 @@ void CG_PrevForcePower_f( void )
 			cg.forcepowerSelect = MAX_SHOWPOWERS; 
 		}
 
-		if (ForcePower_Valid(i))	// Does he have the force power?
+		if (ForcePower_Valid(cg.forcepowerSelect))	// Does he have the force power?
 		{
 			return;
 		}
@@ -3367,7 +3398,9 @@ void CG_DrawForceSelect( void )
 
 	if ( showPowersName[cg.forcepowerSelect] ) 
 	{
-		CG_DrawProportionalString(320, y + 38, showPowersName[cg.forcepowerSelect], CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);
+			int w = cgi_R_Font_StrLenPixels(showPowersName[cg.forcepowerSelect], cgs.media.qhFontSmall, 1.0f);	
+			int x = ( SCREEN_WIDTH - w ) / 2;
+			cgi_R_Font_DrawString(x, (SCREEN_HEIGHT - 24), showPowersName[cg.forcepowerSelect], colorTable[CT_ICON_BLUE], cgs.media.qhFontSmall, -1, 1.0f);
 	}
 }
 
@@ -3444,19 +3477,18 @@ void CG_DPPrevForcePower_f( void )
 
 char *forcepowerDesc[NUM_FORCE_POWERS] = 
 {
-"Force Heal\nDuration:	Instantaneous effect\nArea Of Effect:	Jedi only\nEffect:	The Jedi has the ability to heal himself after injury.\n·	Rank 1 - Jedi goes into a meditative stance for a short time and must remain stationary.  Any movement or attack will prevent healing.\n·	Rank 2 - Jedi no longer needs to be stationary.  The Jedi will heal over a short period of time.\n·	Rank 3 - Jedi heals instantly.",
-"Force Jump\nDuration:	Immediate\nArea Of Effect:	Jedi only\nEffect:			Allows Jedi to make a tremendous vertical leap. \n·	Rank 1 - Jedi can leap up to twice his normal jump height. \n·	Rank 2 - Jedi can leap up to four times his normal jump height.\n·	Rank 3 - Jedi can leap up to eight times his normal jump height.",
-"Force Speed\nDuration:	5 seconds\nArea of Effect:	Jedi and surroundings\nEffect:	Jedi speeds up and slows the world around him.\n·	Rank 1 - Jedi moves 25% faster than normal\n·	Rank 2 - Jedi moves 50% faster than normal\n·	Rank 3 - Jedi moves 100% faster than normal",
-"Force Push\nDuration:	Instantaneous effect\nArea Of Effect:	Objects or Persons\nEffect:	Allows Jedi to push objects away from himself and defend himself from missile and Force Grip attacks.\n·	Rank 1 - Jedi uses the Force to push a specific enemy or object focused on.\n·	Rank 2 - Jedi uses the Force to push back multiple enemies or objects in a limited arc.\n·	Rank 3 - Jedi can push back multiple enemies with enough force to do damage by pushing the enemies into solid surfaces or off ledges.",
-"Force Pull\nDuration:	Instantaneous effect\nArea Of Effect:	Objects only\nEffect:	Allows Jedi to pull different objects to him\n·	Rank 1 - Jedi can pull weapons and items to him from the ground in front of him from a distance\n·	Rank 2 - Jedi can pull projectile weapons from enemies in an arc from a distance\n·	Rank 3 - Jedi can pull and alter specific architecture, levers or objects in an arc from a distance ",
-"Mind Trick\nDuration:	3 seconds\nArea Of Effect:	Humanoids\nEffect:	Allows Jedi to confuse and/or misdirect attention \n·	Rank 1 - Jedi can distract and confuse a single enemy for 5 seconds\n·	Rank 2 - Jedi can distract and confuse multiple enemies for 10 seconds.\n·	Rank 3 - Jedi can distract and confuse multiple enemies for 15 seconds or befriend one enemy.  \nNote:  Aggressive action or loud noises made by the Jedi will alert the enemy and cancel the effect.  Mind tricks don't work on some, more powerful enemies like Dark Jedi or Reborn.",
-"Force Grip\nDuration:	Instantaneous\nArea Of Effect:	Living persons only\nEffect:	Allows Jedi to choke or constrict the organs of a living being\n·	Rank 1 - Affected enemy is gripped and held undamaged, but immobile for 5 seconds.  Jedi must remain stationary.\n·	Rank 2 - Enemy is affected similarly to rank 1, but the grip can damage and lift enemies with prolonged focus of the grip.  Jedi must remain stationary.\n·	 Rank 3- Enemy is affected similarly to rank 2, but the Jedi can move freely and smash the enemy into walls and other obstacles around him or use the enemy as a shield while still doing choke damage.",
-"Force Lightning\nDuration:	Variable\nAOE:		Living persons only\nEffect:	Allows Jedi to hurl a devastating electrical attack against enemies.\n·	Rank 1 - Jedi launches a single bolt that fires forward, doing instant damage.\n·	Rank 2 - Jedi can maintain the Force Lightning for a sustained forward attack.\n·	Rank 3 - Jedi emanates a sustained fan of electricity in a large forward arc, damaging anything in front of him.",
-"Lightsaber Defense\nDuration:		Always on\nArea Of Effect:	N/A\nEffect:	Jedi can block damage with his lightsaber  \n·	Rank 1 - Jedi can deflect projectiles and melee attacks in a small arc directly in front of him.\n·	Rank 2 - Jedi can deflect projectiles and melee attacks in a larger arc directly in front of him.  Increased deflection speed.\n·	Rank 3 - Jedi has a larger defense area and can deflect attacks back at the attacker. Increased deflection speed.",
-"Lightsaber Offense\nDuration:		Always on\nArea Of Effect:	N/A\nEffect:	As Jedi gains combat experience his lighsaber attack effectiveness increases. \nJedi Sense\nDuration:		Always on\nArea Of Effect:	N/A\nEffect:	Jedi can sense enemies, concealed areas, hidden items and enemies around him.",
-"Lightsaber Throw\nDuration:		Instant\nArea Of Effect:	Player arc\nEffect:	Jedi can  throw his lightsaber and use it as a missile weapon.\n·	Rank 1 -  Lightsaber flies straight from the player and returns.\n·	Rank 2 - Jedi can exert minimal control over the flying lightsaber as it arcs out, but the lightsaber still returns directly to the player.  \n·	Rank 3 - Jedi can exert great control over the lightsaber in the air."
+"FORCE_HEAL_DESC",
+"FORCE_JUMP_DESC",
+"FORCE_SPEED_DESC",
+"FORCE_PUSH_DESC",
+"FORCE_PULL_DESC",
+"FORCE_MIND_TRICK",
+"FORCE_GRIP_DESC",
+"FORCE_LIGHTNING_DESC",
+"FORCE_SABER_DEFENSE_DESC",
+"FORCE_SABER_OFFENSE_DESC",
+"FORCE_SABER_THROW_DESC",
 };
-
 
 
 /*
@@ -3472,6 +3504,7 @@ void CG_DrawDataPadForceSelect( void )
 	int		holdX,x,y,pad,length;
 	int		sideLeftIconCnt,sideRightIconCnt;
 	int		sideMax,holdCount,iconCnt;
+	char	text[1024]={0};
 
 	// count the number of powers owned
 	count = 0;
@@ -3589,31 +3622,19 @@ void CG_DrawDataPadForceSelect( void )
 		}
 	}
 
-	CG_DisplayBoxedText(70,50,500,300,forcepowerDesc[cg.DataPadforcepowerSelect],
-												cgs.media.qhFontSmall,
-												0.7f,
-												colorTable[CT_WHITE]	
-												);
+	cgi_SP_GetStringTextString( va("INGAME_%s",forcepowerDesc[cg.DataPadforcepowerSelect]), text, sizeof(text) );
+
+	if (text)
+	{
+
+		CG_DisplayBoxedText(70,50,500,300,text,
+													cgs.media.qhFontSmall,
+													0.7f,
+													colorTable[CT_WHITE]	
+													);
+	}
 }
 
-/*
-===============
-CG_ToggleThirdPersonView_f
-===============
-*/
-void CG_ToggleThirdPersonView_f( void ) 
-{
-
-	if ( !cg.renderingThirdPerson )
-	{
-		cgi_Cvar_Set( "cg_thirdperson", "1" );
-	}
-	else
-	{
-		cgi_Cvar_Set( "cg_thirdperson", "0" );
-	}
-
-}
 // actually, these are pretty pointless so far in CHC, since in TA codebase they were used only so init some HUD
 //	function ptrs to allow cinematics in onscreen displays. So far, we don't use those, but here they are anyway...
 //

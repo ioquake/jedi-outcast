@@ -858,7 +858,7 @@ void RE_RegisterImages_Info_f( void )
 
 // currently, this just goes through all the images and dumps any not referenced on this level...
 //
-void RE_RegisterImages_LevelLoadEnd(void)
+qboolean RE_RegisterImages_LevelLoadEnd(void)
 {
 	ri.Printf( PRINT_DEVELOPER, "RE_RegisterImages_LevelLoadEnd():\n");
 
@@ -902,6 +902,8 @@ void RE_RegisterImages_LevelLoadEnd(void)
 	ri.Printf( PRINT_DEVELOPER, "RE_RegisterImages_LevelLoadEnd(): Ok\n");	
 
 	GL_ResetBinds();
+
+	return bEraseOccured;
 }
 
 

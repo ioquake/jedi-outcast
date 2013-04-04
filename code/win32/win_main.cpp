@@ -282,7 +282,7 @@ static qboolean Sys_ScanForCD( void ) {
 			Result = GetVolumeInformation(drive,VolumeName,sizeof(VolumeName),&VolumeSerialNumber,
 				&MaximumComponentLength,&FileSystemFlags,FileSystemName,sizeof(FileSystemName));
 
-			if (Result && (strcmpi(VolumeName,"JEDI_OUTCAST") == 0 ) )
+			if (Result && (strcmpi(VolumeName,"JEDIOUTCAST") == 0 ) )
 			{
 				sprintf (test, "%s%s\\%s", drive, CD_BASEDIR, CD_EXE);
 				f = fopen( test, "r");

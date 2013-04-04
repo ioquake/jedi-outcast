@@ -326,7 +326,19 @@ static void CG_DrawAmmo(centity_t	*cent,int x,int y)
 
 	if ( cent->currentState.weapon == WP_SABER && cent->gent )
 	{
-//		value = cent->gent->client->ps.forcePower;
+		// don't need to draw ammo, but we will draw the current saber style in this window
+		switch ( cg.saberAnimLevelPending )
+		{
+		case 1://FORCE_LEVEL_1:
+			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyle1 );
+			break;
+		case 2://FORCE_LEVEL_2:
+			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyle2 );
+			break;
+		case 3://FORCE_LEVEL_3:
+			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyle3 );
+			break;
+		}
 		return;
 	}
 	else
@@ -518,7 +530,7 @@ static void CG_DrawArmor(int x,int y)
 	calcColor[2] *= armorPercent;
 	cgi_R_SetColor( calcColor);					
 	CG_DrawPic(   x, y, 80, 80, cgs.media.HUDArmor2 );			//	Inner Armor circular
-
+/*
 	if (ps->stats[STAT_ARMOR])	// Is there armor? Draw the HUD Armor TIC
 	{
 		// Make tic flash if inner armor is at 50% (25% of full armor)
@@ -552,7 +564,7 @@ static void CG_DrawArmor(int x,int y)
 		cgi_R_SetColor( colorTable[CT_HUD_GREEN] );					
 		CG_DrawPic(   x, y, 80, 80, cgs.media.HUDArmorTic );		
 	}
-
+*/
 	cgi_R_SetColor( colorTable[CT_HUD_GREEN] );	
 	CG_DrawNumField (x + 16 + 14, y + 40 + 14, 3, ps->stats[STAT_ARMOR], 6, 12, 
 		NUM_FONT_SMALL,qfalse);
@@ -743,7 +755,6 @@ void CG_DrawDataPadHUD( centity_t *cent )
 	CG_DrawHUDLeftFrame1(x,y);
 	CG_DrawArmor(x,y);
 	CG_DrawHealth(x,y);
-	CG_DrawHUDLeftFrame2(x,y);
 
 	x = 526;
 
@@ -751,7 +762,9 @@ void CG_DrawDataPadHUD( centity_t *cent )
 	CG_DrawForcePower(cent,x,y);
 	CG_DrawAmmo(cent,x,y);
 	CG_DrawMessageLit(cent,x,y);
-	CG_DrawHUDRightFrame2(x,y);
+
+	cgi_R_SetColor( colorTable[CT_WHITE]);
+	CG_DrawPic( 0, 0, 640, 480, cgs.media.dataPadFrame );
 
 }
 
@@ -1227,12 +1240,22 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 	{
 		ecolor[0] = ecolor[1] = ecolor[2] = 1.0f;
 	}
-	else if ( cg_forceCrosshair )
+	else if ( cg_forceCrosshair && cg_crosshairForceHint.integer )
 	{
-		//force-affectable targets are blue
-		ecolor[0] = 0.2f;
-		ecolor[1] = 0.5f;
-		ecolor[2] = 1.0f;
+		if ( cg_crosshairForceHint.integer == 1 )
+		{
+			// force-affectable targets are blue..do subtle for level 1 hint
+			ecolor[0] = 0.55f;
+			ecolor[1] = 0.8f;
+			ecolor[2] = 1.0f;
+		}
+		else
+		{
+			// level 2 hint or higher, make it more obvious blue
+			ecolor[0] = 0.2f;
+			ecolor[1] = 0.5f;
+			ecolor[2] = 1.0f;
+		}
 		corona = qtrue;
 	}
 	else
@@ -1309,6 +1332,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 	}
 
 	ecolor[3] = 1.0;
+	cgi_R_SetColor( ecolor );
 
 	if ( cg.forceCrosshairStartTime )
 	{
@@ -1339,8 +1363,6 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 		}
 	}
 
-	cgi_R_SetColor( ecolor );
-	
 	if ( corona ) // we are pointing at a crosshair item
 	{
 		if ( !cg.forceCrosshairStartTime )
@@ -1413,16 +1435,16 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 			w, h, 0, 0, 1, 1, hShader );	
 	}
 
-	if ( cg.forceCrosshairStartTime )
+	if ( cg.forceCrosshairStartTime && cg_crosshairForceHint.integer > 1 ) // drawing extra bits
 	{
 		ecolor[0] = ecolor[1] = ecolor[2] = 1.0f;
-		ecolor[3] = 1 - ecolor[3];
+		ecolor[3] = (1 - ecolor[3]) * 0.25f;
 		float sc = 1.0f + sin( cg.time * 0.0005f ) * 0.4f;
 
 		cgi_R_SetColor( ecolor );
 
-		cgi_R_DrawStretchPic( x + cg.refdef.x + 0.5 * (640 - w * 3 * (sc+1)), 
-			y + cg.refdef.y + 0.5 * (480 - h * 3), w * 3 * (sc+1), h * 3, 0, 0, 1, 1, cgs.media.forceCoronaShader ); 
+		cgi_R_DrawStretchPic( x + cg.refdef.x + 0.5 * (640 - w * 2.5f * (sc+1)), 
+			y + cg.refdef.y + 0.5 * (480 - h * 2), w * 2.5f * (sc+1), h * 2, 0, 0, 1, 1, cgs.media.forceCoronaShader ); 
 	}
 }
 
@@ -1570,7 +1592,7 @@ static void CG_ScanForCrosshairEntity( qboolean scanAll )
 	//FIXME: debounce this to about 10fps?
 
 	cg_forceCrosshair = qfalse;
-	if ( cg_crosshairForceHint.integer && cg_entities[0].gent && cg_entities[0].gent->client )
+	if ( cg_entities[0].gent && cg_entities[0].gent->client ) // <-Mike said it should always do this   //if (cg_crosshairForceHint.integer &&
 	{//try to check for force-affectable stuff first
 		vec3_t d_f, d_rt, d_up;
 
@@ -1842,7 +1864,7 @@ static void CG_DrawRocketLocking( int lockEntNum, int lockTime )
 		
 		if ( cg.zoomMode > 0 )
 		{
-			if ( cg.overrides.fov )
+			if ( cg.overrides.active & CG_OVERRIDE_FOV )
 			{
 				sz -= ( cg.overrides.fov - cg_zoomFov ) / 80.0f;
 			}

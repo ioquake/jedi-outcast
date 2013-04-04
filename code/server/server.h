@@ -39,6 +39,7 @@ typedef struct {
 	int				snapshotCounter;	// incremented for each snapshot built
 	int				time;				// all entities are correct for this time		// These 2 saved out
 	int				timeResidual;		// <= 1000 / sv_frame->value					//   during savegame.
+	float			timeResidualFraction;	// fraction of a msec accumulated
 	int				nextFrameTime;		// when time > nextFrameTime, process world		// this doesn't get used anywhere! -Ste
 	struct cmodel_s	*models[MAX_MODELS];
 	char			*configstrings[MAX_CONFIGSTRINGS];

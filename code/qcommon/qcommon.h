@@ -617,6 +617,7 @@ inline void *Hunk_Alloc( int size, qboolean bZeroIt = qtrue)
 void Com_TouchMemory( void );
 
 // commandLine should not include the executable name (argv[0])
+void Com_SetOrgAngles(vec3_t org,vec3_t angles);
 void Com_Init( char *commandLine );
 void Com_Frame( void );
 void Com_Shutdown( void );
@@ -641,7 +642,7 @@ void CL_InitKeyCommands( void );
 void CL_Init( void );
 void CL_Disconnect( void );
 void CL_Shutdown( void );
-void CL_Frame( int msec );
+void CL_Frame( int msec,float fractionMsec );
 qboolean CL_GameCommand( void );
 void CL_KeyEvent (int key, qboolean down, unsigned time);
 
@@ -686,7 +687,7 @@ void SCR_DebugGraph (float value, int color);	// FIXME: move logging to common?
 //
 void SV_Init( void );
 void SV_Shutdown( char *finalmsg );
-void SV_Frame( int msec );
+void SV_Frame( int msec,float fractionMsec);
 void SV_PacketEvent( netadr_t from, msg_t *msg );
 qboolean SV_GameCommand( void );
 

@@ -347,11 +347,13 @@ private:
 
 	SParticle	*mRainList;
 	float		mFadeAlpha;
+	bool		mIsRaining;
 
 public:
 	enum
 	{
 		RAINSYSTEM_WIND_DIRECTION,
+		RAINSYSTEM_WIND_SPEED,
 	};
 
 public:
@@ -360,6 +362,7 @@ public:
 
 	virtual	int			GetIntVariable(int which);
 	virtual	SParticle	*GetParticleVariable(int which);
+	virtual float		GetFloatVariable(int which);
 	virtual	float		*GetVecVariable(int which);
 
 	virtual	bool	Command(const char *command);
@@ -368,6 +371,8 @@ public:
 	virtual	void	Render(void);
 
 			void	Init(void);
+
+			bool	IsRaining() { return mIsRaining; }
 };
 
 
@@ -1256,6 +1261,7 @@ private:
 
 	int			mUpdateCount;
 	int			mOverallContents;
+	bool		mIsSnowing;
 
 	const		float	mVelocityStabilize;
 	const		int		mUpdateMax;
@@ -1274,6 +1280,8 @@ public:
 	virtual	void	Render(void);
 
 			void	Init(void);
+
+			bool	IsSnowing() { return mIsSnowing; }
 };
 
 CSnowSystem::CSnowSystem(int maxSnowflakes) :
@@ -1292,7 +1300,8 @@ CSnowSystem::CSnowSystem(int maxSnowflakes) :
 	mOverallContents(0),
 
 	mVelocityStabilize(18),
-	mUpdateMax(10)
+	mUpdateMax(10),
+	mIsSnowing(false)
 {
 	mMinSpread[0] = -600;
 	mMinSpread[1] = -600;
@@ -1610,8 +1619,11 @@ void CSnowSystem::Update(float elapseTime)
 
 	if (!(mOverallContents & CONTENTS_OUTSIDE))
 	{
+		mIsSnowing = false;
 		return;
 	}
+
+	mIsSnowing = true;
 
 	mUpdateCount = (mUpdateCount + 1) % mUpdateMax;
 
@@ -1783,7 +1795,8 @@ CRainSystem::CRainSystem(int maxRain) :
 	mAlpha(0.1f),
 	mWindAngle(1.0f),
 
-	mFadeAlpha(0.0f)
+	mFadeAlpha(0.0f),
+	mIsRaining(false)
 
 {
 	char			name[256];
@@ -1883,6 +1896,17 @@ SParticle *CRainSystem::GetParticleVariable(int which)
 	return CWorldEffectsSystem::GetParticleVariable(which);
 }
 
+float CRainSystem::GetFloatVariable(int which)
+{ 
+	switch(which)
+	{
+		case CRainSystem::RAINSYSTEM_WIND_SPEED:
+			return mWindAngle * 75.0;		// pat scaled
+	}
+
+	return 0.0;
+}
+
 float *CRainSystem::GetVecVariable(int which) 
 { 
 	switch(which)
@@ -1977,6 +2001,7 @@ void CRainSystem::Update(float elapseTime)
 
 	if (originContents & CONTENTS_OUTSIDE && !(originContents & CONTENTS_WATER))
 	{
+		mIsRaining = true;
 		if (mFadeAlpha < 1.0)
 		{
 			mFadeAlpha += elapseTime / 2.0;
@@ -1988,6 +2013,7 @@ void CRainSystem::Update(float elapseTime)
 	}
 	else
 	{
+		mIsRaining = false;
 		if (mFadeAlpha > 0.0)
 		{
 			mFadeAlpha -= elapseTime / 2.0;
@@ -2304,5 +2330,41 @@ bool R_GetWindVector(vec3_t windVector)
 		return true;
 	}
 
+	if (snowSystem)
+	{
+		VectorCopy(snowSystem->GetVecVariable(CRainSystem::RAINSYSTEM_WIND_DIRECTION), windVector);
+		return true;
+	}
+
+
+	return false;
+}
+
+bool R_GetWindSpeed(float &windSpeed)
+{
+	if (rainSystem)
+	{
+		windSpeed = rainSystem->GetFloatVariable(CRainSystem::RAINSYSTEM_WIND_SPEED);
+		return true;
+	}
+
+	return false;
+}
+
+bool R_IsRaining()
+{
+	if (rainSystem)
+	{
+		return rainSystem->IsRaining();
+	}
+	return false;
+}
+
+bool R_IsSnowing()
+{
+	if (snowSystem)
+	{
+		return snowSystem->IsSnowing();
+	}
 	return false;
 }

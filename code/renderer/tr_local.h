@@ -1010,6 +1010,7 @@ typedef struct {
 	int						numShaders;
 	shader_t				*shaders[MAX_SHADERS];
 	shader_t				*sortedShaders[MAX_SHADERS];
+	int						iNumDeniedShaders;	// used for error-messages only
 
 	int						numSkins;
 	skin_t					*skins[MAX_SKINS];
@@ -1289,9 +1290,8 @@ qboolean	RE_RegisterModels_LevelLoadEnd(qboolean bDeleteEverythingNotUsedThisLev
 void*		RE_RegisterModels_Malloc(int iSize, const char *psModelFileName, qboolean *pqbAlreadyFound, memtag_t eTag);
 void		RE_RegisterModels_StoreShaderRequest(const char *psModelFileName, const char *psShaderName, const int *piShaderIndexPoke);
 void		RE_RegisterModels_Info_f(void);
-//
 //void		RE_RegisterImages_LevelLoadBegin(const char *psMapName);
-void		RE_RegisterImages_LevelLoadEnd(void);
+qboolean	RE_RegisterImages_LevelLoadEnd(void);
 void		RE_RegisterImages_Info_f(void);
 
 
@@ -1571,16 +1571,18 @@ void RB_SurfaceAnim( md4Surface_t *surfType );
 Ghoul2 Insert Start
 */
 #pragma warning (disable: 4512)	//default assignment operator could not be gened
+class CBoneCache;
+
 class CRenderableSurface
 {
 public:
 	const int		ident;			// ident of this surface - required so the materials renderer knows what sort of surface this refers to 
-	void	 		*boneList;		// pointer to transformed bone list for this surface - required client side for rendering DONOT USE IN GAME	SIDE
+ 	CBoneCache 		*boneCache;		// pointer to transformed bone list for this surf
 	mdxmSurface_t	*surfaceData;	// pointer to surface data loaded into file - only used by client renderer DO NOT USE IN GAME SIDE - if there is a vid restart this will be out of wack on the game
 
 CRenderableSurface():	
 	ident(SF_MDX),
-	boneList(0),
+	boneCache(0),
 	surfaceData(0)
 	{}
 };
@@ -1786,7 +1788,7 @@ Ghoul2 Insert Start
 
 // tr_ghoul2.cpp
 void		Create_Matrix(const float *angle, mdxaBone_t *matrix);
-void		Multiply_3x4Matrix(mdxaBone_t *out, mdxaBone_t *in2, mdxaBone_t *in);
+void		Multiply_3x4Matrix(mdxaBone_t *out,const mdxaBone_t *in2,const mdxaBone_t *in);
 extern qboolean R_LoadMDXM (model_t *mod, void *buffer, const char *name, qboolean bAlreadyCached );
 extern qboolean R_LoadMDXA (model_t *mod, void *buffer, const char *name, qboolean bAlreadyCached );
 bool LoadTGAPalletteImage ( const char *name, byte **pic, int *width, int *height);

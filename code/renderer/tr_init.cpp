@@ -155,7 +155,13 @@ Ghoul2 Insert Start
 cvar_t	*r_noServerGhoul2;
 cvar_t	*r_noGhoul2;
 cvar_t	*r_Ghoul2Test;
+cvar_t	*r_Ghoul2AnimSmooth;
 cvar_t	*r_Ghoul2UnSqash;
+cvar_t	*r_Ghoul2TimeBase=0;
+cvar_t	*r_Ghoul2NoLerp;
+cvar_t	*r_Ghoul2NoBlend;
+cvar_t	*r_Ghoul2UnSqashAfterSmooth;
+
 
 /*
 Ghoul2 Insert End
@@ -1034,8 +1040,8 @@ void R_Register( void )
 #endif
 	r_facePlaneCull = ri.Cvar_Get ("r_facePlaneCull", "1", CVAR_ARCHIVE );
 
-	r_surfaceSprites = ri.Cvar_Get ("r_surfaceSprites", "1", CVAR_ARCHIVE);
-	r_surfaceWeather = ri.Cvar_Get ("r_surfaceWeather", "1", CVAR_ARCHIVE);
+	r_surfaceSprites = ri.Cvar_Get ("r_surfaceSprites", "1", CVAR_CHEAT);
+	r_surfaceWeather = ri.Cvar_Get ("r_surfaceWeather", "0", 0);
 
 	r_windSpeed = ri.Cvar_Get ("r_windSpeed", "0", 0);
 	r_windAngle = ri.Cvar_Get ("r_windAngle", "0", 0);
@@ -1103,7 +1109,13 @@ Ghoul2 Insert Start
 	r_noServerGhoul2 = ri.Cvar_Get( "r_noserverghoul2", "0", 0);
 	r_noGhoul2 = ri.Cvar_Get( "r_noghoul2", "0", 0);
 	r_Ghoul2Test = ri.Cvar_Get( "r_ghoul2test", "0", 0);
+	r_Ghoul2AnimSmooth = ri.Cvar_Get( "r_ghoul2animsmooth", "0", 0);
 	r_Ghoul2UnSqash = ri.Cvar_Get( "r_ghoul2unsquash", "1", 0);
+	r_Ghoul2TimeBase = ri.Cvar_Get( "r_ghoul2timebase", "2", 0);
+	r_Ghoul2NoLerp = ri.Cvar_Get( "r_ghoul2nolerp", "0", 0);
+	r_Ghoul2NoBlend = ri.Cvar_Get( "r_ghoul2noblend", "0", 0);
+	r_Ghoul2UnSqashAfterSmooth = ri.Cvar_Get( "r_ghoul2unsquashaftersmooth", "1", 0);
+
 /*
 Ghoul2 Insert End
 */
