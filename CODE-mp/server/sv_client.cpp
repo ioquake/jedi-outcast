@@ -932,10 +932,8 @@ SV_Disconnect_f
 The client is going to disconnect, so remove the connection immediately  FIXME: move to game?
 =================
 */
-const char *SV_GetStripEdString(char *refSection, char *refName);
 static void SV_Disconnect_f( client_t *cl ) {
-//	SV_DropClient( cl, "disconnected" );
-	SV_DropClient( cl, SV_GetStripEdString("SVINGAME","DISCONNECTED") );
+	SV_DropClient( cl, "disconnected" );
 }
 
 /*

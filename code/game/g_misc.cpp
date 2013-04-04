@@ -581,10 +581,6 @@ void camera_aim( gentity_t *self )
 			G_ClearViewEntity( player );
 			G_Sound( player, self->soundPos2 );
 			self->painDebounceTime = level.time + (self->wait*1000);//FRAMETIME*5;//don't check for player buttons for 500 ms
-			if ( player->client->usercmd.upmove > 0 )
-			{//stop player from doing anything for a half second after
-				player->aimDebounceTime = level.time + 500;
-			}
 		}
 		else if ( self->painDebounceTime < level.time )
 		{//check for use button

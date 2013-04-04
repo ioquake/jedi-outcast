@@ -50,7 +50,6 @@ cvar_t		*d_JediAI;
 cvar_t		*d_noGroupAI;
 cvar_t		*d_asynchronousGroupAI;
 cvar_t		*d_altRoutes;
-cvar_t		*d_patched;
 cvar_t		*d_slowmodeath;
 
 extern int eventClearTime;
@@ -94,7 +93,7 @@ void CorpsePhysics( gentity_t *self )
 
 	if ( level.time - self->s.time > 3000 )
 	{//been dead for 3 seconds
-		if ( g_dismemberment->integer < 11381138 && !g_saberRealisticCombat->integer )
+		if ( g_dismemberment->integer < 4 && !g_saberRealisticCombat->integer )
 		{//can't be dismembered once dead
 			if ( self->client->NPC_class != CLASS_PROTOCOL )
 			{
@@ -1061,13 +1060,7 @@ void NPC_HandleAIFlags (void)
 			NPCInfo->ffireFadeDebounce = level.time + 3000;
 		}
 	}
-	if ( d_patched->integer )
-	{//use patch-style navigation
-		if ( NPCInfo->consecutiveBlockedMoves > 20 )
-		{//been stuck for a while, try again?
-			NPCInfo->consecutiveBlockedMoves = 0;
-		}
-	}
+
 }
 
 void NPC_AvoidWallsAndCliffs (void)
@@ -2188,7 +2181,6 @@ void NPC_InitAI ( void )
 	d_noGroupAI = gi.cvar ( "d_noGroupAI", "0", CVAR_CHEAT );
 	d_asynchronousGroupAI = gi.cvar ( "d_asynchronousGroupAI", "1", CVAR_CHEAT );
 	d_altRoutes = gi.cvar ( "d_altRoutes", "1", CVAR_CHEAT );
-	d_patched = gi.cvar ( "d_patched", "0", CVAR_CHEAT );
 
 	//0 = never (BORING)
 	//1 = kyle only

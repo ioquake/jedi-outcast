@@ -1316,17 +1316,12 @@ void TryUse( gentity_t *ent )
 	*/
 }
 
-extern int killPlayerTimer;
 void G_ChangeMap (const char *mapname, const char *spawntarget, qboolean hub)
 {
 //	gi.Printf("Loading...");
 	//ignore if player is dead
 	if (g_entities[0].client->ps.pm_type == PM_DEAD)
 		return;
-	if ( killPlayerTimer )
-	{//can't go to next map if your allies have turned on you
-		return;
-	}
 
 	if ( spawntarget == NULL ) {
 		spawntarget = "";	//prevent it from becoming "(null)"

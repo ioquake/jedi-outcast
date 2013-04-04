@@ -1209,6 +1209,7 @@ extern	cvar_t	*r_printShaders;
 Ghoul2 Insert Start
 */
 extern	cvar_t	*r_noServerGhoul2;
+extern	cvar_t	*r_noGhoul2;
 /*
 Ghoul2 Insert End
 */

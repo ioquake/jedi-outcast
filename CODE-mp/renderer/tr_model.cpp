@@ -995,9 +995,10 @@ Ghoul2 Insert Start
 Ghoul2 Insert End
 */
 
-	if (!r_noServerGhoul2)
+	if (!r_noServerGhoul2 || !r_noGhoul2)
 	{ //keep it from choking when it gets to these checks in the g2 code. Registering all r_ cvars for the server would be a Bad Thing though.
 		r_noServerGhoul2 = Cvar_Get( "r_noserverghoul2", "0", 0);
+		r_noGhoul2 = Cvar_Get( "r_noghoul2", "0", 0);
 	}
 
 	if ( !name || !name[0] ) {

@@ -1996,10 +1996,6 @@ void panel_turret_think( gentity_t *self )
 
 			cg.overrides.active &= ~CG_OVERRIDE_FOV;
 			cg.overrides.fov = 0; 
-			if ( ucmd->upmove > 0 )
-			{//stop player from doing anything for a half second after
-				player->aimDebounceTime = level.time + 500;
-			}
 
 			// can be drawn
 //			self->s.eFlags &= ~EF_NODRAW;

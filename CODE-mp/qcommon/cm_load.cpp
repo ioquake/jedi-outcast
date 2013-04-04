@@ -91,6 +91,7 @@ void CMod_LoadShaders( lump_t *l )
 		out->contentFlags = LittleLong( in->contentFlags );
 		out->surfaceFlags = LittleLong( in->surfaceFlags );
 	}
+	CM_SetupShaderProperties();
 }
 
 
@@ -673,6 +674,9 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 		, name, header.version, BSP_VERSION );
 	}
 
+	// Load in the shader text - return instantly if already loaded
+	CM_LoadShaderText(qfalse);
+
 	cmod_base = (byte *)buf;
 
 	// load into heap
@@ -743,6 +747,10 @@ CM_ClearMap
 */
 void CM_ClearMap( void ) 
 {
+#if !defined(BSPC)
+	CM_ShutdownShaderProperties();
+#endif
+
 	Com_Memset( &cm, 0, sizeof( cm ) );
 	CM_ClearLevelPatches();
 }

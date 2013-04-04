@@ -1142,7 +1142,6 @@ int PM_AttackForEnemyPos( qboolean allowFB )
 					&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 //can force jump
 					&& !(pm->gent->flags&FL_LOCK_PLAYER_WEAPONS) // yes this locked weapons check also includes force powers, if we need a separate check later I'll make one
 					&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=500) //on ground or just jumped
-					&& ( pm->ps->clientNum || pm->ps->legsAnim == BOTH_JUMP1 || pm->ps->legsAnim == BOTH_FORCEJUMP1 || pm->ps->legsAnim == BOTH_INAIR1 || pm->ps->legsAnim == BOTH_FORCEINAIR1 )//either an NPC or in a non-flip forward jump
 					&& ( (pm->ps->clientNum&&!PM_ControlledByPlayer()&&!Q_irand(0,2)) || pm->cmd.upmove || (pm->ps->pm_flags&PMF_JUMPING) ) )//jumping
 				{//flip over-forward down-attack
 					if ( (!pm->ps->clientNum||PM_ControlledByPlayer()) || 
@@ -1303,7 +1302,6 @@ int PM_SaberJumpAttackMove( void )
 int PM_SaberFlipOverAttackMove( void )
 {
 	//FIXME: check above for room enough to jump!
-	//FIXME: while in this jump, keep velocity[2] at a minimum until the end of the anim 
 	vec3_t fwdAngles, jumpFwd;
 
 	VectorCopy( pm->ps->viewangles, fwdAngles );
@@ -1410,7 +1408,6 @@ int PM_SaberAttackForMovement( int forwardmove, int rightmove, int move )
 						&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 //can force jump
 						&& !(pm->gent->flags&FL_LOCK_PLAYER_WEAPONS) // yes this locked weapons check also includes force powers, if we need a separate check later I'll make one
 						&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=500) //on ground or just jumped
-						&& ( pm->ps->clientNum || pm->ps->legsAnim == BOTH_JUMP1 || pm->ps->legsAnim == BOTH_FORCEJUMP1 || pm->ps->legsAnim == BOTH_INAIR1 || pm->ps->legsAnim == BOTH_FORCEINAIR1 )//either an NPC or in a non-flip forward jump
 						&& ((pm->ps->clientNum&&!PM_ControlledByPlayer()&&!Q_irand(0,2))||pm->cmd.upmove>0||pm->ps->pm_flags&PMF_JUMPING))//jumping
 					{//flip over-forward down-attack
 						if ( (!pm->ps->clientNum||PM_ControlledByPlayer()) || 

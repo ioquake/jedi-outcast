@@ -562,7 +562,7 @@ void Sys_SetErrorText( const char *buf )
 	if ( !s_wcd.hwndErrorBox )
 	{
 		s_wcd.hwndErrorBox = CreateWindow( "static", NULL, WS_CHILD | WS_VISIBLE | SS_SUNKEN,
-													6, 5, s_wcd.windowWidth-20, 30,
+													6, 5, 526, 30,
 													s_wcd.hWnd, 
 													( HMENU ) ERRORBOX_ID,	// child window ID
 													g_wv.hInstance, NULL );

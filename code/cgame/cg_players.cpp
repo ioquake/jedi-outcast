@@ -4651,13 +4651,6 @@ Ghoul2 Insert End
 
 	// if we happen to be timescaled or running in a high framerate situation, we don't want to flood
 	//	the system with very small trail slices...but perhaps doing it by distance would yield better results?
-	if ( saberTrail->lastTime > cg.time )
-	{//after a pause, cg.time jumps ahead in time for one frame 
-	 //and lastTime gets set to that and will freak out, so, since
-	 //it's never valid for saberTrail->lastTime to be > cg.time, 
-	 //cap it to cg.time here
-		saberTrail->lastTime = cg.time;
-	}
 	if ( cg.time > saberTrail->lastTime + 2  && saberTrail->inAction ) // 2ms
 	{
 		if ( saberTrail->inAction && cg.time < saberTrail->lastTime + 300 ) // if we have a stale segment, don't draw until we have a fresh one

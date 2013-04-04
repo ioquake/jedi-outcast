@@ -341,47 +341,6 @@ void G_Throw( gentity_t *targ, vec3_t newDir, float push )
 	}
 }
 
-int WP_SetSaberModel( gclient_t *client, class_t npcClass )
-{
-	if ( client )
-	{
-		switch ( npcClass )
-		{
-		case CLASS_DESANN://Desann
-			client->ps.saberModel = "models/weapons2/saber_desann/saber_w.glm";
-			break;
-		case CLASS_LUKE://Luke
-			client->ps.saberModel = "models/weapons2/saber_luke/saber_w.glm";
-			break;
-		case CLASS_KYLE://Kyle NPC and player
-			client->ps.saberModel = "models/weapons2/saber/saber_w.glm";
-			break;
-		default://reborn and tavion and everyone else
-			client->ps.saberModel = "models/weapons2/saber_reborn/saber_w.glm";
-			break;
-		}
-		return ( G_ModelIndex( client->ps.saberModel ) );
-	}
-	else
-	{
-		switch ( npcClass )
-		{
-		case CLASS_DESANN://Desann
-			return ( G_ModelIndex( "models/weapons2/saber_desann/saber_w.glm" ) );
-			break;
-		case CLASS_LUKE://Luke
-			return ( G_ModelIndex( "models/weapons2/saber_luke/saber_w.glm" ) );
-			break;
-		case CLASS_KYLE://Kyle NPC and player
-			return ( G_ModelIndex( "models/weapons2/saber/saber_w.glm" ) );
-			break;
-		default://reborn and tavion and everyone else
-			return ( G_ModelIndex( "models/weapons2/saber_reborn/saber_w.glm" ) );
-			break;
-		}
-	}
-}
-
 void WP_SaberInitBladeData( gentity_t *ent )
 {
 	gentity_t *saberent;
@@ -483,7 +442,23 @@ void WP_SaberInitBladeData( gentity_t *ent )
 Ghoul2 Insert Start
 */
 			//FIXME: get saberModel from NPCs.cfg for NPCs?
-			saberent->s.modelindex = WP_SetSaberModel( ent->client, ent->client->NPC_class );
+			if ( ent->client->NPC_class == CLASS_DESANN )
+			{
+				ent->client->ps.saberModel = "models/weapons2/saber_desann/saber_w.glm";
+			}
+			else if ( ent->client->NPC_class == CLASS_LUKE )
+			{
+				ent->client->ps.saberModel = "models/weapons2/saber_luke/saber_w.glm";
+			}
+			else if ( ent->client->NPC_class == CLASS_KYLE )
+			{//Kyle NPC and player
+				ent->client->ps.saberModel = "models/weapons2/saber/saber_w.glm";
+			}
+			else
+			{//reborn and tavion and everyone else
+				ent->client->ps.saberModel = "models/weapons2/saber_reborn/saber_w.glm";
+			}
+			saberent->s.modelindex = G_ModelIndex( ent->client->ps.saberModel );
 			gi.G2API_InitGhoul2Model( saberent->ghoul2, ent->client->ps.saberModel, saberent->s.modelindex );
 			// set up a bolt on the end so we can get where the sabre muzzle is - we can assume this is always bolt 0
 			gi.G2API_AddBolt( &saberent->ghoul2[0], "*flash" );
@@ -831,7 +806,7 @@ qboolean WP_SaberApplyDamage( gentity_t *ent, float baseDamage, int baseDFlags, 
 							{//already being knocked around
 								dFlags |= DAMAGE_NO_KNOCKBACK;
 							}
-							if ( g_dismemberment->integer >= 11381138 || g_saberRealisticCombat->integer )
+							if ( g_dismemberment->integer > 3 || g_saberRealisticCombat->integer )
 							{
 								dFlags |= DAMAGE_DISMEMBER;
 								if ( hitDismember[i] )
@@ -6936,7 +6911,6 @@ void ForceGrip( gentity_t *self )
 			return;
 			break;
 		case CLASS_ATST://much too big to grip!
-			return;
 		//no droids either...?
 		case CLASS_GONK:
 		case CLASS_R2D2:
@@ -6945,7 +6919,6 @@ void ForceGrip( gentity_t *self )
 		case CLASS_MARK2:
 		case CLASS_MOUSE://?
 		case CLASS_PROTOCOL:
-			//*sigh*... in JK3, you'll be able to grab and move *anything*...
 			return;
 			break;
 		case CLASS_PROBE:
@@ -7761,8 +7734,6 @@ void WP_ForcePowerStop( gentity_t *self, forcePowers_t forcePower )
 				gi.cvar_set("timescale", "1");
 			}
 		}
-		//FIXME: reset my current anim, keeping current frame, but with proper anim speed
-		//		otherwise, the anim will continue playing at high speed
 		self->s.loopSound = 0;
 		break;
 	case FP_PUSH:

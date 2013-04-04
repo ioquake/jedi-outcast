@@ -521,7 +521,7 @@ void CL_CheckForResend( void ) {
 
 	case CA_CHALLENGING:
 	// sending back the challenge
-		port = Cvar_VariableIntegerValue("qport");
+		port = Cvar_VariableValue ("qport");
 
 		UI_UpdateConnectionString( va("(%i)", clc.connectPacketCount ) );
 
@@ -629,7 +629,7 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 				NET_AdrToString( clc.serverAddress ) );
 			return;
 		}
-		Netchan_Setup (NS_CLIENT, &clc.netchan, from, Cvar_VariableIntegerValue( "qport" ) );
+		Netchan_Setup (NS_CLIENT, &clc.netchan, from, Cvar_VariableValue( "qport" ) );
 		cls.state = CA_CONNECTED;
 		clc.lastPacketSentTime = -9999;		// send first packet immediately
 		return;
@@ -1066,9 +1066,7 @@ CL_Init
 void CL_Init( void ) {
 	Com_Printf( "----- Client Initialization -----\n" );
 
-	SP_Register("con_text", SP_REGISTER_REQUIRED);	//reference is CON_TEXT
-	
-	Con_Init ();
+	Con_Init ();	
 
 	CL_ClearState ();
 

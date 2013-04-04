@@ -17,7 +17,6 @@ extern qboolean G_EntIsBreakable( int entityNum );
 extern qboolean G_EntIsRemovableUsable( int entNum );
 
 extern	cvar_t		*d_altRoutes;
-extern	cvar_t		*d_patched;
 
 
 static vec3_t	wpMaxs = {  16,  16, 32 };
@@ -1766,28 +1765,6 @@ qboolean CNavigator::NodeFailed( gentity_t *ent, int nodeID )
 	return qfalse;
 }
 
-qboolean CNavigator::NodesAreNeighbors( int startID, int endID )
-{//See if these 2 are neighbors
-	if ( startID == endID )
-	{
-		return qfalse;
-	}
-
-	CNode *start = m_nodes[startID];
-	int	nextID = -1;
-	//NOTE: we only check start because we assume all connections are 2-way
-	for ( int i = 0; i < start->GetNumEdges(); i++ )
-	{
-		nextID = start->GetEdge(i);
-		if ( nextID == endID )
-		{
-			return qtrue;
-		}
-	}
-	//not neighbors
-	return qfalse;
-}
-
 void CNavigator::ClearFailedEdge( failedEdge_t *failedEdge )
 {
 	if ( !failedEdge )
@@ -1885,14 +1862,6 @@ void CNavigator::AddFailedEdge( int entID, int startID, int endID )
 	//Must have nodes
 	if ( m_nodes.size() == 0 )
 		return;
-
-	if ( d_patched->integer )
-	{//use patch-style navigation
-		if ( startID == endID )
-		{//not an edge!
-			return;
-		}
-	}
 
 	//Validate the ent number
 	if ( ( entID < 0 ) || ( entID > ENTITYNUM_NONE ) )

@@ -1276,7 +1276,7 @@ static qboolean PM_CheckJump( void )
 						&& !(pm->gent->flags&FL_LOCK_PLAYER_WEAPONS) // yes this locked weapons check also includes force powers, if we need a separate check later I'll make one
 						&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=500) )//on ground or just jumped
 					{//flip over-forward down-attack
-						if ( ((!pm->ps->clientNum||PM_ControlledByPlayer())&&pm->cmd.forwardmove >= 0&&!pm->cmd.rightmove) || 
+						if ( (!pm->ps->clientNum||PM_ControlledByPlayer()) || 
 							(pm->gent->NPC && (pm->gent->NPC->rank==RANK_CREWMAN||pm->gent->NPC->rank>=RANK_LT) ) )
 						{//only player or acrobat or boss and higher can do this
 							vec3_t fwdAngles = {0,pm->ps->viewangles[YAW],0};
@@ -1296,10 +1296,7 @@ static qboolean PM_CheckJump( void )
 					if ( pm->cmd.forwardmove > 0 //going forward
 						&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 //can force jump
 						&& !(pm->gent->flags&FL_LOCK_PLAYER_WEAPONS) // yes this locked weapons check also includes force powers, if we need a separate check later I'll make one
-						&& ( pm->ps->legsAnim == BOTH_STAND2
-							|| pm->ps->legsAnim == BOTH_SABERFAST_STANCE 
-							|| pm->ps->legsAnim == BOTH_SABERSLOW_STANCE
-							|| level.time-pm->ps->lastStationary <= 500 )//standing or just started moving
+						&& (pm->ps->legsAnim == BOTH_STAND2||pm->ps->legsAnim == BOTH_SABERFAST_STANCE||pm->ps->legsAnim == BOTH_SABERSLOW_STANCE||level.time-pm->ps->lastStationary<=500)//standing or just started moving
 						&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||(pm->ps->clientNum&&!PM_ControlledByPlayer()&&level.time-pm->ps->lastOnGround<=500)))//on ground or just jumped if non-player
 					{//strong attack: jump-hack
 						if ( (!pm->ps->clientNum||PM_ControlledByPlayer()) || 

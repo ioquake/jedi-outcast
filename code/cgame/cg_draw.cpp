@@ -2282,10 +2282,7 @@ static void CG_Draw2D( void )
 	CG_DrawGameText();
 
 	if ( in_camera )
-	{//still draw the saber clash flare, but nothing else
-		CG_SaberClashFlare();
 		return;
-	}
 
 	if ( CG_RenderingFromMiscCamera())
 	{

@@ -6914,7 +6914,7 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 		else
 		{
 #endif
-			if (bot_forcepowers.integer && !g_forcePowerDisable.integer)
+			if (bot_forcepowers.integer)
 			{
 				trap_EA_ForcePower(bs->client);
 			}

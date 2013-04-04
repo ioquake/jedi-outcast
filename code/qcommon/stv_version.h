@@ -1,6 +1,6 @@
 // Current version of the single player game
 
-#define	Q3_VERSION		"JK2: v1.02a"
+#define	Q3_VERSION		"JK2: v1.02"
 
 // end
 

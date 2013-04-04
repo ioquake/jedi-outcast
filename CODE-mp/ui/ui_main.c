@@ -16,12 +16,100 @@ USER INTERFACE MAIN
 #include "../qcommon/game_version.h"
 #include "ui_force.h"
 
+menuDef_t *Menus_FindByName(const char *p);
+void Menu_ShowItemByName(menuDef_t *menu, const char *p, qboolean bShow);
+void UpdateForceUsed();
+
+char holdSPString[1024]={0};
+
+uiInfo_t uiInfo;
+
+static const char *MonthAbbrev[] = {
+	"Jan","Feb","Mar",
+	"Apr","May","Jun",
+	"Jul","Aug","Sep",
+	"Oct","Nov","Dec"
+};
+
+
+static const char *skillLevels[] = {
+  "SKILL1",//"I Can Win",
+  "SKILL2",//"Bring It On",
+  "SKILL3",//"Hurt Me Plenty",
+  "SKILL4",//"Hardcore",
+  "SKILL5"//"Nightmare"
+};
+
+static const int numSkillLevels = sizeof(skillLevels) / sizeof(const char*);
+
+
+static const char *netSources[] = {
+	"Local",
+	"Internet",
+	"Favorites"
+//	"Mplayer"
+};
+static const int numNetSources = sizeof(netSources) / sizeof(const char*);
+
+static const serverFilter_t serverFilters[] = {
+	{"All", "" },
+	{"Jedi Knight 2", "" },
+};
+
+static const char *teamArenaGameTypes[] = {
+	"FFA",
+	"HOLOCRON",
+	"JEDIMASTER",
+	"DUEL",
+	"SP",
+	"TEAM FFA",
+	"N/A",
+	"CTF",
+	"CTY",
+	"TEAMTOURNAMENT"
+};
+
+static int const numTeamArenaGameTypes = sizeof(teamArenaGameTypes) / sizeof(const char*);
+
+
+static const int numServerFilters = sizeof(serverFilters) / sizeof(serverFilter_t);
+
+
+static char* netnames[] = {
+	"???",
+	"UDP",
+	"IPX",
+	NULL
+};
+
+static int gamecodetoui[] = {4,2,3,0,5,1,6};
+static int uitogamecode[] = {4,6,2,3,1,5,7};
+
+
+static void UI_StartServerRefresh(qboolean full);
+static void UI_StopServerRefresh( void );
+static void UI_DoServerRefresh( void );
+static void UI_BuildServerDisplayList(qboolean force);
+static void UI_BuildServerStatus(qboolean force);
+static void UI_BuildFindPlayerList(qboolean force);
+static int QDECL UI_ServersQsortCompare( const void *arg1, const void *arg2 );
+static int UI_MapCountByGameType(qboolean singlePlayer);
+static int UI_HeadCountByTeam( void );
+static int UI_HeadCountByColor( void );
+static void UI_ParseGameInfo(const char *teamFile);
+static const char *UI_SelectedMap(int index, int *actual);
+static const char *UI_SelectedHead(int index, int *actual);
+static int UI_GetIndexFromSelection(int actual);
+
+int ProcessNewUI( int command, int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6 );
+int	uiSkinColor=TEAM_FREE;
+
 /*
 ================
 vmMain
 
 This is the only way control passes into the module.
-!!! This MUST BE THE VERY FIRST FUNCTION compiled into the .qvm file !!!
+This must be the very first function compiled into the .qvm file
 ================
 */
 vmCvar_t  ui_debug;
@@ -78,135 +166,6 @@ int vmMain( int command, int arg0, int arg1, int arg2, int arg3, int arg4, int a
 
 	return -1;
 }
-
-menuDef_t *Menus_FindByName(const char *p);
-void Menu_ShowItemByName(menuDef_t *menu, const char *p, qboolean bShow);
-void UpdateForceUsed();
-
-char holdSPString[1024]={0};
-
-uiInfo_t uiInfo;
-
-static void UI_StartServerRefresh(qboolean full);
-static void UI_StopServerRefresh( void );
-static void UI_DoServerRefresh( void );
-static void UI_BuildServerDisplayList(qboolean force);
-static void UI_BuildServerStatus(qboolean force);
-static void UI_BuildFindPlayerList(qboolean force);
-static int QDECL UI_ServersQsortCompare( const void *arg1, const void *arg2 );
-static int UI_MapCountByGameType(qboolean singlePlayer);
-static int UI_HeadCountByTeam( void );
-static int UI_HeadCountByColor( void );
-static void UI_ParseGameInfo(const char *teamFile);
-static const char *UI_SelectedMap(int index, int *actual);
-static const char *UI_SelectedHead(int index, int *actual);
-static int UI_GetIndexFromSelection(int actual);
-
-int ProcessNewUI( int command, int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6 );
-int	uiSkinColor=TEAM_FREE;
-
-static const serverFilter_t serverFilters[] = {
-	{"All", "" },
-	{"Jedi Knight 2", "" },
-};
-static const int numServerFilters = sizeof(serverFilters) / sizeof(serverFilter_t);
-
-
-
-
-static const char *skillLevels[] = {
-  "SKILL1",//"I Can Win",
-  "SKILL2",//"Bring It On",
-  "SKILL3",//"Hurt Me Plenty",
-  "SKILL4",//"Hardcore",
-  "SKILL5"//"Nightmare"
-};
-static const int numSkillLevels = sizeof(skillLevels) / sizeof(const char*);
-
-
-
-static const char *teamArenaGameTypes[] = {
-	"FFA",
-	"HOLOCRON",
-	"JEDIMASTER",
-	"DUEL",
-	"SP",
-	"TEAM FFA",
-	"N/A",
-	"CTF",
-	"CTY",
-	"TEAMTOURNAMENT"
-};
-static int const numTeamArenaGameTypes = sizeof(teamArenaGameTypes) / sizeof(const char*);
-
-
-
-static char* netnames[] = {
-	"???",
-	"UDP",
-	"IPX",
-	NULL
-};
-
-static int gamecodetoui[] = {4,2,3,0,5,1,6};
-static int uitogamecode[] = {4,6,2,3,1,5,7};
-
-const char *UI_GetStripEdString(const char *refSection, const char *refName);
-
-// returns either string or NULL for OOR...
-//
-static const char *GetCRDelineatedString( const char *psStripFileRef, const char *psStripStringRef, int iIndex)
-{
-	static char sTemp[256];
-	const char *psList = UI_GetStripEdString(psStripFileRef, psStripStringRef);
-	char *p;
-
-	while (iIndex--)
-	{
-		psList = strchr(psList,'\n');
-		if (!psList){
-			return NULL;	// OOR
-		}
-		psList++;
-	}
-
-	strcpy(sTemp,psList);
-	p = strchr(sTemp,'\n');
-	if (p) {
-		*p = '\0';
-	}
-
-	return sTemp;
-}
-
-
-static const char *GetMonthAbbrevString( int iMonth )
-{
-	const char *p = GetCRDelineatedString("INGAMETEXT","MONTHS", iMonth);
-	
-	return p ? p : "Jan";	// sanity
-}
-
-
-
-
-/*
-static const char *netSources[] = {
-	"Local",
-	"Internet",
-	"Favorites"
-//	"Mplayer"
-};
-static const int numNetSources = sizeof(netSources) / sizeof(const char*);
-*/
-static const int numNetSources = 3;	// now hard-entered in StripEd file
-static const char *GetNetSourceString(int iSource)
-{
-	const char *p = GetCRDelineatedString("INGAMETEXT","NET_SOURCES", iSource);
-
-	return p ? p : "??";
-}
-
 
 
 
@@ -433,7 +392,7 @@ char parsedFPMessage[1024];
 extern int FPMessageTime;
 void Text_PaintCenter(float x, float y, float scale, vec4_t color, const char *text, float adjust, int iMenuFont);
 
-const char *UI_GetStripEdString(const char *refSection, const char *refName)
+const char *UI_GetStripEdString(char *refSection, char *refName)
 {
 	static char text[1024]={0};
 
@@ -967,9 +926,8 @@ void UI_Load() {
 	UI_ParseGameInfo("demogameinfo.txt");
 #else
 	UI_ParseGameInfo("ui/jk2mp/gameinfo.txt");
-#endif
 	UI_LoadArenas();
-	UI_LoadBots();
+#endif
 
 	UI_LoadMenus(menuSet, qtrue);
 	Menus_CloseAll();
@@ -1237,7 +1195,7 @@ static void UI_DrawForceSide(rectDef_t *rect, float scale, vec4_t color, int tex
 
 	if (val == FORCE_LIGHTSIDE)
 	{
-		trap_SP_GetStringTextString("MENUS3_FORCEDESC_LIGHT",s, sizeof(s));
+		Com_sprintf(s, sizeof(s), "Light\0");
 		menu = Menus_FindByName("forcealloc");
 		if (menu)
 		{
@@ -1260,7 +1218,8 @@ static void UI_DrawForceSide(rectDef_t *rect, float scale, vec4_t color, int tex
 	}
 	else
 	{
-		trap_SP_GetStringTextString("MENUS3_FORCEDESC_DARK",s, sizeof(s));
+		Com_sprintf(s, sizeof(s), "Dark\0");
+
 		menu = Menus_FindByName("forcealloc");
 		if (menu)
 		{
@@ -1328,13 +1287,11 @@ static void UI_DrawTeamMember(rectDef_t *rect, float scale, vec4_t color, qboole
 	if (value <= 1) {
 		if (value == -1)
 		{
-			//text = "Closed";
-			text = UI_GetStripEdString("MENUS3", "CLOSED");
+			text = "Closed";
 		}
 		else
 		{
-			//text = "Human";
-			text = UI_GetStripEdString("MENUS3", "HUMAN");
+			text = "Human";
 		}
 	} else {
 		value -= 2;
@@ -1456,7 +1413,7 @@ void UpdateForceStatus()
 	{
 		char	info[MAX_INFO_STRING];
 
-		if (uiForcePowersRank[FP_SABERATTACK] > 0 || ui_freeSaber.integer)
+		if (uiForcePowersRank[FP_SABERATTACK] > 0)
 		{	// Show lightsaber stuff.
 			Menu_ShowItemByName(menu, "nosaber", qfalse);
 			Menu_ShowItemByName(menu, "yessaber", qtrue);
@@ -1612,7 +1569,7 @@ static void UI_DrawNetSource(rectDef_t *rect, float scale, vec4_t color, int tex
 
 	trap_SP_GetStringTextString("MENUS3_SOURCE", holdSPString, sizeof(holdSPString) );
 	Text_Paint(rect->x, rect->y, scale, color, va("%s %s",holdSPString,
-		 GetNetSourceString(ui_netSource.integer)), 0, 0, textStyle, iMenuFont);
+		 netSources[ui_netSource.integer]), 0, 0, textStyle, iMenuFont);
 }
 
 static void UI_DrawNetMapPreview(rectDef_t *rect, float scale, vec4_t color) {
@@ -1914,13 +1871,11 @@ static int UI_OwnerDrawWidth(int ownerDraw, float scale) {
 
 		if (i == FORCE_LIGHTSIDE)
 		{
-//			s = "Light";
-			s = (char *)UI_GetStripEdString("MENUS3", "FORCEDESC_LIGHT");
+			s = "Light";
 		}
 		else
 		{
-//			s = "Dark";
-			s = (char *)UI_GetStripEdString("MENUS3", "FORCEDESC_DARK");
+			s = "Dark";
 		}
 		break;
     case UI_FORCE_RANK:
@@ -2048,7 +2003,7 @@ static int UI_OwnerDrawWidth(int ownerDraw, float scale) {
 				ui_netSource.integer = 0;
 			}
 			trap_SP_GetStringTextString("MENUS3_SOURCE", holdSPString, sizeof(holdSPString));
-			s = va("%s %s", holdSPString, GetNetSourceString(ui_netSource.integer));
+			s = va("%s %s", holdSPString, netSources[ui_netSource.integer]);
 			break;
 		case UI_NETFILTER:
 			if (ui_serverFilterType.integer < 0 || ui_serverFilterType.integer > numServerFilters) {
@@ -4014,10 +3969,11 @@ static void UI_RunMenuScript(char **args)
 			UI_GameType_HandleKey(0, 0, K_MOUSE1, qfalse);
 			UI_GameType_HandleKey(0, 0, K_MOUSE2, qfalse);
 		} else if (Q_stricmp(name, "resetDefaults") == 0) {
-			trap_Cmd_ExecuteText( EXEC_APPEND, "cvar_restart\n");
 			trap_Cmd_ExecuteText( EXEC_APPEND, "exec mpdefault.cfg\n");
-			trap_Cmd_ExecuteText( EXEC_APPEND, "vid_restart\n" );
+			trap_Cmd_ExecuteText( EXEC_APPEND, "cvar_restart\n");
+			Controls_SetDefaults();
 			trap_Cvar_Set("com_introPlayed", "1" );
+			trap_Cmd_ExecuteText( EXEC_APPEND, "vid_restart\n" );
 #ifdef USE_CD_KEY
 		} else if (Q_stricmp(name, "getCDKey") == 0) {
 			char out[17];
@@ -6458,11 +6414,11 @@ static void UI_PrintTime ( char *buf, int bufsize, int time ) {
 	time /= 1000;  // change to seconds
 
 	if (time > 3600) { // in the hours range
-		Com_sprintf( buf, bufsize, "%d hr %2d min", time / 3600, (time % 3600) / 60 );
+		Com_sprintf( buf, bufsize, "%d hr %d min", time / 3600, (time % 3600) / 60 );
 	} else if (time > 60) { // mins
-		Com_sprintf( buf, bufsize, "%2d min %2d sec", time / 60, time % 60 );
+		Com_sprintf( buf, bufsize, "%d min %d sec", time / 60, time % 60 );
 	} else  { // secs
-		Com_sprintf( buf, bufsize, "%2d sec", time );
+		Com_sprintf( buf, bufsize, "%d sec", time );
 	}
 }
 
@@ -6473,35 +6429,15 @@ void Text_PaintCenter(float x, float y, float scale, vec4_t color, const char *t
 
 
 static void UI_DisplayDownloadInfo( const char *downloadName, float centerPoint, float yStart, float scale, int iMenuFont) {
-	char sDownLoading[256];
-	char sEstimatedTimeLeft[256];
-	char sTransferRate[256];
-	char sOf[20];
-	char sCopied[256];
-	char sSec[20];
-	//
+	static char dlText[]	= "Downloading:";
+	static char etaText[]	= "Estimated time left:";
+	static char xferText[]	= "Transfer rate:";
+
 	int downloadSize, downloadCount, downloadTime;
 	char dlSizeBuf[64], totalSizeBuf[64], xferRateBuf[64], dlTimeBuf[64];
 	int xferRate;
 	int leftWidth;
 	const char *s;
-
-	vec4_t colorLtGreyAlpha = {0, 0, 0, .5};
-
-	UI_FillRect( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, colorLtGreyAlpha );
-
-	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 0);	// "Downloading:"
-	strcpy(sDownLoading,s?s:"");
-	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 1);	// "Estimated time left:"
-	strcpy(sEstimatedTimeLeft,s?s:"");
-	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 2);	// "Transfer rate:"
-	strcpy(sTransferRate,s?s:"");
-	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 3);	// "of"
-	strcpy(sOf,s?s:"");
-	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 4);	// "copied"
-	strcpy(sCopied,s?s:"");
-	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 5);	// "sec."
-	strcpy(sSec,s?s:"");
 
 	downloadSize = trap_Cvar_VariableValue( "cl_downloadSize" );
 	downloadCount = trap_Cvar_VariableValue( "cl_downloadCount" );
@@ -6510,10 +6446,9 @@ static void UI_DisplayDownloadInfo( const char *downloadName, float centerPoint,
 	leftWidth = 320;
 
 	UI_SetColor(colorWhite);
-
-	Text_PaintCenter(centerPoint, yStart + 112, scale, colorWhite, sDownLoading, 0, iMenuFont);
-	Text_PaintCenter(centerPoint, yStart + 192, scale, colorWhite, sEstimatedTimeLeft, 0, iMenuFont);
-	Text_PaintCenter(centerPoint, yStart + 248, scale, colorWhite, sTransferRate, 0, iMenuFont);
+	Text_PaintCenter(centerPoint, yStart + 112, scale, colorWhite, dlText, 0, iMenuFont);
+	Text_PaintCenter(centerPoint, yStart + 192, scale, colorWhite, etaText, 0, iMenuFont);
+	Text_PaintCenter(centerPoint, yStart + 248, scale, colorWhite, xferText, 0, iMenuFont);
 
 	if (downloadSize > 0) {
 		s = va( "%s (%d%%)", downloadName, downloadCount * 100 / downloadSize );
@@ -6528,7 +6463,7 @@ static void UI_DisplayDownloadInfo( const char *downloadName, float centerPoint,
 
 	if (downloadCount < 4096 || !downloadTime) {
 		Text_PaintCenter(leftWidth, yStart+216, scale, colorWhite, "estimating", 0, iMenuFont);
-		Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s %s %s %s)", dlSizeBuf, sOf, totalSizeBuf, sCopied), 0, iMenuFont);
+		Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s of %s copied)", dlSizeBuf, totalSizeBuf), 0, iMenuFont);
 	} else {
 		if ((uiInfo.uiDC.realTime - downloadTime) / 1000) {
 			xferRate = downloadCount / ((uiInfo.uiDC.realTime - downloadTime) / 1000);
@@ -6546,18 +6481,18 @@ static void UI_DisplayDownloadInfo( const char *downloadName, float centerPoint,
 				(n - (((downloadCount/1024) * n) / (downloadSize/1024))) * 1000);
 
 			Text_PaintCenter(leftWidth, yStart+216, scale, colorWhite, dlTimeBuf, 0, iMenuFont);
-			Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s %s %s %s)", dlSizeBuf, sOf, totalSizeBuf, sCopied), 0, iMenuFont);
+			Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s of %s copied)", dlSizeBuf, totalSizeBuf), 0, iMenuFont);
 		} else {
 			Text_PaintCenter(leftWidth, yStart+216, scale, colorWhite, "estimating", 0, iMenuFont);
 			if (downloadSize) {
-				Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s %s %s %s)", dlSizeBuf, sOf, totalSizeBuf, sCopied), 0, iMenuFont);
+				Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s of %s copied)", dlSizeBuf, totalSizeBuf), 0, iMenuFont);
 			} else {
-				Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s %s)", dlSizeBuf, sCopied), 0, iMenuFont);
+				Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s copied)", dlSizeBuf), 0, iMenuFont);
 			}
 		}
 
 		if (xferRate) {
-			Text_PaintCenter(leftWidth, yStart+272, scale, colorWhite, va("%s/%s", xferRateBuf,sSec), 0, iMenuFont);
+			Text_PaintCenter(leftWidth, yStart+272, scale, colorWhite, va("%s/Sec", xferRateBuf), 0, iMenuFont);
 		}
 	}
 }
@@ -7057,7 +6992,7 @@ static void UI_StartServerRefresh(qboolean full)
 
 	qtime_t q;
 	trap_RealTime(&q);
- 	trap_Cvar_Set( va("ui_lastServerRefresh_%i", ui_netSource.integer), va("%s-%i, %i @ %i:%2i", GetMonthAbbrevString(q.tm_mon),q.tm_mday, 1900+q.tm_year,q.tm_hour,q.tm_min));
+ 	trap_Cvar_Set( va("ui_lastServerRefresh_%i", ui_netSource.integer), va("%s-%i, %i at %i:%i", MonthAbbrev[q.tm_mon],q.tm_mday, 1900+q.tm_year,q.tm_hour,q.tm_min));
 
 	if (!full) {
 		UI_UpdatePendingPings();

@@ -1015,10 +1015,10 @@ void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition)
 	gi.ReadFromSaveGame('DONE', &iDONE, sizeof(iDONE));
 }
 
-extern int killPlayerTimer;
+
 qboolean GameAllowedToSaveHere(void)
 {
-	return (!in_camera&&!killPlayerTimer);
+	return !in_camera;
 }
 
 //////////////////// eof /////////////////////

@@ -1082,7 +1082,23 @@ void SV_InitGameProgs( void ) {
 
 	if ( !Cvar_VariableValue("fs_restrict") && !Sys_CheckCD() ) 
 	{
-		Com_Error( ERR_NEED_CD, SP_GetStringTextString("CON_TEXT_NEED_CD") ); //"Game CD not in drive" );		
+		int iLanguage = Cvar_VariableValue("sp_language");
+		//rww - we don't have an actual cvar object for sp_language to use here.
+
+		if (iLanguage)	// dunno if SP files are loaded at this point if no CD...
+		{
+			switch (iLanguage)
+			{
+				case SP_LANGUAGE_GERMAN:
+					Com_Error( ERR_NEED_CD, "Spiel CD nicht im Laufwerk" );
+					break;	// keep compiler happy
+				case SP_LANGUAGE_FRENCH:
+					Com_Error( ERR_NEED_CD, "CD de jeu pas dans le lecteur" );
+					break;	// keep compiler happy
+			}
+		}
+
+		Com_Error( ERR_NEED_CD, "Game CD not in drive" );		
 	}
 
 	// load the dll or bytecode

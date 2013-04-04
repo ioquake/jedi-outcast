@@ -83,7 +83,7 @@ void Con_Dump_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf (SP_GetStringTextString("CON_TEXT_DUMP_USAGE"));
+		Com_Printf ("usage: condump <filename>\n");
 		return;
 	}
 

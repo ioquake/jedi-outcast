@@ -931,7 +931,7 @@ void WP_DisruptorAltFire( gentity_t *ent )
 					G_PlayEffect( G_EffectIndex( "disruptor/alt_hit" ), tr.endpos, tr.plane.normal );
 
 					if ( traceEnt->client && LogAccuracyHit( traceEnt, ent )) 
-					{//NOTE: hitting multiple ents can still get you over 100% accuracy
+					{
 						ent->client->ps.persistant[PERS_ACCURACY_HITS]++;
 					} 
 

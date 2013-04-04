@@ -346,6 +346,10 @@ SOURCE=.\qcommon\cm_public.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\qcommon\cm_shader.cpp
+# End Source File
+# Begin Source File
+
 SOURCE=.\qcommon\cm_test.cpp
 # End Source File
 # Begin Source File

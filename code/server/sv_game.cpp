@@ -332,9 +332,22 @@ void SV_InitGameProgs (void) {
 		SV_ShutdownGameProgs ();
 	}
 
-	if ( !Cvar_VariableIntegerValue("fs_restrict") && !Sys_CheckCD() ) 
+	if ( !Cvar_VariableValue("fs_restrict") && !Sys_CheckCD() ) 
 	{
-		Com_Error( ERR_NEED_CD, SP_GetStringTextString("CON_TEXT_NEED_CD") ); //"Game CD not in drive" );		
+		if (sp_language)	// dunno if SP files are loaded at this point if no CD...
+		{
+			switch (sp_language->integer)
+			{
+				case SP_LANGUAGE_GERMAN:
+					Com_Error( ERR_NEED_CD, "Spiel CD nicht im Laufwerk" );
+					break;	// keep compiler happy
+				case SP_LANGUAGE_FRENCH:
+					Com_Error( ERR_NEED_CD, "CD de jeu pas dans le lecteur" );
+					break;	// keep compiler happy
+			}
+		}
+
+		Com_Error( ERR_NEED_CD, "Game CD not in drive" );		
 	}
 
 	// load a new game dll

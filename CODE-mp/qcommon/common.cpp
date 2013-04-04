@@ -278,7 +278,6 @@ void QDECL Com_Error( int code, const char *fmt, ... ) {
 	va_end (argptr);
 
 	if ( code != ERR_DISCONNECT ) {
-		Cvar_Get("com_errorMessage", "", CVAR_ROM);	//give com_errorMessage a default so it won't come back to life after a resetDefaults
 		Cvar_Set("com_errorMessage", com_errorMessage);
 	}
 
@@ -2939,6 +2938,7 @@ void MSG_shutdownHuffman();
 void Com_Shutdown (void) 
 {
 	CM_ClearMap();
+	CM_FreeShaderText();
 
 	if (logfile) {
 		FS_FCloseFile (logfile);

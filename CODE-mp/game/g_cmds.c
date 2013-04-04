@@ -2417,8 +2417,7 @@ void ClientCommand( int clientNum ) {
 	{
 		if (Q_stricmp(cmd, "addbot") == 0)
 		{ //because addbot isn't a recognized command unless you're the server, but it is in the menus regardless
-//			trap_SendServerCommand( clientNum, va("print \"You can only add bots as the server.\n\"" ) );
-			trap_SendServerCommand( clientNum, va("print \"%s.\n\"", G_GetStripEdString("SVINGAME", "ONLY_ADD_BOTS_AS_SERVER")));
+			trap_SendServerCommand( clientNum, va("print \"You can only add bots as the server.\n\"" ) );
 		}
 		else
 		{

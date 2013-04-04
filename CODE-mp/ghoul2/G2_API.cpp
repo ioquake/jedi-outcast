@@ -172,7 +172,6 @@ int G2API_InitGhoul2Model(CGhoul2Info_v **ghoul2Ptr, const char *fileName, int m
 	{
 		if (ghoul2.size() == 0)//very first model created
 		{//you can't have an empty vector, so let's not give it one
-			G2API_CleanGhoul2Models(ghoul2Ptr);
 			delete *ghoul2Ptr;
 			*ghoul2Ptr = 0;
 		}

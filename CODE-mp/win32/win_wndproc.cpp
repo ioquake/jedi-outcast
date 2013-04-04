@@ -473,10 +473,8 @@ LONG WINAPI MainWndProc (
 		break;
 
 	case WM_SYSCOMMAND:
-		if ( (wParam&0xFFF0) == SC_SCREENSAVE || (wParam&0xFFF0) == SC_MONITORPOWER)
-		{
+		if ( wParam == SC_SCREENSAVE )
 			return 0;
-		}
 		break;
 
 	case WM_SYSKEYDOWN:
@@ -501,13 +499,6 @@ LONG WINAPI MainWndProc (
 
 	case WM_CHAR:
 		Sys_QueEvent( g_wv.sysMsgTime, SE_CHAR, wParam, 0, 0, NULL );
-		break;
-	case WM_POWERBROADCAST:
-		if (wParam == PBT_APMQUERYSUSPEND)
-		{
-			Com_Printf("Cannot go into hibernate / standby mode while game is running!\n");
-			return BROADCAST_QUERY_DENY;
-		}
 		break;
    }
 

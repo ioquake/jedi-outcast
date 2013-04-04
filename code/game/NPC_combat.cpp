@@ -1348,9 +1348,6 @@ qboolean ValidEnemy(gentity_t *ent)
 	if ( ent == NULL )
 		return qfalse;
 
-	if ( ent == NPC )
-		return qfalse;
-
 	//if team_free, maybe everyone is an enemy?
 	if ( !NPC->client->enemyTeam )
 		return qfalse;
@@ -1580,7 +1577,7 @@ gentity_t *NPC_PickEnemy( gentity_t *closestTo, int enemyTeam, qboolean checkVis
 	{
 		newenemy = &g_entities[entNum];
 
-		if ( newenemy != NPC && (newenemy->client || newenemy->svFlags & SVF_NONNPC_ENEMY) && !(newenemy->flags & FL_NOTARGET) && !(newenemy->s.eFlags & EF_NODRAW))
+		if ( (newenemy->client || newenemy->svFlags & SVF_NONNPC_ENEMY) && !(newenemy->flags & FL_NOTARGET) && !(newenemy->s.eFlags & EF_NODRAW))
 		{
 			if ( newenemy->health > 0 )
 			{

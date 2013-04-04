@@ -1597,7 +1597,7 @@ int SP_GetStringID(const char *inReference)
 	int													ID;
 	char Reference[MAX_QPATH];
 	Q_strncpyz(Reference, inReference, MAX_QPATH);
-	Q_strupr(Reference);
+	strupr(Reference);
 
 	for(i = SP_ListByID.begin(); i != SP_ListByID.end(); i++)
 	{
@@ -1714,7 +1714,7 @@ static void SP_UpdateLanguage(void)
 
 void SP_Init(void)
 {
-	sp_language = Cvar_Get("sp_language", va("%d", SP_LANGUAGE_ENGLISH), CVAR_ARCHIVE | CVAR_NORESTART);
+	sp_language = Cvar_Get("sp_language", va("%d", SP_LANGUAGE_ENGLISH), CVAR_ARCHIVE);
 	sp_show_strip = Cvar_Get ("sp_show_strip", "0", 0);
 
 	SP_UpdateLanguage();

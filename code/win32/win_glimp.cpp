@@ -1469,11 +1469,13 @@ extern qboolean Sys_LowPhysicalMemory();
 		//this must be a really sucky card!
 		if ( (glConfig.textureCompression == TC_NONE) || (glConfig.maxActiveTextures < 2)  || (glConfig.maxTextureSize <= 512) )
 		{
-			ri.Cvar_Set( "r_picmip", "2");
+			ri.Cvar_Set( "r_picmip", "3");
+			ri.Cvar_Set( "r_lodbias", "2");			
+			ri.Cvar_Set( "r_detailtextures", "0");
 			ri.Cvar_Set( "r_colorbits", "16");
 			ri.Cvar_Set( "r_texturebits", "16");
+			ri.Cvar_Set( "cg_shadows", "0");
 			ri.Cvar_Set( "r_mode", "3");	//force 640
-			Cmd_ExecuteString ("exec low.cfg\n");	//get the rest which can be pulled in after init
 		}
 	}
 	

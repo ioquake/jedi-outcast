@@ -138,18 +138,7 @@ void NPC_Jedi_PlayConfusionSound( gentity_t *self )
 {
 	if ( self->health > 0 )
 	{
-		if ( self->client && ( self->client->NPC_class == CLASS_TAVION || self->client->NPC_class == CLASS_DESANN ) )
-		{
-			G_AddVoiceEvent( self, Q_irand( EV_CONFUSE1, EV_CONFUSE3 ), 2000 );
-		}
-		else if ( Q_irand( 0, 1 ) )
-		{
-			G_AddVoiceEvent( self, Q_irand( EV_TAUNT1, EV_TAUNT3 ), 2000 );
-		}
-		else
-		{
-			G_AddVoiceEvent( self, Q_irand( EV_GLOAT1, EV_GLOAT3 ), 2000 );
-		}
+		G_AddVoiceEvent( self, Q_irand( EV_CONFUSE1, EV_CONFUSE2 ), 2000 );
 	}
 }
 

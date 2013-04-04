@@ -1572,12 +1572,12 @@ commandDef_t commandList[] =
   {"setitemcolor", &Script_SetItemColor},       // group/name
   {"setitemrect", &Script_SetItemRect},			// group/name
   {"setteamcolor", &Script_SetTeamColor},       // sets this background color to team color
-  {"setfocus", &Script_SetFocus},               // sets focus
-  {"setplayermodel", &Script_SetPlayerModel},   // sets model
-  {"setplayerhead", &Script_SetPlayerHead},     // sets head
+  {"setfocus", &Script_SetFocus},               // sets this background color to team color
+  {"setplayermodel", &Script_SetPlayerModel},   // sets this background color to team color
+  {"setplayerhead", &Script_SetPlayerHead},     // sets this background color to team color
   {"transition", &Script_Transition},           // group/name
-  {"setcvar", &Script_SetCvar},					// name
-  {"setcvartocvar", &Script_SetCvarToCvar},     // name
+  {"setcvar", &Script_SetCvar},					// group/name
+  {"setcvartocvar", &Script_SetCvarToCvar},     // group/name
   {"exec", &Script_Exec},						// group/name
   {"play", &Script_Play},						// group/name
   {"playlooped", &Script_playLooped},           // group/name
@@ -4056,6 +4056,31 @@ void Controls_SetConfig(qboolean restart)
 // ^--this is bad, it shows the cursor during map load, if you need to, add it as an exec cmd to use_joy or something.
 }
 
+/*
+=================
+Controls_SetDefaults
+=================
+*/
+void Controls_SetDefaults( void )
+{
+	int	i;
+
+	// iterate each command, set its default binding
+  for (i=0; i < g_bindCount; i++)
+	{
+		g_bindings[i].bind1 = g_bindings[i].defaultbind1;
+		g_bindings[i].bind2 = g_bindings[i].defaultbind2;
+	}
+
+	//s_controls.invertmouse.curvalue  = Controls_GetCvarDefault( "m_pitch" ) < 0;
+	//s_controls.smoothmouse.curvalue  = Controls_GetCvarDefault( "m_filter" );
+	//s_controls.alwaysrun.curvalue    = Controls_GetCvarDefault( "cl_run" );
+	//s_controls.autoswitch.curvalue   = Controls_GetCvarDefault( "cg_autoswitch" );
+	//s_controls.sensitivity.curvalue  = Controls_GetCvarDefault( "sensitivity" );
+	//s_controls.joyenable.curvalue    = Controls_GetCvarDefault( "in_joystick" );
+	//s_controls.joythreshold.curvalue = Controls_GetCvarDefault( "joy_threshold" );
+	//s_controls.freelook.curvalue     = Controls_GetCvarDefault( "cl_freelook" );
+}
 
 int BindingIDFromName(const char *name) {
 	int i;

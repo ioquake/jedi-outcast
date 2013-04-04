@@ -130,7 +130,7 @@ void Con_Dump_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf (SP_GetStringText(CON_TEXT_DUMP_USAGE));
+		Com_Printf(SP_GetStringText(CON_TEXT_DUMP_USAGE));
 		return;
 	}
 
@@ -139,7 +139,7 @@ void Con_Dump_f (void)
 	f = FS_FOpenFileWrite( Cmd_Argv( 1 ) );
 	if (!f)
 	{
-		Com_Printf (S_COLOR_RED"ERROR: couldn't open.\n");
+		Com_Printf ("ERROR: couldn't open.\n");
 		return;
 	}
 

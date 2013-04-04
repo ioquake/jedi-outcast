@@ -185,7 +185,6 @@ public:
 	void CheckFailedNodes( gentity_t *ent );
 	void AddFailedNode( gentity_t *ent, int nodeID );
 	qboolean NodeFailed( gentity_t *ent, int nodeID );
-	qboolean NodesAreNeighbors( int startID, int endID );
 	void ClearFailedEdge( failedEdge_t	*failedEdge );
 	void ClearAllFailedEdges( void );
 	qboolean EdgeFailed( int startID, int endID );

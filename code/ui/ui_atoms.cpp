@@ -47,7 +47,7 @@ void UI_SetActiveMenu( const char* menuname,const char *menuID )
 {
 	// this should be the ONLY way the menu system is brought up (besides the UI_ConsoleCommand below)
 
-	if (cls.state != CA_DISCONNECTED && !ui.SG_GameAllowedToSaveHere(qtrue))	//don't check full sytem, only if incamera
+	if (!ui.SG_GameAllowedToSaveHere(qtrue))	//don't check full sytem, only if incamera
 	{
 		return;
 	}

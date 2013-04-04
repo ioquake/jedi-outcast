@@ -1625,8 +1625,8 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 	bool			setNewOrigin = false;
 	CGhoul2Info_v	&ghoul2 = *((CGhoul2Info_v *)ent->e.ghoul2);
 
-	// if we don't want server ghoul2 models and this is one, then return
-	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) )
+	// if we don't want server ghoul2 models and this is one, or we just don't want ghoul2 models at all, then return
+	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) || (r_noGhoul2->integer))
 	{
 		return;
 	}
@@ -1902,8 +1902,8 @@ void G2_ConstructGhoulSkeleton( CGhoul2Info_v &ghoul2, const int frameNum, qhand
 	bool			setNewOrigin = false;
 	mdxaBone_t		rootMatrix;
 
-	// if we don't want server ghoul2 models and this is one, then return
-	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) )
+	// if we don't want server ghoul2 models and this is one, or we just don't want ghoul2 models at all, then return
+	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) || (r_noGhoul2->integer))
 	{
 		return;
 	}

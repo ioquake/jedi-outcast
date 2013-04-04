@@ -414,7 +414,7 @@ static qboolean UI_DeferMenuScript ( const char **args )
 		}
 
 		// Defer if the video options were modified
-		deferred = Cvar_VariableIntegerValue( "ui_r_modified" ) ? qtrue : qfalse;
+		deferred = Cvar_VariableValue ( "ui_r_modified" ) ? qtrue : qfalse;
 
 		if ( deferred )
 		{
@@ -2500,8 +2500,8 @@ UI_ResetDefaults
 */
 void UI_ResetDefaults( void )
 {
-	ui.Cmd_ExecuteText( EXEC_APPEND, "cvar_restart\n");
 	ui.Cmd_ExecuteText( EXEC_APPEND, "exec default.cfg\n");
+	ui.Cmd_ExecuteText( EXEC_APPEND, "cvar_restart\n");
 	ui.Cmd_ExecuteText( EXEC_APPEND, "vid_restart\n" );
 	Cvar_Set("com_introPlayed", "1" );
 }

@@ -917,10 +917,6 @@ qboolean NPC_ValidEnemy( gentity_t *ent )
 	if ( ent == NULL )
 		return qfalse;
 
-	//Must not be me
-	if ( ent == NPC )
-		return qfalse;
-
 	//Must not be deleted
 	if ( ent->inuse == qfalse )
 		return qfalse;

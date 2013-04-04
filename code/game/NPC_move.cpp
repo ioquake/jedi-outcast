@@ -292,7 +292,7 @@ qboolean NPC_GetMoveDirectionAltRoute( vec3_t out, float *distance, qboolean try
 			memcpy( &tempInfo, &frameNavInfo, sizeof( tempInfo ) );
 			if ( NAVNEW_AvoidCollision( NPC, NPCInfo->goalEntity, tempInfo, qtrue, 5 ) == qfalse )
 			{//revert to macro nav
-				//Can't get straight to goal, dump tempInfo and use macro nav
+				//Can't get straight to goal, deump tempInfo and use macro nav
 				if ( NAVNEW_MoveToGoal( NPC, frameNavInfo ) == WAYPOINT_NONE )
 				{
 					//Can't reach goal, just face

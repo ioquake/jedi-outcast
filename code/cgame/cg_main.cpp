@@ -1775,7 +1775,6 @@ Called before every level change or subsystem restart
 */
 void CG_Shutdown( void ) 
 {
-	in_camera = false;
 	FX_Free();
 }
 
@@ -3173,7 +3172,7 @@ int showDataPadPowers[MAX_DPSHOWPOWERS] =
 	FP_SABER_OFFENSE,
 };
 
-/*char *showDataPadPowersName[MAX_DPSHOWPOWERS] = 
+char *showDataPadPowersName[MAX_DPSHOWPOWERS] = 
 {
 	"HEAL2",
 	"JUMP2",
@@ -3187,8 +3186,6 @@ int showDataPadPowers[MAX_DPSHOWPOWERS] =
 	"SABER_DEFENSE2",
 	"SABER_OFFENSE2",
 };
-/*
-
 /*
 ===============
 ForcePower_Valid

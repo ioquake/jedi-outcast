@@ -753,16 +753,17 @@ static void Q3_SetObjective(const char *ObjEnum, int status)
 Q3_SetMissionFailed
 -------------------------
 */
-extern void G_PlayerGuiltDeath( void );
 static void	Q3_SetMissionFailed(const char *TextEnum)
 {
 	gentity_t	*ent = &g_entities[0];
 
-	if ( ent->health >= 0 )
-	{
-		G_PlayerGuiltDeath();
-	}
 	ent->health = 0;
+	if ( ent->playerModel >= 0 && ent->ghoul2.size() )
+	{// don't let 'em animate
+		gi.G2API_PauseBoneAnimIndex( &ent->ghoul2[ent->playerModel], ent->rootBone, cg.time );
+		gi.G2API_PauseBoneAnimIndex( &ent->ghoul2[ent->playerModel], ent->motionBone, cg.time );
+		gi.G2API_PauseBoneAnimIndex( &ent->ghoul2[ent->playerModel], ent->lowerLumbarBone, cg.time );
+	}
 	//FIXME: what about other NPCs?  Scripts?
 
 	// statusTextIndex is looked at on the client side. 
