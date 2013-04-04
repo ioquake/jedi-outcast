@@ -1552,6 +1552,9 @@ void SP_fx_runner( gentity_t *ent )
 //rww - here starts the main example g2animent stuff
 #define ANIMENT_TYPE_STORMTROOPER			0
 #define ANIMENT_TYPE_RODIAN					1
+#define ANIMENT_TYPE_JAN					2
+#define ANIMENT_TYPE_CUSTOM					3
+#define	MAX_ANIMENTS						4
 
 #define TROOPER_PAIN_SOUNDS 4
 #define TROOPER_DEATH_SOUNDS 3
@@ -1567,11 +1570,244 @@ int gRodianSound_Pain[RODIAN_PAIN_SOUNDS];
 int gRodianSound_Death[RODIAN_DEATH_SOUNDS];
 int gRodianSound_Alert[RODIAN_ALERT_SOUNDS];
 
+#define JAN_PAIN_SOUNDS 4
+#define JAN_DEATH_SOUNDS 3
+#define JAN_ALERT_SOUNDS 5
+int gJanSound_Pain[JAN_PAIN_SOUNDS];
+int gJanSound_Death[JAN_DEATH_SOUNDS];
+int gJanSound_Alert[JAN_ALERT_SOUNDS];
+
 int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, int hitLoc );
 void AnimEntFireWeapon( gentity_t *ent, qboolean altFire );
 int GetNearestVisibleWP(vec3_t org, int ignore);
 int InFieldOfVision(vec3_t viewangles, float fov, vec3_t angles);
 extern float gBotEdit;
+
+#define ANIMENT_ALIGNED_UNKNOWN		0
+#define ANIMENT_ALIGNED_BAD			1
+#define ANIMENT_ALIGNED_GOOD		2
+
+#define ANIMENT_CUSTOMSOUND_PAIN	0
+#define ANIMENT_CUSTOMSOUND_DEATH	1
+#define ANIMENT_CUSTOMSOUND_ALERT	2
+
+int gAnimEntTypes = 0;
+
+typedef struct animentCustomInfo_s
+{
+	int							aeAlignment;
+	int							aeIndex;
+	int							aeWeapon;
+	char						*modelPath;
+	char						*soundPath;
+	void						*next;
+} animentCustomInfo_t;
+
+animentCustomInfo_t *animEntRoot = NULL;
+
+animentCustomInfo_t *ExampleAnimEntCustomData(gentity_t *self)
+{
+	animentCustomInfo_t *iter = animEntRoot;
+	int safetyCheck = 0;
+
+	while (iter && safetyCheck < 30000)
+	{
+		if (iter->aeIndex == self->waterlevel)
+		{
+			return iter;
+		}
+
+		iter = iter->next;
+		safetyCheck++;
+	}
+
+	return NULL;
+}
+
+animentCustomInfo_t *ExampleAnimEntCustomDataExists(gentity_t *self, int alignment, int weapon, char *modelname,
+												   char *soundpath)
+{
+	animentCustomInfo_t *iter = animEntRoot;
+	int safetyCheck = 0;
+
+	while (iter && safetyCheck < 30000)
+	{
+		if (iter->aeAlignment == alignment &&
+			iter->aeWeapon == weapon &&
+			!Q_stricmp(iter->modelPath, modelname) &&
+			!Q_stricmp(iter->soundPath, soundpath))
+		{
+			return iter;
+		}
+
+		iter = iter->next;
+		safetyCheck++;
+	}
+
+	return NULL;
+}
+
+void ExampleAnimEntCustomDataEntry(gentity_t *self, int alignment, int weapon, char *modelname, char *soundpath)
+{
+	animentCustomInfo_t *find = ExampleAnimEntCustomDataExists(self, alignment, weapon, modelname, soundpath);
+	animentCustomInfo_t *lastValid = NULL;
+	int safetyCheck = 0;
+
+	if (find)
+	{ //data for this guy already exists. Set our waterlevel (aeIndex) to use this.
+		self->waterlevel = find->aeIndex;
+		return;
+	}
+
+	find = animEntRoot;
+
+	while (find && safetyCheck < 30000)
+	{ //find the next null pointer
+		lastValid = find;
+		find = find->next;
+		safetyCheck++;
+	}
+
+	if (!find)
+	{
+		find = BG_Alloc(sizeof(animentCustomInfo_t));
+
+		if (!find)
+		{ //careful not to exceed the BG_Alloc limit!
+			return;
+		}
+
+		find->aeAlignment = alignment;
+		self->waterlevel = gAnimEntTypes;
+		find->aeIndex = self->waterlevel;
+		find->aeWeapon = weapon;
+		find->next = NULL;
+
+		find->modelPath = BG_Alloc(strlen(modelname)+1);
+		find->soundPath = BG_Alloc(strlen(soundpath)+1);
+
+		if (!find->modelPath || !find->soundPath)
+		{
+			find->aeIndex = -1;
+			return;
+		}
+
+		strcpy(find->modelPath, modelname);
+		strcpy(find->soundPath, soundpath);
+
+		find->modelPath[strlen(modelname)] = 0;
+		find->soundPath[strlen(modelname)] = 0;
+
+		if (lastValid)
+		{
+			lastValid->next = find;
+		}
+
+		if (!animEntRoot)
+		{
+			animEntRoot = find;
+		}
+
+		gAnimEntTypes++;
+	}
+}
+
+void AnimEntCustomSoundPrecache(animentCustomInfo_t *aeInfo)
+{
+	if (!aeInfo)
+	{
+		return;
+	}
+
+	G_SoundIndex(va("%s/pain25", aeInfo->soundPath));
+	G_SoundIndex(va("%s/pain50", aeInfo->soundPath));
+	G_SoundIndex(va("%s/pain75", aeInfo->soundPath));
+	G_SoundIndex(va("%s/pain100", aeInfo->soundPath));
+
+	G_SoundIndex(va("%s/death1", aeInfo->soundPath));
+	G_SoundIndex(va("%s/death2", aeInfo->soundPath));
+	G_SoundIndex(va("%s/death3", aeInfo->soundPath));
+
+	G_SoundIndex(va("%s/detected1", aeInfo->soundPath));
+	G_SoundIndex(va("%s/detected2", aeInfo->soundPath));
+	G_SoundIndex(va("%s/detected3", aeInfo->soundPath));
+	G_SoundIndex(va("%s/detected4", aeInfo->soundPath));
+	G_SoundIndex(va("%s/detected5", aeInfo->soundPath));
+}
+
+void ExampleAnimEntCustomSound(gentity_t *self, int soundType)
+{
+	animentCustomInfo_t *aeInfo = ExampleAnimEntCustomData(self);
+	int customSounds[16];
+	int numSounds = 0;
+
+	if (!aeInfo)
+	{
+		return;
+	}
+
+	if (soundType == ANIMENT_CUSTOMSOUND_PAIN)
+	{
+		customSounds[0] = G_SoundIndex(va("%s/pain25", aeInfo->soundPath));
+		customSounds[1] = G_SoundIndex(va("%s/pain50", aeInfo->soundPath));
+		customSounds[2] = G_SoundIndex(va("%s/pain75", aeInfo->soundPath));
+		customSounds[3] = G_SoundIndex(va("%s/pain100", aeInfo->soundPath));
+		numSounds = 4;
+	}
+	else if (soundType == ANIMENT_CUSTOMSOUND_DEATH)
+	{
+		customSounds[0] = G_SoundIndex(va("%s/death1", aeInfo->soundPath));
+		customSounds[1] = G_SoundIndex(va("%s/death2", aeInfo->soundPath));
+		customSounds[2] = G_SoundIndex(va("%s/death3", aeInfo->soundPath));
+		numSounds = 3;
+	}
+	else if (soundType == ANIMENT_CUSTOMSOUND_ALERT)
+	{
+		customSounds[0] = G_SoundIndex(va("%s/detected1", aeInfo->soundPath));
+		customSounds[1] = G_SoundIndex(va("%s/detected2", aeInfo->soundPath));
+		customSounds[2] = G_SoundIndex(va("%s/detected3", aeInfo->soundPath));
+		customSounds[3] = G_SoundIndex(va("%s/detected4", aeInfo->soundPath));
+		customSounds[4] = G_SoundIndex(va("%s/detected5", aeInfo->soundPath));
+		numSounds = 5;
+	}
+
+	if (!numSounds)
+	{
+		return;
+	}
+
+	G_Sound(self, CHAN_AUTO, customSounds[Q_irand(0, numSounds-1)]);
+}
+
+int ExampleAnimEntAlignment(gentity_t *self)
+{
+	if (self->watertype == ANIMENT_TYPE_STORMTROOPER)
+	{
+		return ANIMENT_ALIGNED_BAD;
+	}
+	
+	if (self->watertype == ANIMENT_TYPE_RODIAN)
+	{
+		return ANIMENT_ALIGNED_BAD;
+	}
+
+	if (self->watertype == ANIMENT_TYPE_JAN)
+	{
+		return ANIMENT_ALIGNED_GOOD;
+	}
+	
+	if (self->watertype == ANIMENT_TYPE_CUSTOM)
+	{
+		animentCustomInfo_t *aeInfo = ExampleAnimEntCustomData(self);
+
+		if (aeInfo)
+		{
+			return aeInfo->aeAlignment;
+		}
+	}
+
+	return ANIMENT_ALIGNED_UNKNOWN;
+}
 
 void ExampleAnimEntAlertOthers(gentity_t *self)
 {
@@ -1584,7 +1820,8 @@ void ExampleAnimEntAlertOthers(gentity_t *self)
 			g_entities[i].s.eType == ET_GRAPPLE &&
 			g_entities[i].health > 0)
 		{
-			if (g_entities[i].bolt_Motion == ENTITYNUM_NONE && trap_InPVS(self->r.currentOrigin, g_entities[i].r.currentOrigin))
+			if (g_entities[i].bolt_Motion == ENTITYNUM_NONE && trap_InPVS(self->r.currentOrigin, g_entities[i].r.currentOrigin) &&
+				ExampleAnimEntAlignment(self) == ExampleAnimEntAlignment(&g_entities[i]))
 			{
 				g_entities[i].bolt_Motion = self->bolt_Motion;
 				g_entities[i].speed = level.time + 4000; //4 seconds til we forget about the enemy
@@ -1600,7 +1837,7 @@ void ExampleAnimEnt_Die( gentity_t *self, gentity_t *inflictor, gentity_t *attac
 {
 	self->s.torsoAnim = G_PickDeathAnim(self, self->pos1, damage, mod, HL_NONE);
 
-	if (self->s.torsoAnim < 0 || self->s.torsoAnim >= MAX_TOTALANIMATIONS)
+	if (self->s.torsoAnim <= 0 || self->s.torsoAnim >= MAX_TOTALANIMATIONS)
 	{ //?! (bad)
 		self->s.torsoAnim = BOTH_DEATH1;
 	}
@@ -1618,6 +1855,14 @@ void ExampleAnimEnt_Die( gentity_t *self, gentity_t *inflictor, gentity_t *attac
 	else if (self->watertype == ANIMENT_TYPE_RODIAN)
 	{
 		G_Sound(self, CHAN_AUTO, gRodianSound_Death[Q_irand(0, RODIAN_DEATH_SOUNDS-1)]);
+	}
+	else if (self->watertype == ANIMENT_TYPE_JAN)
+	{
+		G_Sound(self, CHAN_AUTO, gJanSound_Death[Q_irand(0, JAN_DEATH_SOUNDS-1)]);
+	}
+	else if (self->watertype == ANIMENT_TYPE_CUSTOM)
+	{
+		ExampleAnimEntCustomSound(self, ANIMENT_CUSTOMSOUND_DEATH);
 	}
 
 	if (mod == MOD_SABER)
@@ -1647,6 +1892,12 @@ void ExampleAnimEnt_Die( gentity_t *self, gentity_t *inflictor, gentity_t *attac
 		VectorCopy(preDelta, self->s.pos.trDelta);
 	}
 
+	if (self->bolt_Motion == ENTITYNUM_NONE &&
+		(attacker->client || attacker->s.eType == ET_GRAPPLE))
+	{
+		self->bolt_Motion = attacker->s.number;
+	}
+
 	if (self->bolt_Motion != ENTITYNUM_NONE)
 	{
 		ExampleAnimEntAlertOthers(self);
@@ -1671,6 +1922,11 @@ void ExampleAnimEnt_Pain(gentity_t *self, gentity_t *attacker, int damage)
 	self->s.legsAnim = painAnim;
 	self->bolt_LArm = level.time + animLen;
 
+	if (self->s.torsoAnim <= 0 || self->s.torsoAnim >= MAX_TOTALANIMATIONS)
+	{
+		self->s.torsoAnim = self->s.legsAnim = BOTH_PAIN1;
+	}
+
 	if (self->watertype == ANIMENT_TYPE_STORMTROOPER)
 	{
 		G_Sound(self, CHAN_AUTO, gTrooperSound_Pain[Q_irand(0, TROOPER_PAIN_SOUNDS-1)]);
@@ -1679,13 +1935,24 @@ void ExampleAnimEnt_Pain(gentity_t *self, gentity_t *attacker, int damage)
 	{
 		G_Sound(self, CHAN_AUTO, gRodianSound_Pain[Q_irand(0, RODIAN_PAIN_SOUNDS-1)]);
 	}
-
-	if (attacker && attacker->client && self->bolt_Motion == ENTITYNUM_NONE)
+	else if (self->watertype == ANIMENT_TYPE_JAN)
 	{
-		self->bolt_Motion = attacker->s.number;
-		self->speed = level.time + 4000; //4 seconds til we forget about the enemy
-		ExampleAnimEntAlertOthers(self);
-		self->bolt_RArm = level.time + Q_irand(500, 1000);
+		G_Sound(self, CHAN_AUTO, gJanSound_Pain[Q_irand(0, JAN_PAIN_SOUNDS-1)]);
+	}
+	else if (self->watertype == ANIMENT_TYPE_CUSTOM)
+	{
+		ExampleAnimEntCustomSound(self, ANIMENT_CUSTOMSOUND_PAIN);
+	}
+
+	if (attacker && (attacker->client || attacker->s.eType == ET_GRAPPLE) && self->bolt_Motion == ENTITYNUM_NONE)
+	{
+		if (attacker->s.number >= MAX_CLIENTS || (ExampleAnimEntAlignment(self) != ANIMENT_ALIGNED_GOOD && !(attacker->r.svFlags & SVF_BOT)))
+		{
+			self->bolt_Motion = attacker->s.number;
+			self->speed = level.time + 4000; //4 seconds til we forget about the enemy
+			ExampleAnimEntAlertOthers(self);
+			self->bolt_RArm = level.time + Q_irand(500, 1000);
+		}
 	}
 }
 
@@ -1844,10 +2111,27 @@ qboolean ExampleAnimEntClearLOS(gentity_t *self, vec3_t point)
 
 	trap_Trace(&tr, self->r.currentOrigin, 0, 0, point, self->s.number, self->clipmask);
 
-	if (tr.fraction == 1 ||
-		tr.entityNum < MAX_CLIENTS)
-	{ //clear LOS, or would be hitting a client (they're all bad!), so fire.
-		return qtrue;
+	if (ExampleAnimEntAlignment(self) == ANIMENT_ALIGNED_GOOD)
+	{
+		if (tr.fraction == 1 ||
+			(g_entities[tr.entityNum].s.eType == ET_GRAPPLE && ExampleAnimEntAlignment(&g_entities[tr.entityNum]) != ANIMENT_ALIGNED_GOOD) ||
+			(self->bolt_Motion < MAX_CLIENTS && tr.entityNum == self->bolt_Motion))
+		{ //clear LOS, or would be hitting a bad animent, so fire.
+			return qtrue;
+		}
+		else if (g_entities[tr.entityNum].inuse && g_entities[tr.entityNum].client && (g_entities[tr.entityNum].r.svFlags & SVF_BOT))
+		{
+			return qtrue;
+		}
+	}
+	else
+	{
+		if (tr.fraction == 1 ||
+			tr.entityNum < MAX_CLIENTS ||
+			(g_entities[tr.entityNum].s.eType == ET_GRAPPLE && ExampleAnimEntAlignment(&g_entities[tr.entityNum]) != ANIMENT_ALIGNED_BAD))
+		{ //clear LOS, or would be hitting a client (they're all bad!), so fire.
+			return qtrue;
+		}
 	}
 
 	return qfalse;
@@ -1872,7 +2156,19 @@ void ExampleAnimEntWeaponHandling(gentity_t *self)
 		{
 			AnimEntFireWeapon(self, qfalse);
 			G_AddEvent(self, EV_FIRE_WEAPON, 0);
-			self->bolt_RArm = level.time + Q_irand(700, 1000);
+
+			if (self->s.weapon == WP_REPEATER)
+			{
+				self->bolt_RArm = level.time + Q_irand(1, 500);
+			}
+			else if (ExampleAnimEntAlignment(self) == ANIMENT_ALIGNED_GOOD)
+			{
+				self->bolt_RArm = level.time + Q_irand(200, 400);
+			}
+			else
+			{
+				self->bolt_RArm = level.time + Q_irand(700, 1000);
+			}
 		}
 	}
 }
@@ -2002,30 +2298,92 @@ void ExampleAnimEntEnemyHandling(gentity_t *self, float enDist)
 	int bestIndex = -1;
 	float minDist = enDist;
 
-	while (i < MAX_CLIENTS)
+	if (ExampleAnimEntAlignment(self) == ANIMENT_ALIGNED_GOOD)
 	{
-		if (g_entities[i].inuse && g_entities[i].client && g_entities[i].health > 0 && g_entities[i].client->sess.sessionTeam != TEAM_SPECTATOR)
+		while (i < MAX_GENTITIES)
 		{
-			vec3_t checkLen;
-			float fCheckLen;
-
-			VectorSubtract(self->r.currentOrigin, g_entities[i].client->ps.origin, checkLen);
-
-			fCheckLen = VectorLength(checkLen);
-
-			if (fCheckLen < (minDist - 128))
+			if (g_entities[i].inuse && (g_entities[i].s.eType == ET_GRAPPLE || (g_entities[i].client && (g_entities[i].r.svFlags & SVF_BOT))) && ExampleAnimEntAlignment(&g_entities[i]) != ANIMENT_ALIGNED_GOOD && g_entities[i].health > 0 && !(g_entities[i].s.eFlags & EF_DEAD))
 			{
-				vec3_t enAngles;
-				VectorSubtract(g_entities[i].client->ps.origin, self->r.currentOrigin, enAngles);
-				vectoangles(enAngles, enAngles);
-				if ((InFieldOfVision(self->s.apos.trBase, 120, enAngles) || self->s.genericenemyindex > level.time) && ExampleAnimEntClearLOS(self, g_entities[i].client->ps.origin))
+				vec3_t checkLen;
+				float fCheckLen;
+
+				VectorSubtract(self->r.currentOrigin, g_entities[i].r.currentOrigin, checkLen);
+
+				fCheckLen = VectorLength(checkLen);
+
+				if (fCheckLen < (minDist - 128))
 				{
-					minDist = fCheckLen;
-					bestIndex = i;
+					vec3_t enAngles;
+					VectorSubtract(g_entities[i].r.currentOrigin, self->r.currentOrigin, enAngles);
+					vectoangles(enAngles, enAngles);
+					if ((InFieldOfVision(self->s.apos.trBase, 120, enAngles) || self->s.genericenemyindex > level.time) && ExampleAnimEntClearLOS(self, g_entities[i].r.currentOrigin))
+					{
+						minDist = fCheckLen;
+						bestIndex = i;
+					}
 				}
 			}
+			i++;
 		}
-		i++;
+	}
+	else
+	{
+		while (i < MAX_CLIENTS)
+		{
+			if (g_entities[i].inuse && g_entities[i].client && !(g_entities[i].r.svFlags & SVF_BOT) && g_entities[i].health > 0 && !(g_entities[i].s.eFlags & EF_DEAD) && g_entities[i].client->sess.sessionTeam != TEAM_SPECTATOR)
+			{
+				vec3_t checkLen;
+				float fCheckLen;
+
+				VectorSubtract(self->r.currentOrigin, g_entities[i].client->ps.origin, checkLen);
+
+				fCheckLen = VectorLength(checkLen);
+
+				if (fCheckLen < (minDist - 128))
+				{
+					vec3_t enAngles;
+					VectorSubtract(g_entities[i].client->ps.origin, self->r.currentOrigin, enAngles);
+					vectoangles(enAngles, enAngles);
+					if ((InFieldOfVision(self->s.apos.trBase, 120, enAngles) || self->s.genericenemyindex > level.time) && ExampleAnimEntClearLOS(self, g_entities[i].client->ps.origin))
+					{
+						minDist = fCheckLen;
+						bestIndex = i;
+					}
+				}
+			}
+			i++;
+		}
+
+		if (bestIndex == -1)
+		{
+			i = 0;
+
+			while (i < MAX_GENTITIES)
+			{
+				if (g_entities[i].inuse && g_entities[i].s.eType == ET_GRAPPLE && ExampleAnimEntAlignment(&g_entities[i]) != ANIMENT_ALIGNED_BAD && g_entities[i].health > 0 && !(g_entities[i].s.eFlags & EF_DEAD))
+				{
+					vec3_t checkLen;
+					float fCheckLen;
+
+					VectorSubtract(self->r.currentOrigin, g_entities[i].r.currentOrigin, checkLen);
+
+					fCheckLen = VectorLength(checkLen);
+
+					if (fCheckLen < (minDist - 128))
+					{
+						vec3_t enAngles;
+						VectorSubtract(g_entities[i].r.currentOrigin, self->r.currentOrigin, enAngles);
+						vectoangles(enAngles, enAngles);
+						if ((InFieldOfVision(self->s.apos.trBase, 120, enAngles) || self->s.genericenemyindex > level.time) && ExampleAnimEntClearLOS(self, g_entities[i].r.currentOrigin))
+						{
+							minDist = fCheckLen;
+							bestIndex = i;
+						}
+					}
+				}
+				i++;
+			}
+		}
 	}
 
 	if (bestIndex != -1)
@@ -2043,6 +2401,14 @@ void ExampleAnimEntEnemyHandling(gentity_t *self, float enDist)
 		else if (self->watertype == ANIMENT_TYPE_RODIAN)
 		{
 			G_Sound(self, CHAN_AUTO, gRodianSound_Alert[Q_irand(0, RODIAN_ALERT_SOUNDS-1)]);
+		}
+		else if (self->watertype == ANIMENT_TYPE_JAN)
+		{
+			G_Sound(self, CHAN_AUTO, gJanSound_Alert[Q_irand(0, JAN_ALERT_SOUNDS-1)]);
+		}
+		else if (self->watertype == ANIMENT_TYPE_CUSTOM)
+		{
+			ExampleAnimEntCustomSound(self, ANIMENT_CUSTOMSOUND_ALERT);
 		}
 	}
 }
@@ -2099,6 +2465,24 @@ void ExampleAnimEntUpdateSelf(gentity_t *self)
 				}
 			}
 
+			if (self->bolt_Motion < MAX_CLIENTS &&
+				(!g_entities[self->bolt_Motion].inuse ||
+				!g_entities[self->bolt_Motion].client))
+			{
+				self->bolt_Motion = ENTITYNUM_NONE;
+			}
+
+			if (self->bolt_Motion != ENTITYNUM_NONE &&
+				g_entities[self->bolt_Motion].inuse &&
+				(g_entities[self->bolt_Motion].client || g_entities[self->bolt_Motion].s.eType == ET_GRAPPLE))
+			{
+				if (g_entities[self->bolt_Motion].health < 1 ||
+					(g_entities[self->bolt_Motion].s.eFlags & EF_DEAD))
+				{
+					self->bolt_Motion = ENTITYNUM_NONE;
+				}
+			}
+
 			if (gWPNum > 0)
 			{
 				if (self->bolt_Motion != ENTITYNUM_NONE &&
@@ -2120,6 +2504,19 @@ void ExampleAnimEntUpdateSelf(gentity_t *self)
 					{
 						enemyOrigin[2] += 8;
 					}
+
+					hasEnemyLOS = ExampleAnimEntClearLOS(self, enemyOrigin);
+				}
+				else if (self->bolt_Motion != ENTITYNUM_NONE &&
+					g_entities[self->bolt_Motion].inuse &&
+					g_entities[self->bolt_Motion].s.eType == ET_GRAPPLE)
+				{
+					vec3_t enSubVec;
+					VectorSubtract(self->r.currentOrigin, g_entities[self->bolt_Motion].r.currentOrigin, enSubVec);
+	
+					enDist = VectorLength(enSubVec);
+
+					VectorCopy(g_entities[self->bolt_Motion].r.currentOrigin, enemyOrigin);
 
 					hasEnemyLOS = ExampleAnimEntClearLOS(self, enemyOrigin);
 				}
@@ -2165,7 +2562,14 @@ void ExampleAnimEntUpdateSelf(gentity_t *self)
 
 			if (self->bolt_Motion == ENTITYNUM_NONE)
 			{
-				runSpeed = 6;
+				if (ExampleAnimEntAlignment(self) == ANIMENT_ALIGNED_GOOD)
+				{
+					runSpeed = 18;
+				}
+				else
+				{
+					runSpeed = 6;
+				}
 			}
 
 			didMove = ExampleAnimEntMove(self, goalPos, runSpeed);
@@ -2189,24 +2593,57 @@ void ExampleAnimEntUpdateSelf(gentity_t *self)
 					}
 				}
 			}
+			else if (self->bolt_Motion != ENTITYNUM_NONE &&
+				g_entities[self->bolt_Motion].inuse &&
+				g_entities[self->bolt_Motion].s.eType == ET_GRAPPLE)
+			{
+				if (self->speed < level.time || g_entities[self->bolt_Motion].health < 1)
+				{
+					self->bolt_Motion = ENTITYNUM_NONE;
+				}
+				else
+				{
+					if (self->bolt_Motion != originalEnemyIndex)
+					{
+						vec3_t enSubVec;
+						VectorSubtract(self->r.currentOrigin, g_entities[self->bolt_Motion].r.currentOrigin, enSubVec);
+	
+						enDist = VectorLength(enSubVec);
+					}
+				}
+			}
 
 			ExampleAnimEntEnemyHandling(self, enDist);
 
 			if (self->bolt_Motion != ENTITYNUM_NONE &&
 				g_entities[self->bolt_Motion].inuse &&
-				g_entities[self->bolt_Motion].client)
+				(g_entities[self->bolt_Motion].client || g_entities[self->bolt_Motion].s.eType == ET_GRAPPLE))
 			{
+				vec3_t enOrigin;
+
+				if (g_entities[self->bolt_Motion].client)
+				{
+					VectorCopy(g_entities[self->bolt_Motion].client->ps.origin, enOrigin);
+				}
+				else
+				{
+					VectorCopy(g_entities[self->bolt_Motion].r.currentOrigin, enOrigin);
+				}
+
 				if (originalEnemyIndex != self->bolt_Motion)
 				{
-					VectorCopy(g_entities[self->bolt_Motion].client->ps.origin, enemyOrigin);
+					VectorCopy(enOrigin, enemyOrigin);
 
-					if (g_entities[self->bolt_Motion].client->pers.cmd.upmove < 0)
+					if (g_entities[self->bolt_Motion].client)
 					{
-						enemyOrigin[2] -= 8;
-					}
-					else
-					{
-						enemyOrigin[2] += 8;
+						if (g_entities[self->bolt_Motion].client->pers.cmd.upmove < 0)
+						{
+							enemyOrigin[2] -= 8;
+						}
+						else
+						{
+							enemyOrigin[2] += 8;
+						}
 					}
 
 					hasEnemyLOS = ExampleAnimEntClearLOS(self, enemyOrigin);
@@ -2219,7 +2656,7 @@ void ExampleAnimEntUpdateSelf(gentity_t *self)
 					vec3_t selfAimOrg;
 					vec3_t myZeroPitchAngles;
 
-					VectorCopy(g_entities[self->bolt_Motion].client->ps.origin, enAimOrg);
+					VectorCopy(enOrigin, enAimOrg);
 					VectorCopy(self->r.currentOrigin, selfAimOrg);
 					enAimOrg[2] = selfAimOrg[2];
 
@@ -2271,8 +2708,8 @@ void ExampleAnimEntUpdateSelf(gentity_t *self)
 
 			if (didMove == 1)
 			{
-				if (self->bolt_Motion == ENTITYNUM_NONE)
-				{
+				if (self->bolt_Motion == ENTITYNUM_NONE && ExampleAnimEntAlignment(self) != ANIMENT_ALIGNED_GOOD)
+				{ //Good guys are always on "alert"
 					self->s.torsoAnim = BOTH_WALK1;
 					self->s.legsAnim = BOTH_WALK1;
 				}
@@ -2306,7 +2743,7 @@ void ExampleAnimEntUpdateSelf(gentity_t *self)
 	VectorCopy(preserveAngles, self->s.apos.trBase);
 }
 
-void G_SpawnExampleAnimEnt(vec3_t pos, int aeType)
+void G_SpawnExampleAnimEnt(vec3_t pos, int aeType, animentCustomInfo_t *aeInfo)
 {
 	gentity_t *animEnt;
 	vec3_t playerMins;
@@ -2355,10 +2792,36 @@ void G_SpawnExampleAnimEnt(vec3_t pos, int aeType)
 			gRodianSound_Alert[4] = G_SoundIndex("sound/chars/rodian1/misc/detected5");
 		}
 	}
+	else if (aeType == ANIMENT_TYPE_JAN)
+	{
+		if (!gJanSound_Pain[0])
+		{
+			gJanSound_Pain[0] = G_SoundIndex("sound/chars/jan/misc/pain25");
+			gJanSound_Pain[1] = G_SoundIndex("sound/chars/jan/misc/pain50");
+			gJanSound_Pain[2] = G_SoundIndex("sound/chars/jan/misc/pain75");
+			gJanSound_Pain[3] = G_SoundIndex("sound/chars/jan/misc/pain100");
+
+			gJanSound_Death[0] = G_SoundIndex("sound/chars/jan/misc/death1");
+			gJanSound_Death[1] = G_SoundIndex("sound/chars/jan/misc/death2");
+			gJanSound_Death[2] = G_SoundIndex("sound/chars/jan/misc/death3");
+
+			gJanSound_Alert[0] = G_SoundIndex("sound/chars/jan/misc/detected1");
+			gJanSound_Alert[1] = G_SoundIndex("sound/chars/jan/misc/detected2");
+			gJanSound_Alert[2] = G_SoundIndex("sound/chars/jan/misc/detected3");
+			gJanSound_Alert[3] = G_SoundIndex("sound/chars/jan/misc/detected4");
+			gJanSound_Alert[4] = G_SoundIndex("sound/chars/jan/misc/detected5");
+		}
+	}
 
 	animEnt = G_Spawn();
 
 	animEnt->watertype = aeType; //set the animent type
+
+	if (aeType == ANIMENT_TYPE_CUSTOM && aeInfo)
+	{
+		ExampleAnimEntCustomDataEntry(animEnt, aeInfo->aeAlignment, aeInfo->aeWeapon, aeInfo->modelPath, aeInfo->soundPath);
+		AnimEntCustomSoundPrecache(aeInfo);
+	}
 
 	animEnt->s.eType = ET_GRAPPLE; //ET_GRAPPLE is the reserved special type for G2 anim ents.
 
@@ -2369,6 +2832,23 @@ void G_SpawnExampleAnimEnt(vec3_t pos, int aeType)
 	else if (animEnt->watertype == ANIMENT_TYPE_RODIAN)
 	{
 		animEnt->s.modelindex = G_ModelIndex( "models/players/rodian/model.glm" );
+	}
+	else if (animEnt->watertype == ANIMENT_TYPE_JAN)
+	{
+		animEnt->s.modelindex = G_ModelIndex( "models/players/jan/model.glm" );
+	}
+	else if (animEnt->watertype == ANIMENT_TYPE_CUSTOM)
+	{
+		animentCustomInfo_t *aeInfo = ExampleAnimEntCustomData(animEnt);
+
+		if (aeInfo)
+		{
+			animEnt->s.modelindex = G_ModelIndex(aeInfo->modelPath);
+		}
+		else
+		{
+			animEnt->s.modelindex = G_ModelIndex( "models/players/stormtrooper/model.glm" );
+		}
 	}
 	else
 	{
@@ -2384,6 +2864,23 @@ void G_SpawnExampleAnimEnt(vec3_t pos, int aeType)
 	else if (animEnt->watertype == ANIMENT_TYPE_RODIAN)
 	{
 		animEnt->s.weapon = WP_DISRUPTOR; //These guys get disruptors instead of blasters.
+	}
+	else if (animEnt->watertype == ANIMENT_TYPE_JAN)
+	{
+		animEnt->s.weapon = WP_BLASTER;
+	}
+	else if (animEnt->watertype == ANIMENT_TYPE_CUSTOM)
+	{
+		animentCustomInfo_t *aeInfo = ExampleAnimEntCustomData(animEnt);
+
+		if (aeInfo)
+		{
+			animEnt->s.weapon = aeInfo->aeWeapon;
+		}
+		else
+		{
+			animEnt->s.weapon = WP_BLASTER;
+		}
 	}
 
 	animEnt->s.modelGhoul2 = 1; //Deal with it like any other ghoul2 ent, as far as killing instances.
@@ -2433,7 +2930,7 @@ qboolean gEscaping = qfalse;
 int gEscapeTime = 0;
 
 #ifdef ANIMENT_SPAWNER
-int AESpawner_CountAnimEnts(void)
+int AESpawner_CountAnimEnts(gentity_t *spawner, qboolean onlySameType)
 {
 	int i = 0;
 	int count = 0;
@@ -2442,7 +2939,27 @@ int AESpawner_CountAnimEnts(void)
 	{
 		if (g_entities[i].inuse && g_entities[i].s.eType == ET_GRAPPLE)
 		{
-			count++;
+			if (!onlySameType)
+			{
+				count++;
+			}
+			else
+			{
+				if (spawner->watertype == g_entities[i].watertype)
+				{
+					if (spawner->watertype == ANIMENT_TYPE_CUSTOM)
+					{
+						if (spawner->waterlevel == g_entities[i].waterlevel)
+						{ //only count it if it's the same custom type template, indicated by equal "waterlevel" value.
+							count++;
+						}
+					}
+					else
+					{
+						count++;
+					}
+				}
+			}
 		}
 		i++;
 	}
@@ -2500,6 +3017,7 @@ qboolean AESpawner_PassAnimEntPVSCheck(gentity_t *ent)
 void AESpawner_Think(gentity_t *ent)
 {
 	int animEntCount;
+	animentCustomInfo_t *aeInfo = NULL;
 
 	if (gBotEdit)
 	{
@@ -2513,7 +3031,13 @@ void AESpawner_Think(gentity_t *ent)
 	}
 	else
 	{
-		animEntCount = AESpawner_CountAnimEnts();
+		qboolean onlySameType = qfalse;
+
+		if (ent->bolt_RLeg)
+		{
+			onlySameType = qtrue;
+		}
+		animEntCount = AESpawner_CountAnimEnts(ent, onlySameType);
 	}
 
 	if (animEntCount < ent->bolt_LLeg)
@@ -2533,7 +3057,11 @@ void AESpawner_Think(gentity_t *ent)
 			{
 				if (AESpawner_PassAnimEntPVSCheck(ent))
 				{
-					G_SpawnExampleAnimEnt(ent->s.origin, ent->watertype);
+					if (ent->watertype == ANIMENT_TYPE_CUSTOM)
+					{
+						aeInfo = ExampleAnimEntCustomData(ent); //we can get this info from the spawner, because it has its waterlevel set too.
+					}
+					G_SpawnExampleAnimEnt(ent->s.origin, ent->watertype, aeInfo);
 				}
 			}
 		}
@@ -2560,6 +3088,9 @@ void SP_misc_animent_spawner(gentity_t *ent)
 	//0 is unlimited, but that could cause horrible disaster.
 	G_SpawnInt( "spawntype", "0", &ent->watertype);
 	//Spawn type. 0 is stormtrooper, 1 is rodian.
+	G_SpawnInt( "sametype", "1", &ent->bolt_RLeg);
+	//If 1, only counts other animates of the same type for deciding whether or not to spawn (as opposed to all types).
+	//Default is 1.
 
 	//Just precache the assets now
 	if (ent->watertype == ANIMENT_TYPE_STORMTROOPER)
@@ -2599,6 +3130,52 @@ void SP_misc_animent_spawner(gentity_t *ent)
 		gRodianSound_Alert[4] = G_SoundIndex("sound/chars/rodian1/misc/detected5");
 
 		G_ModelIndex( "models/players/rodian/model.glm" );
+	}
+	else if (ent->watertype == ANIMENT_TYPE_JAN)
+	{
+		gJanSound_Pain[0] = G_SoundIndex("sound/chars/jan/misc/pain25");
+		gJanSound_Pain[1] = G_SoundIndex("sound/chars/jan/misc/pain50");
+		gJanSound_Pain[2] = G_SoundIndex("sound/chars/jan/misc/pain75");
+		gJanSound_Pain[3] = G_SoundIndex("sound/chars/jan/misc/pain100");
+
+		gJanSound_Death[0] = G_SoundIndex("sound/chars/jan/misc/death1");
+		gJanSound_Death[1] = G_SoundIndex("sound/chars/jan/misc/death2");
+		gJanSound_Death[2] = G_SoundIndex("sound/chars/jan/misc/death3");
+
+		gJanSound_Alert[0] = G_SoundIndex("sound/chars/jan/misc/detected1");
+		gJanSound_Alert[1] = G_SoundIndex("sound/chars/jan/misc/detected2");
+		gJanSound_Alert[2] = G_SoundIndex("sound/chars/jan/misc/detected3");
+		gJanSound_Alert[3] = G_SoundIndex("sound/chars/jan/misc/detected4");
+		gJanSound_Alert[4] = G_SoundIndex("sound/chars/jan/misc/detected5");
+
+		G_ModelIndex( "models/players/jan/model.glm" );
+	}
+	else if (ent->watertype == ANIMENT_TYPE_CUSTOM)
+	{
+		int alignment = 1;
+		int weapon = 3;
+		char *model;
+		char *soundpath;
+		animentCustomInfo_t *aeInfo;
+
+		G_SpawnInt( "ae_aligned", "1", &alignment );
+		//Alignedment - 1 is bad, 2 is good.
+		G_SpawnInt( "ae_weapon", "3", &weapon);
+		//Weapon - Same values as normal weapons.
+		G_SpawnString( "ae_model", "models/players/stormtrooper/model.glm", &model);
+		//Model to use
+		G_SpawnString( "ae_soundpath", "sound/chars/jan/misc", &soundpath);
+		//Sound path to use
+
+		ExampleAnimEntCustomDataEntry(ent, alignment, weapon, model, soundpath);
+
+		aeInfo = ExampleAnimEntCustomData(ent);
+
+		if (aeInfo)
+		{
+			AnimEntCustomSoundPrecache(aeInfo);
+			G_ModelIndex( aeInfo->modelPath );
+		}
 	}
 
 	ent->think = AESpawner_Think;
@@ -2689,6 +3266,28 @@ void SP_target_escapetrig(gentity_t *ent)
 void G_CreateExampleAnimEnt(gentity_t *ent)
 {
 	vec3_t fwd, fwdPos;
+	animentCustomInfo_t aeInfo;
+	char	arg[MAX_STRING_CHARS];
+	int		iArg = 0;
+	int		argNum = trap_Argc();
+
+	memset(&aeInfo, 0, sizeof(aeInfo));
+
+	if (argNum > 1)
+	{
+		trap_Argv( 1, arg, sizeof( arg ) );
+
+		iArg = atoi(arg);
+
+		if (iArg < 0)
+		{
+			iArg = 0;
+		}
+		if (iArg >= MAX_ANIMENTS)
+		{
+			iArg = MAX_ANIMENTS-1;
+		}
+	}
 
 	AngleVectors(ent->client->ps.viewangles, fwd, 0, 0);
 
@@ -2696,7 +3295,52 @@ void G_CreateExampleAnimEnt(gentity_t *ent)
 	fwdPos[1] = ent->client->ps.origin[1] + fwd[1]*128;
 	fwdPos[2] = ent->client->ps.origin[2] + fwd[2]*128;
 
-	G_SpawnExampleAnimEnt(fwdPos, 0);
+	if (iArg == ANIMENT_TYPE_CUSTOM)
+	{
+		char arg2[MAX_STRING_CHARS];
+
+		if (argNum > 2)
+		{
+			trap_Argv( 2, arg, sizeof( arg ) );
+			aeInfo.aeAlignment = atoi(arg);
+		}
+		else
+		{
+			aeInfo.aeAlignment = ANIMENT_ALIGNED_BAD;
+		}
+
+		if (argNum > 3)
+		{
+			trap_Argv( 3, arg, sizeof( arg ) );
+			aeInfo.aeWeapon = atoi(arg);
+		}
+		else
+		{
+			aeInfo.aeWeapon = WP_BRYAR_PISTOL;
+		}
+
+		if (argNum > 4)
+		{
+			trap_Argv( 4, arg, sizeof( arg ) );
+			aeInfo.modelPath = arg;
+		}
+		else
+		{
+			aeInfo.modelPath = "models/players/stormtrooper/model.glm";
+		}
+
+		if (argNum > 5)
+		{
+			trap_Argv( 5, arg2, sizeof( arg2 ) );
+			aeInfo.soundPath = arg2;
+		}
+		else
+		{
+			aeInfo.soundPath = "sound/chars/jan/misc";
+		}
+	}
+
+	G_SpawnExampleAnimEnt(fwdPos, iArg, &aeInfo);
 }
 //rww - here ends the main example g2animent stuff
 

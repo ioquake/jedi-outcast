@@ -792,6 +792,8 @@ void DeathmatchScoreboardMessage (gentity_t *client);
 // g_main.c
 //
 extern vmCvar_t g_ff_objectives;
+extern qboolean gDoSlowMoDuel;
+extern int gSlowMoDuelTime;
 
 void FindIntermissionPoint( void );
 void SetLeader(int team, int client);
@@ -964,10 +966,22 @@ extern	vmCvar_t	g_saberGhoul2Collision;
 extern	vmCvar_t	g_saberAlwaysBoxTrace;
 extern	vmCvar_t	g_saberBoxTraceSize;
 
+extern	vmCvar_t	g_logClientInfo;
+
+extern	vmCvar_t	g_slowmoDuelEnd;
+
+extern	vmCvar_t	g_saberDamageScale;
+
+extern	vmCvar_t	g_useWhileThrowing;
+
 extern	vmCvar_t	g_forceRegenTime;
 extern	vmCvar_t	g_spawnInvulnerability;
 extern	vmCvar_t	g_forcePowerDisable;
 extern	vmCvar_t	g_weaponDisable;
+
+extern	vmCvar_t	g_allowDuelSuicide;
+extern	vmCvar_t	g_fraglimitVoteCorrection;
+
 extern	vmCvar_t	g_duelWeaponDisable;
 extern	vmCvar_t	g_fraglimit;
 extern	vmCvar_t	g_duel_fraglimit;

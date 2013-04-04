@@ -2198,6 +2198,11 @@ int BotIsAChickenWuss(bot_state_t *bs)
 		return 0;
 	}
 
+	if (g_gametype.integer == GT_SINGLE_PLAYER)
+	{
+		return 0;
+	}
+
 	if (g_gametype.integer == GT_JEDIMASTER && !bs->cur_ps.isJediMaster)
 	{ //Then you may know no fear.
 		//Well, unless he's strong.
@@ -3724,7 +3729,15 @@ void GetIdealDestination(bot_state_t *bs)
 			if (tempInt != -1 && TotalTrailDistance(bs->wpCurrent->index, tempInt, bs) != -1)
 			{
 				bs->wpDestination = gWPArray[tempInt];
-				bs->wpDestSwitchTime = level.time + Q_irand(1000, 5000);
+
+				if (g_gametype.integer == GT_SINGLE_PLAYER)
+				{ //be more aggressive
+					bs->wpDestSwitchTime = level.time + Q_irand(300, 1000);
+				}
+				else
+				{
+					bs->wpDestSwitchTime = level.time + Q_irand(1000, 5000);
+				}
 			}
 		}
 	}
@@ -6439,6 +6452,8 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 	{
 		if (BotGetWeaponRange(bs) == BWEAPONRANGE_SABER)
 		{
+			int saberRange = SABER_ATTACK_RANGE;
+
 			VectorSubtract(bs->currentEnemy->client->ps.origin, bs->eye, a_fo);
 			vectoangles(a_fo, a_fo);
 
@@ -6478,7 +6493,12 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 				}
 			}
 
-			if (bs->frame_Enemy_Len <= SABER_ATTACK_RANGE)
+			if (g_gametype.integer == GT_SINGLE_PLAYER)
+			{
+				saberRange *= 3;
+			}
+
+			if (bs->frame_Enemy_Len <= saberRange)
 			{
 				SaberCombatHandling(bs);
 

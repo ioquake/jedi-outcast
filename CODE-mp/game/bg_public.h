@@ -1032,9 +1032,6 @@ void	BG_TouchJumpPad( playerState_t *ps, entityState_t *jumppad );
 
 void	BG_PlayerStateToEntityState( playerState_t *ps, entityState_t *s, qboolean snap );
 void	BG_PlayerStateToEntityStateExtraPolate( playerState_t *ps, entityState_t *s, int time, qboolean snap );
-void	BG_G2PlayerAngles( vec3_t startAngles, vec3_t legs[3], vec3_t legsAngles, int painTime, int painDirection, int currentTime,
-					   qboolean *torso_yawing, float *torso_yawAngle, qboolean *torso_pitching, float *torso_pitchAngle, qboolean *legs_yawing, float *legs_yawAngle,
-					   int frameTime, vec3_t velocity, int legsAnim, int torsoAnim, qboolean dead, float movementDir, void *ghoul2, qhandle_t *modelList, int weapon);
 
 qboolean	BG_PlayerTouchesItem( playerState_t *ps, entityState_t *item, int atTime );
 

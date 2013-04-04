@@ -671,12 +671,21 @@ static void SV_Status_f( void )
 	const char		*s;
 	int				ping;
 	char			state[32];
+	qboolean		avoidTruncation = qfalse;
 
 	// make sure server is running
 	if ( !com_sv_running->integer ) 
 	{
 		Com_Printf( SP_GetStringText(STR_SERVER_SERVER_NOT_RUNNING) );
 		return;
+	}
+
+	if ( Cmd_Argc() > 1 )
+	{
+		if (!Q_stricmp("notrunc", Cmd_Argv(1)))
+		{
+			avoidTruncation = qtrue;
+		}
 	}
 
 	Com_Printf ("map: %s\n", sv_mapname->string );
@@ -706,16 +715,33 @@ static void SV_Status_f( void )
 
 		ps = SV_GameClientNum( i );
 		s = NET_AdrToString( cl->netchan.remoteAddress );
-		Com_Printf ("%3i %5i %s %-15.15s %7i %21s %5i %5i\n", 
-			i, 
-			ps->persistant[PERS_SCORE],
-			state,
-			cl->name,
-			svs.time - cl->lastPacketTime,
-			s,
-			cl->netchan.qport,
-			cl->rate
-			);
+
+		if (!avoidTruncation)
+		{
+			Com_Printf ("%3i %5i %s %-15.15s %7i %21s %5i %5i\n", 
+				i, 
+				ps->persistant[PERS_SCORE],
+				state,
+				cl->name,
+				svs.time - cl->lastPacketTime,
+				s,
+				cl->netchan.qport,
+				cl->rate
+				);
+		}
+		else
+		{
+			Com_Printf ("%3i %5i %s %s %7i %21s %5i %5i\n", 
+				i, 
+				ps->persistant[PERS_SCORE],
+				state,
+				cl->name,
+				svs.time - cl->lastPacketTime,
+				s,
+				cl->netchan.qport,
+				cl->rate
+				);
+		}
 	}
 	Com_Printf ("\n");
 }

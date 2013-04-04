@@ -503,8 +503,11 @@ void Cmd_Kill_f( gentity_t *ent ) {
 
 	if (g_gametype.integer == GT_TOURNAMENT && level.numPlayingClients > 1 && !level.warmupTime)
 	{
-		trap_SendServerCommand( ent-g_entities, va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "ATTEMPTDUELKILL")) );
-		return;
+		if (!g_allowDuelSuicide.integer)
+		{
+			trap_SendServerCommand( ent-g_entities, va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "ATTEMPTDUELKILL")) );
+			return;
+		}
 	}
 
 	ent->flags &= ~FL_GODMODE;
@@ -646,7 +649,7 @@ void SetTeam( gentity_t *ent, char *s ) {
 			//}
 		}
 
-		if ( g_teamForceBalance.integer  ) {
+		if ( g_teamForceBalance.integer && !g_trueJedi.integer ) {
 			int		counts[TEAM_NUM_TEAMS];
 
 			counts[TEAM_BLUE] = TeamCount( ent->client->ps.clientNum, TEAM_BLUE );
@@ -1409,6 +1412,109 @@ static const char *gameNames[] = {
 
 /*
 ==================
+G_ClientNumberFromName
+
+Finds the client number of the client with the given name
+==================
+*/
+int G_ClientNumberFromName ( const char* name )
+{
+	char		s2[MAX_STRING_CHARS];
+	char		n2[MAX_STRING_CHARS];
+	int			i;
+	gclient_t*	cl;
+
+	// check for a name match
+	SanitizeString( (char*)name, s2 );
+	for ( i=0, cl=level.clients ; i < level.numConnectedClients ; i++, cl++ ) 
+	{
+		SanitizeString( cl->pers.netname, n2 );
+		if ( !strcmp( n2, s2 ) ) 
+		{
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+/*
+==================
+SanitizeString2
+
+Rich's revised version of SanitizeString
+==================
+*/
+void SanitizeString2( char *in, char *out )
+{
+	int i = 0;
+	int r = 0;
+
+	while (in[i])
+	{
+		if (i >= MAX_NAME_LENGTH-1)
+		{ //the ui truncates the name here..
+			break;
+		}
+
+		if (in[i] == '^')
+		{
+			if (in[i+1] >= 48 && //'0'
+				in[i+1] <= 57) //'9'
+			{ //only skip it if there's a number after it for the color
+				i += 2;
+				continue;
+			}
+			else
+			{ //just skip the ^
+				i++;
+				continue;
+			}
+		}
+
+		if (in[i] < 32)
+		{
+			i++;
+			continue;
+		}
+
+		out[r] = in[i];
+		r++;
+		i++;
+	}
+	out[r] = 0;
+}
+
+/*
+==================
+G_ClientNumberFromStrippedName
+
+Same as above, but strips special characters out of the names before comparing.
+==================
+*/
+int G_ClientNumberFromStrippedName ( const char* name )
+{
+	char		s2[MAX_STRING_CHARS];
+	char		n2[MAX_STRING_CHARS];
+	int			i;
+	gclient_t*	cl;
+
+	// check for a name match
+	SanitizeString2( (char*)name, s2 );
+	for ( i=0, cl=level.clients ; i < level.numConnectedClients ; i++, cl++ ) 
+	{
+		SanitizeString2( cl->pers.netname, n2 );
+		if ( !strcmp( n2, s2 ) ) 
+		{
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+/*
+==================
 Cmd_CallVote_f
 ==================
 */
@@ -1466,7 +1572,8 @@ void Cmd_CallVote_f( gentity_t *ent ) {
 	}
 
 	// special case for g_gametype, check for bad values
-	if ( !Q_stricmp( arg1, "g_gametype" ) ) {
+	if ( !Q_stricmp( arg1, "g_gametype" ) )
+	{
 		i = atoi( arg2 );
 		if( i == GT_SINGLE_PLAYER || i < GT_FFA || i >= GT_MAX_GAME_TYPE) {
 			trap_SendServerCommand( ent-g_entities, "print \"Invalid gametype.\n\"" );
@@ -1478,7 +1585,9 @@ void Cmd_CallVote_f( gentity_t *ent ) {
 
 		Com_sprintf( level.voteString, sizeof( level.voteString ), "%s %d", arg1, i );
 		Com_sprintf( level.voteDisplayString, sizeof( level.voteDisplayString ), "%s %s", arg1, gameNames[i] );
-	} else if ( !Q_stricmp( arg1, "map" ) ) {
+	}
+	else if ( !Q_stricmp( arg1, "map" ) ) 
+	{
 		// special case for map changes, we want to reset the nextmap setting
 		// this allows a player to change maps, but not upset the map rotation
 		char	s[MAX_STRING_CHARS];
@@ -1497,7 +1606,46 @@ void Cmd_CallVote_f( gentity_t *ent ) {
 			Com_sprintf( level.voteString, sizeof( level.voteString ), "%s %s", arg1, arg2 );
 		}
 		Com_sprintf( level.voteDisplayString, sizeof( level.voteDisplayString ), "%s", level.voteString );
-	} else if ( !Q_stricmp( arg1, "nextmap" ) ) {
+	}
+	else if ( !Q_stricmp ( arg1, "clientkick" ) )
+	{
+		int n = atoi ( arg2 );
+
+		if ( n < 0 || n >= MAX_CLIENTS )
+		{
+			trap_SendServerCommand( ent-g_entities, va("print \"invalid client number %d.\n\"", n ) );
+			return;
+		}
+
+		if ( g_entities[n].client->pers.connected == CON_DISCONNECTED )
+		{
+			trap_SendServerCommand( ent-g_entities, va("print \"there is no client with the client number %d.\n\"", n ) );
+			return;
+		}
+			
+		Com_sprintf ( level.voteString, sizeof(level.voteString ), "%s %s", arg1, arg2 );
+		Com_sprintf ( level.voteDisplayString, sizeof(level.voteDisplayString), "kick %s", g_entities[n].client->pers.netname );
+	}
+	else if ( !Q_stricmp ( arg1, "kick" ) )
+	{
+		int clientid = G_ClientNumberFromName ( arg2 );
+
+		if ( clientid == -1 )
+		{
+			clientid = G_ClientNumberFromStrippedName(arg2);
+
+			if (clientid == -1)
+			{
+				trap_SendServerCommand( ent-g_entities, va("print \"there is no client named '%s' currently on the server.\n\"", arg2 ) );
+				return;
+			}
+		}
+
+		Com_sprintf ( level.voteString, sizeof(level.voteString ), "clientkick %d", clientid );
+		Com_sprintf ( level.voteDisplayString, sizeof(level.voteDisplayString), "kick %s", g_entities[clientid].client->pers.netname );
+	}
+	else if ( !Q_stricmp( arg1, "nextmap" ) ) 
+	{
 		char	s[MAX_STRING_CHARS];
 
 		trap_Cvar_VariableStringBuffer( "nextmap", s, sizeof(s) );
@@ -1507,7 +1655,9 @@ void Cmd_CallVote_f( gentity_t *ent ) {
 		}
 		Com_sprintf( level.voteString, sizeof( level.voteString ), "vstr nextmap");
 		Com_sprintf( level.voteDisplayString, sizeof( level.voteDisplayString ), "%s", level.voteString );
-	} else {
+	} 
+	else
+	{
 		Com_sprintf( level.voteString, sizeof( level.voteString ), "%s \"%s\"", arg1, arg2 );
 		Com_sprintf( level.voteDisplayString, sizeof( level.voteDisplayString ), "%s", level.voteString );
 	}
@@ -2174,9 +2324,10 @@ void Cmd_EngageDuel_f(gentity_t *ent)
 	}
 }
 
+void PM_SetAnim(int setAnimParts,int anim,int setAnimFlags, int blendTime);
+
 #ifdef _DEBUG
 extern stringID_table_t animTable[MAX_ANIMATIONS+1];
-void PM_SetAnim(int setAnimParts,int anim,int setAnimFlags, int blendTime);
 
 void Cmd_DebugSetSaberMove_f(gentity_t *self)
 {
@@ -2206,7 +2357,7 @@ void Cmd_DebugSetSaberMove_f(gentity_t *self)
 	Com_Printf("Anim for move: %s\n", animTable[saberMoveData[self->client->ps.saberMove].animToUse].name);
 }
 
-void Cmd_DebugSetBodyAnim_f(gentity_t *self)
+void Cmd_DebugSetBodyAnim_f(gentity_t *self, int flags)
 {
 	int argNum = trap_Argc();
 	char arg[MAX_STRING_CHARS];
@@ -2249,11 +2400,27 @@ void Cmd_DebugSetBodyAnim_f(gentity_t *self)
 	pmv.gametype = g_gametype.integer;
 
 	pm = &pmv;
-	PM_SetAnim(SETANIM_BOTH, i, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD, 0);
+	PM_SetAnim(SETANIM_BOTH, i, flags, 0);
 
 	Com_Printf("Set body anim to %s\n", arg);
 }
 #endif
+
+void StandardSetBodyAnim(gentity_t *self, int anim, int flags)
+{
+	pmove_t pmv;
+
+	memset (&pmv, 0, sizeof(pmv));
+	pmv.ps = &self->client->ps;
+	pmv.animations = bgGlobalAnimations;
+	pmv.cmd = self->client->pers.cmd;
+	pmv.trace = trap_Trace;
+	pmv.pointcontents = trap_PointContents;
+	pmv.gametype = g_gametype.integer;
+
+	pm = &pmv;
+	PM_SetAnim(SETANIM_BOTH, anim, flags, 0);
+}
 
 void DismembermentTest(gentity_t *self);
 
@@ -2478,6 +2645,7 @@ void ClientCommand( int clientNum ) {
 	*/
 	//I broke the ATST when I restructured it to use a single global anim set for all client animation.
 	//You can fix it, but you'll have to implement unique animations (per character) again.
+#ifdef _DEBUG //sigh..
 	else if (Q_stricmp(cmd, "headexplodey") == 0 && CheatsOk( ent ))
 	{
 		Cmd_Kill_f (ent);
@@ -2493,6 +2661,67 @@ void ClientCommand( int clientNum ) {
 	{
 		G_CreateExampleAnimEnt(ent);
 	}
+	else if (Q_stricmp(cmd, "loveandpeace") == 0 && CheatsOk( ent ))
+	{
+		trace_t tr;
+		vec3_t fPos;
+
+		AngleVectors(ent->client->ps.viewangles, fPos, 0, 0);
+
+		fPos[0] = ent->client->ps.origin[0] + fPos[0]*40;
+		fPos[1] = ent->client->ps.origin[1] + fPos[1]*40;
+		fPos[2] = ent->client->ps.origin[2] + fPos[2]*40;
+
+		trap_Trace(&tr, ent->client->ps.origin, 0, 0, fPos, ent->s.number, ent->clipmask);
+
+		if (tr.entityNum < MAX_CLIENTS && tr.entityNum != ent->s.number)
+		{
+			gentity_t *other = &g_entities[tr.entityNum];
+
+			if (other && other->inuse && other->client)
+			{
+				vec3_t entDir;
+				vec3_t otherDir;
+				vec3_t entAngles;
+				vec3_t otherAngles;
+
+				if (ent->client->ps.weapon == WP_SABER && !ent->client->ps.saberHolstered)
+				{
+					Cmd_ToggleSaber_f(ent);
+				}
+
+				if (other->client->ps.weapon == WP_SABER && !other->client->ps.saberHolstered)
+				{
+					Cmd_ToggleSaber_f(other);
+				}
+
+				if ((ent->client->ps.weapon != WP_SABER || ent->client->ps.saberHolstered) &&
+					(other->client->ps.weapon != WP_SABER || other->client->ps.saberHolstered))
+				{
+					VectorSubtract( other->client->ps.origin, ent->client->ps.origin, otherDir );
+					VectorCopy( ent->client->ps.viewangles, entAngles );
+					entAngles[YAW] = vectoyaw( otherDir );
+					SetClientViewAngle( ent, entAngles );
+
+					StandardSetBodyAnim(ent, BOTH_KISSER1LOOP, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD|SETANIM_FLAG_HOLDLESS);
+					ent->client->ps.saberMove = LS_NONE;
+					ent->client->ps.saberBlocked = 0;
+					ent->client->ps.saberBlocking = 0;
+
+					VectorSubtract( ent->client->ps.origin, other->client->ps.origin, entDir );
+					VectorCopy( other->client->ps.viewangles, otherAngles );
+					otherAngles[YAW] = vectoyaw( entDir );
+					SetClientViewAngle( other, otherAngles );
+
+					StandardSetBodyAnim(other, BOTH_KISSEE1LOOP, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD|SETANIM_FLAG_HOLDLESS);
+					other->client->ps.saberMove = LS_NONE;
+					other->client->ps.saberBlocked = 0;
+					other->client->ps.saberBlocking = 0;
+				}
+			}
+		}
+	}
+#endif
 	else if (Q_stricmp(cmd, "thedestroyer") == 0 && CheatsOk( ent ) && ent && ent->client && ent->client->ps.saberHolstered && ent->client->ps.weapon == WP_SABER)
 	{
 		Cmd_ToggleSaber_f(ent);
@@ -2521,7 +2750,7 @@ void ClientCommand( int clientNum ) {
 	}
 	else if (Q_stricmp(cmd, "debugSetBodyAnim") == 0)
 	{
-		Cmd_DebugSetBodyAnim_f(ent);
+		Cmd_DebugSetBodyAnim_f(ent, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
 	}
 	else if (Q_stricmp(cmd, "debugDismemberment") == 0)
 	{
@@ -2542,6 +2771,21 @@ void ClientCommand( int clientNum ) {
 			}
 
 			DismembermentByNum(ent, iArg);
+		}
+	}
+	else if (Q_stricmp(cmd, "debugKnockMeDown") == 0)
+	{
+		ent->client->ps.forceHandExtend = HANDEXTEND_KNOCKDOWN;
+		ent->client->ps.forceDodgeAnim = 0;
+		if (trap_Argc() > 1)
+		{
+			ent->client->ps.forceHandExtendTime = level.time + 1100;
+			ent->client->ps.quickerGetup = qfalse;
+		}
+		else
+		{
+			ent->client->ps.forceHandExtendTime = level.time + 700;
+			ent->client->ps.quickerGetup = qtrue;
 		}
 	}
 #endif

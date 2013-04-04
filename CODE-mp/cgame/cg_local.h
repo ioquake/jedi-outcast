@@ -1313,6 +1313,11 @@ typedef struct {
 	int				capturelimit;
 	int				timelimit;
 	int				maxclients;
+	qboolean		needpass;
+	qboolean		jediVmerc;
+	int				wDisable;
+	int				fDisable;
+
 	char			mapname[MAX_QPATH];
 	char			redTeam[MAX_QPATH];
 	char			blueTeam[MAX_QPATH];
@@ -1456,9 +1461,16 @@ extern	vmCvar_t		cg_zoomFov;
 
 extern	vmCvar_t		cg_swingAngles;
 
+extern	vmCvar_t		cg_oldPainSounds;
+
 #ifdef G2_COLLISION_ENABLED
 extern	vmCvar_t		cg_saberModelTraceEffect;
 #endif
+
+extern	vmCvar_t		cg_fpls;
+
+extern	vmCvar_t		cg_saberDynamicMarks;
+extern	vmCvar_t		cg_saberDynamicMarkTime;
 
 extern	vmCvar_t		cg_saberContact;
 extern	vmCvar_t		cg_saberTrail;

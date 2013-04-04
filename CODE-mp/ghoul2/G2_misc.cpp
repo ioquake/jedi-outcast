@@ -1089,7 +1089,8 @@ static bool G2_RadiusTracePolys( const mdxmSurface_t *surface, const vec3_t rayS
 		{
 			// we hit a triangle, so init a collision record...
 			//
-			for (int i=0; i<MAX_G2_COLLISIONS;i++)
+			int i=0;
+			for (i=0; i<MAX_G2_COLLISIONS;i++)
 			{
 				if (collRecMap[i].mEntityNum == -1)
 				{

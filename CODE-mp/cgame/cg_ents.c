@@ -524,7 +524,7 @@ static void CG_General( centity_t *cent ) {
 		}
 		else
 		{
-			clEnt = &cg_entities[cent->currentState.modelindex2];
+			clEnt = &cg_entities[cent->currentState.otherEntityNum2];
 		}
 
 		if (!dismember_settings)
@@ -793,6 +793,10 @@ static void CG_General( centity_t *cent ) {
 				trap_G2API_GiveMeVectorFromMatrix(&matrix, ORIGIN, boltOrg);
 				trap_G2API_GiveMeVectorFromMatrix(&matrix, NEGATIVE_Y, boltAng);
 
+				if (!boltAng[0] && !boltAng[1] && !boltAng[2])
+				{
+					boltAng[1] = 1;
+				}
 				trap_FX_PlayEffectID(trap_FX_RegisterEffect("blaster/smoke_bolton"), boltOrg, boltAng);
 
 				cent->trailTime = cg.time + 400;

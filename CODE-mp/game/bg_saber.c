@@ -30,6 +30,7 @@ void BG_ForcePowerDrain( playerState_t *ps, forcePowers_t forcePower, int overri
 		return;
 	}
 	*/
+	//No longer grant infinite force with boon.
 
 	if ( !drain )
 	{
@@ -353,7 +354,6 @@ qboolean PM_SaberKataDone(int curmove, int newmove);
 
 int PM_SaberAnimTransitionAnim( int curmove, int newmove )
 {
-	//FIXME: take FP_SABER_OFFENSE into account here somehow?
 	int retmove = newmove;
 	if ( curmove == LS_READY )
 	{//just standing there
@@ -401,10 +401,8 @@ int PM_SaberAnimTransitionAnim( int curmove, int newmove )
 		case LS_A_TR2BL:
 		case LS_A_T2B:
 			if ( newmove == curmove )
-			{//FIXME: need a spin or something or go to next level, but for now, just play the return
-				//going into another attack...
-				//allow endless chaining in level 1 attacks, several in level 2 and only one or a few in level 3
-				//FIXME: don't let strong attacks chain to an attack in the opposite direction ( > 45 degrees?)
+			{
+				//going into an attack
 				if ( PM_SaberKataDone( curmove, newmove ) )
 				{//done with this kata, must return to ready before attack again
 					retmove = LS_R_TL2BR + (newmove-LS_A_TL2BR);
@@ -555,12 +553,11 @@ int PM_SaberMoveQuadrantForMovement( usercmd_t *ucmd )
 		{//backward= T2B slash	//or B2T uppercut?
 			return Q_T;
 		}
-		else //if ( curmove == LS_READY )//???
+		else
 		{//Not moving at all
 			return Q_R;
 		}
 	}
-	//return Q_R;//????
 }
 
 //===================================================================
@@ -702,7 +699,7 @@ qboolean PM_SaberKataDone(int curmove, int newmove)
 		}
 	}
 	else 
-	{//FIXME: have chainAngle influence fast and medium chains as well?
+	{//Perhaps have chainAngle influence fast and medium chains as well? For now, just do level 3.
 		if (newmove == LS_A_TL2BR ||
 			newmove == LS_A_L2R ||
 			newmove == LS_A_BL2TR ||
@@ -756,7 +753,6 @@ void PM_SaberLockBreak( playerState_t *genemy, qboolean victory )
 		}
 		else
 		{
-			//loseAnim = BOTH_KNOCKDOWN4;
 			punishLoser = qtrue;
 		}
 		break;
@@ -770,7 +766,6 @@ void PM_SaberLockBreak( playerState_t *genemy, qboolean victory )
 		}
 		else
 		{
-			//loseAnim = BOTH_BF1BREAK;
 			punishLoser = qtrue;
 		}
 		break;
@@ -782,9 +777,8 @@ void PM_SaberLockBreak( playerState_t *genemy, qboolean victory )
 		}
 		else
 		{
-			genemy->saberMove = /*genemy->saberBounceMove =*/ LS_H1_BL;
+			genemy->saberMove = LS_H1_BL;
 			genemy->saberBlocked = BLOCKED_PARRY_BROKEN;
-			//loseAnim = BOTH_H1_S1_BR;
 			punishLoser = qtrue;
 		}
 		break;
@@ -796,9 +790,8 @@ void PM_SaberLockBreak( playerState_t *genemy, qboolean victory )
 		}
 		else
 		{
-			genemy->saberMove = /*genemy->saberBounceMove =*/ LS_H1_BR;
+			genemy->saberMove = LS_H1_BR;
 			genemy->saberBlocked = BLOCKED_PARRY_BROKEN;
-			//loseAnim = BOTH_H1_S1_BL;
 			punishLoser = qtrue;
 		}
 		break;
@@ -806,7 +799,7 @@ void PM_SaberLockBreak( playerState_t *genemy, qboolean victory )
 	PM_SetAnim( SETANIM_BOTH, winAnim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD, -1 );
 
 	if (punishLoser)
-	{
+	{ //someone lost the lock, so punish them by knocking them down
 		vec3_t oppDir;
 
 		int strength = 8;
@@ -829,7 +822,7 @@ void PM_SaberLockBreak( playerState_t *genemy, qboolean victory )
 		pm->checkDuelLoss = genemy->clientNum+1;
 	}
 	else
-	{
+	{ //If no one lost, then shove each player away from the other
 		vec3_t oppDir;
 
 		int strength = 4;
@@ -849,8 +842,7 @@ void PM_SaberLockBreak( playerState_t *genemy, qboolean victory )
 		genemy->forceHandExtend = HANDEXTEND_WEAPONREADY;
 	}
 
-	pm->ps->weaponTime = 0;//pm->ps->torsoTimer;
-	//The enemy unfortunately has no valid torso animation time at this point, so just use ours
+	pm->ps->weaponTime = 0;
 	genemy->weaponTime = 0;
 
 	pm->ps->saberLockTime = genemy->saberLockTime = 0;
@@ -877,12 +869,7 @@ extern qboolean ValidAnimFileIndex ( int index );
 void PM_SaberLocked( void )
 {
 	int	remaining = 0;
-	/*
-	if ( pm->ps->weaponTime )
-	{//can't attack yet
-		return;
-	}
-	*/
+
 	playerState_t *genemy = pm->bgClients[pm->ps->saberLockEnemy];
 	if ( !genemy )
 	{
@@ -906,13 +893,15 @@ void PM_SaberLocked( void )
 		genemy->weaponTime = 0;
 
 		dist = DistanceSquared(pm->ps->origin,genemy->origin);
-		if ( dist < 64 || dist > 6400 )//( dist < 128 || dist > 2304 )
-		{//between 8 and 80 from each other//was 16 and 48
+		if ( dist < 64 || dist > 6400 )
+		{//between 8 and 80 from each other
 			PM_SaberLockBreak( genemy, qfalse );
 			return;
 		}
 		if ( (pm->cmd.buttons & BUTTON_ATTACK) || pm->ps->saberLockAdvance )
 		{//holding attack
+			animation_t *anim;
+
 			if (pm->ps->saberLockAdvance)
 			{//tapping
 				animation_t *anim;
@@ -968,24 +957,21 @@ void PM_SaberLocked( void )
 			{
 				return;
 			}
-			if( 1/*ValidAnimFileIndex( genemy->client->clientInfo.animFileIndex )*/ )
-			{
-				animation_t *anim;
-				anim = &pm->animations[(genemy->torsoAnim&~ANIM_TOGGLEBIT)];
 
-				if ( (genemy->torsoAnim&~ANIM_TOGGLEBIT) == BOTH_CWCIRCLELOCK ||
-					(genemy->torsoAnim&~ANIM_TOGGLEBIT) == BOTH_BF1LOCK )
+			anim = &pm->animations[(genemy->torsoAnim&~ANIM_TOGGLEBIT)];
+
+			if ( (genemy->torsoAnim&~ANIM_TOGGLEBIT) == BOTH_CWCIRCLELOCK ||
+				(genemy->torsoAnim&~ANIM_TOGGLEBIT) == BOTH_BF1LOCK )
+			{
+				if ( !PM_irand_timesync( 0, 2 ) )
 				{
-					if ( !PM_irand_timesync( 0, 2 ) )
-					{
-						BG_AddPredictableEventToPlayerstate(EV_PAIN, floor((float)80/100*100.0f), genemy);
-					}
-					PM_SetAnimFrame( genemy, anim->firstFrame+remaining, qtrue, qtrue );
+					BG_AddPredictableEventToPlayerstate(EV_PAIN, floor((float)80/100*100.0f), genemy);
 				}
-				else
-				{
-					PM_SetAnimFrame( genemy, anim->firstFrame+anim->numFrames-remaining, qtrue, qtrue );
-				}
+				PM_SetAnimFrame( genemy, anim->firstFrame+remaining, qtrue, qtrue );
+			}
+			else
+			{
+				PM_SetAnimFrame( genemy, anim->firstFrame+anim->numFrames-remaining, qtrue, qtrue );
 			}
 		}
 	}
@@ -1011,8 +997,6 @@ qboolean PM_SaberInBrokenParry( int move )
 
 int PM_BrokenParryForParry( int move )
 {
-	//FIXME: need actual anims for this
-	//FIXME: need to know which side of the saber was hit!  For now, we presume the saber gets knocked away from the center
 	switch ( move )
 	{
 	case LS_PARRY_UP:
@@ -1031,13 +1015,13 @@ int PM_BrokenParryForParry( int move )
 		return LS_H1_BR;
 		break;
 	case LS_READY:
-		return LS_H1_B_;//???
+		return LS_H1_B_;
 		break;
 	}
 	return LS_NONE;
 }
 
-#define BACK_STAB_DISTANCE 128//64
+#define BACK_STAB_DISTANCE 128
 
 qboolean PM_CanBackstab(void)
 {
@@ -1068,7 +1052,6 @@ qboolean PM_CanBackstab(void)
 
 saberMoveName_t PM_SaberFlipOverAttackMove(trace_t *tr)
 {
-	//FIXME: check above for room enough to jump!
 	vec3_t fwdAngles, jumpFwd;
 	float zDiff = 0;
 	playerState_t *psData;
@@ -1076,12 +1059,10 @@ saberMoveName_t PM_SaberFlipOverAttackMove(trace_t *tr)
 	VectorCopy( pm->ps->viewangles, fwdAngles );
 	fwdAngles[PITCH] = fwdAngles[ROLL] = 0;
 	AngleVectors( fwdAngles, jumpFwd, NULL, NULL );
-	VectorScale( jumpFwd, /*100*/50, pm->ps->velocity );
+	VectorScale( jumpFwd, 50, pm->ps->velocity );
 	pm->ps->velocity[2] = 400;
 
 	psData = pm->bgClients[tr->entityNum];
-
-	pm->ps->velocity[2] *= 1;//(pm->gent->enemy->maxs[2]-pm->gent->enemy->mins[2])/64.0f;
 
 	//go higher for enemies higher than you, lower for those lower than you
 	if (psData)
@@ -1108,7 +1089,7 @@ saberMoveName_t PM_SaberFlipOverAttackMove(trace_t *tr)
 		pm->ps->velocity[2] = 400;
 	}
 
-	pm->ps->fd.forceJumpZStart = pm->ps->origin[2];//so we don't take damage if we land at same height
+	PM_SetForceJumpZStart(pm->ps->origin[2]);//so we don't take damage if we land at same height
 
 	PM_AddEvent( EV_JUMP );
 	pm->ps->fd.forceJumpSound = 1;
@@ -1161,7 +1142,6 @@ saberMoveName_t PM_SaberLungeAttackMove( void )
 	//do the lunge
 	AngleVectors( fwdAngles, jumpFwd, NULL, NULL );
 	VectorScale( jumpFwd, 150, pm->ps->velocity );
-	//pm->ps->velocity[2] = 50;
 	PM_AddEvent( EV_JUMP );
 
 	return LS_A_LUNGE;
@@ -1174,9 +1154,9 @@ saberMoveName_t PM_SaberJumpAttackMove( void )
 	VectorCopy( pm->ps->viewangles, fwdAngles );
 	fwdAngles[PITCH] = fwdAngles[ROLL] = 0;
 	AngleVectors( fwdAngles, jumpFwd, NULL, NULL );
-	VectorScale( jumpFwd, /*200*/300, pm->ps->velocity );
-	pm->ps->velocity[2] = 280;//180;
-	pm->ps->fd.forceJumpZStart = pm->ps->origin[2];//so we don't take damage if we land at same height
+	VectorScale( jumpFwd, 300, pm->ps->velocity );
+	pm->ps->velocity[2] = 280;
+	PM_SetForceJumpZStart(pm->ps->origin[2]);//so we don't take damage if we land at same height
 
 	PM_AddEvent( EV_JUMP );
 	pm->ps->fd.forceJumpSound = 1;
@@ -1240,10 +1220,10 @@ saberMoveName_t PM_SaberAttackForMovement(saberMoveName_t curmove)
 		if ( pm->cmd.forwardmove > 0 )
 		{//forward= T2B slash
 			if (pm->ps->fd.saberAnimLevel == FORCE_LEVEL_2 &&
-				/*pm->ps->groundEntityNum != ENTITYNUM_NONE &&*/
 				pm->ps->velocity[2] > 100 &&
 				PM_GroundDistance() < 32 &&
-				!BG_InSpecialJump(pm->ps->legsAnim))
+				!BG_InSpecialJump(pm->ps->legsAnim) &&
+				!BG_SaberInSpecialAttack(pm->ps->torsoAnim))
 			{ //FLIP AND DOWNWARD ATTACK
 				trace_t tr;
 
@@ -1253,8 +1233,10 @@ saberMoveName_t PM_SaberAttackForMovement(saberMoveName_t curmove)
 				}
 			}
 			else if (pm->ps->fd.saberAnimLevel == FORCE_LEVEL_1 &&
+				pm->ps->groundEntityNum != ENTITYNUM_NONE &&
 				(pm->ps->pm_flags & PMF_DUCKED) &&
-				pm->ps->weaponTime <= 0)
+				pm->ps->weaponTime <= 0 &&
+				!BG_SaberInSpecialAttack(pm->ps->torsoAnim))
 			{ //LUNGE (weak)
 				newmove = PM_SaberLungeAttackMove();
 			}
@@ -1265,7 +1247,7 @@ saberMoveName_t PM_SaberAttackForMovement(saberMoveName_t curmove)
 		}
 		else if ( pm->cmd.forwardmove < 0 )
 		{//backward= T2B slash//B2T uppercut?
-			if (PM_CanBackstab())
+			if (PM_CanBackstab() && !BG_SaberInSpecialAttack(pm->ps->torsoAnim))
 			{ //BACKSTAB (attack varies by level)
 				if (pm->ps->fd.saberAnimLevel >= FORCE_LEVEL_2)
 				{//medium and higher attacks
@@ -1309,7 +1291,6 @@ saberMoveName_t PM_SaberAttackForMovement(saberMoveName_t curmove)
 			//prediction values. Under laggy conditions this will cause the appearance of rapid swing
 			//sequence changes.
 
-			//newmove = PM_irand_timesync(LS_A_TL2BR, LS_A_T2B);
 			newmove = LS_A_T2B; //decided we don't like random attacks when idle, use an overhead instead.
 		}
 	}
@@ -1532,7 +1513,7 @@ void PM_WeaponLightsaber(void)
 			case BLOCKED_ATK_BOUNCE:
 				// If there is absolutely no blocked move in the chart, don't even mess with the animation.
 				// OR if we are already in a block or parry.
-				if (pm->ps->saberMove >= LS_T1_BR__R/*LS_BOUNCE_TOP*/ )//|| saberMoveData[pm->ps->saberMove].bounceMove == LS_NONE )
+				if (pm->ps->saberMove >= LS_T1_BR__R)
 				{//an actual bounce?  Other bounces before this are actually transitions?
 					pm->ps->saberBlocked = BLOCKED_NONE;
 				}
@@ -1690,8 +1671,6 @@ weapChecks:
 	// Check for WEAPON ATTACK
 	// *********************************************************
 
-	// NOTENOTE This is simply a client-side struct.  Anything that is needed client and server should be moved to bg_weapon.
-
 	if(!delayed_fire)
 	{
 		// Start with the current move, and cross index it with the current control states.
@@ -1704,7 +1683,7 @@ weapChecks:
 			curmove = LS_READY;
 		}
 		// check for fire
-		if ( !(pm->cmd.buttons & (BUTTON_ATTACK/*|BUTTON_ALT_ATTACK*/)) )
+		if ( !(pm->cmd.buttons & (BUTTON_ATTACK)) )
 		{
 			if (pm->ps->weaponTime != 0)
 			{//Still firing
@@ -1798,12 +1777,6 @@ weapChecks:
 				}
 				else//if ( pm->cmd.buttons&BUTTON_ATTACK && !(pm->ps->pm_flags&PMF_ATTACK_HELD) )//only do this if just pressed attack button?
 				{//get attack move from movement command
-					/*
-					if ( PM_SaberKataDone() )
-					{//we came from a bounce and cannot chain to another attack because our kata is done
-						newmove = saberMoveData[curmove].chain_idle;
-					}
-					else */
 					saberMoveName_t checkMove = PM_SaberAttackForMovement(curmove);
 					if (checkMove != -1)
 					{
@@ -1820,39 +1793,17 @@ weapChecks:
 					{//we came from a bounce and cannot chain to another attack because our kata is done
 						newmove = saberMoveData[curmove].chain_idle;
 					}
-					/*else
-					{
-						saberMoveName_t checkMove = PM_SaberAttackForMovement(curmove);
-						if (checkMove != -1)
-						{
-							newmove = checkMove;
-						}
-					}
-					*/
 				}
-				/*
-				if ( newmove == LS_NONE )
-				{//FIXME: should we allow this?  Are there some anims that you should never be able to chain into an attack?
-					//only curmove that might get in here is LS_NONE, LS_DRAW, LS_PUTAWAY and the LS_R_ returns... all of which are in Q_R
-					newmove = PM_AttackMoveForQuad( saberMoveData[curmove].endQuad );
-				}
-				*/
+
 				if ( newmove != LS_NONE )
 				{
 					//Now get the proper transition move
 					newmove = PM_SaberAnimTransitionAnim( curmove, newmove );
-					// NOTENOTE Had to remove this concept since there is no gent in pmove.
-					/*
-					if ( PM_HasAnimation( pm->gent, saberMoveData[newmove].animToUse ) )
-					*/
 
 					assert(	bgGlobalAnimations[saberMoveData[newmove].animToUse].firstFrame != 0 || 
 							bgGlobalAnimations[saberMoveData[newmove].animToUse].numFrames != 0);
 
-					if (1)
-					{
-						anim = saberMoveData[newmove].animToUse;
-					}
+					anim = saberMoveData[newmove].animToUse;
 				}
 			}
 
@@ -1890,7 +1841,7 @@ weapChecks:
 				}
 
 				if (anim == BOTH_RUN2 && !pm->cmd.forwardmove && !pm->cmd.rightmove)
-				{ //semi-hacky
+				{ //semi-hacky (if not moving on x-y and still playing the running anim, force the player out of it)
 					anim = PM_GetSaberStance();
 				}
 				newmove = LS_READY;
@@ -2021,8 +1972,6 @@ void PM_SetSaberMove(short newMove)
 			!PM_JumpingAnim( pm->ps->legsAnim ) &&
 			!BG_InSpecialJump( pm->ps->legsAnim ) &&
 			anim != PM_GetSaberStance() &&
-			//!PM_CrouchAnim( pm->ps->legsAnim ) &&
-			//pm->cmd.upmove >= 0 &&
 			pm->ps->groundEntityNum != ENTITYNUM_NONE &&
 			!(pm->ps->pm_flags & PMF_DUCKED))
 		{
@@ -2047,7 +1996,7 @@ void PM_SetSaberMove(short newMove)
 		pm->ps->saberMove = newMove;
 		pm->ps->saberBlocking = saberMoveData[newMove].blocking;
 
-		pm->ps->torsoAnim = anim;//saberMoveData[newMove].animToUse;
+		pm->ps->torsoAnim = anim;
 
 		if (pm->ps->weaponTime <= 0)
 		{

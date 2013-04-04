@@ -756,7 +756,7 @@ void SV_Frame( int msec ) {
 
 	if (!com_dedicated->integer) SV_BotFrame( svs.time + sv.timeResidual );
 
-	if ( com_dedicated->integer && sv.timeResidual < frameMsec ) {
+	if ( com_dedicated->integer && sv.timeResidual < frameMsec && (!com_timescale || com_timescale->value >= 1) ) {
 		// NET_Sleep will give the OS time slices until either get a packet
 		// or time enough for a server frame has gone by
 		NET_Sleep(frameMsec - sv.timeResidual);

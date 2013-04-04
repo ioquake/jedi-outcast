@@ -410,9 +410,16 @@ vmCvar_t	cg_zoomFov;
 
 vmCvar_t	cg_swingAngles;
 
+vmCvar_t	cg_oldPainSounds;
+
 #ifdef G2_COLLISION_ENABLED
 vmCvar_t	cg_saberModelTraceEffect;
 #endif
+
+vmCvar_t	cg_fpls;
+
+vmCvar_t	cg_saberDynamicMarks;
+vmCvar_t	cg_saberDynamicMarkTime;
 
 vmCvar_t	cg_saberContact;
 vmCvar_t	cg_saberTrail;
@@ -557,9 +564,16 @@ static cvarTable_t cvarTable[] = { // bk001129
 
 	{ &cg_swingAngles, "cg_swingAngles", "1", 0 },
 
+	{ &cg_oldPainSounds, "cg_oldPainSounds", "0", 0 },
+
 #ifdef G2_COLLISION_ENABLED
 	{ &cg_saberModelTraceEffect, "cg_saberModelTraceEffect", "0", 0 },
 #endif
+
+	{ &cg_fpls, "cg_fpls", "0", 0 },
+
+	{ &cg_saberDynamicMarks, "cg_saberDynamicMarks", "0", 0 },
+	{ &cg_saberDynamicMarkTime, "cg_saberDynamicMarkTime", "60000", 0 },
 
 	{ &cg_saberContact, "cg_saberContact", "1", 0 },
 	{ &cg_saberTrail, "cg_saberTrail", "1", 0 },

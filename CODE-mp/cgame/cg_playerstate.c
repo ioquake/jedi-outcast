@@ -332,9 +332,14 @@ void CG_CheckLocalSounds( playerState_t *ps, playerState_t *ops ) {
 	}
 
 	// health changes of more than -3 should make pain sounds
-	if ( ps->stats[STAT_HEALTH] < (ops->stats[STAT_HEALTH] - 3)) {
-		if ( ps->stats[STAT_HEALTH] > 0 ) {
-			CG_PainEvent( &cg.predictedPlayerEntity, ps->stats[STAT_HEALTH] );
+	if (cg_oldPainSounds.integer)
+	{
+		if ( ps->stats[STAT_HEALTH] < (ops->stats[STAT_HEALTH] - 3))
+		{
+			if ( ps->stats[STAT_HEALTH] > 0 )
+			{
+				CG_PainEvent( &cg.predictedPlayerEntity, ps->stats[STAT_HEALTH] );
+			}
 		}
 	}
 

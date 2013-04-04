@@ -363,7 +363,12 @@ qboolean CG_DrawOldScoreboard( void ) {
 
 	CG_DrawPic ( SB_SCORELINE_X - 40, y - 5, SB_SCORELINE_WIDTH + 80, 40, trap_R_RegisterShaderNoMip ( "gfx/menus/menu_buttonback.tga" ) );
 
-	CG_Text_Paint ( SB_NAME_X, y, 1.0f, colorWhite, "Name", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
+	// "NAME", "SCORE", "PING", "TIME" weren't localised, GODDAMMIT!!!!!!!!     
+	//
+	// Unfortunately, since it's so sodding late now and post release I can't enable the localisation code (REM'd) since some of 
+	//	the localised strings don't fit - since no-one's ever seen them to notice this.  Smegging brilliant. Thanks people.
+	//
+	CG_Text_Paint ( SB_NAME_X, y, 1.0f, colorWhite, /*CG_GetStripEdString("MENUS3", "NAME")*/"Name",0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
 	if (cgs.gametype == GT_TOURNAMENT)
 	{
 		char sWL[100];
@@ -373,10 +378,10 @@ qboolean CG_DrawOldScoreboard( void ) {
 	}
 	else
 	{
-		CG_Text_Paint ( SB_SCORE_X, y, 1.0f, colorWhite, "Score", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
+		CG_Text_Paint ( SB_SCORE_X, y, 1.0f, colorWhite, /*CG_GetStripEdString("MENUS3", "SCORE")*/"Score", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
 	}
-	CG_Text_Paint ( SB_PING_X, y, 1.0f, colorWhite, "Ping", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
-	CG_Text_Paint ( SB_TIME_X, y, 1.0f, colorWhite, "Time", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
+	CG_Text_Paint ( SB_PING_X, y, 1.0f, colorWhite, /*CG_GetStripEdString("MENUS0", "PING")*/"Ping", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
+	CG_Text_Paint ( SB_TIME_X, y, 1.0f, colorWhite, /*CG_GetStripEdString("MENUS3", "TIME")*/"Time", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
 
 	y = SB_TOP;
 

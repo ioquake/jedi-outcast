@@ -4087,13 +4087,13 @@ void BindingFromName(const char *cvar) {
 				break;
 			}
 				DC->keynumToStringBuf( b1, g_nameBind1, 32 );
-				Q_strupr(g_nameBind1);
+// do NOT do this or it corrupts asian text!!!					Q_strupr(g_nameBind1);
 
 				b2 = g_bindings[i].bind2;
 				if (b2 != -1)
 				{
 					DC->keynumToStringBuf( b2, g_nameBind2, 32 );
-					Q_strupr(g_nameBind2);
+// do NOT do this or it corrupts asian text!!!					Q_strupr(g_nameBind2);
 
 					trap_SP_GetStringTextString("MENUS3_KEYBIND_OR",sOR, sizeof(sOR));
 
@@ -4634,6 +4634,7 @@ void Item_ListBox_Paint(itemDef_t *item) {
 						{
 							imageStartX = listPtr->columnInfo[j+1].pos;
 						}
+						DC->setColor( NULL );
 						if (optionalImage3 >= 0) {
 							DC->drawHandlePic(imageStartX - listPtr->elementHeight*3, y+2, listPtr->elementHeight, listPtr->elementHeight, optionalImage3);
 						} 

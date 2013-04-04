@@ -40,11 +40,21 @@ vmCvar_t	g_saberGhoul2Collision;
 vmCvar_t	g_saberAlwaysBoxTrace;
 vmCvar_t	g_saberBoxTraceSize;
 
+vmCvar_t	g_logClientInfo;
+
+vmCvar_t	g_slowmoDuelEnd;
+
+vmCvar_t	g_saberDamageScale;
+
+vmCvar_t	g_useWhileThrowing;
+
 vmCvar_t	g_forceRegenTime;
 vmCvar_t	g_spawnInvulnerability;
 vmCvar_t	g_forcePowerDisable;
 vmCvar_t	g_weaponDisable;
 vmCvar_t	g_duelWeaponDisable;
+vmCvar_t	g_allowDuelSuicide;
+vmCvar_t	g_fraglimitVoteCorrection;
 vmCvar_t	g_fraglimit;
 vmCvar_t	g_duel_fraglimit;
 vmCvar_t	g_timelimit;
@@ -136,7 +146,7 @@ static cvarTable_t		gameCvarTable[] = {
 	// change anytime vars
 	{ &g_ff_objectives, "g_ff_objectives", "0", /*CVAR_SERVERINFO |*/  CVAR_NORESTART, 0, qtrue },
 
-	{ &g_trueJedi, "g_jediVmerc", "0", CVAR_INTERNAL |CVAR_SERVERINFO | CVAR_LATCH, 0, qtrue },
+	{ &g_trueJedi, "g_jediVmerc", "0", CVAR_SERVERINFO | CVAR_LATCH | CVAR_ARCHIVE, 0, qtrue },
 
 	{ &g_autoMapCycle, "g_autoMapCycle", "0", CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
 	{ &g_dmflags, "dmflags", "0", CVAR_SERVERINFO | CVAR_ARCHIVE, 0, qtrue  },
@@ -154,6 +164,14 @@ static cvarTable_t		gameCvarTable[] = {
 	{ &g_saberAlwaysBoxTrace, "g_saberAlwaysBoxTrace", "0", 0, 0, qtrue  },
 	{ &g_saberBoxTraceSize, "g_saberBoxTraceSize", "2", 0, 0, qtrue  },
 
+	{ &g_logClientInfo, "g_logClientInfo", "0", CVAR_ARCHIVE, 0, qtrue  },
+
+	{ &g_slowmoDuelEnd, "g_slowmoDuelEnd", "0", CVAR_ARCHIVE, 0, qtrue  },
+
+	{ &g_saberDamageScale, "g_saberDamageScale", "1", CVAR_ARCHIVE, 0, qtrue  },
+
+	{ &g_useWhileThrowing, "g_useWhileThrowing", "1", 0, 0, qtrue  },
+
 	{ &g_forceRegenTime, "g_forceRegenTime", "200", CVAR_SERVERINFO | CVAR_ARCHIVE, 0, qtrue  },
 
 	{ &g_spawnInvulnerability, "g_spawnInvulnerability", "3000", CVAR_ARCHIVE, 0, qtrue  },
@@ -161,6 +179,10 @@ static cvarTable_t		gameCvarTable[] = {
 	{ &g_forcePowerDisable, "g_forcePowerDisable", "0", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_LATCH, 0, qtrue  },
 	{ &g_weaponDisable, "g_weaponDisable", "0", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_LATCH, 0, qtrue  },
 	{ &g_duelWeaponDisable, "g_duelWeaponDisable", "1", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_LATCH, 0, qtrue  },
+
+	{ &g_allowDuelSuicide, "g_allowDuelSuicide", "0", CVAR_ARCHIVE, 0, qtrue },
+
+	{ &g_fraglimitVoteCorrection, "g_fraglimitVoteCorrection", "1", CVAR_ARCHIVE, 0, qtrue },
 
 	{ &g_fraglimit, "fraglimit", "20", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
 	{ &g_duel_fraglimit, "duel_fraglimit", "10", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
@@ -1685,6 +1707,11 @@ void CheckExitRules( void ) {
 		return;
 	}
 
+	if (gDoSlowMoDuel)
+	{ //don't go to intermission while in slow motion
+		return;
+	}
+
 	if (gEscaping)
 	{
 		int i = 0;
@@ -2001,6 +2028,28 @@ void CheckVote( void ) {
 			{ //otherwise, just leave the map until a restart
 				G_RefreshNextMap(level.votingGametypeTo, qfalse);
 			}
+
+			if (g_fraglimitVoteCorrection.integer)
+			{ //This means to auto-correct fraglimit when voting to and from duel.
+				int currentGT = trap_Cvar_VariableIntegerValue("g_gametype");
+				int currentFL = trap_Cvar_VariableIntegerValue("fraglimit");
+
+				if (level.votingGametypeTo == GT_TOURNAMENT && currentGT != GT_TOURNAMENT)
+				{
+					if (currentFL > 3 || !currentFL)
+					{ //if voting to duel, and fraglimit is more than 3 (or unlimited), then set it down to 3
+						trap_SendConsoleCommand(EXEC_APPEND, "fraglimit 3\n");
+					}
+				}
+				else if (level.votingGametypeTo != GT_TOURNAMENT && currentGT == GT_TOURNAMENT)
+				{
+					if (currentFL && currentFL < 20)
+					{ //if voting from duel, an fraglimit is less than 20, then set it up to 20
+						trap_SendConsoleCommand(EXEC_APPEND, "fraglimit 20\n");
+					}
+				}
+			}
+
 			level.votingGametype = qfalse;
 			level.votingGametypeTo = 0;
 		}
@@ -2196,6 +2245,9 @@ void G_RunThink (gentity_t *ent) {
 int g_LastFrameTime = 0;
 int g_TimeSinceLastFrame = 0;
 
+qboolean gDoSlowMoDuel = qfalse;
+int gSlowMoDuelTime = 0;
+
 /*
 ================
 G_RunFrame
@@ -2208,7 +2260,64 @@ void G_RunFrame( int levelTime ) {
 	int			i;
 	gentity_t	*ent;
 	int			msec;
-int start, end;
+	int start, end;
+
+	if (gDoSlowMoDuel)
+	{
+		if (level.restarted)
+		{
+			char buf[128];
+			float tFVal = 0;
+
+			trap_Cvar_VariableStringBuffer("timescale", buf, sizeof(buf));
+
+			tFVal = atof(buf);
+
+			trap_Cvar_Set("timescale", "1");
+			if (tFVal == 1.0f)
+			{
+				gDoSlowMoDuel = qfalse;
+			}
+		}
+		else
+		{
+			float timeDif = (level.time - gSlowMoDuelTime); //difference in time between when the slow motion was initiated and now
+			float useDif = 0; //the difference to use when actually setting the timescale
+
+			if (timeDif < 150)
+			{
+				trap_Cvar_Set("timescale", "0.1f");
+			}
+			else if (timeDif < 1150)
+			{
+				useDif = (timeDif/1000); //scale from 0.1 up to 1
+				if (useDif < 0.1)
+				{
+					useDif = 0.1;
+				}
+				if (useDif > 1.0)
+				{
+					useDif = 1.0;
+				}
+				trap_Cvar_Set("timescale", va("%f", useDif));
+			}
+			else
+			{
+				char buf[128];
+				float tFVal = 0;
+
+				trap_Cvar_VariableStringBuffer("timescale", buf, sizeof(buf));
+
+				tFVal = atof(buf);
+
+				trap_Cvar_Set("timescale", "1");
+				if (timeDif > 1500 && tFVal == 1.0f)
+				{
+					gDoSlowMoDuel = qfalse;
+				}
+			}
+		}
+	}
 
 	// if we are waiting for the level to restart, do nothing
 	if ( level.restarted ) {
@@ -2295,7 +2404,7 @@ int start, end;
 		{
 			G_CheckClientTimeouts ( ent );
 			
-			if((!level.intermissiontime)&&!(ent->client->ps.pm_flags&PMF_FOLLOW))
+			if((!level.intermissiontime)&&!(ent->client->ps.pm_flags&PMF_FOLLOW) && ent->client->sess.sessionTeam != TEAM_SPECTATOR)
 			{
 				WP_ForcePowersUpdate(ent, &ent->client->pers.cmd );
 				WP_SaberPositionUpdate(ent, &ent->client->pers.cmd);

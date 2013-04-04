@@ -777,6 +777,8 @@ typedef struct {
 	char teamNames[MAX_CLIENTS][MAX_NAME_LENGTH];
 	int teamClientNums[MAX_CLIENTS];
 
+	int playerIndexes[MAX_CLIENTS]; //so we can vote-kick by index
+
 	int mapCount;
 	mapInfo mapList[MAX_MAPS];
 

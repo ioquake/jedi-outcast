@@ -254,7 +254,7 @@ qboolean	Sys_IsLANAddress (netadr_t adr) {
 
 	// choose which comparison to use based on the class of the address being tested
 	// any local adresses of a different class than the address being tested will fail based on the first byte
-
+/*
 	// Class A
 	if( (adr.ip[0] & 0x80) == 0x00 ) {
 		for ( i = 0 ; i < numIP ; i++ ) {
@@ -279,7 +279,8 @@ qboolean	Sys_IsLANAddress (netadr_t adr) {
 		}
 		return qfalse;
 	}
-
+*/ 
+	//we only look at class C since ISPs and Universities are using class A but we don't want to consider them on the same LAN.
 	// Class C
 	for ( i = 0 ; i < numIP ; i++ ) {
 		if( adr.ip[0] == localIP[i][0] && adr.ip[1] == localIP[i][1] && adr.ip[2] == localIP[i][2] ) {
@@ -412,6 +413,9 @@ void NET_GetLocalAddress( void ) {
 	int					ip;
 	int					n;
 
+    // Set this early so we can just return if there is an error
+	numIP = 0;
+
 	if ( gethostname( hostname, 256 ) == -1 ) {
 		return;
 	}
@@ -431,14 +435,14 @@ void NET_GetLocalAddress( void ) {
 		return;
 	}
 
-	numIP = 0;
-	while( ( p = hostInfo->h_addr_list[numIP++] ) != NULL && numIP < MAX_IPS ) {
+	while( ( p = hostInfo->h_addr_list[numIP] ) != NULL && numIP < MAX_IPS ) {
 		ip = ntohl( *(int *)p );
 		localIP[ numIP ][0] = p[0];
 		localIP[ numIP ][1] = p[1];
 		localIP[ numIP ][2] = p[2];
 		localIP[ numIP ][3] = p[3];
 		Com_Printf( "IP: %i.%i.%i.%i\n", ( ip >> 24 ) & 0xff, ( ip >> 16 ) & 0xff, ( ip >> 8 ) & 0xff, ip & 0xff );
+		numIP++;
 	}
 }
 #endif

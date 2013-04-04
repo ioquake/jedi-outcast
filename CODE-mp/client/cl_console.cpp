@@ -349,8 +349,8 @@ void CL_ConsolePrint( char *txt ) {
 
 	color = ColorIndex(COLOR_WHITE);
 
-	while ( (c = *txt) != 0 ) {
-		if ( Q_IsColorString( txt ) ) {
+	while ( (c = (unsigned char) *txt) != 0 ) {
+		if ( Q_IsColorString( (unsigned char*) txt ) ) {
 			color = ColorIndex( *(txt+1) );
 			txt += 2;
 			continue;

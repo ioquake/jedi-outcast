@@ -5,4 +5,7 @@
 // 
 // memory, string alloc
 
-
+void RichIsGettingTiredOfEmptyFileVMCompilerWarnings()
+{
+	int andUnderstandablySo = 0;
+}

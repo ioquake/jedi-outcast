@@ -2236,7 +2236,9 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		// local player sounds are triggered in CG_CheckLocalSounds,
 		// so ignore events on the player
 		DEBUGNAME("EV_PAIN");
-		if ( cent->currentState.number != cg.snap->ps.clientNum ) {
+
+		if ( !cg_oldPainSounds.integer || (cent->currentState.number != cg.snap->ps.clientNum) )
+		{
 			CG_PainEvent( cent, es->eventParm );
 		}
 		break;

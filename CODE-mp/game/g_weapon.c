@@ -816,7 +816,14 @@ static void WP_BowcasterMainFire( gentity_t *ent )
 	gentity_t	*missile;
 	int i;
 
-	count = ( level.time - ent->client->ps.weaponChargeTime ) / BOWCASTER_CHARGE_UNIT;
+	if (!ent->client)
+	{
+		count = 1;
+	}
+	else
+	{
+		count = ( level.time - ent->client->ps.weaponChargeTime ) / BOWCASTER_CHARGE_UNIT;
+	}
 
 	if ( count < 1 )
 	{
@@ -2524,8 +2531,16 @@ void WP_FireStunBaton( gentity_t *ent, qboolean alt_fire )
 	vec3_t		mins, maxs, end;
 	vec3_t		muzzleStun;
 
-	VectorCopy(ent->client->ps.origin, muzzleStun);
-	muzzleStun[2] += ent->client->ps.viewheight-6;
+	if (!ent->client)
+	{
+		VectorCopy(ent->r.currentOrigin, muzzleStun);
+		muzzleStun[2] += 8;
+	}
+	else
+	{
+		VectorCopy(ent->client->ps.origin, muzzleStun);
+		muzzleStun[2] += ent->client->ps.viewheight-6;
+	}
 
 	muzzleStun[0] += forward[0]*20;
 	muzzleStun[1] += forward[1]*20;
@@ -2557,7 +2572,8 @@ void WP_FireStunBaton( gentity_t *ent, qboolean alt_fire )
 			return;
 		}
 
-		if (ent->client->ps.duelInProgress &&
+		if (ent->client &&
+			ent->client->ps.duelInProgress &&
 			ent->client->ps.duelIndex != tr_ent->s.number)
 		{
 			return;

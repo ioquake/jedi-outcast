@@ -172,10 +172,6 @@ SOURCE=.\ui_shared.c
 
 SOURCE=.\ui_syscalls.c
 # End Source File
-# Begin Source File
-
-SOURCE=.\ui_util.c
-# End Source File
 # End Group
 # Begin Group "Header Files"
 

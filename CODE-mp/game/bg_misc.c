@@ -161,12 +161,18 @@ int WeaponAttackAnim[WP_NUM_WEAPONS] =
 };
 
 
-//The magical function to end all functions.
-//This will take the force power string in powerOut and parse through it, then legalize
-//it based on the supposed rank and spit it into powerOut, returning true if it was legal
-//to begin with and false if not.
-//fpDisabled is actually only expected (needed) from the server, because the ui disables
-//force power selection anyway when force powers are disabled on the server.
+/*
+================
+BG_LegalizedForcePowers
+
+The magical function to end all functions.
+This will take the force power string in powerOut and parse through it, then legalize
+it based on the supposed rank and spit it into powerOut, returning true if it was legal
+to begin with and false if not.
+fpDisabled is actually only expected (needed) from the server, because the ui disables
+force power selection anyway when force powers are disabled on the server.
+================
+*/
 qboolean BG_LegalizedForcePowers(char *powerOut, int maxRank, qboolean freeSaber, int teamForce, int gametype, int fpDisabled)
 {
 	char powerBuf[128];
@@ -254,7 +260,6 @@ qboolean BG_LegalizedForcePowers(char *powerOut, int maxRank, qboolean freeSaber
 		{
 			final_Powers[i] = 0;
 			//This is only likely to happen with g_forceBasedTeams. Let it slide.
-			//maintainsValidity = 0;
 		}
 
 		if ( final_Powers[i] &&
@@ -410,16 +415,16 @@ qboolean BG_LegalizedForcePowers(char *powerOut, int maxRank, qboolean freeSaber
 		final_Powers[FP_LEVITATION] = 1;
 	}
 
-	/*
-	if (fpDisabled)
+	i = 0;
+	while (i < NUM_FORCE_POWERS)
 	{
-		final_Powers[FP_LEVITATION] = 1;
-		final_Powers[FP_SABERATTACK] = 3;
-		final_Powers[FP_SABERDEFEND] = 3;
-		final_Powers[FP_SABERTHROW] = 0;
+		if (final_Powers[i] > FORCE_LEVEL_3)
+		{
+			final_Powers[i] = FORCE_LEVEL_3;
+		}
+		i++;
 	}
-	*/
-	//Ahh. I have no idea why I did this, but I would say that it makes me a very bad man.
+
 	if (fpDisabled)
 	{ //If we specifically have attack or def disabled, force them up to level 3. It's the way
 	  //things work for the case of all powers disabled.
@@ -1303,7 +1308,7 @@ qboolean BG_CanUseFPNow(int gametype, playerState_t *ps, int time, forcePowers_t
 
 	if (ps->duelInProgress)
 	{
-		if (power != FP_SABERATTACK && power != FP_SABERDEFEND && power != FP_SABERTHROW &&
+		if (power != FP_SABERATTACK && power != FP_SABERDEFEND && /*power != FP_SABERTHROW &&*/
 			power != FP_LEVITATION)
 		{
 			if (!ps->saberLockFrame || power != FP_PUSH)
@@ -1466,68 +1471,68 @@ void BG_CycleForce(playerState_t *ps, int direction)
 	presel = x;
 
 	if (direction == 1)
-	{
+	{ //get the next power
 		x++;
 	}
 	else
-	{
+	{ //get the previous power
 		x--;
 	}
 
 	if (x >= NUM_FORCE_POWERS)
-	{
+	{ //cycled off the end.. cycle around to the first
 		x = 0;
 	}
 	if (x < 0)
-	{
+	{ //cycled off the beginning.. cycle around to the last
 		x = NUM_FORCE_POWERS-1;
 	}
 
-	i = forcePowerSorted[x];
+	i = forcePowerSorted[x]; //the "sorted" value of this power
 
 	while (x != presel)
-	{
+	{ //loop around to the current force power
 		if (ps->fd.forcePowersKnown & (1 << i) && i != ps->fd.forcePowerSelected)
-		{
+		{ //we have the force power
 			if (i != FP_LEVITATION &&
 				i != FP_SABERATTACK &&
 				i != FP_SABERDEFEND &&
 				i != FP_SABERTHROW)
-			{
+			{ //it's selectable
 				foundnext = i;
 				break;
 			}
 		}
 
 		if (direction == 1)
-		{
+		{ //next
 			x++;
 		}
 		else
-		{
+		{ //previous
 			x--;
 		}
 	
 		if (x >= NUM_FORCE_POWERS)
-		{
+		{ //loop around
 			x = 0;
 		}
 		if (x < 0)
-		{
+		{ //loop around
 			x = NUM_FORCE_POWERS-1;
 		}
 
-		i = forcePowerSorted[x];
+		i = forcePowerSorted[x]; //set to the sorted value again
 	}
 
 	if (foundnext != -1)
-	{
+	{ //found one, select it
 		ps->fd.forcePowerSelected = foundnext;
 	}
 }
 
 int BG_GetItemIndexByTag(int tag, int type)
-{
+{ //Get the itemlist index from the tag and type
 	int i = 0;
 
 	while (i < bg_numItems)
@@ -1553,37 +1558,37 @@ void BG_CycleInven(playerState_t *ps, int direction)
 	original = i;
 
 	if (direction == 1)
-	{
+	{ //next
 		i++;
 	}
 	else
-	{
+	{ //previous
 		i--;
 	}
 
 	while (i != original)
 	{ //go in a full loop until hitting something, if hit nothing then select nothing
 		if (ps->stats[STAT_HOLDABLE_ITEMS] & (1 << i))
-		{
+		{ //we have it, select it.
 			ps->stats[STAT_HOLDABLE_ITEM] = BG_GetItemIndexByTag(i, IT_HOLDABLE);
 			break;
 		}
 
 		if (direction == 1)
-		{
+		{ //next
 			i++;
 		}
 		else
-		{
+		{ //previous
 			i--;
 		}
 
 		if (i < 0)
-		{
+		{ //wrap around to the last
 			i = HI_NUM_HOLDABLE;
 		}
 		else if (i >= HI_NUM_HOLDABLE)
-		{
+		{ //wrap around to the first
 			i = 0;
 		}
 	}
@@ -2039,7 +2044,6 @@ void BG_TouchJumpPad( playerState_t *ps, entityState_t *jumppad ) {
 		} else {
 			effectNum = 1;
 		}
-		//BG_AddPredictableEventToPlayerstate( EV_JUMP_PAD, effectNum, ps );
 	}
 	// remember hitting this jumppad this frame
 	ps->jumppad_ent = jumppad->number;
@@ -2333,179 +2337,6 @@ PLAYER ANGLES
 
 =============================================================================
 */
-
-/*
-==================
-BG_SwingAngles
-==================
-*/
-static void BG_SwingAngles( float destination, float swingTolerance, float clampTolerance,
-					float speed, float *angle, qboolean *swinging, int frameTime ) {
-	float	swing;
-	float	move;
-	float	scale;
-
-	if ( !*swinging ) {
-		// see if a swing should be started
-		swing = AngleSubtract( *angle, destination );
-		if ( swing > swingTolerance || swing < -swingTolerance ) {
-			*swinging = qtrue;
-		}
-	}
-
-	if ( !*swinging ) {
-		return;
-	}
-	
-	// modify the speed depending on the delta
-	// so it doesn't seem so linear
-	swing = AngleSubtract( destination, *angle );
-	scale = fabs( swing );
-	if ( scale < swingTolerance * 0.5 ) {
-		scale = 0.5;
-	} else if ( scale < swingTolerance ) {
-		scale = 1.0;
-	} else {
-		scale = 2.0;
-	}
-
-	// swing towards the destination angle
-	if ( swing >= 0 ) {
-		move = frameTime * scale * speed;
-		if ( move >= swing ) {
-			move = swing;
-			*swinging = qfalse;
-		}
-		*angle = AngleMod( *angle + move );
-	} else if ( swing < 0 ) {
-		move = frameTime * scale * -speed;
-		if ( move <= swing ) {
-			move = swing;
-			*swinging = qfalse;
-		}
-		*angle = AngleMod( *angle + move );
-	}
-
-	// clamp to no more than tolerance
-	swing = AngleSubtract( destination, *angle );
-	if ( swing > clampTolerance ) {
-		*angle = AngleMod( destination - (clampTolerance - 1) );
-	} else if ( swing < -clampTolerance ) {
-		*angle = AngleMod( destination + (clampTolerance - 1) );
-	}
-}
-
-/*
-=================
-CG_AddPainTwitch
-=================
-*/
-#define	PAIN_TWITCH_TIME	200
-static void BG_AddPainTwitch( int painTime, int painDirection, int currentTime,  vec3_t torsoAngles ) {
-	int		t;
-	float	f;
-
-	t = currentTime - painTime;
-	if ( t >= PAIN_TWITCH_TIME ) {
-		return;
-	}
-
-	f = 1.0 - (float)t / PAIN_TWITCH_TIME;
-
-	if ( painDirection ) {
-		torsoAngles[ROLL] += 20 * f;
-	} else {
-		torsoAngles[ROLL] -= 20 * f;
-	}
-}
-
-void BG_G2PlayerAngles( vec3_t startAngles, vec3_t legs[3], vec3_t legsAngles, int painTime, int painDirection, int currentTime,
-					   qboolean *torso_yawing, float *torso_yawAngle, qboolean *torso_pitching, float *torso_pitchAngle, qboolean *legs_yawing, float *legs_yawAngle,
-					   int frameTime, vec3_t velocity, int legsAnim, int torsoAnim, qboolean dead, float movementDir, void *ghoul2, qhandle_t *modelList, int weapon){
-	vec3_t		torsoAngles, headAngles;
-	float		dest;
-	static	int	movementOffsets[8] = { 0, 22, 45, -22, 0, 22, -45, -22 };
-	float		speed;
-	int			dir;
-
-	VectorCopy( startAngles, headAngles );
-	headAngles[YAW] = AngleMod( headAngles[YAW] );
-	VectorClear( legsAngles );
-	VectorClear( torsoAngles );
-
-	// --------- yaw -------------
-
-	// allow yaw to drift a bit
-	if ( ( legsAnim & ~ANIM_TOGGLEBIT ) != WeaponReadyAnim[weapon] 
-		|| ( torsoAnim & ~ANIM_TOGGLEBIT ) != WeaponReadyAnim[weapon]  ) {
-		// if not standing still, always point all in the same direction
-		*torso_yawing = qtrue;	// always center
-		*torso_pitching = qtrue;	// always center
-		*legs_yawing = qtrue;	// always center
-	}
-
-	// adjust legs for movement dir
-	if (dead  ) {
-		// don't let dead bodies twitch
-		dir = 0;
-	} else {
-		dir = movementDir;
-//		if ( dir < 0 || dir > 7 ) {
-//			CG_Error( "Bad player movement angle" );
-//		}
-	}
-	legsAngles[YAW] = headAngles[YAW] + movementOffsets[ dir ];
-	torsoAngles[YAW] = headAngles[YAW] + 0.25 * movementOffsets[ dir ];
-
-	// torso
-	BG_SwingAngles( torsoAngles[YAW], 25, 90, /*cg_swingSpeed.value*/ 0.3, torso_yawAngle, torso_yawing, frameTime );
-	BG_SwingAngles( legsAngles[YAW], 40, 90, /*cg_swingSpeed.value*/ 0.3, legs_yawAngle, legs_yawing, frameTime );
-
-	torsoAngles[YAW] = *torso_yawAngle;
-	legsAngles[YAW] = *legs_yawAngle;
-
-	// --------- pitch -------------
-
-	// only show a fraction of the pitch angle in the torso
-	if ( headAngles[PITCH] > 180 ) {
-		dest = (-360 + headAngles[PITCH]) * 0.75;
-	} else {
-		dest = headAngles[PITCH] * 0.75;
-	}
-	BG_SwingAngles( dest, 15, 30, 0.1, torso_pitchAngle, torso_pitching, frameTime );
-	torsoAngles[PITCH] = *torso_pitchAngle;
-
-	// --------- roll -------------
-
-	// lean towards the direction of travel
-	speed = VectorNormalize( velocity );
-	if ( speed ) {
-		vec3_t	axis[3];
-		float	side;
-
-		speed *= 0.05;
-
-		AnglesToAxis( legsAngles, axis );
-		side = speed * DotProduct( velocity, axis[1] );
-		legsAngles[ROLL] -= side;
-
-		side = speed * DotProduct( velocity, axis[0] );
-		legsAngles[PITCH] += side;
-	}
-
-	// pain twitch
-	BG_AddPainTwitch( painTime, painDirection, currentTime, torsoAngles );
-
-	// pull the angles back out of the hierarchial chain
-	AnglesSubtract( headAngles, torsoAngles, headAngles );
-	AnglesSubtract( torsoAngles, legsAngles, torsoAngles );
-	AnglesToAxis( legsAngles, legs );
-	// we assume that model 0 is the player model.
-//g2r	trap_G2API_SetBoneAngles(ghoul2, 0, "upper_lumbar", torsoAngles, BONE_ANGLES_POSTMULT, POSITIVE_X, NEGATIVE_Y, NEGATIVE_Z, modelList, 0, currentTime); 
-//g2r	trap_G2API_SetBoneAngles(ghoul2, 0, "cranium", headAngles, BONE_ANGLES_POSTMULT, POSITIVE_Z, NEGATIVE_Y, POSITIVE_X, modelList,0, currentTime); 
-
-}
-
 #define MAX_POOL_SIZE	2048000 //1024000
 
 static char		bg_pool[MAX_POOL_SIZE];

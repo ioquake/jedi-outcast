@@ -321,8 +321,8 @@ qboolean Netchan_Process( netchan_t *chan, msg_t *msg ) {
 
 	// read the fragment information
 	if ( fragmented ) {
-		fragmentStart = MSG_ReadShort( msg );
-		fragmentLength = MSG_ReadShort( msg );
+		fragmentStart  = (unsigned short)MSG_ReadShort( msg );
+		fragmentLength = (unsigned short)MSG_ReadShort( msg );
 	} else {
 		fragmentStart = 0;		// stop warning message
 		fragmentLength = 0;
@@ -425,10 +425,10 @@ qboolean Netchan_Process( netchan_t *chan, msg_t *msg ) {
 			return qfalse;
 		}
 
-		if ( chan->fragmentLength > msg->maxsize ) {
+		if ( chan->fragmentLength+4 > msg->maxsize ) {
 			Com_Printf( "%s:fragmentLength %i > msg->maxsize\n"
 				, NET_AdrToString (chan->remoteAddress ),
-				chan->fragmentLength );
+				chan->fragmentLength+4 );
 			return qfalse;
 		}
 
@@ -437,10 +437,6 @@ qboolean Netchan_Process( netchan_t *chan, msg_t *msg ) {
 		// make sure the sequence number is still there
 		*(int *)msg->data = LittleLong( sequence );
 
-		if ( chan->fragmentLength + 4 > MAX_MSGLEN ) 
-		{
-			Com_Error( ERR_DROP, "Netchan_Process: length = %i",chan->fragmentLength + 4);
-		}
 		Com_Memcpy( msg->data + 4, chan->fragmentBuffer, chan->fragmentLength );
 		msg->cursize = chan->fragmentLength + 4;
 		chan->fragmentLength = 0;

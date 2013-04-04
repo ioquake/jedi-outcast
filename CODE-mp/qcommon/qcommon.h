@@ -196,7 +196,8 @@ PROTOCOL
 ==============================================================
 */
 
-#define	PROTOCOL_VERSION	15
+//v1.03 #define	PROTOCOL_VERSION	15
+#define	PROTOCOL_VERSION	16	//v1.04
 
 #define	UPDATE_SERVER_NAME		"updatejk2.ravensoft.com"
 #define MASTER_SERVER_NAME		"masterjk2.ravensoft.com"

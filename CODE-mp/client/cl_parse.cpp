@@ -477,7 +477,7 @@ void CL_ParseDownload ( msg_t *msg ) {
 	int block;
 
 	// read the data
-	block = MSG_ReadShort ( msg );
+	block = (unsigned short)MSG_ReadShort ( msg );
 
 	if ( !block )
 	{
@@ -493,7 +493,7 @@ void CL_ParseDownload ( msg_t *msg ) {
 		}
 	}
 
-	size = MSG_ReadShort ( msg );
+	size = (unsigned short)MSG_ReadShort ( msg );
 	if (size > 0)
 		MSG_ReadData( msg, data, size );
 

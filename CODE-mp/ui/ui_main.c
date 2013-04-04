@@ -1736,20 +1736,22 @@ void UpdateForceStatus()
 	}
 
 
-	// Take the current team and force a skin color based on it.
-	switch((int)(trap_Cvar_VariableValue("ui_myteam")))
-	{
-	case TEAM_RED:
-		uiSkinColor = TEAM_RED;
-		uiInfo.effectsColor = SABER_RED;
-		break;
-	case TEAM_BLUE:
-		uiSkinColor = TEAM_BLUE;
-		uiInfo.effectsColor = SABER_BLUE;
-		break;
-	default:
-		uiSkinColor = TEAM_FREE;
-		break;
+	if ( !UI_TrueJediEnabled() )
+	{// Take the current team and force a skin color based on it.
+		switch((int)(trap_Cvar_VariableValue("ui_myteam")))
+		{
+		case TEAM_RED:
+			uiSkinColor = TEAM_RED;
+			uiInfo.effectsColor = SABER_RED;
+			break;
+		case TEAM_BLUE:
+			uiSkinColor = TEAM_BLUE;
+			uiInfo.effectsColor = SABER_BLUE;
+			break;
+		default:
+			uiSkinColor = TEAM_FREE;
+			break;
+		}
 	}
 }
 
@@ -2373,6 +2375,7 @@ static void UI_BuildPlayerList() {
 		if (info[0]) {
 			Q_strncpyz( uiInfo.playerNames[uiInfo.playerCount], Info_ValueForKey( info, "n" ), MAX_NAME_LENGTH );
 			Q_CleanStr( uiInfo.playerNames[uiInfo.playerCount] );
+			uiInfo.playerIndexes[uiInfo.playerCount] = n;
 			uiInfo.playerCount++;
 			team2 = atoi(Info_ValueForKey(info, "t"));
 			if (team2 == team && n != uiInfo.playerNumber) {
@@ -2989,32 +2992,34 @@ static qboolean UI_Handicap_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_Effects_HandleKey(int flags, float *special, int key) {
-  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
-
-	  int team = (int)(trap_Cvar_VariableValue("ui_myteam"));
-
-	  if (team == TEAM_RED || team==TEAM_BLUE)
-	  {
-		  return qfalse;
-	  }
-
-
+	if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
+		
+		if ( !UI_TrueJediEnabled() )
+		{
+			int team = (int)(trap_Cvar_VariableValue("ui_myteam"));
+					
+			if (team == TEAM_RED || team==TEAM_BLUE)
+			{
+				return qfalse;
+			}
+		}
+				
 		if (key == A_MOUSE2) {
-	    uiInfo.effectsColor--;
+			uiInfo.effectsColor--;
 		} else {
-	    uiInfo.effectsColor++;
+			uiInfo.effectsColor++;
 		}
-
-    if( uiInfo.effectsColor > 5 ) {
-	  	uiInfo.effectsColor = 0;
+		
+		if( uiInfo.effectsColor > 5 ) {
+			uiInfo.effectsColor = 0;
 		} else if (uiInfo.effectsColor < 0) {
-	  	uiInfo.effectsColor = 5;
+			uiInfo.effectsColor = 5;
 		}
-
-	  trap_Cvar_SetValue( "color1", /*uitogamecode[uiInfo.effectsColor]*/uiInfo.effectsColor );
-    return qtrue;
-  }
-  return qfalse;
+		
+		trap_Cvar_SetValue( "color1", /*uitogamecode[uiInfo.effectsColor]*/uiInfo.effectsColor );
+		return qtrue;
+	}
+	return qfalse;
 }
 
 static qboolean UI_ClanName_HandleKey(int flags, float *special, int key) {
@@ -4419,7 +4424,8 @@ static void UI_RunMenuScript(char **args)
 			}
 		} else if (Q_stricmp(name, "voteKick") == 0) {
 			if (uiInfo.playerIndex >= 0 && uiInfo.playerIndex < uiInfo.playerCount) {
-				trap_Cmd_ExecuteText( EXEC_APPEND, va("callvote kick \"%s\"\n",uiInfo.playerNames[uiInfo.playerIndex]) );
+				//trap_Cmd_ExecuteText( EXEC_APPEND, va("callvote kick \"%s\"\n",uiInfo.playerNames[uiInfo.playerIndex]) );
+				trap_Cmd_ExecuteText( EXEC_APPEND, va("callvote clientkick \"%i\"\n",uiInfo.playerIndexes[uiInfo.playerIndex]) );
 			}
 		} else if (Q_stricmp(name, "voteGame") == 0) {
 			if (ui_netGameType.integer >= 0 && ui_netGameType.integer < uiInfo.numGameTypes) {
@@ -6922,7 +6928,7 @@ void UI_DrawConnectScreen( qboolean overlay ) {
 	//UI_DrawProportionalString( 320, 96, "Press Esc to abort", UI_CENTER|UI_SMALLFONT|UI_DROPSHADOW, menu_text_color );
 
 	// display global MOTD at bottom
-	Text_PaintCenter(centerPoint, 600, scale, colorWhite, Info_ValueForKey( cstate.updateInfoString, "motd" ), 0, FONT_MEDIUM);
+	Text_PaintCenter(centerPoint, 425, scale, colorWhite, Info_ValueForKey( cstate.updateInfoString, "motd" ), 0, FONT_MEDIUM);
 	// print any server info (server full, bad version, etc)
 	if ( cstate.connState < CA_CONNECTED ) {
 		Text_PaintCenter(centerPoint, yStart + 176, scale, colorWhite, cstate.messageString, 0, FONT_MEDIUM);
@@ -7392,10 +7398,10 @@ static void UI_StartServerRefresh(qboolean full)
 
 		ptr = UI_Cvar_VariableString("debug_protocol");
 		if (strlen(ptr)) {
-			trap_Cmd_ExecuteText( EXEC_NOW, va( "globalservers %d %s full empty\n", i, ptr));
+			trap_Cmd_ExecuteText( EXEC_NOW, va( "globalservers %d %s\n", i, ptr));
 		}
 		else {
-			trap_Cmd_ExecuteText( EXEC_NOW, va( "globalservers %d %d full empty\n", i, (int)trap_Cvar_VariableValue( "protocol" ) ) );
+			trap_Cmd_ExecuteText( EXEC_NOW, va( "globalservers %d %d\n", i, (int)trap_Cvar_VariableValue( "protocol" ) ) );
 		}
 	}
 }

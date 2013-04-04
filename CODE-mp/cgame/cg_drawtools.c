@@ -208,50 +208,69 @@ to a fixed color.
 Coordinates are at 640 by 480 virtual resolution
 ==================
 */
+#include "../../ui/menudef.h"	// for "ITEM_TEXTSTYLE_SHADOWED"
 void CG_DrawStringExt( int x, int y, const char *string, const float *setColor, 
 		qboolean forceColor, qboolean shadow, int charWidth, int charHeight, int maxChars )
 {
-	vec4_t		color;
-	const char	*s;
-	int			xx;
+	if (trap_Language_IsAsian())
+	{
+		// hack-a-doodle-do (post-release quick fix code)...
+		//
+		vec4_t color;
+		memcpy(color,setColor, sizeof(color));	// de-const it
+		CG_Text_Paint(x, y, 1.0f,	// float scale, 
+						color,		// vec4_t color, 
+						string,		// const char *text, 
+						0.0f,		// float adjust, 
+						0,			// int limit, 
+						shadow ? ITEM_TEXTSTYLE_SHADOWED : 0,	// int style, 
+						FONT_MEDIUM		// iMenuFont
+						) ;
+	}
+	else
+	{
+		vec4_t		color;
+		const char	*s;
+		int			xx;
 
-	// draw the drop shadow
-	if (shadow) {
-		color[0] = color[1] = color[2] = 0;
-		color[3] = setColor[3];
-		trap_R_SetColor( color );
+		// draw the drop shadow
+		if (shadow) {
+			color[0] = color[1] = color[2] = 0;
+			color[3] = setColor[3];
+			trap_R_SetColor( color );
+			s = string;
+			xx = x;
+			while ( *s ) {
+				if ( Q_IsColorString( s ) ) {
+					s += 2;
+					continue;
+				}
+				CG_DrawChar( xx + 2, y + 2, charWidth, charHeight, *s );
+				xx += charWidth;
+				s++;
+			}
+		}
+
+		// draw the colored text
 		s = string;
 		xx = x;
+		trap_R_SetColor( setColor );
 		while ( *s ) {
 			if ( Q_IsColorString( s ) ) {
+				if ( !forceColor ) {
+					memcpy( color, g_color_table[ColorIndex(*(s+1))], sizeof( color ) );
+					color[3] = setColor[3];
+					trap_R_SetColor( color );
+				}
 				s += 2;
 				continue;
 			}
-			CG_DrawChar( xx + 2, y + 2, charWidth, charHeight, *s );
+			CG_DrawChar( xx, y, charWidth, charHeight, *s );
 			xx += charWidth;
 			s++;
 		}
+		trap_R_SetColor( NULL );
 	}
-
-	// draw the colored text
-	s = string;
-	xx = x;
-	trap_R_SetColor( setColor );
-	while ( *s ) {
-		if ( Q_IsColorString( s ) ) {
-			if ( !forceColor ) {
-				memcpy( color, g_color_table[ColorIndex(*(s+1))], sizeof( color ) );
-				color[3] = setColor[3];
-				trap_R_SetColor( color );
-			}
-			s += 2;
-			continue;
-		}
-		CG_DrawChar( xx, y, charWidth, charHeight, *s );
-		xx += charWidth;
-		s++;
-	}
-	trap_R_SetColor( NULL );
 }
 
 void CG_DrawBigString( int x, int y, const char *s, float alpha ) {

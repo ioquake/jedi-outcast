@@ -1077,15 +1077,13 @@ void PM_SetAnimFinal(int setAnimParts,int anim,int setAnimFlags,
 		PM_StartTorsoAnim( anim );
 
 		if (setAnimFlags & SETANIM_FLAG_HOLD)
-		{//FIXME: allow to set a specific time?
+		{
 			if (setAnimFlags & SETANIM_FLAG_HOLDLESS)
 			{	// Make sure to only wait in full 1/20 sec server frame intervals.
 				int dur;
 				int speedDif;
 				
 				dur = (animations[anim].numFrames-1) * fabs(animations[anim].frameLerp);
-				//dur = ((int)(dur/50.0)) * 50 / timeScaleMod;
-				//dur -= blendTime+fabs(animations[anim].frameLerp)*2;
 				speedDif = dur - (dur * editAnimSpeed);
 				dur += speedDif;
 				if (dur > 1)
@@ -1127,15 +1125,13 @@ setAnimLegs:
 		PM_StartLegsAnim(anim);
 
 		if (setAnimFlags & SETANIM_FLAG_HOLD)
-		{//FIXME: allow to set a specific time?
+		{
 			if (setAnimFlags & SETANIM_FLAG_HOLDLESS)
 			{	// Make sure to only wait in full 1/20 sec server frame intervals.
 				int dur;
 				int speedDif;
 				
 				dur = (animations[anim].numFrames-1) * fabs(animations[anim].frameLerp);
-				//dur = ((int)(dur/50.0)) * 50 / timeScaleMod;
-				//dur -= blendTime+fabs(animations[anim].frameLerp)*2;
 				speedDif = dur - (dur * editAnimSpeed);
 				dur += speedDif;
 				if (dur > 1)
@@ -1151,11 +1147,6 @@ setAnimLegs:
 			{
 				pm->ps->legsTimer = ((animations[anim].numFrames ) * fabs(animations[anim].frameLerp));
 			}
-
-			/*
-			PM_DebugLegsAnim(anim);
-			Com_Printf("%i\n", pm->ps->legsTimer);
-			*/
 
 			if (pm->ps->fd.forcePowersActive & (1 << FP_RAGE))
 			{
@@ -1186,8 +1177,7 @@ void PM_SetAnim(int setAnimParts,int anim,int setAnimFlags, int blendTime)
 	}
 
 	if (BG_InRoll(pm->ps, pm->ps->legsAnim))
-	{
-		//setAnimFlags |= SETANIM_FLAG_RESTART;
+	{ //never interrupt a roll
 		return;
 	}
 

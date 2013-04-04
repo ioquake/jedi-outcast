@@ -1277,7 +1277,10 @@ void ClientUserinfoChanged( int clientNum ) {
 
 	trap_SetConfigstring( CS_PLAYERS+clientNum, s );
 
-	//G_LogPrintf( "ClientUserinfoChanged: %i %s\n", clientNum, s );
+	if (g_logClientInfo.integer)
+	{
+		G_LogPrintf( "ClientUserinfoChanged: %i %s\n", clientNum, s );
+	}
 }
 
 
@@ -1742,6 +1745,46 @@ void ClientSpawn(gentity_t *ent) {
 		&& !AllForceDisabled( g_forcePowerDisable.integer )
 		&& g_trueJedi.integer )
 	{
+		if ( g_gametype.integer >= GT_TEAM && (client->sess.sessionTeam == TEAM_BLUE || client->sess.sessionTeam == TEAM_RED) )
+		{//In Team games, force one side to be merc and other to be jedi
+			if ( level.numPlayingClients > 0 )
+			{//already someone in the game
+				int		i, forceTeam = TEAM_SPECTATOR;
+				for ( i = 0 ; i < level.maxclients ; i++ ) 
+				{
+					if ( level.clients[i].pers.connected == CON_DISCONNECTED ) {
+						continue;
+					}
+					if ( level.clients[i].sess.sessionTeam == TEAM_BLUE || level.clients[i].sess.sessionTeam == TEAM_RED ) 
+					{//in-game
+						if ( WP_HasForcePowers( &level.clients[i].ps ) )
+						{//this side is using force
+							forceTeam = level.clients[i].sess.sessionTeam;
+						}
+						else
+						{//other team is using force
+							if ( level.clients[i].sess.sessionTeam == TEAM_BLUE )
+							{
+								forceTeam = TEAM_RED;
+							}
+							else
+							{
+								forceTeam = TEAM_BLUE;
+							}
+						}
+						break;
+					}
+				}
+				if ( WP_HasForcePowers( &client->ps ) && client->sess.sessionTeam != forceTeam )
+				{//using force but not on right team, switch him over
+					const char *teamName = TeamName( forceTeam );
+					//client->sess.sessionTeam = forceTeam;
+					SetTeam( ent, (char *)teamName );
+					return;
+				}
+			}
+		}
+
 		if ( WP_HasForcePowers( &client->ps ) )
 		{
 			client->ps.trueNonJedi = qfalse;
@@ -1758,13 +1801,23 @@ void ClientSpawn(gentity_t *ent) {
 			{
 				client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_BRYAR_PISTOL );
 			}
+			if (!wDisable || !(wDisable & (1 << WP_BLASTER)))
+			{
+				client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_BLASTER );
+			}
+			if (!wDisable || !(wDisable & (1 << WP_BOWCASTER)))
+			{
+				client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_BOWCASTER );
+			}
 			client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
 			client->ps.stats[STAT_WEAPONS] |= (1 << WP_STUN_BATON);
+			client->ps.ammo[AMMO_POWERCELL] = ammoData[AMMO_POWERCELL].max;
 			client->ps.weapon = WP_BRYAR_PISTOL;
 		}
 	}
 	else
-	{
+	{//jediVmerc is incompatible with this gametype, turn it off!
+		trap_Cvar_Set( "g_jediVmerc", "0" );
 		if (g_gametype.integer == GT_HOLOCRON)
 		{
 			//always get free saber level 1 in holocron

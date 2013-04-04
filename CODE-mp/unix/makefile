@@ -77,7 +77,7 @@ DLL_ONLY=false
   # bk001205: no mo'  -I/usr/include/glide, no FX
   # bk001205: no mo'  -Dstricmp=strcasecmp, see q_shared.h
   #BASE_CFLAGS =  -pipe -fsigned-char -x c++ -D_JK2 -D_M_IX86  -I/home/drews/STLport-4.5.3/stlport -I/opt/intel/compiler50/ia32/include
-  BASE_CFLAGS =  -pipe -fsigned-char -Kc++ -D_JK2 -D_M_IX86  -I/opt/intel/compiler50/ia32/include
+  BASE_CFLAGS =  -pipe -fsigned-char -Kc++ -D_JK2 -D_M_IX86  -I/opt/intel/compiler50/ia32/include 
   # rcg010216: DLL_ONLY for PPC
   ifeq ($(strip $(DLL_ONLY)),true)
     BASE_CFLAGS += -DDLL_ONLY
@@ -95,12 +95,12 @@ DLL_ONLY=false
 #  DEBUG_CFLAGS=$(BASE_CFLAGS) -g  -Wall -Werror -O
   ifeq ($(ARCH),axp)
     CC=pgcc
-    RELEASE_CFLAGS=$(BASE_CFLAGS) -DNDEBUG -O6 -ffast-math -funroll-loops -fomit-frame-pointer -fexpensive-optimizations
+    RELEASE_CFLAGS=$(BASE_CFLAGS) -DNDEBUG -O2 -unroll
   else
     ifeq ($(ARCH),ppc)
       NEWPGCC=/loki/global/ppc/bin/gcc
       CC=$(NEWPGCC)
-      RELEASE_CFLAGS=$(BASE_CFLAGS) -DNDEBUG -O6 -fomit-frame-pointer -pipe -ffast-math -malign-loops=2 -malign-jumps=2 -malign-functions=2 -fno-strict-aliasing -fstrength-reduce
+      RELEASE_CFLAGS=$(BASE_CFLAGS) -DNDEBUG -O2 -pipe -unroll 
     else
       #NEWPGCC=/usr/local/gcc-2.95.2/bin/gcc # bk001205
       #NEWPGCC=/loki/global/x86/bin/gcc
@@ -112,7 +112,7 @@ DLL_ONLY=false
 # TTimo: legacy RELEASE_CFLAGS
 # NOTE: the -fomit-frame-pointer option leads to an unstable binary on my test box if it was built on the main box
 #   but building on the Mdk 7.2 baseline seems to work
-      RELEASE_CFLAGS=$(BASE_CFLAGS) -DNDEBUG -O6 -mcpu=pentiumpro -march=pentium -fomit-frame-pointer -pipe -ffast-math -malign-loops=2 -malign-jumps=2 -malign-functions=2 -fno-strict-aliasing -fstrength-reduce
+      RELEASE_CFLAGS=$(BASE_CFLAGS) -DNDEBUG -O2 -unroll -tpp6
 # TTimo: use this for building on P3 gcc 2.95.3 libc2.2 for all targets (experimental! -fomit-fram-pointer removed)
 #      RELEASE_CFLAGS=$(BASE_CFLAGS) -DNDEBUG -O6 -mcpu=pentiumpro -march=pentium -pipe -ffast-math -malign-loops=2 -malign-jumps=2 -malign-functions=2 -fno-strict-aliasing -fstrength-reduce
     endif
@@ -129,7 +129,7 @@ DLL_ONLY=false
 
   THREAD_LDFLAGS=-lpthread
   #LDFLAGS=/opt/sxl/lib/sxlgcc3.a -lpthread -ldl -lm -lstdc++ -static -Wl --gc-sections
-  LDFLAGS=-ldl -lm -lstdc++ -static 
+  LDFLAGS=-ldl -lm -static 
   GLLDFLAGS=-L/usr/X11R6/lib -L$(MESADIR)/lib -lX11 -lXext -lXxf86dga -lXxf86vm
 
   TARGETS=\
@@ -213,7 +213,6 @@ Q3DOBJ = \
 	$(B)/ded/cm_polylib.o \
 	$(B)/ded/cm_test.o \
 	$(B)/ded/cm_trace.o \
-	$(B)/ded/cm_shader.o \
 	$(B)/ded/cmd.o \
 	$(B)/ded/common.o \
 	$(B)/ded/cvar.o \

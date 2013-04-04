@@ -12,8 +12,8 @@
 #define	CONTENTS_WATER			0x00000004
 #define	CONTENTS_FOG			0x00000008
 #define	CONTENTS_PLAYERCLIP		0x00000010
-#define	CONTENTS_MONSTERCLIP	0x00000020
-#define CONTENTS_BOTCLIP		0x00000040
+#define	CONTENTS_MONSTERCLIP	0x00000020	// Physically block bots
+#define CONTENTS_BOTCLIP		0x00000040	// A hint for bots - do not enter this brush by navigation (if possible)
 #define CONTENTS_SHOTCLIP		0x00000080
 #define	CONTENTS_BODY			0x00000100	// should never be on a brush, only in game
 #define	CONTENTS_CORPSE			0x00000200	// should never be on a brush, only in game

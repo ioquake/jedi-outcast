@@ -397,6 +397,7 @@ qboolean Sys_IsLANAddress( netadr_t adr ) {
 		return qtrue;
 	}
 
+	/*
 	// Class A
 	if( (adr.ip[0] & 0x80) == 0x00 ) {
 		for ( i = 0 ; i < numIP ; i++ ) {
@@ -421,6 +422,8 @@ qboolean Sys_IsLANAddress( netadr_t adr ) {
 		}
 		return qfalse;
 	}
+	*/
+	//we only look at class C since ISPs and Universities are using class A but we don't want to consider them on the same LAN.
 
 	// Class C
 	for ( i = 0 ; i < numIP ; i++ ) {
@@ -707,6 +710,9 @@ void NET_GetLocalAddress( void ) {
 	int					ip;
 	int					n;
 
+    // Set this early so we can just return if there is an error
+	numIP = 0;
+
 	if( gethostname( hostname, 256 ) == SOCKET_ERROR ) {
 		error = WSAGetLastError();
 		return;
@@ -728,7 +734,6 @@ void NET_GetLocalAddress( void ) {
 		return;
 	}
 
-	numIP = 0;
 	while( ( p = hostInfo->h_addr_list[numIP] ) != NULL && numIP < MAX_IPS ) {
 		ip = ntohl( *(int *)p );
 		localIP[ numIP ][0] = p[0];

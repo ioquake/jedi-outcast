@@ -153,7 +153,7 @@ weaponData_t weaponData[WP_NUM_WEAPONS] =
 		1,						//	int		energyPerShot;		// Amount of energy used per shot
 		100,					//	int		fireTime;			// Amount of time between firings
 		8192,					//	int		range;				// Range of weapon
-		25,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
+		15,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
 		800,					//	int		altFireTime;		// Amount of time between alt-firings
 		8192,					//	int		altRange;			// Range of alt-fire
 		0,						//	int		chargeSubTime;		// ms interval for subtracting ammo during charge
@@ -187,7 +187,7 @@ weaponData_t weaponData[WP_NUM_WEAPONS] =
 		10,						//	int		energyPerShot;		// Amount of energy used per shot
 		700,					//	int		fireTime;			// Amount of time between firings
 		8192,					//	int		range;				// Range of weapon
-		25,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
+		15,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
 		800,					//	int		altFireTime;		// Amount of time between alt-firings
 		8192,					//	int		altRange;			// Range of alt-fire
 		0,						//	int		chargeSubTime;		// ms interval for subtracting ammo during charge

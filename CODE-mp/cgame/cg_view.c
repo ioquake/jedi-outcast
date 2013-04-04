@@ -1559,7 +1559,14 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 	if (cg.snap->ps.stats[STAT_HEALTH] > 0 && (cg.predictedPlayerState.weapon == WP_SABER || cg.predictedPlayerState.usingATST ||
 		cg.predictedPlayerState.forceHandExtend == HANDEXTEND_KNOCKDOWN || cg.predictedPlayerState.fallingToDeath))
 	{
-		cg.renderingThirdPerson = 1;
+		if (cg_fpls.integer && cg.predictedPlayerState.weapon == WP_SABER)
+		{ //force to first person for fpls
+			cg.renderingThirdPerson = 0;
+		}
+		else
+		{
+			cg.renderingThirdPerson = 1;
+		}
 	}
 	else if (cg.snap->ps.zoomMode)
 	{ //always force first person when zoomed
