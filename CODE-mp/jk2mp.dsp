@@ -75,7 +75,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /G5 /MTd /W3 /GX /ZI /Od /D "WIN32" /D "_Debug" /D "_WINDOWS" /D "__USEA3D" /D "__A3D_GEOM" /Fr /YX /FD /c
-# ADD CPP /nologo /G6 /W3 /GX /ZI /Od /D "_DEBUG" /D "WIN32" /D "_WINDOWS" /D "_JK2" /Fr /FD /GZ /c
+# ADD CPP /nologo /G6 /W3 /GX /ZI /Od /D "_DEBUG" /D "WIN32" /D "_WINDOWS" /D "_JK2" /D "MEM_DEBUG" /Fr /FD /GZ /c
 # ADD BASE MTL /nologo /D "_Debug" /mktyplib203 /win32
 # ADD MTL /nologo /D "_Debug" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /fo"win32\winquake.res" /d "_Debug"
@@ -86,7 +86,7 @@ BSC32=bscmake.exe
 LINK32=link.exe
 # ADD BASE LINK32 advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /profile /map /debug /machine:I386
 # SUBTRACT BASE LINK32 /nodefaultlib
-# ADD LINK32 advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /map:"Debug/jk2mp.map" /debug /machine:I386
+# ADD LINK32 ./debug/jk2/smrtheap.obj advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /map:"Debug/jk2mp.map" /debug /machine:I386
 # SUBTRACT LINK32 /profile
 
 !ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
@@ -181,6 +181,23 @@ SOURCE=.\win32\winquake.rc
 # Begin Group "Client"
 
 # PROP Default_Filter ""
+# Begin Source File
+
+SOURCE=.\client\0_SH_Leak.cpp
+
+!IF  "$(CFG)" == "jk2mp - Win32 Release JK2"
+
+# PROP Exclude_From_Build 1
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
+
+# PROP Exclude_From_Build 1
+
+!ENDIF 
+
+# End Source File
 # Begin Source File
 
 SOURCE=.\client\cl_cgame.cpp
@@ -329,10 +346,6 @@ SOURCE=.\qcommon\cm_public.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\qcommon\cm_shader.cpp
-# End Source File
-# Begin Source File
-
 SOURCE=.\qcommon\cm_test.cpp
 # End Source File
 # Begin Source File
@@ -342,6 +355,10 @@ SOURCE=.\qcommon\cm_trace.cpp
 # Begin Source File
 
 SOURCE=.\qcommon\cmd.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\qcommon\CNetProfile.cpp
 # End Source File
 # Begin Source File
 
@@ -361,6 +378,10 @@ SOURCE=.\game\g_public.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\qcommon\game_version.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\qcommon\GenericParser2.cpp
 # End Source File
 # Begin Source File
@@ -369,7 +390,19 @@ SOURCE=.\qcommon\GenericParser2.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\qcommon\hstring.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\qcommon\hstring.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\qcommon\huffman.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\qcommon\INetProfile.h
 # End Source File
 # Begin Source File
 
@@ -1334,6 +1367,163 @@ SOURCE=.\encryption\sockets.cpp
 # Begin Source File
 
 SOURCE=.\encryption\sockets.h
+# End Source File
+# End Group
+# Begin Group "SmartHeap"
+
+# PROP Default_Filter ""
+# Begin Source File
+
+SOURCE=.\smartheap\HA312W32.DLL
+
+!IF  "$(CFG)" == "jk2mp - Win32 Release JK2"
+
+# PROP Exclude_From_Build 1
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
+
+# PROP Exclude_From_Build 1
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\smartheap\HEAPAGNT.H
+
+!IF  "$(CFG)" == "jk2mp - Win32 Release JK2"
+
+# PROP Exclude_From_Build 1
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
+
+# PROP Exclude_From_Build 1
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\smartheap\SHW32.DLL
+
+!IF  "$(CFG)" == "jk2mp - Win32 Release JK2"
+
+# PROP Exclude_From_Build 1
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
+
+# PROP Exclude_From_Build 1
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\smartheap\SMRTHEAP.C
+
+!IF  "$(CFG)" == "jk2mp - Win32 Release JK2"
+
+# PROP Exclude_From_Build 1
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
+
+# PROP Exclude_From_Build 1
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\smartheap\SMRTHEAP.H
+
+!IF  "$(CFG)" == "jk2mp - Win32 Release JK2"
+
+# PROP Exclude_From_Build 1
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
+
+# PROP Exclude_From_Build 1
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\smartheap\smrtheap.hpp
+
+!IF  "$(CFG)" == "jk2mp - Win32 Release JK2"
+
+# PROP Exclude_From_Build 1
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
+
+# PROP Exclude_From_Build 1
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\smartheap\HAW32M.LIB
+
+!IF  "$(CFG)" == "jk2mp - Win32 Release JK2"
+
+# PROP Exclude_From_Build 1
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
+
+# PROP Exclude_From_Build 1
+
+!ENDIF 
+
+# End Source File
+# End Group
+# Begin Group "Debug"
+
+# PROP Default_Filter ""
+# Begin Source File
+
+SOURCE=.\Debug\HA312W32.DLL
+
+!IF  "$(CFG)" == "jk2mp - Win32 Release JK2"
+
+# PROP Exclude_From_Build 1
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\Debug\SHW32.DLL
+
+!IF  "$(CFG)" == "jk2mp - Win32 Release JK2"
+
+# PROP Exclude_From_Build 1
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
+
+!ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
+
+!ENDIF 
+
 # End Source File
 # End Group
 # End Target

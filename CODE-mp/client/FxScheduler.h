@@ -204,6 +204,7 @@ public:
 	CFxRange		mSpawnDelay;
 	CFxRange		mSpawnCount;
 	CFxRange		mLife;
+	int				mCullRange;
 
 	CMediaHandles	mMediaHandles;
 	CMediaHandles	mImpactFxHandles;

@@ -671,9 +671,19 @@ void SV_ClipMoveToEntities( moveclip_t *clip ) {
 		else
 #endif
 		{
+#ifdef __MACOS__
+			// compiler bug with const
+			CM_TransformedBoxTrace ( &trace, (float *)clip->start, (float *)clip->end,
+				(float *)clip->mins, (float *)clip->maxs, clipHandle,  clip->contentmask,
+				origin, angles);
+#else
 			CM_TransformedBoxTrace ( &trace, clip->start, clip->end,
 				clip->mins, clip->maxs, clipHandle,  clip->contentmask,
 				origin, angles);
+#endif
+		//FIXME: when startsolid in another ent, doesn't return correct entityNum 
+		//ALSO: 2 players can be standing next to each other and this function will
+		//think they're in each other!!!
 		}
 		oldTrace = clip->trace;
 

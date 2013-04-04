@@ -175,9 +175,13 @@ Ghoul2 Insert End
 
 
 
-void CL_SetUserCmdValue( int userCmdValue, float sensitivityScale ) {
+extern float cl_mPitchOverride;
+extern float cl_mYawOverride;
+void CL_SetUserCmdValue( int userCmdValue, float sensitivityScale, float mPitchOverride, float mYawOverride ) {
 	cl.cgameUserCmdValue = userCmdValue;
 	cl.cgameSensitivity = sensitivityScale;
+	cl_mPitchOverride = mPitchOverride;
+	cl_mYawOverride = mYawOverride;
 }
 
 extern vec3_t cl_overriddenAngles;
@@ -364,7 +368,7 @@ The cgame module is making a system call
 ====================
 */
 void *VM_ArgPtr( int intValue );
-
+void CM_SnapPVS(vec3_t origin,byte *buffer);
 //#define	VMA(x) VM_ArgPtr(args[x])
 #define	VMA(x) ((void*)args[x])
 #define	VMF(x)	((float *)args)[x]
@@ -441,6 +445,9 @@ int CL_CgameSystemCalls( int *args ) {
 		return 0;
 	case CG_CM_MARKFRAGMENTS:
 		return re.MarkFragments( args[1], (float(*)[3]) VMA(2), (const float *) VMA(3), args[4], (float *) VMA(5), args[6], (markFragment_t *) VMA(7) );
+	case CG_CM_SNAPPVS:
+		CM_SnapPVS((float(*))VMA(1),(byte *) VMA(2));
+		return 0;
 	case CG_S_STARTSOUND:
 		// stops an ERR_DROP internally if called illegally from game side, but note that it also gets here 
 		//	legally during level start where normally the internal s_soundStarted check would return. So ok to hit this.
@@ -599,7 +606,7 @@ int CL_CgameSystemCalls( int *args ) {
 	case CG_GETUSERCMD:
 		return CL_GetUserCmd( args[1], (usercmd_s *) VMA(2) );
 	case CG_SETUSERCMDVALUE:
-		CL_SetUserCmdValue( args[1], VMF(2) );
+		CL_SetUserCmdValue( args[1], VMF(2), VMF(3), VMF(4) );
 		return 0;
 	case CG_SETUSERCMDANGLES:
 		CL_SetUserCmdAngles( VMF(1), VMF(2), VMF(3) );
@@ -876,8 +883,13 @@ void CL_CGameRendering( stereoFrame_t stereo ) {
 		}
 	}
 #endif
+	int timei=cl.serverTime;
+	if (timei>60)
+	{
+		timei-=0;
+	}
 	G2API_SetTime(cl.serverTime,G2T_CG_TIME);
-	VM_Call( CG_DRAW_ACTIVE_FRAME, cl.serverTime, stereo, qfalse );
+	VM_Call( CG_DRAW_ACTIVE_FRAME,timei, stereo, qfalse );
 //	VM_Debug( 0 );
 }
 

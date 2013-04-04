@@ -114,6 +114,7 @@ typedef struct {
 	byte*				buf;
 	long				drawX, drawY;
 	sfxHandle_t			hSFX;	// 0 = none
+	qhandle_t			hCRAWLTEXT;	// 0 = none
 } cin_cache;
 
 static cinematics_t		cin;
@@ -188,7 +189,8 @@ static void RllSetupTable()
 //
 // Returns:		Number of samples placed in output buffer
 //-----------------------------------------------------------------------------
-long RllDecodeMonoToMono(unsigned char *from,short *to,unsigned int size,char signedOutput ,unsigned short flag)
+/*
+static long RllDecodeMonoToMono(unsigned char *from,short *to,unsigned int size,char signedOutput ,unsigned short flag)
 {
 	unsigned int z;
 	int prev;
@@ -205,7 +207,7 @@ long RllDecodeMonoToMono(unsigned char *from,short *to,unsigned int size,char si
 	}
 	return size;	//*sizeof(short));
 }
-
+*/
 
 //-----------------------------------------------------------------------------
 // RllDecodeMonoToStereo
@@ -221,7 +223,7 @@ long RllDecodeMonoToMono(unsigned char *from,short *to,unsigned int size,char si
 //
 // Returns:		Number of samples placed in output buffer
 //-----------------------------------------------------------------------------
-long RllDecodeMonoToStereo(unsigned char *from,unsigned int size,char signedOutput,unsigned short flag, qboolean bMixedWithCurrentAudio)
+static long RllDecodeMonoToStereo(unsigned char *from,unsigned int size,char signedOutput,unsigned short flag, qboolean bMixedWithCurrentAudio)
 {
 	unsigned int z;
 	int prev, dst;
@@ -263,7 +265,7 @@ long RllDecodeMonoToStereo(unsigned char *from,unsigned int size,char signedOutp
 //
 // Returns:		Number of samples placed in output buffer
 //-----------------------------------------------------------------------------
-long RllDecodeStereoToStereo(unsigned char *from,unsigned int size,char signedOutput, unsigned short flag, qboolean bMixedWithCurrentAudio)
+static long RllDecodeStereoToStereo(unsigned char *from,unsigned int size,char signedOutput, unsigned short flag, qboolean bMixedWithCurrentAudio)
 {
 	unsigned int z;
 	unsigned char *zz = from;
@@ -356,7 +358,8 @@ long RllDecodeStereoToStereo(unsigned char *from,unsigned int size,char signedOu
 //
 // Returns:		Number of samples placed in output buffer
 //-----------------------------------------------------------------------------
-long RllDecodeStereoToMono(unsigned char *from,short *to,unsigned int size,char signedOutput, unsigned short flag)
+/*
+static long RllDecodeStereoToMono(unsigned char *from,short *to,unsigned int size,char signedOutput, unsigned short flag)
 {
 	unsigned int z;
 	int prevL,prevR;
@@ -379,7 +382,7 @@ long RllDecodeStereoToMono(unsigned char *from,short *to,unsigned int size,char 
 
 	return size;
 }
-
+*/
 /******************************************************************************
 *
 * Function:		
@@ -900,7 +903,7 @@ static void readQuadInfo( byte *qData )
             cinTable[currentHandle].drawY = 256;
         }
 		if (cinTable[currentHandle].CIN_WIDTH != 256 || cinTable[currentHandle].CIN_HEIGHT != 256) {
-			Com_Printf("HACK: approxmimating cinematic for Rage Pro or Voodoo\n");
+			Com_DPrintf("HACK: approxmimating cinematic for Rage Pro or Voodoo\n");
 		}
 	}
 }
@@ -1013,14 +1016,13 @@ static void RoQInterrupt(void)
 				RoQReset();
 			} else {
 				cinTable[currentHandle].status = FMV_EOF;
+				if (cinTable[currentHandle].hSFX && !cinTable[currentHandle].looping)
+				{
+					S_CIN_StopSound( cinTable[currentHandle].hSFX );
+				}
 			}
 		} else {
 			cinTable[currentHandle].status = FMV_IDLE;
-		}
-
-		if (cinTable[currentHandle].hSFX && !cinTable[currentHandle].looping)
-		{
-			S_CIN_StopSound( cinTable[currentHandle].hSFX );
 		}
 		return; 
 	}
@@ -1416,6 +1418,7 @@ int CIN_PlayCinematic( const char *arg, int x, int y, int w, int h, int systemBi
 	{
 		cinTable[currentHandle].hSFX = 0;
 	}
+	cinTable[currentHandle].hCRAWLTEXT = 0;
 
 	if (cinTable[currentHandle].alterGameState) 
 	{
@@ -1483,6 +1486,94 @@ void CIN_SetLooping(int handle, qboolean loop) {
 	cinTable[handle].looping = loop;
 }
 
+// Text crawl defines
+#define TC_PLANE_WIDTH	250
+#define TC_PLANE_NEAR	90
+#define TC_PLANE_FAR	715
+#define TC_PLANE_TOP	0
+#define TC_PLANE_BOTTOM	1100
+
+#define TC_DELAY 9000
+#define TC_STOPTIME 81000
+static void CIN_AddTextCrawl()
+{
+	refdef_t	refdef;
+	polyVert_t	verts[4];
+
+	// Set up refdef
+	memset( &refdef, 0, sizeof( refdef ));
+
+	refdef.rdflags = RDF_NOWORLDMODEL;
+	AxisClear( refdef.viewaxis );
+
+	refdef.fov_x = 130;
+	refdef.fov_y = 130;
+
+	refdef.x = 0;
+	refdef.y = -50;
+	refdef.width = cls.glconfig.vidWidth;
+	refdef.height = cls.glconfig.vidHeight * 2; // deliberately extend off the bottom of the screen
+
+	// use to set shaderTime for scrolling shaders
+	refdef.time = 0; 
+
+	// Set up the poly verts
+	float fadeDown = 1.0;
+	if (cls.realtime-CL_iPlaybackStartTime >= (TC_STOPTIME-2500))
+	{
+		fadeDown = (TC_STOPTIME - (cls.realtime-CL_iPlaybackStartTime))/ 2480.0f;
+		if (fadeDown < 0)
+		{
+			fadeDown = 0;
+		}
+		if (fadeDown > 1)
+		{
+			fadeDown = 1;
+		}
+	}
+	for ( int i = 0; i < 4; i++ )
+	{
+		verts[i].modulate[0] = 255*fadeDown; // gold color?
+		verts[i].modulate[1] = 235*fadeDown;
+		verts[i].modulate[2] = 127*fadeDown;
+		verts[i].modulate[3] = 255*fadeDown;
+	}
+
+	_VectorScale( verts[2].modulate, 0.1f, verts[2].modulate ); // darken at the top??
+	_VectorScale( verts[3].modulate, 0.1f, verts[3].modulate );
+
+#define TIMEOFFSET  +(cls.realtime-CL_iPlaybackStartTime-TC_DELAY)*0.000015f -1
+	VectorSet( verts[0].xyz, TC_PLANE_NEAR, -TC_PLANE_WIDTH, TC_PLANE_TOP );
+	verts[0].st[0] = 1;
+	verts[0].st[1] = 1 TIMEOFFSET;
+
+	VectorSet( verts[1].xyz, TC_PLANE_NEAR, TC_PLANE_WIDTH, TC_PLANE_TOP );
+	verts[1].st[0] = 0;
+	verts[1].st[1] = 1 TIMEOFFSET;
+
+	VectorSet( verts[2].xyz, TC_PLANE_FAR, TC_PLANE_WIDTH, TC_PLANE_BOTTOM );
+	verts[2].st[0] = 0;
+	verts[2].st[1] = 0 TIMEOFFSET;
+
+	VectorSet( verts[3].xyz, TC_PLANE_FAR, -TC_PLANE_WIDTH, TC_PLANE_BOTTOM );
+	verts[3].st[0] = 1;
+	verts[3].st[1] = 0 TIMEOFFSET;
+
+	// render it out
+	re.ClearScene();
+	re.AddPolyToScene( cinTable[CL_handle].hCRAWLTEXT, 4, verts );
+	re.RenderScene( &refdef );
+
+	//time's up
+	if (cls.realtime-CL_iPlaybackStartTime >= TC_STOPTIME)
+	{
+//		cinTable[currentHandle].holdAtEnd = qfalse;
+		cinTable[CL_handle].status = FMV_EOF;
+		RoQShutdown();
+		SCR_StopCinematic();	// change ROQ from FMV_IDLE to FMV_EOF, and clear some other vars
+	}
+}
+
 /*
 ==================
 SCR_DrawCinematic
@@ -1521,6 +1612,7 @@ void CIN_DrawCinematic (int handle) {
 		re.DrawStretchRaw( x, y, w, h, 256, 256, (byte *)buf2, handle, qtrue);
 		cinTable[handle].dirty = qfalse;
 		Z_Free(buf2);
+
 		return;
 	}
 
@@ -1535,15 +1627,30 @@ extern qboolean s_soundStarted, s_soundMuted;
 //
 // ... and if the app isn't ready yet (which should only apply for the intro video), then I use these...
 //
-char	 sPendingCinematic_Arg	[256]={0};
-char	 sPendingCinematic_s	[256]={0};
-qboolean gbPendingCinematic = qfalse;
+static char	 sPendingCinematic_Arg	[256]={0};
+static char	 sPendingCinematic_s	[256]={0};
+static qboolean gbPendingCinematic = qfalse;
 //
 // This stuff is for EF1-type ingame cinematics...
 //
-qboolean qbPlayingInGameCinematic = qfalse;
-qboolean qbInGameCinematicOnStandBy = qfalse;
-char	 sInGameCinematicStandingBy[MAX_QPATH];
+static qboolean qbPlayingInGameCinematic = qfalse;
+static qboolean qbInGameCinematicOnStandBy = qfalse;
+static char	 sInGameCinematicStandingBy[MAX_QPATH];
+
+
+
+static qboolean CIN_HardwareReadyToPlayVideos(void)
+{
+	if (com_fullyInitialized && cls.rendererStarted && 
+								cls.soundStarted	&& 
+								cls.soundRegistered
+		)
+	{
+		return qtrue;
+	}
+
+	return qfalse;
+}
 
 
 static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
@@ -1555,7 +1662,6 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 
 	qbInGameCinematicOnStandBy = qfalse;
 
-	qboolean	holdatend;
 	int bits = qbInGame?0:CIN_system;
 
 	Com_DPrintf("CL_PlayCinematic_f\n");
@@ -1575,7 +1681,7 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 		SCR_StopCinematic();
 		// command-line hack to avoid problems when playing intro video before app is fully setup...
 		//
-		if (!(com_fullyInitialized && s_soundStarted && !s_soundMuted))	
+		if (!CIN_HardwareReadyToPlayVideos())	
 		{
 			strcpy(sPendingCinematic_Arg,arg);
 			strcpy(sPendingCinematic_s , (s&&s[0])?s:"");
@@ -1585,8 +1691,7 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 
 		qbPlayingInGameCinematic = qbInGame;
 
-		holdatend = qfalse;
-		if ((s && s[0] == '1') || Q_stricmp(arg,"demoend.roq")==0 || Q_stricmp(arg,"end.roq")==0) {
+		if ((s && s[0] == '1') || Q_stricmp(arg,"end.roq")==0) {
 			bits |= CIN_hold;
 		}
 		if (s && s[0] == '2') {
@@ -1601,18 +1706,29 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 		// work out associated audio-overlay file, if any...
 		//
 		extern cvar_t *s_language;
-		qboolean	bIsForeign	= s_language && !(!stricmp(s_language->string,"english") || !stricmp(s_language->string,""));
+		qboolean	bIsForeign	= s_language && stricmp(s_language->string,"english") && stricmp(s_language->string,"");
 		LPCSTR		psAudioFile	= NULL;
-		if (bIsForeign && !stricmp(arg,"video/jk05.roq"))
+		qhandle_t	hCrawl = 0;
+		if (!stricmp(arg,"video/jk0101_sw.roq"))
 		{
-			psAudioFile = "sound/chars/video/cinematic_5";
-			bits |= CIN_silent;	// knock out existing english track
+			psAudioFile = "music/cinematic_1";
+			hCrawl = re.RegisterShader( va("menu/video/tc_%d",sp_language->integer) );
+			bits |= CIN_hold;
 		}
 		else
-		if (bIsForeign && !stricmp(arg,"video/jk06.roq"))
+		if (bIsForeign)
 		{
-			psAudioFile = "sound/chars/video/cinematic_6";
-			bits |= CIN_silent;	// knock out existing english track
+			if (!stricmp(arg,"video/jk05.roq"))
+			{
+				psAudioFile = "sound/chars/video/cinematic_5";
+				bits |= CIN_silent;	// knock out existing english track
+			}
+			else
+			if (!stricmp(arg,"video/jk06.roq"))
+			{
+				psAudioFile = "sound/chars/video/cinematic_6";
+				bits |= CIN_silent;	// knock out existing english track
+			}
 		}
 		//
 		////////////////////////////////////////////////////////////////////
@@ -1620,6 +1736,7 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 		CL_handle = CIN_PlayCinematic( arg, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, bits, psAudioFile );
 		if (CL_handle >= 0) 
 		{
+			cinTable[CL_handle].hCRAWLTEXT = hCrawl;
 			do 
 			{
 				SCR_RunCinematic();
@@ -1666,9 +1783,7 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 
 qboolean CL_CheckPendingCinematic(void)
 {
-	if ( gbPendingCinematic && 
-		(com_fullyInitialized && s_soundStarted && !s_soundMuted)
-		)
+	if ( gbPendingCinematic && CIN_HardwareReadyToPlayVideos() )
 	{
 		gbPendingCinematic = qfalse;	// BEFORE next line, or we get recursion
 		PlayCinematic(sPendingCinematic_Arg,sPendingCinematic_s[0]?sPendingCinematic_s:NULL,false);		
@@ -1713,6 +1828,10 @@ void SCR_DrawCinematic (void)
 
 	if (CL_handle >= 0 && CL_handle < MAX_VIDEO_HANDLES) {
 		CIN_DrawCinematic(CL_handle);
+		if (cinTable[CL_handle].hCRAWLTEXT && (cls.realtime - CL_iPlaybackStartTime >= TC_DELAY))
+		{
+			CIN_AddTextCrawl();
+		}
 	}
 }
 
@@ -1723,7 +1842,7 @@ void SCR_RunCinematic (void)
 	if (CL_handle >= 0 && CL_handle < MAX_VIDEO_HANDLES) {
 		e_status Status = CIN_RunCinematic(CL_handle);
 		
-		if (CL_IsRunningInGameCinematic() && Status == FMV_IDLE)
+		if (CL_IsRunningInGameCinematic() && Status == FMV_IDLE  && !cinTable[CL_handle].holdAtEnd)
 		{
 			SCR_StopCinematic();	// change ROQ from FMV_IDLE to FMV_EOF, and clear some other vars
 		}

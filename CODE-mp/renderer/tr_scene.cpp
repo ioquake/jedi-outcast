@@ -5,7 +5,7 @@
 	#include "../ghoul2/G2.h"
 #endif
 #include "../ghoul2/G2_local.h"
-#include "matcomp.h"
+#include "MatComp.h"
 
 #pragma warning (disable: 4512)	//default assignment operator could not be gened
 #include "../qcommon/disablewarnings.h"
@@ -206,10 +206,12 @@ void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 	{
 		CGhoul2Info_v	&ghoul2 = *((CGhoul2Info_v *)ent->ghoul2);
 
+#ifndef __linux__
 		if (!ghoul2[0].mModel)
 		{
 			DebugBreak();
 		}
+#endif
 	}
 
 	if (ent->reType == RT_ENT_CHAIN)
@@ -456,10 +458,10 @@ void RE_RenderScene( const refdef_t *fd ) {
 	parms.fovX = tr.refdef.fov_x;
 	parms.fovY = tr.refdef.fov_y;
 
-	VectorCopy( fd->vieworg, parms.or.origin );
-	VectorCopy( fd->viewaxis[0], parms.or.axis[0] );
-	VectorCopy( fd->viewaxis[1], parms.or.axis[1] );
-	VectorCopy( fd->viewaxis[2], parms.or.axis[2] );
+	VectorCopy( fd->vieworg, parms.ori.origin );
+	VectorCopy( fd->viewaxis[0], parms.ori.axis[0] );
+	VectorCopy( fd->viewaxis[1], parms.ori.axis[1] );
+	VectorCopy( fd->viewaxis[2], parms.ori.axis[2] );
 
 	VectorCopy( fd->vieworg, parms.pvsOrigin );
 

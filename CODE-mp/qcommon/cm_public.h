@@ -1,4 +1,4 @@
-
+#include "../game/q_shared.h"
 #include "qfiles.h"
 
 
@@ -57,4 +57,4 @@ void CM_DrawDebugSurface( void (*drawPoly)(int color, int numPoints, float *poin
 // cm_shader.cpp
 const char *CM_GetShaderText(const char *key);
 void CM_FreeShaderText(void);
-void CM_LoadShaderText(bool forceReload);
+void CM_LoadShaderText(qboolean forceReload);

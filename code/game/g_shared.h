@@ -73,6 +73,7 @@ typedef enum //# material_e
 	MAT_GRATE1,		// grate chunks
 	MAT_ROPE,		// for yavin trial...no chunks, just wispy bits
 	MAT_CRATE2,		// read multi-colored crate chunks
+	MAT_WHITE_METAL,// white angular chunks
 
 	NUM_MATERIALS
 
@@ -89,7 +90,7 @@ typedef enum //# material_e
 // this is regenerated each time a userinfo configstring changes
 
 #define	MAX_CUSTOM_BASIC_SOUNDS	14
-#define	MAX_CUSTOM_COMBAT_SOUNDS	15
+#define	MAX_CUSTOM_COMBAT_SOUNDS	17
 #define	MAX_CUSTOM_EXTRA_SOUNDS	36
 #define	MAX_CUSTOM_JEDI_SOUNDS	22
 #define	MAX_CUSTOM_SOUNDS	(MAX_CUSTOM_JEDI_SOUNDS + MAX_CUSTOM_EXTRA_SOUNDS + MAX_CUSTOM_COMBAT_SOUNDS + MAX_CUSTOM_BASIC_SOUNDS)
@@ -321,6 +322,7 @@ typedef struct missionStats_s
 	int				totalSecrets;					// # of secret areas that could have been found
 	int				shotsFired;						// total number of shots fired
 	int				hits;							// Shots that did damage
+	int				enemiesSpawned;					// # of enemies spawned
 	int				enemiesKilled;					// # of enemies killed
 	int				saberThrownCnt;					// # of times saber was thrown
 	int				saberBlocksCnt;					// # of times saber was used to block
@@ -406,10 +408,6 @@ typedef enum {
 } saberBlockedType_t;
 
 // !!!!!!!!!! LOADSAVE-affecting structure !!!!!!!!!!
-typedef struct {
-	int				tourObjectivesShown;	// Number of times tour objectives have been updated
-	objectives_t	tour_objectives[MAX_MISSION_OBJ];
-} clientTourSession_t;
 
 // this structure is cleared on each ClientSpawn(),
 // except for 'client->pers' and 'client->sess'
@@ -499,7 +497,8 @@ struct gclient_s {
 	int			poisonTime;					// When to apply poison damage
 	int			slopeRecalcTime;			// debouncer for slope-foot-height-diff calcing
 
-	clientTourSession_t		tourSess;
+	vec3_t		pushVec;
+	int			pushVecTime;
 };
 
 #define	MAX_PARMS	16

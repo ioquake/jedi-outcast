@@ -1,4 +1,6 @@
+#if defined (_MSC_VER) && (_MSC_VER >= 1020)
 #pragma once
+#endif
 #if !defined(GENERICPARSER2_H_INC)
 #define GENERICPARSER2_H_INC
 

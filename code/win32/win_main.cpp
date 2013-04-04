@@ -19,7 +19,7 @@
 
 #define	CD_BASEDIR	"gamedata\\gamedata"
 #define	CD_EXE		"jk2sp.exe"
-#define MEM_THRESHOLD 192*1024*1024
+#define MEM_THRESHOLD 128*1024*1024
 
 static char		sys_cmdline[MAX_STRING_CHARS];
 

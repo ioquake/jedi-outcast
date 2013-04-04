@@ -28,7 +28,8 @@ void CG_ParseServerinfo( void ) {
 	cgs.maxclients = 1;
 	mapname = Info_ValueForKey( info, "mapname" );
 	Com_sprintf( cgs.mapname, sizeof( cgs.mapname ), "maps/%s.bsp", mapname );
-	strcpy( cgs.stripLevelName[0], mapname );
+	char *p = strrchr(mapname,'/');
+	strcpy( cgs.stripLevelName[0], p?p+1:mapname );
 	strupr( cgs.stripLevelName[0] );
 	for (int i=1; i<STRIPED_LEVELNAME_VARIATIONS; i++)	// clear retry-array
 	{
@@ -79,7 +80,9 @@ void CG_ParseServerinfo( void ) {
 	{
 		// additional SP files needed for some levels...
 		//
-		if (!stricmp(cgs.stripLevelName[0],"KEJIM_BASE"))
+		if (!stricmp(cgs.stripLevelName[0],"KEJIM_BASE") ||
+			!stricmp(cgs.stripLevelName[0],"KEJIM_POST")
+			)
 		{
 			strcpy( cgs.stripLevelName[1], "ARTUS_MINE" );
 			if (!cgi_SP_Register(cgs.stripLevelName[1], qfalse))
@@ -88,9 +91,20 @@ void CG_ParseServerinfo( void ) {
 				//
 			}
 		}
-		if (!stricmp(cgs.stripLevelName[0],"DOOM_DETENTION"))
+		if (!stricmp(cgs.stripLevelName[0],"DOOM_DETENTION") ||
+			!stricmp(cgs.stripLevelName[0],"DOOM_SHIELDS")
+			)
 		{
 			strcpy( cgs.stripLevelName[1], "DOOM_COMM" );
+			if (!cgi_SP_Register(cgs.stripLevelName[1], qfalse))
+			{
+				// failed again, give up for now...
+				//
+			}
+		}
+		if (!stricmp(cgs.stripLevelName[0],"DOOM_COMM"))
+		{
+			strcpy( cgs.stripLevelName[1], "CAIRN_BAY" );
 			if (!cgi_SP_Register(cgs.stripLevelName[1], qfalse))
 			{
 				// failed again, give up for now...
@@ -113,6 +127,16 @@ void CG_ParseServerinfo( void ) {
 				//
 			} 
 		}
+		if (!stricmp(cgs.stripLevelName[0],"BESPIN_PLATFORM"))
+		{
+			strcpy( cgs.stripLevelName[1], "BESPIN_UNDERCITY" );
+			if (!cgi_SP_Register(cgs.stripLevelName[1], qfalse))
+			{
+				// failed again, give up for now...
+				//
+			} 
+		}
+
 	}
 }
 
@@ -139,7 +163,20 @@ static void CG_ConfigStringModified( void ) {
 	str = CG_ConfigString( num );
 
 	// do something with it if necessary
-	if ( num == CS_MUSIC ) {
+	if ( num == CS_ITEMS ) {
+		int i;
+		for ( i = 1 ; i < bg_numItems ; i++ ) {
+			if ( str[ i ] == '1' ) 
+			{
+				if (bg_itemlist[i].classname)
+				{
+					CG_RegisterItemSounds( i );
+					CG_RegisterItemVisuals( i );
+				}
+			}
+		}
+	}
+	else if ( num == CS_MUSIC ) {
 		CG_StartMusic( qtrue );
 	} else if ( num == CS_SERVERINFO ) {
 		CG_ParseServerinfo();

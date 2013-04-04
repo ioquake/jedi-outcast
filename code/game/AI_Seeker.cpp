@@ -42,9 +42,10 @@ void NPC_Seeker_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, v
 		G_Damage( self, NULL, NULL, (float*)vec3_origin, (float*)vec3_origin, 999, 0, MOD_FALLING );
 	}
 
-	NPC = self;
-	NPCInfo = self->NPC;
+	SaveNPCGlobals();
+	SetNPCGlobals( self );
 	Seeker_Strafe();
+	RestoreNPCGlobals();
 	NPC_Pain( self, inflictor, other, point, damage, mod );
 }
 
@@ -159,7 +160,7 @@ void Seeker_Strafe( void )
 		{
 			VectorMA( NPC->client->ps.velocity, SEEKER_STRAFE_VEL * side, right, NPC->client->ps.velocity );
 
-			G_Sound( NPC, G_SoundIndex( "sound/chars/SEEKER/misc/hiss.wav" ));
+			G_Sound( NPC, G_SoundIndex( "sound/chars/seeker/misc/hiss" ));
 
 			// Add a slight upward push
 			NPC->client->ps.velocity[2] += SEEKER_UPWARD_PUSH;
@@ -191,7 +192,7 @@ void Seeker_Strafe( void )
 			// Try to move the desired enemy side
 			VectorMA( NPC->client->ps.velocity, dis, dir, NPC->client->ps.velocity );
 
-			G_Sound( NPC, G_SoundIndex( "sound/chars/SEEKER/misc/hiss.wav" ));
+			G_Sound( NPC, G_SoundIndex( "sound/chars/seeker/misc/hiss" ));
 
 			// Add a slight upward push
 			NPC->client->ps.velocity[2] += SEEKER_UPWARD_PUSH;
@@ -290,9 +291,10 @@ void Seeker_Ranged( qboolean visible, qboolean advance )
 	else
 	{
 		// out of ammo, so let it die...give it a push up so it can fall more and blow up on impact
-		NPC->client->ps.gravity = 900;
-		NPC->svFlags &= ~SVF_CUSTOM_GRAVITY;
-		NPC->client->ps.velocity[2] += 16;
+//		NPC->client->ps.gravity = 900;
+//		NPC->svFlags &= ~SVF_CUSTOM_GRAVITY;
+//		NPC->client->ps.velocity[2] += 16;
+		G_Damage( NPC, NPC, NPC, NULL, NULL, 999, 0, MOD_UNKNOWN );
 	}
 
 	if ( NPCInfo->scriptFlags & SCF_CHASE_ENEMIES )
@@ -370,7 +372,7 @@ void Seeker_FindEnemy( void )
 	if ( best )
 	{
 		// used to offset seekers around a circle so they don't occupy the same spot.  This is not a fool-proof method.
-		NPC->random = random() * 6.2f; // roughly 2pi
+		NPC->random = random() * 6.3f; // roughly 2pi
 
 		NPC->enemy = best;
 	}
@@ -396,6 +398,12 @@ void Seeker_FollowPlayer( void )
 	}
 	else
 	{
+		if ( TIMER_Done( NPC, "seekerhiss" ))
+		{
+			TIMER_Set( NPC, "seekerhiss", 1000 + random() * 1000 );
+			G_Sound( NPC, G_SoundIndex( "sound/chars/seeker/misc/hiss" ));
+		}
+
 		// Hey come back!
 		NPCInfo->goalEntity = &g_entities[0];
 		NPCInfo->goalRadius = 32;
@@ -416,10 +424,16 @@ void Seeker_FollowPlayer( void )
 //------------------------------------
 void NPC_BSSeeker_Default( void )
 {
+	if ( in_camera )
+	{
+		// cameras make me commit suicide....
+		G_Damage( NPC, NPC, NPC, NULL, NULL, 999, 0, MOD_UNKNOWN );
+	}
+
 	if ( NPC->random == 0.0f )
 	{
 		// used to offset seekers around a circle so they don't occupy the same spot.  This is not a fool-proof method.
-		NPC->random = random() * 6.4f; // roughly 2pi
+		NPC->random = random() * 6.3f; // roughly 2pi
 	}
 
 	if ( NPC->enemy && NPC->enemy->health && NPC->enemy->inuse )

@@ -581,6 +581,10 @@ void camera_aim( gentity_t *self )
 			G_ClearViewEntity( player );
 			G_Sound( player, self->soundPos2 );
 			self->painDebounceTime = level.time + (self->wait*1000);//FRAMETIME*5;//don't check for player buttons for 500 ms
+			if ( player->client->usercmd.upmove > 0 )
+			{//stop player from doing anything for a half second after
+				player->aimDebounceTime = level.time + 500;
+			}
 		}
 		else if ( self->painDebounceTime < level.time )
 		{//check for use button
@@ -611,6 +615,7 @@ void camera_aim( gentity_t *self )
 			vectoangles( dir, angles );
 			//FIXME: if a G2 model, do a bone override..???
 			VectorCopy( self->currentAngles, self->s.apos.trBase );
+
 			for( int i = 0; i < 3; i++ )
 			{
 				angles[i] = AngleNormalize180( angles[i] );
@@ -621,6 +626,17 @@ void camera_aim( gentity_t *self )
 			self->s.apos.trTime = level.time;
 			self->s.apos.trDuration = FRAMETIME;
 			VectorCopy( angles, self->currentAngles );
+
+			if ( DistanceSquared( self->currentAngles, self->lastAngles ) > 0.01f ) // if it moved at all, start a loop sound? not exactly the "bestest" solution
+			{
+				self->s.loopSound = G_SoundIndex( "sound/movers/objects/cameramove_lp2" );
+			}
+			else
+			{
+				self->s.loopSound = 0; // not moving so don't bother
+			}
+
+			VectorCopy( self->currentAngles, self->lastAngles );
 			//G_SetAngles( self, angles );
 		}
 	}
@@ -657,6 +673,8 @@ void SP_misc_camera( gentity_t *self )
 	self->s.modelindex3 = self->s.modelindex = G_ModelIndex( "models/map_objects/kejim/impcam.md3" );
 	self->soundPos1 = G_SoundIndex( "sound/movers/camera_on.mp3" );
 	self->soundPos2 = G_SoundIndex( "sound/movers/camera_off.mp3" );
+	G_SoundIndex( "sound/movers/objects/cameramove_lp2" );
+
 	G_SetOrigin( self, self->s.origin );
 	G_SetAngles( self, self->s.angles );
 	self->s.apos.trType = TR_LINEAR_STOP;//TR_INTERPOLATE;//
@@ -2054,28 +2072,31 @@ void ammo_power_converter_use( gentity_t *self, gentity_t *other, gentity_t *act
 
 			self->count -= add;
 		}
-	}
 
-	if ( self->count <= 0 )
-	{
-		G_Sound( self, G_SoundIndex( "sound/interface/ammocon_empty.mp3" ));
-		self->setTime = level.time + 1000; // extra debounce so that the sounds don't overlap too much
-		self->s.loopSound = 0;
-
-		if ( self->s.eFlags & EF_SHADER_ANIM )
+		if ( self->count <= 0 )
 		{
-			self->s.frame = 1;
+			// play empty sound
+			self->setTime = level.time + 1000; // extra debounce so that the sounds don't overlap too much
+			G_Sound( self, G_SoundIndex( "sound/interface/ammocon_empty.mp3" ));
+			self->s.loopSound = 0;
+
+			if ( self->s.eFlags & EF_SHADER_ANIM )
+			{
+				self->s.frame = 1;
+			}
+		}
+		else if  ( ps->ammo[AMMO_BLASTER] >= ammoData[AMMO_BLASTER].max 
+						&& ps->ammo[AMMO_POWERCELL] >= ammoData[AMMO_POWERCELL].max 
+						&& ps->ammo[AMMO_METAL_BOLTS] >= ammoData[AMMO_METAL_BOLTS].max )
+		{
+			// play full sound
+			G_Sound( self, G_SoundIndex( "sound/interface/ammocon_done.wav" ));
+			self->setTime = level.time + 1000; // extra debounce so that the sounds don't overlap too much
+			self->s.loopSound = 0;
 		}
 	}
-	else if  ( ps->ammo[AMMO_BLASTER] >= ammoData[AMMO_BLASTER].max 
-					&& ps->ammo[AMMO_POWERCELL] >= ammoData[AMMO_POWERCELL].max 
-					&& ps->ammo[AMMO_METAL_BOLTS] >= ammoData[AMMO_METAL_BOLTS].max )
-	{
-		G_Sound( self, G_SoundIndex( "sound/interface/ammocon_done.wav" ));
-		self->setTime = level.time + 1000; // extra debounce so that the sounds don't overlap too much
-		self->s.loopSound = 0;
-	}
 
+	
 	if ( self->s.loopSound )
 	{
 		// we will have to shut of the loop sound, so I guess try and do it intelligently...NOTE: this could get completely stomped every time through the loop
@@ -2160,7 +2181,8 @@ welder_think
 void welder_think( gentity_t *self )
 {
 	self->nextthink = level.time + 200;
-	vec3_t		org;
+	vec3_t		org,
+				dir;
 	mdxaBone_t	boltMatrix;
 
 	if( self->svFlags & SVF_INACTIVE )
@@ -2176,13 +2198,18 @@ void welder_think( gentity_t *self )
 
 	if ( newBolt != -1 )
 	{
-		G_PlayEffect( "blueWeldSparks", self->playerModel, newBolt, self->s.number);
+		G_Sound( self, self->noise_index );
+	//	G_PlayEffect( "blueWeldSparks", self->playerModel, newBolt, self->s.number);
 		// The welder gets rotated around a lot, and since the origin is offset by 352 I have to make this super expensive call to position the hurt...
 		gi.G2API_GetBoltMatrix( self->ghoul2, self->playerModel, newBolt,
 					&boltMatrix, self->currentAngles, self->currentOrigin, (cg.time?cg.time:level.time),
 					NULL, self->s.modelScale );
 
 		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, org );
+		VectorSubtract( self->currentOrigin, org, dir );
+		VectorNormalize( dir );
+		// we want the  welder effect to face inwards....
+		G_PlayEffect( "blueWeldSparks", org, dir );
 		G_RadiusDamage( org, self, 10, 45, self, MOD_UNKNOWN );
 	}
 
@@ -2226,6 +2253,7 @@ void SP_misc_model_welder( gentity_t *ent )
 	ent->takedamage = qfalse;
 	ent->contents = 0;
 	G_EffectIndex( "blueWeldSparks" );
+	ent->noise_index = G_SoundIndex( "sound/movers/objects/welding.wav" );
 
 	ent->s.modelindex = G_ModelIndex( "models/map_objects/cairn/welder.glm" );
 //	ent->s.modelindex2 = G_ModelIndex( "models/map_objects/cairn/welder.md3" );
@@ -2564,7 +2592,7 @@ void misc_atst_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, 
 	VectorCopy( self->currentOrigin, effectPos );
 	effectPos[2] -= 15;
 	G_PlayEffect( "droidexplosion1", effectPos );
-	G_PlayEffect( "small_chunks", effectPos );
+//	G_PlayEffect( "small_chunks", effectPos );
 	//set these to defaults that work in a worst-case scenario (according to current animation.cfg)
 	gi.G2API_StopBoneAnimIndex( &self->ghoul2[self->playerModel], self->craniumBone );
 	misc_atst_setanim( self, self->rootBone, BOTH_DEATH1 );
@@ -2594,6 +2622,7 @@ void misc_atst_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 		G_SetOrigin( activator, self->currentOrigin );
 
 		//copy angles
+		VectorCopy( self->s.angles2, self->currentAngles );
 		G_SetAngles( activator, self->currentAngles );
 		SetClientViewAngle( activator, self->currentAngles );
 
@@ -2616,6 +2645,10 @@ void misc_atst_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 			activator->locationDamage[hl] = self->locationDamage[hl];
 			self->locationDamage[hl] = tempLocDmg[hl];
 		}
+		if ( !self->s.number )
+		{
+			CG_CenterPrint( "@INGAME_EXIT_VIEW", SCREEN_HEIGHT * 0.95 );
+		}
 	}
 	else
 	{//get out of ATST
@@ -2628,11 +2661,12 @@ void misc_atst_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 		}
 		//FIXME: after a load/save, this crashes, BAD... somewhere in G2
 		G_SetOrigin( self, activator->currentOrigin );
-		VectorCopy( activator->currentAngles, self->currentAngles );
-		self->currentAngles[PITCH] = activator->currentAngles[ROLL] = 0;
+		VectorSet( self->currentAngles, 0, activator->client->ps.legsYaw, 0 );
+		//self->currentAngles[PITCH] = activator->currentAngles[ROLL] = 0;
 		G_SetAngles( self, self->currentAngles );
+		VectorCopy( activator->currentAngles, self->s.angles2 );
 		//remove my G2
-		if ( self->playerModel != -1 )
+		if ( self->playerModel >= 0 )
 		{
 			gi.G2API_RemoveGhoul2Model( self->ghoul2, self->playerModel );
 			self->playerModel = -1;
@@ -2666,6 +2700,7 @@ void misc_atst_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 		//open the hatch
 		misc_atst_setanim( self, self->craniumBone, BOTH_STAND2 );
 		gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "head_hatchcover_off", 0 );
+		G_Sound( self, G_SoundIndex( "sound/chars/atst/atst_hatch_open" ));
 	}
 }
 
@@ -2686,9 +2721,12 @@ void SP_misc_atst_drivable( gentity_t *ent )
 	RegisterItem( FindItemForWeapon( WP_ATST_SIDE ));	//precache the weapon
 	//HACKHACKHACKTEMP - until ATST gets real weapons of it's own?
 	RegisterItem( FindItemForWeapon( WP_EMPLACED_GUN ));	//precache the weapon
-	RegisterItem( FindItemForWeapon( WP_ROCKET_LAUNCHER ));	//precache the weapon
-	RegisterItem( FindItemForWeapon( WP_BOWCASTER ));	//precache the weapon
+//	RegisterItem( FindItemForWeapon( WP_ROCKET_LAUNCHER ));	//precache the weapon
+//	RegisterItem( FindItemForWeapon( WP_BOWCASTER ));	//precache the weapon
 	//HACKHACKHACKTEMP - until ATST gets real weapons of it's own?
+
+	G_SoundIndex( "sound/chars/atst/atst_hatch_open" );
+	G_SoundIndex( "sound/chars/atst/atst_hatch_close" );
 
 	NPC_ATST_Precache();
 	ent->NPC_type = "atst";
@@ -2712,6 +2750,7 @@ void SP_misc_atst_drivable( gentity_t *ent )
 
 	G_SetOrigin( ent, ent->s.origin );
 	G_SetAngles( ent, ent->s.angles );
+	VectorCopy( ent->currentAngles, ent->s.angles2 );
 
 	gi.linkentity ( ent );
 

@@ -46,6 +46,7 @@ void SaberUpdateSelf(gentity_t *ent)
 		ent->clipmask = 0;
 	}
 	else if (g_entities[ent->r.ownerNum].client->ps.weapon != WP_SABER ||
+		(g_entities[ent->r.ownerNum].client->ps.pm_flags & PMF_FOLLOW) ||
 		g_entities[ent->r.ownerNum].health < 1 ||
 		g_entities[ent->r.ownerNum].client->ps.saberHolstered ||
 		!g_entities[ent->r.ownerNum].client->ps.fd.forcePowerLevel[FP_SABERATTACK]/* ||
@@ -57,7 +58,7 @@ void SaberUpdateSelf(gentity_t *ent)
 	else
 	{
 		ent->r.contents = CONTENTS_LIGHTSABER;
-		ent->clipmask = MASK_SOLID | CONTENTS_LIGHTSABER;
+		ent->clipmask = MASK_PLAYERSOLID | CONTENTS_LIGHTSABER;
 	}
 
 	trap_LinkEntity(ent);
@@ -90,7 +91,7 @@ void WP_SaberInitBladeData( gentity_t *ent )
 	saberent->r.svFlags = SVF_USE_CURRENT_ORIGIN;
 	saberent->r.ownerNum = ent->s.number;
 
-	saberent->clipmask = MASK_SOLID | CONTENTS_LIGHTSABER;
+	saberent->clipmask = MASK_PLAYERSOLID | CONTENTS_LIGHTSABER;
 	saberent->r.contents = CONTENTS_LIGHTSABER;
 
 	VectorSet( saberent->r.mins, -8.0f, -8.0f, -8.0f );
@@ -112,6 +113,7 @@ void WP_SaberInitBladeData( gentity_t *ent )
 	saberHumSound = G_SoundIndex("sound/weapons/saber/saberhum1.wav");
 }
 
+#if 0
 static void G_SwingAngles( float destination, float swingTolerance, float clampTolerance,
 					float speed, float *angle, qboolean *swinging ) {
 	float	swing;
@@ -167,6 +169,7 @@ static void G_SwingAngles( float destination, float swingTolerance, float clampT
 		*angle = AngleMod( destination + (clampTolerance - 1) );
 	}
 }
+#endif
 
 //NOTE: If C` is modified this function should be modified as well (and vice versa)
 void G_G2ClientSpineAngles( gentity_t *ent, vec3_t viewAngles, const vec3_t angles, vec3_t thoracicAngles, vec3_t ulAngles, vec3_t llAngles )
@@ -194,34 +197,59 @@ void G_G2ClientSpineAngles( gentity_t *ent, vec3_t viewAngles, const vec3_t angl
 
 		trap_G2API_GetBoltMatrix_NoReconstruct( ent->client->ghoul2, 0, ent->bolt_Motion, &boltMatrix, vec3_origin, ent->client->ps.origin, level.time, /*cgs.gameModels*/0, vec3_origin);
 		//trap_G2API_GiveMeVectorFromMatrix( &boltMatrix, POSITIVE_X, motionFwd );
+		//POSITIVE_X:
+		/*
 		motionFwd[0] = boltMatrix.matrix[0][0];
 		motionFwd[1] = boltMatrix.matrix[1][0];
 		motionFwd[2] = boltMatrix.matrix[2][0];
+		*/
+		
+
+		//NEGATIVE_Y:
+		motionFwd[0] = -boltMatrix.matrix[0][1];
+		motionFwd[1] = -boltMatrix.matrix[1][1];
+		motionFwd[2] = -boltMatrix.matrix[2][1];
 
 		vectoangles( motionFwd, motionAngles );
 		for ( ang = 0; ang < 3; ang++ )
 		{
 			viewAngles[ang] = AngleNormalize180( viewAngles[ang] - AngleNormalize180( motionAngles[ang] ) );
 		}
+
+		if (viewAngles[YAW] < -90)
+		{
+			viewAngles[YAW] += 360;
+		}
+
+		viewAngles[YAW] -= 90;
 	}
 	//distribute the angles differently up the spine
 	//NOTE: each of these distributions must add up to 1.0f
-	thoracicAngles[PITCH] = viewAngles[PITCH]*0.20f;
-	llAngles[PITCH] = viewAngles[PITCH]*0.40f;
-	ulAngles[PITCH] = viewAngles[PITCH]*0.40f;
+	thoracicAngles[PITCH] = 0;//viewAngles[PITCH]*0.20f;
+	llAngles[PITCH] = 0;//viewAngles[PITCH]*0.40f;
+	ulAngles[PITCH] = 0;//viewAngles[PITCH]*0.40f;
 
+	thoracicAngles[YAW] = viewAngles[YAW]*0.20f - (viewAngles[PITCH]*(viewAngles[YAW]*.020f));
+	ulAngles[YAW] = viewAngles[YAW]*0.25f - (viewAngles[PITCH]*(viewAngles[YAW]*.0005f));
+	llAngles[YAW] = viewAngles[YAW]*0.25f - (viewAngles[PITCH]*(viewAngles[YAW]*.0005f));
 
-//	thoracicAngles[YAW] = viewAngles[YAW]*0.20f;
-//	ulAngles[YAW] = viewAngles[YAW]*0.35f;
-//	llAngles[YAW] = viewAngles[YAW]*0.45f;
-	thoracicAngles[YAW] = viewAngles[YAW]*0.20f;
-	ulAngles[YAW] = viewAngles[YAW]*0.25f;
-	llAngles[YAW] = viewAngles[YAW]*0.25f;
+	if (thoracicAngles[YAW] > 20)
+	{
+		thoracicAngles[YAW] = 20;
+	}
+	if (ulAngles[YAW] > 20)
+	{
+		ulAngles[YAW] = 20;
+	}
+	if (llAngles[YAW] > 20)
+	{
+		llAngles[YAW] = 20;
+	}
 
 	thoracicAngles[ROLL] = viewAngles[ROLL]*0.20f;
 	ulAngles[ROLL] = viewAngles[ROLL]*0.35f;
 	llAngles[ROLL] = viewAngles[ROLL]*0.45f;
-	
+
 	for ( ang = 0; ang < 3; ang++ )
 	{
 		if (ulAngles[ang] < 0)
@@ -253,7 +281,8 @@ void G_G2PlayerAngles( gentity_t *ent, vec3_t legs[3], vec3_t legsAngles){
 	float		degrees_positive = 0;
 	qboolean	yawing = qfalse;
 	vec3_t		ulAngles, llAngles, viewAngles, angles, thoracicAngles = {0,0,0};
-
+	//float		pitchViewAng;
+	//float		yawViewAng;
 
 	VectorCopy( ent->client->ps.viewangles, headAngles );
 	headAngles[YAW] = AngleMod( headAngles[YAW] );
@@ -282,10 +311,6 @@ void G_G2PlayerAngles( gentity_t *ent, vec3_t legs[3], vec3_t legsAngles){
 
 	torsoAngles[YAW] = headAngles[YAW] + 0.25 * movementOffsets[ dir ];
 
-	// torso
-//	G_SwingAngles( torsoAngles[YAW], 25, 90, /*cg_swingSpeed.value*/ 0.3, &ent->client->ps.viewangles[YAW], &yawing );
-//	torsoAngles[YAW] = ent->client->ps.viewangles[YAW];
-
 	// --------- pitch -------------
 
 	// only show a fraction of the pitch angle in the torso
@@ -294,7 +319,11 @@ void G_G2PlayerAngles( gentity_t *ent, vec3_t legs[3], vec3_t legsAngles){
 	} else {
 		dest = headAngles[PITCH] * 0.75;
 	}
-	G_SwingAngles( dest, 15, 30, 0.1, &ent->client->ps.viewangles[PITCH], &yawing );
+
+	//G_SwingAngles call disabled, at least for now. It isn't necessary on the server.
+//	pitchViewAng = ent->client->ps.viewangles[PITCH];
+//	G_SwingAngles( dest, 15, 30, 0.1, &pitchViewAng, &yawing );
+
 	torsoAngles[PITCH] = ent->client->ps.viewangles[PITCH];
 
 	// --------- roll -------------
@@ -345,6 +374,12 @@ void G_G2PlayerAngles( gentity_t *ent, vec3_t legs[3], vec3_t legsAngles){
 	velPos[0] = ent->client->ps.origin[0] + velocity[0];
 	velPos[1] = ent->client->ps.origin[1] + velocity[1];
 	velPos[2] = ent->client->ps.origin[2] + velocity[2];
+
+	if (ent->client->ps.groundEntityNum == ENTITYNUM_NONE)
+	{ //off the ground, no direction-based leg angles
+		VectorCopy(ent->client->ps.origin, velPos);
+	}
+
 	VectorSubtract(ent->client->ps.origin, velPos, velAng);
 
 	if (!VectorCompare(velAng, vec3_origin))
@@ -399,7 +434,10 @@ void G_G2PlayerAngles( gentity_t *ent, vec3_t legs[3], vec3_t legsAngles){
 		}
 	}
 
-	G_SwingAngles( legsAngles[YAW], 40, 90, /*cg_swingSpeed.value*/ 0.3, &ent->client->ps.viewangles[YAW], &yawing );
+	//G_SwingAngles call disabled, at least for now. It isn't necessary on the server.
+//	yawViewAng = ent->client->ps.viewangles[YAW];
+//	G_SwingAngles( legsAngles[YAW], 40, 90, /*cg_swingSpeed.value*/ 0.3, &yawViewAng, &yawing );
+
 	legsAngles[YAW] = ent->client->ps.viewangles[YAW];
 
 	legsAngles[ROLL] = 0;
@@ -414,6 +452,12 @@ void G_G2PlayerAngles( gentity_t *ent, vec3_t legs[3], vec3_t legsAngles){
 //	trap_G2API_SetBoneAngles(ent->client->ghoul2, 0, "upper_lumbar", torsoAngles, BONE_ANGLES_POSTMULT, POSITIVE_X, NEGATIVE_Y, NEGATIVE_Z, NULL, 0, level.time); 
 
 	VectorCopy( ent->client->ps.viewangles, viewAngles );
+
+	if (viewAngles[PITCH] > 290)
+	{ //keep the same general range as lerpAngles on the client so we can use the same spine correction
+		viewAngles[PITCH] -= 360;
+	}
+
 	viewAngles[YAW] = viewAngles[ROLL] = 0;
 	viewAngles[PITCH] *= 0.5;
 
@@ -980,11 +1024,9 @@ qboolean CheckSaberDamage(gentity_t *self, vec3_t saberStart, vec3_t saberEnd, q
 
 	if (doInterpolate)
 	{ //This didn't quite work out like I hoped. But it's better than nothing. Sort of.
-		vec3_t oldSaberStart, oldSaberEnd, saberDif, oldSaberDif, newOldAngles, newOldDif;
-		vec3_t mins, maxs;
-		float temp, ang;
-		float c, s;
-		int i = 0;
+		vec3_t oldSaberStart, oldSaberEnd, saberDif, oldSaberDif;
+		int traceTests = 0;
+		float trDif = 8;
 
 		VectorCopy(self->client->lastSaberBase, oldSaberStart);
 		VectorCopy(self->client->lastSaberTip, oldSaberEnd);
@@ -992,57 +1034,49 @@ qboolean CheckSaberDamage(gentity_t *self, vec3_t saberStart, vec3_t saberEnd, q
 		VectorSubtract(saberStart, saberEnd, saberDif);
 		VectorSubtract(oldSaberStart, oldSaberEnd, oldSaberDif);
 
-		saberEnd[0] = saberStart[0] - (saberDif[0]/2);
-		saberEnd[1] = saberStart[1] - (saberDif[1]/2);
-		saberEnd[2] = saberStart[2] - (saberDif[2]/2);
+		VectorNormalize(saberDif);
+		VectorNormalize(oldSaberDif);
 
-		oldSaberEnd[0] = oldSaberStart[0] - (oldSaberDif[0]/2);
-		oldSaberEnd[1] = oldSaberStart[1] - (oldSaberDif[1]/2);
-		oldSaberEnd[2] = oldSaberStart[2] - (oldSaberDif[2]/2);
+		saberEnd[0] = saberStart[0] - (saberDif[0]*trDif);
+		saberEnd[1] = saberStart[1] - (saberDif[1]*trDif);
+		saberEnd[2] = saberStart[2] - (saberDif[2]*trDif);
+
+		oldSaberEnd[0] = oldSaberStart[0] - (oldSaberDif[0]*trDif);
+		oldSaberEnd[1] = oldSaberStart[1] - (oldSaberDif[1]*trDif);
+		oldSaberEnd[2] = oldSaberStart[2] - (oldSaberDif[2]*trDif);
 
 		//G_TestLine(oldSaberEnd, saberEnd, 0x0000ff, 50);
 
-		VectorSubtract(saberEnd, oldSaberEnd, newOldDif);
-		VectorNormalize(newOldDif);
-		vectoangles(newOldDif, newOldAngles);
+		trap_Trace(&tr, saberEnd, NULL, NULL, saberStart, self->s.number, (MASK_PLAYERSOLID|CONTENTS_LIGHTSABER));
 
-		ang = newOldAngles[YAW] * 0.0174533f;
+		trDif++;
 
-		// rotate
-		c = cos( ang );
-		s = sin( ang );
-
-		if (SaberAttacking(self))
-		{ //increase trace thickness for attack
-			VectorSet( mins, -4, -4, -4 );
-			VectorSet( maxs, 4, 4, 4 );
-		}
-		else
+		while (tr.fraction == 1.0 && traceTests < 4 && tr.entityNum >= ENTITYNUM_NONE)
 		{
-			VectorSet( mins, -1, -1, -1 );
-			VectorSet( maxs, 1, 1, 1 );
+			VectorCopy(self->client->lastSaberBase, oldSaberStart);
+			VectorCopy(self->client->lastSaberTip, oldSaberEnd);
+
+			VectorSubtract(saberStart, saberEnd, saberDif);
+			VectorSubtract(oldSaberStart, oldSaberEnd, oldSaberDif);
+
+			VectorNormalize(saberDif);
+			VectorNormalize(oldSaberDif);
+
+			saberEnd[0] = saberStart[0] - (saberDif[0]*trDif);
+			saberEnd[1] = saberStart[1] - (saberDif[1]*trDif);
+			saberEnd[2] = saberStart[2] - (saberDif[2]*trDif);
+
+			oldSaberEnd[0] = oldSaberStart[0] - (oldSaberDif[0]*trDif);
+			oldSaberEnd[1] = oldSaberStart[1] - (oldSaberDif[1]*trDif);
+			oldSaberEnd[2] = oldSaberStart[2] - (oldSaberDif[2]*trDif);
+
+			//G_TestLine(oldSaberEnd, saberEnd, 0x0000ff, 50);
+
+			trap_Trace(&tr, saberEnd, NULL, NULL, saberStart, self->s.number, (MASK_PLAYERSOLID|CONTENTS_LIGHTSABER));
+
+			traceTests++;
+			trDif += 8;
 		}
-
-		temp = c * mins[0] - s * mins[1];
-		mins[1] = s * mins[0] + c * mins[1];
-		mins[0] = temp;
-
-		temp = c * maxs[0] - s * maxs[1];
-		maxs[1] = s * maxs[0] + c * maxs[1];
-		maxs[0] = temp;
-
-		// ensure that maxs is greater than mins
-		for ( i = 0; i < 2; i++ )
-		{
-			if ( maxs[i] < mins[i] )
-			{
-				temp = maxs[i];
-				maxs[i] = mins[i];
-				mins[i] = temp;
-			}
-		}
-
-		trap_Trace(&tr, saberEnd, mins, maxs, saberStart, self->s.number, (MASK_PLAYERSOLID|CONTENTS_LIGHTSABER));
 	}
 	else
 	{
@@ -1084,6 +1118,10 @@ qboolean CheckSaberDamage(gentity_t *self, vec3_t saberStart, vec3_t saberEnd, q
 
 	VectorSubtract(saberEnd, saberStart, dir);
 	VectorNormalize(dir);
+
+	//rww - I'm saying || tr.startsolid here, because otherwise your saber tends to skip positions and go through
+	//people, and the compensation traces start in their bbox too. Which results in the saber passing through people
+	//when you visually cut right through them. Which sucks.
 
 	if ((tr.fraction != 1 || tr.startsolid) &&
 		/*(!g_entities[tr.entityNum].client || !g_entities[tr.entityNum].client->ps.usingATST) &&*/
@@ -1144,7 +1182,16 @@ qboolean CheckSaberDamage(gentity_t *self, vec3_t saberStart, vec3_t saberEnd, q
 			if (dmg > 5)
 			{
 				if ((g_entities[tr.entityNum].client->ps.fd.forcePowerLevel[FP_SABERATTACK] - self->client->ps.fd.forcePowerLevel[FP_SABERATTACK]) > 1 &&
-					Q_irand(1, 10) < 8) //used to be < 7
+					Q_irand(1, 10) < 9) //used to be < 7
+				{ //Just got blocked by someone with a decently higher attack level, so enter into a lock (where they have the advantage due to a higher attack lev)
+					if (WP_SabersCheckLock(self, &g_entities[tr.entityNum]))
+					{	
+						self->client->ps.saberBlocked = BLOCKED_NONE;
+						g_entities[tr.entityNum].client->ps.saberBlocked = BLOCKED_NONE;
+						return didHit;
+					}
+				}
+				else if (Q_irand(1, 10) < 3)
 				{ //Just got blocked by someone with a decently higher attack level, so enter into a lock (where they have the advantage due to a higher attack lev)
 					if (WP_SabersCheckLock(self, &g_entities[tr.entityNum]))
 					{	
@@ -1312,7 +1359,7 @@ qboolean CheckSaberDamage(gentity_t *self, vec3_t saberStart, vec3_t saberEnd, q
 
 		if (dmg > 5)
 		{
-			if (Q_irand(1, 10) < 8) //used to be < 7
+			if (Q_irand(1, 10) < 9) //used to be < 7
 			{
 				if (WP_SabersCheckLock(self, otherOwner))
 				{
@@ -1343,20 +1390,178 @@ qboolean CheckSaberDamage(gentity_t *self, vec3_t saberStart, vec3_t saberEnd, q
 	return didHit;
 }
 
-#define MIN_SABER_SLICE_DISTANCE 60
+#define MIN_SABER_SLICE_DISTANCE 50
 
 #define MIN_SABER_SLICE_RETURN_DISTANCE 30
 
-#define SABER_THROWN_HIT_DAMAGE 40
-#define SABER_THROWN_RETURN_HIT_DAMAGE 20
+#define SABER_THROWN_HIT_DAMAGE 30
+#define SABER_THROWN_RETURN_HIT_DAMAGE 5
 
 void thrownSaberTouch (gentity_t *saberent, gentity_t *other, trace_t *trace);
+
+qboolean CheckThrownSaberDamaged(gentity_t *saberent, gentity_t *saberOwner, gentity_t *ent, int dist, int returning)
+{
+	vec3_t vecsub;
+	float veclen;
+	gentity_t *te;
+
+	if (saberOwner && saberOwner->client && saberOwner->client->ps.saberAttackWound > level.time)
+	{
+		return qfalse;
+	}
+
+	if (ent && ent->client && ent->inuse && ent->s.number != saberOwner->s.number &&
+		ent->health > 0 && ent->takedamage &&
+		trap_InPVS(ent->client->ps.origin, saberent->r.currentOrigin) &&
+		ent->client->sess.sessionTeam != TEAM_SPECTATOR &&
+		ent->client->pers.connected)
+	{
+		if (ent->inuse && ent->client &&
+			ent->client->ps.duelInProgress &&
+			ent->client->ps.duelIndex != saberOwner->s.number)
+		{
+			return qfalse;
+		}
+
+		if (ent->inuse && ent->client &&
+			saberOwner->client->ps.duelInProgress &&
+			saberOwner->client->ps.duelIndex != ent->s.number)
+		{
+			return qfalse;
+		}
+
+		VectorSubtract(saberent->r.currentOrigin, ent->client->ps.origin, vecsub);
+		veclen = VectorLength(vecsub);
+
+		if (veclen < dist)
+		{
+			trace_t tr;
+
+			trap_Trace(&tr, saberent->r.currentOrigin, NULL, NULL, ent->client->ps.origin, saberent->s.number, MASK_SHOT);
+
+			/*
+			if (tr.startsolid || tr.allsolid)
+			{
+				if (!returning)
+				{ //return to owner if startsolid
+					thrownSaberTouch(saberent, saberent, NULL);
+				}
+
+				return qfalse;
+			}
+			*/
+
+			if (tr.fraction == 1 || tr.entityNum == ent->s.number)
+			{ //Slice them
+				if (!saberOwner->client->ps.isJediMaster && WP_SaberCanBlock(ent, tr.endpos, 0, MOD_SABER, qfalse, 8))
+				{
+					te = G_TempEntity( tr.endpos, EV_SABER_BLOCK );
+					VectorCopy(tr.endpos, te->s.origin);
+					VectorCopy(tr.plane.normal, te->s.angles);
+					if (!te->s.angles[0] && !te->s.angles[1] && !te->s.angles[2])
+					{
+						te->s.angles[1] = 1;
+					}
+					te->s.eventParm = 1;
+
+					if (!returning)
+					{ //return to owner if blocked
+						thrownSaberTouch(saberent, saberent, NULL);
+					}
+
+					saberOwner->client->ps.saberAttackWound = level.time + 500;
+					return qfalse;
+				}
+				else
+				{
+					vec3_t dir;
+
+					VectorSubtract(tr.endpos, saberent->r.currentOrigin, dir);
+					VectorNormalize(dir);
+
+					if (!dir[0] && !dir[1] && !dir[2])
+					{
+						dir[1] = 1;
+					}
+
+					if (saberOwner->client->ps.isJediMaster)
+					{ //2x damage for the Jedi Master
+						G_Damage(ent, saberOwner, saberOwner, dir, tr.endpos, saberent->damage*2, 0, MOD_SABER);
+					}
+					else
+					{
+						G_Damage(ent, saberOwner, saberOwner, dir, tr.endpos, saberent->damage, 0, MOD_SABER);
+					}
+
+					te = G_TempEntity( tr.endpos, EV_SABER_HIT );
+					VectorCopy(tr.endpos, te->s.origin);
+					VectorCopy(tr.plane.normal, te->s.angles);
+					if (!te->s.angles[0] && !te->s.angles[1] && !te->s.angles[2])
+					{
+						te->s.angles[1] = 1;
+					}
+
+					te->s.eventParm = 1;
+
+					if (!returning)
+					{ //return to owner if blocked
+						thrownSaberTouch(saberent, saberent, NULL);
+					}
+				}
+
+				saberOwner->client->ps.saberAttackWound = level.time + 500;
+			}
+		}
+	}
+	else if (ent && !ent->client && ent->inuse && ent->takedamage && ent->health > 0 && ent->s.number != saberOwner->s.number &&
+		ent->s.number != saberent->s.number && trap_InPVS(ent->r.currentOrigin, saberent->r.currentOrigin))
+	{
+		VectorSubtract(saberent->r.currentOrigin, ent->r.currentOrigin, vecsub);
+		veclen = VectorLength(vecsub);
+
+		if (veclen < dist)
+		{
+			trace_t tr;
+
+			trap_Trace(&tr, saberent->r.currentOrigin, NULL, NULL, ent->r.currentOrigin, saberent->s.number, MASK_SHOT);
+
+			if (tr.fraction == 1 || tr.entityNum == ent->s.number)
+			{
+				vec3_t dir;
+
+				VectorSubtract(tr.endpos, saberent->r.currentOrigin, dir);
+				VectorNormalize(dir);
+
+				G_Damage(ent, saberOwner, saberOwner, dir, tr.endpos, 5, 0, MOD_SABER);
+
+				te = G_TempEntity( tr.endpos, EV_SABER_HIT );
+				VectorCopy(tr.endpos, te->s.origin);
+				VectorCopy(tr.plane.normal, te->s.angles);
+				if (!te->s.angles[0] && !te->s.angles[1] && !te->s.angles[2])
+				{
+					te->s.angles[1] = 1;
+				}
+
+				te->s.eventParm = 1;
+
+				if (!returning)
+				{ //return to owner if blocked
+					thrownSaberTouch(saberent, saberent, NULL);
+				}
+
+				saberOwner->client->ps.saberAttackWound = level.time + 500;
+			}
+		}
+	}
+
+	return qtrue;
+}
 
 void saberCheckRadiusDamage(gentity_t *saberent, int returning)
 { //we're going to cheat and damage players within the saber's radius, just for the sake of doing things more "efficiently"
 	int i = 0;
 	int dist = 0;
-	gentity_t *ent, *te;
+	gentity_t *ent;
 	gentity_t *saberOwner = &g_entities[saberent->r.ownerNum];
 
 	if (returning && returning != 2)
@@ -1382,137 +1587,13 @@ void saberCheckRadiusDamage(gentity_t *saberent, int returning)
 	{
 		ent = &g_entities[i];
 
-		if (ent && ent->client && ent->inuse && ent->s.number != saberOwner->s.number &&
-			ent->health > 0 && ent->takedamage &&
-			trap_InPVS(ent->client->ps.origin, saberent->r.currentOrigin))
-		{
-			vec3_t vecsub;
-			float veclen;
-
-			if (ent->inuse && ent->client &&
-				ent->client->ps.duelInProgress &&
-				ent->client->ps.duelIndex != saberOwner->s.number)
-			{
-				i++;
-				continue;
-			}
-
-			if (ent->inuse && ent->client &&
-				saberOwner->client->ps.duelInProgress &&
-				saberOwner->client->ps.duelIndex != ent->s.number)
-			{
-				i++;
-				continue;
-			}
-
-			VectorSubtract(saberent->r.currentOrigin, ent->client->ps.origin, vecsub);
-			veclen = VectorLength(vecsub);
-
-			if (veclen < dist)
-			{
-				trace_t tr;
-
-				trap_Trace(&tr, saberent->r.currentOrigin, NULL, NULL, ent->client->ps.origin, saberent->s.number, MASK_SHOT);
-
-				if (tr.fraction == 1 || tr.entityNum == ent->s.number)
-				{ //Slice them
-					if (!saberOwner->client->ps.isJediMaster && WP_SaberCanBlock(ent, tr.endpos, 0, MOD_SABER, qfalse, 0))
-					{
-						te = G_TempEntity( tr.endpos, EV_SABER_BLOCK );
-						VectorCopy(tr.endpos, te->s.origin);
-						VectorCopy(tr.plane.normal, te->s.angles);
-						if (!te->s.angles[0] && !te->s.angles[1] && !te->s.angles[2])
-						{
-							te->s.angles[1] = 1;
-						}
-						te->s.eventParm = 1;
-
-						if (!returning)
-						{ //return to owner if blocked
-							thrownSaberTouch(saberent, saberent, NULL);
-						}
-						return;
-					}
-					else
-					{
-						vec3_t dir;
-
-						VectorSubtract(tr.endpos, saberent->r.currentOrigin, dir);
-						VectorNormalize(dir);
-
-						if (!dir[0] && !dir[1] && !dir[2])
-						{
-							dir[1] = 1;
-						}
-
-						if (saberOwner->client->ps.isJediMaster)
-						{ //2x damage for the Jedi Master
-							G_Damage(ent, saberOwner, saberOwner, dir, tr.endpos, saberent->damage*2, 0, MOD_SABER);
-						}
-						else
-						{
-							G_Damage(ent, saberOwner, saberOwner, dir, tr.endpos, saberent->damage, 0, MOD_SABER);
-						}
-
-						te = G_TempEntity( tr.endpos, EV_SABER_HIT );
-						VectorCopy(tr.endpos, te->s.origin);
-						VectorCopy(tr.plane.normal, te->s.angles);
-						if (!te->s.angles[0] && !te->s.angles[1] && !te->s.angles[2])
-						{
-							te->s.angles[1] = 1;
-						}
-
-						te->s.eventParm = 1;
-					}
-
-					saberOwner->client->ps.saberAttackWound = level.time + 300;
-				}
-			}
-		}
-		else if (ent && ent->inuse && ent->takedamage && ent->health > 0 && ent->s.number != saberOwner->s.number &&
-			ent->s.number != saberent->s.number && trap_InPVS(ent->r.currentOrigin, saberent->r.currentOrigin))
-		{
-			vec3_t vecsub;
-			float veclen;
-
-			VectorSubtract(saberent->r.currentOrigin, ent->r.currentOrigin, vecsub);
-			veclen = VectorLength(vecsub);
-
-			if (veclen < dist)
-			{
-			trace_t tr;
-
-			trap_Trace(&tr, saberent->r.currentOrigin, NULL, NULL, ent->r.currentOrigin, saberent->s.number, MASK_SHOT);
-
-			if (tr.fraction == 1 || tr.entityNum == ent->s.number)
-			{
-					vec3_t dir;
-
-					VectorSubtract(tr.endpos, saberent->r.currentOrigin, dir);
-					VectorNormalize(dir);
-
-					G_Damage(ent, saberOwner, saberOwner, dir, tr.endpos, 5, 0, MOD_SABER);
-
-					te = G_TempEntity( tr.endpos, EV_SABER_HIT );
-					VectorCopy(tr.endpos, te->s.origin);
-					VectorCopy(tr.plane.normal, te->s.angles);
-					if (!te->s.angles[0] && !te->s.angles[1] && !te->s.angles[2])
-					{
-						te->s.angles[1] = 1;
-					}
-
-					te->s.eventParm = 1;
-
-					saberOwner->client->ps.saberAttackWound = level.time + 100;
-				}
-			}
-		}
+		CheckThrownSaberDamaged(saberent, saberOwner, ent, dist, returning);
 
 		i++;
 	}
 }
 
-#define THROWN_SABER_COMP
+//#define THROWN_SABER_COMP
 
 void saberMoveBack( gentity_t *ent, qboolean goingBack ) 
 {
@@ -1556,6 +1637,9 @@ void saberMoveBack( gentity_t *ent, qboolean goingBack )
 			//Unfortunately doing this would defeat the purpose of the compensation. We will have to settle for a jerk on the client.
 			//VectorCopy( origin, ent->r.currentOrigin );
 
+			CheckThrownSaberDamaged(ent, &g_entities[ent->r.ownerNum], &g_entities[tr.entityNum], 256, 0);
+
+			tr.startsolid = 0;
 			thrownSaberTouch(ent, &g_entities[tr.entityNum], &tr);
 			return;
 		}
@@ -1606,7 +1690,7 @@ void MakeDeadSaber(gentity_t *ent)
 	saberent->r.svFlags = SVF_USE_CURRENT_ORIGIN;
 	saberent->r.ownerNum = ent->s.number;
 
-	saberent->clipmask = MASK_SOLID;
+	saberent->clipmask = MASK_PLAYERSOLID;
 	saberent->r.contents = CONTENTS_TRIGGER;//0;
 
 	VectorSet( saberent->r.mins, -3.0f, -3.0f, -3.0f );
@@ -1740,7 +1824,7 @@ void saberBackToOwner(gentity_t *saberent)
 		saberent->s.pos.trTime = level.time;
 	}
 
-	if (ownerLen <= 256)
+	if (ownerLen <= 512)
 	{
 		saberent->s.saberInFlight = qfalse;
 		saberent->s.loopSound = saberHumSound;
@@ -1775,8 +1859,16 @@ void saberBackToOwner(gentity_t *saberent)
 	saberent->nextthink = level.time;
 }
 
+void saberFirstThrown(gentity_t *saberent);
+
 void thrownSaberTouch (gentity_t *saberent, gentity_t *other, trace_t *trace)
 {
+	gentity_t *hitEnt = other;
+
+	if (other && other->s.number == saberent->r.ownerNum)
+	{
+		return;
+	}
 	VectorClear(saberent->s.pos.trDelta);
 	saberent->s.pos.trTime = level.time;
 
@@ -1791,6 +1883,17 @@ void thrownSaberTouch (gentity_t *saberent, gentity_t *other, trace_t *trace)
 
 	saberent->think = saberBackToOwner;
 	saberent->nextthink = level.time;
+
+	//saberCheckRadiusDamage(saberent, 2);
+	if (other && other->r.ownerNum < MAX_CLIENTS &&
+		(other->r.contents & CONTENTS_LIGHTSABER) &&
+		g_entities[other->r.ownerNum].client &&
+		g_entities[other->r.ownerNum].inuse)
+	{
+		hitEnt = &g_entities[other->r.ownerNum];
+	}
+
+	CheckThrownSaberDamaged(saberent, &g_entities[saberent->r.ownerNum], hitEnt, 256, 0);
 
 	saberent->speed = 0;
 }
@@ -1859,7 +1962,7 @@ void saberFirstThrown(gentity_t *saberent)
 		}
 	}
 
-	if (BG_HasYsalimari(g_gametype.integer, &saberOwn->client->ps))
+	if (BG_HasYsalamiri(g_gametype.integer, &saberOwn->client->ps))
 	{
 		thrownSaberTouch(saberent, saberent, NULL);
 		goto runMin;
@@ -1896,6 +1999,9 @@ void saberFirstThrown(gentity_t *saberent)
 		traceTo[1] += fwd[1]*4096;
 		traceTo[2] += fwd[2]*4096;
 
+		saberMoveBack(saberent, qfalse);
+		VectorCopy(saberent->r.currentOrigin, saberent->s.pos.trBase);
+
 		if (saberOwn->client->ps.fd.forcePowerLevel[FP_SABERTHROW] >= FORCE_LEVEL_3)
 		{ //if highest saber throw rank, we can direct the saber toward players directly by looking at them
 			trap_Trace(&tr, traceFrom, NULL, NULL, traceTo, saberOwn->s.number, MASK_PLAYERSOLID);
@@ -1905,23 +2011,25 @@ void saberFirstThrown(gentity_t *saberent)
 			trap_Trace(&tr, traceFrom, NULL, NULL, traceTo, saberOwn->s.number, MASK_SOLID);
 		}
 
-		VectorSubtract(tr.endpos, saberent->r.currentOrigin, dir);
+		//G_TestLine(traceFrom, tr.endpos, 0x000000ff, 100);
 
-		VectorNormalize(dir);
-
-		saberMoveBack(saberent, qfalse);
-		VectorCopy(saberent->r.currentOrigin, saberent->s.pos.trBase);
-
-		VectorScale(dir, 700, saberent->s.pos.trDelta );
-		saberent->s.pos.trTime = level.time;
-
-		if (saberOwn->client->ps.fd.forcePowerLevel[FP_SABERTHROW] >= FORCE_LEVEL_3)
-		{ //we'll treat them to a quicker update rate if their throw rank is high enough
-			saberent->speed = level.time + 100;
-		}
-		else
+		//if (tr.fraction != 1)
 		{
-			saberent->speed = level.time + 400;
+			VectorSubtract(tr.endpos, saberent->r.currentOrigin, dir);
+
+			VectorNormalize(dir);
+
+			VectorScale(dir, 500, saberent->s.pos.trDelta );
+			saberent->s.pos.trTime = level.time;
+
+			if (saberOwn->client->ps.fd.forcePowerLevel[FP_SABERTHROW] >= FORCE_LEVEL_3)
+			{ //we'll treat them to a quicker update rate if their throw rank is high enough
+				saberent->speed = level.time + 100;
+			}
+			else
+			{
+				saberent->speed = level.time + 400;
+			}
 		}
 	}
 
@@ -1946,6 +2054,7 @@ void WP_SaberPositionUpdate( gentity_t *self, usercmd_t *ucmd )
 	int legsAnim;
 	int returnAfterUpdate = 0;
 	float animSpeedScale = 1;
+	qboolean setTorso = qfalse;
 
 	if (self && self->inuse && self->client)
 	{
@@ -2125,7 +2234,9 @@ void WP_SaberPositionUpdate( gentity_t *self, usercmd_t *ucmd )
 				saberent->s.eType = ET_GENERAL;
 				saberent->s.eFlags = 0;
 				saberent->s.modelindex = G_ModelIndex("models/weapons2/saber/saber_w.glm");
-				saberent->s.modelGhoul2 = 999;
+				saberent->s.modelGhoul2 = 127;
+
+				saberent->parent = self;
 
 				self->client->ps.saberEntityState = 1;
 
@@ -2255,30 +2366,35 @@ finalUpdate:
 
 	if (self->client->ps.legsAnimExecute != legsAnim)
 	{
-		trap_G2API_SetBoneAnim(self->client->ghoul2, 0, "model_root", bgGlobalAnimations[legsAnim].firstFrame, bgGlobalAnimations[legsAnim].firstFrame+bgGlobalAnimations[legsAnim].numFrames, BONE_ANIM_OVERRIDE_FREEZE|BONE_ANIM_BLEND, animSpeedScale, level.time, -1, 150);
-		self->client->ps.legsAnimExecute = legsAnim;
+		float animSpeed = 50.0f / bgGlobalAnimations[legsAnim].frameLerp;
+		int aFlags;
+		animSpeedScale = (animSpeed *= animSpeedScale);
 
-		if ((self->client->ps.torsoAnim&~ANIM_TOGGLEBIT) == legsAnim)
+		if (bgGlobalAnimations[legsAnim].loopFrames != -1)
 		{
-			if (!BG_FlippingAnim( self->client->ps.legsAnim ) &&
-				!BG_SpinningSaberAnim( self->client->ps.legsAnim ) &&
-				!BG_InSpecialJump( self->client->ps.legsAnim ) &&
-				!BG_InRoll(&self->client->ps, self->client->ps.legsAnim) &&
-				!BG_SaberInSpecial(self->client->ps.saberMove) &&
-				!BG_SaberInSpecialAttack(self->client->ps.legsAnim) )
-			{
-				trap_G2API_SetBoneAnim(self->client->ghoul2, 0, "Motion", bgGlobalAnimations[legsAnim].firstFrame, bgGlobalAnimations[legsAnim].firstFrame+bgGlobalAnimations[legsAnim].numFrames, BONE_ANIM_OVERRIDE_FREEZE|BONE_ANIM_BLEND, animSpeedScale, level.time, -1, 150);
-			}
+			aFlags = BONE_ANIM_OVERRIDE_LOOP;
 		}
+		else
+		{
+			aFlags = BONE_ANIM_OVERRIDE_FREEZE;
+		}
+
+		aFlags |= BONE_ANIM_BLEND; //since client defaults to blend. Not sure if this will make much difference if any on client position, but it's here just for the sake of matching them.
+
+		trap_G2API_SetBoneAnim(self->client->ghoul2, 0, "model_root", bgGlobalAnimations[legsAnim].firstFrame, bgGlobalAnimations[legsAnim].firstFrame+bgGlobalAnimations[legsAnim].numFrames, aFlags, animSpeedScale, level.time, -1, 150);
+		self->client->ps.legsAnimExecute = legsAnim;
 	}
 	if (self->client->ps.torsoAnimExecute != torsoAnim)
 	{
 		int initialFrame;
+		int aFlags = 0;
+		float animSpeed = 0;
 
 		f = torsoAnim;
 
 		initialFrame = bgGlobalAnimations[f].firstFrame;
 	
+		/*
 		if (bgGlobalAnimations[f].numFrames > 20)
 		{
 			initialFrame += 6;
@@ -2287,25 +2403,59 @@ finalUpdate:
 		{ //HACK: Force it a couple frames into the animation so it doesn't lag behind the client visual position as much..
 			initialFrame += 2;
 		}
+		*/
 
 		BG_SaberStartTransAnim(self->client->ps.fd.saberAnimLevel, f, &animSpeedScale);
 
-		trap_G2API_SetBoneAnim(self->client->ghoul2, 0, "upper_lumbar", initialFrame, bgGlobalAnimations[f].firstFrame+bgGlobalAnimations[f].numFrames, BONE_ANIM_OVERRIDE_FREEZE|BONE_ANIM_BLEND, animSpeedScale, level.time, initialFrame, 150);
+		animSpeed = 50.0f / bgGlobalAnimations[f].frameLerp;
+		animSpeedScale = (animSpeed *= animSpeedScale);
+
+		if (bgGlobalAnimations[f].loopFrames != -1)
+		{
+			aFlags = BONE_ANIM_OVERRIDE_LOOP;
+		}
+		else
+		{
+			aFlags = BONE_ANIM_OVERRIDE_FREEZE;
+		}
+
+		aFlags |= BONE_ANIM_BLEND; //since client defaults to blend. Not sure if this will make much difference if any on client position, but it's here just for the sake of matching them.
+
+		trap_G2API_SetBoneAnim(self->client->ghoul2, 0, "upper_lumbar", initialFrame, bgGlobalAnimations[f].firstFrame+bgGlobalAnimations[f].numFrames, aFlags, animSpeedScale, level.time, initialFrame, 150);
 
 		self->client->ps.torsoAnimExecute = torsoAnim;
+		
+		setTorso = qtrue;
+	}
 
-		if ((self->client->ps.torsoAnim&~ANIM_TOGGLEBIT) == torsoAnim)
+	if (!BG_FlippingAnim( self->client->ps.legsAnim ) &&
+		!BG_FlippingAnim( self->client->ps.torsoAnim ) &&
+		!BG_SpinningSaberAnim( self->client->ps.legsAnim ) &&
+		!BG_SpinningSaberAnim( self->client->ps.torsoAnim ) &&
+		!BG_InSpecialJump( self->client->ps.legsAnim ) &&
+		!BG_InSpecialJump( self->client->ps.torsoAnim ) &&
+		!BG_InRoll(&self->client->ps, self->client->ps.legsAnim) &&
+		!BG_SaberInSpecial(self->client->ps.saberMove) &&
+		!BG_SaberInSpecialAttack(self->client->ps.legsAnim) &&
+		!BG_SaberInSpecialAttack(self->client->ps.torsoAnim) &&
+		setTorso )
+	{
+		float animSpeed = 50.0f / bgGlobalAnimations[torsoAnim].frameLerp;
+		int aFlags;
+		animSpeedScale = (animSpeed *= animSpeedScale);
+
+		if (bgGlobalAnimations[torsoAnim].loopFrames != -1)
 		{
-			if (!BG_FlippingAnim( self->client->ps.torsoAnim ) &&
-				!BG_SpinningSaberAnim( self->client->ps.torsoAnim ) &&
-				!BG_InSpecialJump( self->client->ps.torsoAnim ) &&
-				!BG_InRoll(&self->client->ps, self->client->ps.legsAnim) &&
-				!BG_SaberInSpecial(self->client->ps.saberMove) &&
-				!BG_SaberInSpecialAttack(self->client->ps.torsoAnim) )
-			{
-				trap_G2API_SetBoneAnim(self->client->ghoul2, 0, "Motion", bgGlobalAnimations[f].firstFrame, bgGlobalAnimations[f].firstFrame+bgGlobalAnimations[f].numFrames, BONE_ANIM_OVERRIDE_FREEZE|BONE_ANIM_BLEND, animSpeedScale, level.time, initialFrame, 150);
-			}
+			aFlags = BONE_ANIM_OVERRIDE_LOOP;
 		}
+		else
+		{
+			aFlags = BONE_ANIM_OVERRIDE_FREEZE;
+		}
+
+		aFlags |= BONE_ANIM_BLEND; //since client defaults to blend. Not sure if this will make much difference if any on client position, but it's here just for the sake of matching them.
+
+		trap_G2API_SetBoneAnim(self->client->ghoul2, 0, "Motion", bgGlobalAnimations[torsoAnim].firstFrame, bgGlobalAnimations[torsoAnim].firstFrame+bgGlobalAnimations[torsoAnim].numFrames, aFlags, animSpeedScale, level.time, -1, 150);
 	}
 }
 
@@ -2539,9 +2689,32 @@ void WP_SaberBlock( gentity_t *playerent, vec3_t hitloc, qboolean missileBlock )
 
 int WP_SaberCanBlock(gentity_t *self, vec3_t point, int dflags, int mod, qboolean projectile, int attackStr)
 {
+	qboolean thrownSaber = qfalse;
+	float blockFactor = 0;
+
 	if (!self || !self->client || !point)
 	{
 		return 0;
+	}
+
+	if (attackStr == 8)
+	{
+		attackStr = 0;
+		thrownSaber = qtrue;
+	}
+
+	if (BG_SaberInAttack(self->client->ps.saberMove))
+	{
+		return 0;
+	}
+
+	if (PM_InSaberAnim(self->client->ps.torsoAnim) && !self->client->ps.saberBlocked &&
+		self->client->ps.saberMove != LS_READY && self->client->ps.saberMove != LS_NONE)
+	{
+		if ( self->client->ps.saberMove < LS_PARRY_UP || self->client->ps.saberMove > LS_REFLECT_LL )
+		{
+			return 0;
+		}
 	}
 
 	if (self->client->ps.saberHolstered)
@@ -2569,8 +2742,8 @@ int WP_SaberCanBlock(gentity_t *self, vec3_t point, int dflags, int mod, qboolea
 		return 0;
 	}
 
-	if ((self->client->pers.cmd.buttons & BUTTON_ATTACK) &&
-		(projectile || attackStr == FORCE_LEVEL_3))
+	if ((self->client->pers.cmd.buttons & BUTTON_ATTACK)/* &&
+		(projectile || attackStr == FORCE_LEVEL_3)*/)
 	{ //don't block when the player is trying to slash, if it's a projectile or he's doing a very strong attack
 		return 0;
 	}
@@ -2640,30 +2813,30 @@ int WP_SaberCanBlock(gentity_t *self, vec3_t point, int dflags, int mod, qboolea
 
 	if (self->client->ps.fd.forcePowerLevel[FP_SABERDEFEND] == FORCE_LEVEL_3)
 	{
-		if (!InFront( point, self->client->ps.origin, self->client->ps.viewangles, 0.05f )) //orig 0.2f
-		{
-			return 0;
-		}
+		blockFactor = 0.05f;
 	}
 	else if (self->client->ps.fd.forcePowerLevel[FP_SABERDEFEND] == FORCE_LEVEL_2)
 	{
-		if (!InFront( point, self->client->ps.origin, self->client->ps.viewangles, 0.6f ))
-		{
-			return 0;
-		}
+		blockFactor = 0.6f;
 	}
 	else if (self->client->ps.fd.forcePowerLevel[FP_SABERDEFEND] == FORCE_LEVEL_1)
 	{
-		if (!InFront( point, self->client->ps.origin, self->client->ps.viewangles, 0.9f ))
-		{
-			return 0;
-		}
+		blockFactor = 0.9f;
 	}
 	else
 	{ //for now we just don't get to autoblock with no def
 		return 0;
 	}
 
+	if (thrownSaber)
+	{
+		blockFactor -= 0.25f;
+	}
+
+	if (!InFront( point, self->client->ps.origin, self->client->ps.viewangles, blockFactor )) //orig 0.2f
+	{
+		return 0;
+	}
 
 	WP_SaberBlockNonRandom(self, point, projectile);
 	return 1;
@@ -2672,15 +2845,25 @@ int WP_SaberCanBlock(gentity_t *self, vec3_t point, int dflags, int mod, qboolea
 qboolean HasSetSaberOnly(void)
 {
 	int i = 0;
+	int wDisable = 0;
 
 	if (g_gametype.integer == GT_JEDIMASTER)
 	{ //set to 0 
 		return qfalse;
 	}
 
+	if (g_gametype.integer == GT_TOURNAMENT)
+	{
+		wDisable = g_duelWeaponDisable.integer;
+	}
+	else
+	{
+		wDisable = g_weaponDisable.integer;
+	}
+
 	while (i < WP_NUM_WEAPONS)
 	{
-		if (!(g_weaponDisable.integer & (1 << i)) &&
+		if (!(wDisable & (1 << i)) &&
 			i != WP_SABER && i != WP_NONE)
 		{
 			return qfalse;

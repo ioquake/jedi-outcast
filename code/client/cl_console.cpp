@@ -83,7 +83,7 @@ void Con_Dump_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("usage: condump <filename>\n");
+		Com_Printf (SP_GetStringTextString("CON_TEXT_DUMP_USAGE"));
 		return;
 	}
 
@@ -164,15 +164,22 @@ void Con_CheckResize (void)
 
 	if (width < 1)			// video hasn't been initialized yet
 	{
+		con.xadjust = 1;
+		con.yadjust = 1;
 		width = DEFAULT_CONSOLE_WIDTH;
 		con.linewidth = width;
 		con.totallines = CON_TEXTSIZE / con.linewidth;
 		for(i=0; i<CON_TEXTSIZE; i++)
-
+		{
 			con.text[i] = (ColorIndex(COLOR_WHITE)<<8) | ' ';
+		}
 	}
 	else
 	{
+		// on wide screens, we will center the text
+		con.xadjust = 640.0f / cls.glconfig.vidWidth;
+		con.yadjust = 480.0f / cls.glconfig.vidHeight;
+
 		oldwidth = con.linewidth;
 		con.linewidth = width;
 		oldtotallines = con.totallines;
@@ -459,10 +466,6 @@ void Con_DrawSolidConsole( float frac )
 
 	if (lines > cls.glconfig.vidHeight )
 		lines = cls.glconfig.vidHeight;
-
-	// on wide screens, we will center the text
-	con.xadjust = 640.0f / cls.glconfig.vidWidth;
-	con.yadjust = 480.0f / cls.glconfig.vidHeight;
 
 	// draw the background
 	y = frac * SCREEN_HEIGHT - 2;

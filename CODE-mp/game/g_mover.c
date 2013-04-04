@@ -40,7 +40,13 @@ gentity_t	*G_TestEntityPosition( gentity_t *ent ) {
 		mask = MASK_SOLID;
 	}
 	if ( ent->client ) {
-		trap_Trace( &tr, ent->client->ps.origin, ent->r.mins, ent->r.maxs, ent->client->ps.origin, ent->s.number, mask );
+		vec3_t vMax;
+		VectorCopy(ent->r.maxs, vMax);
+		if (vMax[2] < 1)
+		{
+			vMax[2] = 1;
+		}
+		trap_Trace( &tr, ent->client->ps.origin, ent->r.mins, vMax, ent->client->ps.origin, ent->s.number, mask );
 	} else {
 		trap_Trace( &tr, ent->s.pos.trBase, ent->r.mins, ent->r.maxs, ent->s.pos.trBase, ent->s.number, mask );
 	}
@@ -146,7 +152,7 @@ qboolean	G_TryPushingEntity( gentity_t *check, gentity_t *pusher, vec3_t move, v
 
 	// may have pushed them off an edge
 	if ( check->s.groundEntityNum != pusher->s.number ) {
-		check->s.groundEntityNum = -1;
+		check->s.groundEntityNum = ENTITYNUM_NONE;//-1;
 	}
 
 	block = G_TestEntityPosition( check );
@@ -161,6 +167,15 @@ qboolean	G_TryPushingEntity( gentity_t *check, gentity_t *pusher, vec3_t move, v
 		return qtrue;
 	}
 
+	if (check->takedamage && !check->client && check->s.weapon && check->r.ownerNum < MAX_CLIENTS &&
+		check->health < 500)
+	{
+		if (check->health > 0)
+		{
+			G_Damage(check, pusher, pusher, vec3_origin, check->r.currentOrigin, 999, 0, MOD_UNKNOWN);
+		}
+		return qfalse;
+	}
 	// if it is ok to leave in the old position, do it
 	// this is only relevent for riding entities, not pushed
 	// Sliding trapdoors can cause this.
@@ -722,19 +737,34 @@ void Blocked_Door( gentity_t *ent, gentity_t *other ) {
 			Team_DroppedFlagThink( other );
 			return;
 		}
-		G_TempEntity( other->s.origin, EV_ITEM_POP );
-		G_FreeEntity( other );
+		if (other->physicsObject && other->health && other->takedamage && other->inuse && !other->client)
+		{ //it would otherwise just remove us, so do 99999 damage instead
+			G_Damage( other, ent, ent, NULL, NULL, 99999, DAMAGE_NO_ARMOR, MOD_CRUSH );
+		}
+		else if (other->physicsObject && other->inuse && !other->client && other->s.weapon == WP_DET_PACK && other->think)
+		{ //detpack is about to explode
+			return;
+		}
+		else if (other->isSaberEntity)
+		{
+			return;
+		}
+		else
+		{
+			G_TempEntity( other->s.origin, EV_ITEM_POP );
+			G_FreeEntity( other );
+		}
 		return;
 	}
 
 	if ( ent->damage ) {
 		if (ent->activator && ent->activator->inuse && ent->activator->client)
 		{
-			G_Damage( other, ent->activator, ent->activator, NULL, NULL, ent->damage, DAMAGE_NO_ARMOR, MOD_CRUSH );
+			G_Damage( other, ent->activator, ent->activator, NULL, NULL, ent->damage, DAMAGE_NO_ARMOR|DAMAGE_NO_PROTECTION, MOD_CRUSH );
 		}
 		else
 		{
-			G_Damage( other, ent, ent, NULL, NULL, ent->damage, DAMAGE_NO_ARMOR, MOD_CRUSH );
+			G_Damage( other, ent, ent, NULL, NULL, ent->damage, DAMAGE_NO_ARMOR|DAMAGE_NO_PROTECTION, MOD_CRUSH );
 		}
 	}
 	if ( ent->spawnflags & 4 ) {

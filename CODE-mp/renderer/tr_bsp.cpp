@@ -81,7 +81,7 @@ static	void R_ColorShiftLightingBytes( byte in[4], byte out[4] ) {
 
 	// should NOT do it if overbrightBits is 0
 	if (tr.overbrightBits)
-		shift = r_mapOverBrightBits->integer - tr.overbrightBits;
+		shift = 1 - tr.overbrightBits;
 
 	if (!shift)
 	{
@@ -126,7 +126,7 @@ static	void R_ColorShiftLightingBytes( byte in[3])
 
 	// should NOT do it if overbrightBits is 0
 	if (tr.overbrightBits)
-		shift = r_mapOverBrightBits->integer - tr.overbrightBits;
+		shift = 1 - tr.overbrightBits;
 
 	if (!shift)
 	{

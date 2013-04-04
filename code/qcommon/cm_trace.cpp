@@ -285,10 +285,11 @@ void CM_TraceThroughBrush( traceWork_t *tw, cbrush_t *brush ) {
 	//
 	if (!startout) {	// original point was inside brush
 		tw->trace.startsolid = qtrue;
-		if (!getout) {
+		tw->trace.contents |= brush->contents;	//note, we always want to know the contents of something we're inside of
+		if (!getout) 
+		{	//endpoint was inside brush
 			tw->trace.allsolid = qtrue;
 			tw->trace.fraction = 0;
-			tw->trace.contents = brush->contents;
 		}
 		return;
 	}

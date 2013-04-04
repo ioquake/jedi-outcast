@@ -132,6 +132,7 @@ int G_GetMapTypeBits(char *type)
 	if( *type ) {
 		if( strstr( type, "ffa" ) ) {
 			typeBits |= (1 << GT_FFA);
+			typeBits |= (1 << GT_TEAM);
 		}
 		if( strstr( type, "holocron" ) ) {
 			typeBits |= (1 << GT_HOLOCRON);
@@ -629,7 +630,7 @@ void G_CheckBotSpawn( void ) {
 		if ( botSpawnQueue[n].spawnTime > level.time ) {
 			continue;
 		}
-		ClientBegin( botSpawnQueue[n].clientNum );
+		ClientBegin( botSpawnQueue[n].clientNum, qfalse );
 		botSpawnQueue[n].spawnTime = 0;
 
 		if( g_gametype.integer == GT_SINGLE_PLAYER ) {
@@ -657,7 +658,7 @@ static void AddBotToSpawnQueue( int clientNum, int delay ) {
 	}
 
 	G_Printf( S_COLOR_YELLOW "Unable to delay spawn\n" );
-	ClientBegin( clientNum );
+	ClientBegin( clientNum, qfalse );
 }
 
 
@@ -718,7 +719,7 @@ static void G_AddBot( const char *name, float skill, const char *team, int delay
 	char			*s;
 	char			*botname;
 	char			*model;
-	char			*headmodel;
+//	char			*headmodel;
 	char			userinfo[MAX_INFO_STRING];
 	int				preTeam = 0;
 
@@ -764,7 +765,7 @@ static void G_AddBot( const char *name, float skill, const char *team, int delay
 	key = "team_model";
 	Info_SetValueForKey( userinfo, key, model );
 
-	key = "headmodel";
+/*	key = "headmodel";
 	headmodel = Info_ValueForKey( botinfo, key );
 	if ( !*headmodel ) {
 		headmodel = model;
@@ -772,7 +773,7 @@ static void G_AddBot( const char *name, float skill, const char *team, int delay
 	Info_SetValueForKey( userinfo, key, headmodel );
 	key = "team_headmodel";
 	Info_SetValueForKey( userinfo, key, headmodel );
-
+*/
 	key = "gender";
 	s = Info_ValueForKey( botinfo, key );
 	if ( !*s ) {
@@ -807,8 +808,9 @@ static void G_AddBot( const char *name, float skill, const char *team, int delay
 	// have the server allocate a client slot
 	clientNum = trap_BotAllocateClient();
 	if ( clientNum == -1 ) {
-		G_Printf( S_COLOR_RED "Unable to add bot.  All player slots are in use.\n" );
-		G_Printf( S_COLOR_RED "Start server with more 'open' slots (or check setting of sv_maxclients cvar).\n" );
+//		G_Printf( S_COLOR_RED "Unable to add bot.  All player slots are in use.\n" );
+//		G_Printf( S_COLOR_RED "Start server with more 'open' slots.\n" );
+		trap_SendServerCommand( -1, va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "UNABLE_TO_ADD_BOT")));
 		return;
 	}
 
@@ -889,7 +891,7 @@ static void G_AddBot( const char *name, float skill, const char *team, int delay
 	}
 
 	if( delay == 0 ) {
-		ClientBegin( clientNum );
+		ClientBegin( clientNum, qfalse );
 		return;
 	}
 
@@ -972,7 +974,7 @@ void Svcmd_BotList_f( void ) {
 	for (i = 0; i < g_numBots; i++) {
 		strcpy(name, Info_ValueForKey( g_botInfos[i], "name" ));
 		if ( !*name ) {
-			strcpy(name, "UnnamedPlayer");
+			strcpy(name, "Padawan");
 		}
 		strcpy(funname, Info_ValueForKey( g_botInfos[i], "funname" ));
 		if ( !*funname ) {

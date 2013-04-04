@@ -35,6 +35,7 @@ void		ToWindowCoords(float *x, float *y, windowDef_t *window);
 void		Window_Paint(Window *w, float fadeAmount, float fadeClamp, float fadeCycle);
 int			Item_ListBox_ThumbDrawPosition(itemDef_t *item);
 int			Item_ListBox_ThumbPosition(itemDef_t *item);
+qboolean Rect_ContainsPoint(rectDef_t *rect, float x, float y) ;
 
 //static qboolean debugMode = qfalse;
 static qboolean g_waitingForKey = qfalse;
@@ -203,6 +204,11 @@ void PC_SourceError(int handle, char *format, ...)
 PC_ParseStringMem
 =================
 */
+//static vector<string> RetryPool;
+//void AddMenuPackageRetryKey(const char *psSPPackage)
+//{
+//	RetryPool.push_back(psSPPackage);
+//}
 qboolean PC_ParseStringMem(const char **out) 
 {
 	const char *temp;
@@ -214,13 +220,27 @@ qboolean PC_ParseStringMem(const char **out)
 	
 	if (*temp == '@')	// Is it a localized text?
 	{
-		const int ID = SP_GetStringID(va("%s_%s",uiInfo.uiDC.Assets.stripedFile,(temp+1)));	// The +1 is to offset the @ at the beginning of the text
+		int ID = SP_GetStringID(temp+1);	// The +1 is to offset the @ at the beginning of the text
 		if (ID != -1)
 		{
 			*(out) = (char*)-ID;
 			return ID;
 		}
-		PC_ParseWarning(va("Can't find StriP '%s' in %s", temp, uiInfo.uiDC.Assets.stripedFile));
+/*		// ok failed, now hopefully this is probably just because of the stupid/wrong way the MP menus were done, so...
+		//
+		for (int i=0; i<RetryPool.size(); i++)
+		{
+			ID = SP_GetStringID(va("%s_%s",RetryPool[i].c_str(),(temp+1)));	// The +1 is to offset the @ at the beginning of the text
+			if (ID != -1)
+			{
+				*(out) = (char*)-ID;
+				return ID;
+			}
+		}
+*/
+		// ok, give up, this is just plain wrong...
+		//
+		PC_ParseWarning(va("Can't find StriP '%s'", temp));
 	}
 
 	*(out) = String_Alloc(temp);
@@ -2066,7 +2086,7 @@ qboolean Script_Play(itemDef_t *item, const char **args)
 	const char *val;
 	if (String_Parse(args, &val)) 
 	{
-		DC->startLocalSound(DC->registerSound(val, qfalse), CHAN_LOCAL_SOUND);
+		DC->startLocalSound(DC->registerSound(val, qfalse), CHAN_AUTO );
 	}
 
 	return qtrue;
@@ -2265,6 +2285,11 @@ qboolean ItemParse_focusSound( itemDef_t *item)
 }
 
 
+
+//#ifdef _DEBUG
+//extern void UI_Debug_EnterReference(LPCSTR ps4LetterType, LPCSTR psItemString);
+//#endif
+
 /*
 ===============
 ItemParse_text 
@@ -2272,11 +2297,15 @@ ItemParse_text
 ===============
 */
 qboolean ItemParse_text( itemDef_t *item) 
-{
+{	
 	if (!PC_ParseStringMem((const char **) &item->text))
 	{
 		return qfalse;
 	}
+
+//#ifdef _DEBUG
+//	UI_Debug_EnterReference("TEXT", item->text);
+//#endif
 
 	return qtrue;
 }
@@ -2294,6 +2323,10 @@ qboolean ItemParse_descText( itemDef_t *item)
 		return qfalse;
 	}
 
+//#ifdef _DEBUG
+//	UI_Debug_EnterReference("DESC", item->descText);
+//#endif
+
 	return qtrue;
 }
 
@@ -2309,6 +2342,10 @@ qboolean ItemParse_text2( itemDef_t *item)
 	{
 		return qfalse;
 	}
+
+//#ifdef _DEBUG
+//	UI_Debug_EnterReference("TXT2", item->text2);
+//#endif
 
 	return qtrue;
 }
@@ -3246,25 +3283,6 @@ qboolean ItemParse_action( itemDef_t *item)
 
 /*
 ===============
-ItemParse_stripedFile 
-===============
-*/
-qboolean ItemParse_stripedFile( itemDef_t *item) 
-{
-	char		*tempStr;
-
-	if (!PC_ParseStringMem((const char **) &tempStr)) 
-	{
-		return qfalse;
-	}
-
-	Q_strncpyz( uiInfo.uiDC.Assets.stripedFile, tempStr,  sizeof(uiInfo.uiDC.Assets.stripedFile) );
-
-	return ui.SP_Register(uiInfo.uiDC.Assets.stripedFile, SP_REGISTER_REQUIRED|SP_REGISTER_MENU);
-}
-
-/*
-===============
 ItemParse_special 
 ===============
 */
@@ -3458,6 +3476,10 @@ qboolean ItemParse_cvarStrList( itemDef_t *item)
 		{
 			multiPtr->cvarList[multiPtr->count] = token;
 			pass = 1;
+
+//#ifdef _DEBUG
+//			UI_Debug_EnterReference("CVRF", token);
+//#endif
 		} 
 		else 
 		{
@@ -3522,6 +3544,13 @@ qboolean ItemParse_cvarFloatList( itemDef_t *item)
 				continue;
 			}
 		}
+
+//#ifdef _DEBUG
+////		if ((int)token < 0)	// always do it, then "1024 x 768" would go into SP and can be asianised
+//		{
+//			UI_Debug_EnterReference("CVRF", token);
+//		}
+//#endif
 
 		multiPtr->cvarList[multiPtr->count] = token;	//either a striped ID, or a StringAlloc ptr
 		if (PC_ParseFloat(&multiPtr->cvarValue[multiPtr->count])) 
@@ -3737,7 +3766,6 @@ keywordHash_t itemParseKeywords[] = {
 	{"rect",			ItemParse_rect,				},
 	{"showCvar",		ItemParse_showCvar,			},
 	{"special",			ItemParse_special,			},
-	{"stripedFile",		ItemParse_stripedFile,		},
 	{"style",			ItemParse_style,			},
 	{"text",			ItemParse_text				},
 	{"text2",			ItemParse_text2				},
@@ -4590,13 +4618,12 @@ qboolean Item_EnableShowViaCvar(itemDef_t *item, int flag)
 {
 	char script[1024];
 	const char *p;
-	memset(script, 0, sizeof(script));
 	if (item && item->enableCvar && *item->enableCvar && item->cvarTest && *item->cvarTest) 
 	{
 		char buff[1024];
 		DC->getCVarString(item->cvarTest, buff, sizeof(buff));
 
-		Q_strcat(script, 1024, item->enableCvar);
+		Q_strncpyz(script, item->enableCvar, 1024);
 		p = script;
 		while (1) 
 		{
@@ -5219,7 +5246,7 @@ void BindingFromName(const char *cvar)
 				DC->keynumToStringBuf( b2, g_nameBind2, 32 );
 				Q_strupr(g_nameBind2);
 
-				strcat( g_nameBind1, va(" %s ",ui.SP_GetStringTextString("MENUS_OR")) );
+				strcat( g_nameBind1, va(" %s ",ui.SP_GetStringTextString("MENUS3_KEYBIND_OR")) );
 				strcat( g_nameBind1, g_nameBind2 );
 			}
 			return;
@@ -5236,9 +5263,9 @@ Item_Bind_Paint
 */
 void Item_Bind_Paint(itemDef_t *item) 
 {
-	vec4_t newColor, lowLight;
-	float value;
-	int maxChars = 0;
+	vec4_t	newColor, lowLight;
+	float	value,textScale,textWidth;
+	int		maxChars = 0, textHeight,yAdj,startingXPos;
 
 	menuDef_t *parent = (menuDef_t*)item->parent;
 	editFieldDef_t *editPtr = (editFieldDef_t*)item->typeData;
@@ -5277,7 +5304,28 @@ void Item_Bind_Paint(itemDef_t *item)
 	{
 		Item_Text_Paint(item);
 		BindingFromName(item->cvar);
-		DC->drawText(item->textRect.x + item->textRect.w + 8, item->textRect.y, item->textscale, newColor, g_nameBind1, maxChars/*item->textRect.w*/, item->textStyle, item->font);
+
+		// If the text runs past the limit bring the scale down until it fits.
+		textScale = item->textscale;
+		textWidth = DC->textWidth(g_nameBind1,(float) textScale, uiInfo.uiDC.Assets.qhMediumFont);
+
+		startingXPos = (item->textRect.x + item->textRect.w + 8);
+
+		while ((startingXPos + textWidth) >= SCREEN_WIDTH)
+		{
+			textScale -= .05f;
+			textWidth = DC->textWidth(g_nameBind1,(float) textScale, uiInfo.uiDC.Assets.qhMediumFont);
+		}
+
+		// Try to adjust it's y placement if the scale has changed.
+		yAdj = 0;
+		if (textScale != item->textscale)
+		{
+			textHeight = DC->textHeight(g_nameBind1, item->textscale, uiInfo.uiDC.Assets.qhMediumFont);
+			yAdj = textHeight - DC->textHeight(g_nameBind1, textScale, uiInfo.uiDC.Assets.qhMediumFont);
+		}
+
+		DC->drawText(startingXPos, item->textRect.y + yAdj, textScale, newColor, g_nameBind1, maxChars/*item->textRect.w*/, item->textStyle, item->font);
 	} 
 	else 
 	{
@@ -5449,15 +5497,9 @@ void Item_OwnerDraw_Paint(itemDef_t *item)
 		if (item->text) 
 		{
 			Item_Text_Paint(item);
-			if (item->text[0]) 
-			{
-				// +8 is an offset kludge to properly align owner draw items that have text combined with them
-				DC->ownerDrawItem(item->textRect.x + item->textRect.w + 8, item->window.rect.y, item->window.rect.w, item->window.rect.h, 0, item->textaligny, item->window.ownerDraw, item->window.ownerDrawFlags, item->alignment, item->special, item->textscale, color, item->window.background, item->textStyle, item->font );
-			} 
-			else 
-			{
-				DC->ownerDrawItem(item->textRect.x + item->textRect.w, item->window.rect.y, item->window.rect.w, item->window.rect.h, 0, item->textaligny, item->window.ownerDraw, item->window.ownerDrawFlags, item->alignment, item->special, item->textscale, color, item->window.background, item->textStyle, item->font );
-			}
+
+			// +8 is an offset kludge to properly align owner draw items that have text combined with them
+			DC->ownerDrawItem(item->textRect.x + item->textRect.w + 8, item->window.rect.y, item->window.rect.w, item->window.rect.h, 0, item->textaligny, item->window.ownerDraw, item->window.ownerDrawFlags, item->alignment, item->special, item->textscale, color, item->window.background, item->textStyle, item->font );
 		} 
 		else 
 		{
@@ -5487,14 +5529,17 @@ void Item_YesNo_Paint(itemDef_t *item)
 		memcpy(&newColor, &item->window.foreColor, sizeof(vec4_t));
 	}
 
+	const char *psYes = ui.SP_GetStringTextString("MENUS0_YES");
+	const char *psNo  = ui.SP_GetStringTextString("MENUS0_NO");
 	if (item->text) 
 	{
 		Item_Text_Paint(item);
-		DC->drawText(item->textRect.x + item->textRect.w + 8, item->textRect.y, item->textscale, newColor, (value != 0) ? "Yes" : "No", 0, item->textStyle, item->font);
+		DC->drawText(item->textRect.x + item->textRect.w + 8, item->textRect.y, item->textscale, newColor, (value != 0) ? psYes : psNo, 0, item->textStyle, item->font);
+		
 	} 
 	else 
 	{
-		DC->drawText(item->textRect.x, item->textRect.y, item->textscale, newColor, (value != 0) ? "Yes" : "No", 0, item->textStyle, item->font);
+		DC->drawText(item->textRect.x, item->textRect.y, item->textscale, newColor, (value != 0) ? psYes : psNo , 0, item->textStyle, item->font);
 	}
 }
 
@@ -5693,46 +5738,6 @@ void Item_Paint(itemDef_t *item)
 		return;
 	}
 
-	if (item->window.flags & WINDOW_MOUSEOVER)
-	{
-		if (item->descText)
-		{
-			const char *textPtr;
-			if ((int)item->descText < 0)
-			{
-				textPtr = SP_GetStringText(-(int)item->descText);
-			}
-			else
-			{
-				textPtr = item->descText;
-			}
-
-			textWidth = DC->textWidth(textPtr,(float) item->textscale, uiInfo.uiDC.Assets.qhMediumFont);	//  item->font);
-
-			if (parent->descAlignment == ITEM_ALIGN_RIGHT)
-			{
-				xPos = parent->descX - textWidth;	// Right justify
-			}
-			else if (parent->descAlignment == ITEM_ALIGN_CENTER)
-			{
-				xPos = parent->descX - (textWidth/2);	// Center justify
-			}
-			else										// Left justify	
-			{
-				xPos = parent->descX;
-			}
-
-			vec4_t color = {1, 1, 1, 1};
-			Item_TextColor(item, &color);
-
-			if (!parent->descScale)
-			{
-				parent->descScale = 1;
-			}
-
-			DC->drawText(xPos, parent->descY, (float) parent->descScale, parent->descColor, textPtr, 0, 0, uiInfo.uiDC.Assets.qhMediumFont);	//item->font);
-		}
-	}
 
 	if (item->window.flags & WINDOW_ORBITING) 
 	{
@@ -5906,6 +5911,76 @@ void Item_Paint(itemDef_t *item)
 	if (!(item->window.flags & WINDOW_VISIBLE)) 
 	{
 		return;
+	}
+
+	if (item->window.flags & WINDOW_MOUSEOVER)
+	{
+		if (item->descText && !Display_KeyBindPending())
+		{
+			// Make DOUBLY sure that this item should have desctext.
+		    if (!Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory)) 
+			{	// It isn't something that should, because it isn't live anymore.
+				item->window.flags &= ~WINDOW_MOUSEOVER;
+			}
+			else
+			{	// Draw the desctext
+				const char *textPtr;
+				if ((int)item->descText < 0)
+				{
+					textPtr = SP_GetStringText(-(int)item->descText);
+				}
+				else
+				{
+					textPtr = item->descText;
+				}
+
+				vec4_t color = {1, 1, 1, 1};
+				Item_TextColor(item, &color);
+
+				float fDescScale = parent->descScale ? parent->descScale : 1;
+				float fDescScaleCopy = fDescScale;
+				while (1)
+				{
+					textWidth = DC->textWidth(textPtr, fDescScale, uiInfo.uiDC.Assets.qhMediumFont);	//  item->font);
+
+					if (parent->descAlignment == ITEM_ALIGN_RIGHT)
+					{
+						xPos = parent->descX - textWidth;	// Right justify
+					}
+					else if (parent->descAlignment == ITEM_ALIGN_CENTER)
+					{
+						xPos = parent->descX - (textWidth/2);	// Center justify
+					}
+					else										// Left justify	
+					{
+						xPos = parent->descX;
+					}
+
+					if (parent->descAlignment == ITEM_ALIGN_CENTER)
+					{
+						// only this one will auto-shrink the scale until we eventually fit...
+						//
+						if (xPos + textWidth > (SCREEN_WIDTH-4)) {
+							fDescScale -= 0.001f;
+							continue;
+						}
+					}
+
+
+					// Try to adjust it's y placement if the scale has changed...
+					//
+					int iYadj = 0;
+					if (fDescScale != fDescScaleCopy)
+					{
+						int iOriginalTextHeight = DC->textHeight(textPtr, fDescScaleCopy, uiInfo.uiDC.Assets.qhMediumFont);
+						iYadj = iOriginalTextHeight - DC->textHeight(textPtr, fDescScale, uiInfo.uiDC.Assets.qhMediumFont);
+					}
+
+					DC->drawText(xPos, parent->descY + iYadj, fDescScale, parent->descColor, textPtr, 0, 0, uiInfo.uiDC.Assets.qhMediumFont);	//item->font);
+					break;
+				}
+			}
+		}
 	}
 
 	// paint the rect first.. 
@@ -6915,7 +6990,9 @@ void Controls_SetConfig(qboolean restart)
 	//trap_Cvar_SetValue( "in_joystick", s_controls.joyenable.curvalue );
 	//trap_Cvar_SetValue( "joy_threshold", s_controls.joythreshold.curvalue );
 	//trap_Cvar_SetValue( "cl_freelook", s_controls.freelook.curvalue );
-	DC->executeText(EXEC_APPEND, "in_restart\n");
+//
+//	DC->executeText(EXEC_APPEND, "in_restart\n");
+// ^--this is bad, it shows the cursor during map load, if you need to, add it as an exec cmd to use_joy or something.
 }
 
 void Item_Bind_Ungrey(itemDef_t *item)
@@ -6946,9 +7023,9 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down)
 	int			i;
 	menuDef_t *menu;
 
-	if (Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && !g_waitingForKey)
+	if (key == K_MOUSE1 && Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && !g_waitingForKey)
 	{
-		if (down && (key == K_MOUSE1 || key == K_ENTER)) 
+		if (down) 
 		{
 			g_waitingForKey = qtrue;
 			g_bindItem = item;
@@ -6965,9 +7042,26 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down)
 			}
 
 		}
-		else if (down && (key == K_ESCAPE))
+		return qtrue;
+	}
+	else if (key == K_ENTER && !g_waitingForKey)
+	{
+		if (down) 
 		{
-			return qfalse;
+			g_waitingForKey = qtrue;
+			g_bindItem = item;
+
+			// Set all others in the menu to grey
+			menu = (menuDef_t *) item->parent;
+			for (i=0;i<menu->itemCount;++i)
+			{
+				if (menu->items[i] == item)
+				{
+					continue;
+				}
+				menu->items[i]->window.flags |= WINDOW_INACTIVE;
+			}
+
 		}
 		return qtrue;
 	}
@@ -6975,7 +7069,7 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down)
 	{
 		if (!g_waitingForKey || g_bindItem == NULL) 
 		{
-			return qtrue;
+			return qfalse;
 		}
 
 		if (key & K_CHAR_FLAG) 
@@ -7917,6 +8011,14 @@ static void Scroll_Slider_ThumbFunc(void *p)
 	scrollInfo_t *si = (scrollInfo_t*)p;
 	editFieldDef_t *editDef = (struct editFieldDef_s *) si->item->typeData;
 
+	if (!Rect_ContainsPoint(&si->item->window.rect, DC->cursorx, DC->cursory))
+	{
+		Item_StopCapture(itemCapture);
+		itemCapture = NULL;
+		captureFunc = NULL;
+		captureData = NULL;
+	}
+
 	if (si->item->text) 
 	{
 		x = si->item->textRect.x + si->item->textRect.w + 8;
@@ -8077,6 +8179,8 @@ int Item_Multi_CountSettings(itemDef_t *item)
 	return multiPtr->count;
 }
 
+
+
 /*
 =================
 Item_OwnerDraw_HandleKey
@@ -8086,7 +8190,7 @@ qboolean Item_OwnerDraw_HandleKey(itemDef_t *item, int key)
 {
   if (item && DC->ownerDrawHandleKey) 
   {
-    return DC->ownerDrawHandleKey(item->window.ownerDraw, item->window.ownerDrawFlags, &item->special, key);
+		return DC->ownerDrawHandleKey(item->window.ownerDraw, item->window.ownerDrawFlags, &item->special, key);
   }
   return qfalse;
 }
@@ -8378,10 +8482,25 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down)
 		return;
 	}
 
+	// Special Data Pad key handling (gotta love the datapad)
+	if (!(key & K_CHAR_FLAG) ) 
+	{	//only check keys not chars
+		char	b[256];
+		DC->getBindingBuf( key, b, 256 );
+		if (Q_stricmp(b,"datapad") == 0)	// They hit the datapad key again.
+		{
+			if (( Q_stricmp(menu->window.name,"datapadMissionMenu") == 0) ||
+			 (Q_stricmp(menu->window.name,"datapadWeaponsMenu") == 0) ||
+			 (Q_stricmp(menu->window.name,"datapadForcePowersMenu") == 0) ||
+			 (Q_stricmp(menu->window.name,"datapadInventoryMenu") == 0))
+			{
+				key = K_ESCAPE;	//pop on outta here
+			}
+		}
+	}
 	// default handling
 	switch ( key ) 
 	{
-
 		case K_F11:
 			if (DC->getCVarValue("developer")) 
 			{
@@ -8404,8 +8523,8 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down)
 			if (!g_waitingForKey && menu->onESC) 
 			{
 				itemDef_t it;
-		    it.parent = menu;
-		    Item_RunScript(&it, menu->onESC);
+				it.parent = menu;
+				Item_RunScript(&it, menu->onESC);
 			}
 			break;
 		case K_TAB:

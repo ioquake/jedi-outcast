@@ -52,7 +52,7 @@ weaponData_t weaponData[WP_NUM_WEAPONS] =
 		400,					//	int		fireTime;			// Amount of time between firings
 		8192,					//	int		range;				// Range of weapon
 		0,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
-		800,					//	int		altFireTime;		// Amount of time between alt-firings
+		400,					//	int		altFireTime;		// Amount of time between alt-firings
 		8192,					//	int		altRange;			// Range of alt-fire
 		0,						//	int		chargeSubTime;		// ms interval for subtracting ammo during charge
 		0,						//	int		altChargeSubTime;	// above for secondary
@@ -116,18 +116,18 @@ weaponData_t weaponData[WP_NUM_WEAPONS] =
 //		"Tenloss Disruptor Rifle",//	char	classname[32];		// Spawning name
 		AMMO_POWERCELL,			//	int		ammoIndex;			// Index to proper ammo slot
 		5,						//	int		ammoLow;			// Count when ammo is low
-		4,						//	int		energyPerShot;		// Amount of energy used per shot
+		5,						//	int		energyPerShot;		// Amount of energy used per shot
 		600,					//	int		fireTime;			// Amount of time between firings
 		8192,					//	int		range;				// Range of weapon
-		10,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
+		6,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
 		1300,					//	int		altFireTime;		// Amount of time between alt-firings
 		8192,					//	int		altRange;			// Range of alt-fire
 		0,						//	int		chargeSubTime;		// ms interval for subtracting ammo during charge
-		0,						//	int		altChargeSubTime;	// above for secondary
+		200,					//	int		altChargeSubTime;	// above for secondary
 		0,						//	int		chargeSub;			// amount to subtract during charge on each interval
-		0,						//int		altChargeSub;		// above for secondary
+		3,						//int		altChargeSub;		// above for secondary
 		0,						//	int		maxCharge;			// stop subtracting once charged for this many ms
-		0					//	int		altMaxCharge;		// above for secondary
+		1700					//	int		altMaxCharge;		// above for secondary
 	},
 	{	// WP_BOWCASTER
 //		"Wookiee Bowcaster",		//	char	classname[32];		// Spawning name
@@ -139,11 +139,11 @@ weaponData_t weaponData[WP_NUM_WEAPONS] =
 		5,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
 		750,					//	int		altFireTime;		// Amount of time between alt-firings
 		8192,					//	int		altRange;			// Range of alt-fire
-		200,						//	int		chargeSubTime;		// ms interval for subtracting ammo during charge
+		400,						//	int		chargeSubTime;		// ms interval for subtracting ammo during charge
 		0,					//	int		altChargeSubTime;	// above for secondary
-		1,						//	int		chargeSub;			// amount to subtract during charge on each interval
+		5,						//	int		chargeSub;			// amount to subtract during charge on each interval
 		0,						//int		altChargeSub;		// above for secondary
-		1500,						//	int		maxCharge;			// stop subtracting once charged for this many ms
+		1700,						//	int		maxCharge;			// stop subtracting once charged for this many ms
 		0					//	int		altMaxCharge;		// above for secondary
 	},
 	{	// WP_REPEATER
@@ -151,7 +151,7 @@ weaponData_t weaponData[WP_NUM_WEAPONS] =
 		AMMO_METAL_BOLTS,		//	int		ammoIndex;			// Index to proper ammo slot
 		5,						//	int		ammoLow;			// Count when ammo is low
 		1,						//	int		energyPerShot;		// Amount of energy used per shot
-		50,						//	int		fireTime;			// Amount of time between firings
+		100,					//	int		fireTime;			// Amount of time between firings
 		8192,					//	int		range;				// Range of weapon
 		8,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
 		800,					//	int		altFireTime;		// Amount of time between alt-firings
@@ -167,25 +167,25 @@ weaponData_t weaponData[WP_NUM_WEAPONS] =
 //		"DEMP2",				//	char	classname[32];		// Spawning name
 		AMMO_POWERCELL,			//	int		ammoIndex;			// Index to proper ammo slot
 		5,						//	int		ammoLow;			// Count when ammo is low
-		10,						//	int		energyPerShot;		// Amount of energy used per shot
+		8,						//	int		energyPerShot;		// Amount of energy used per shot
 		500,					//	int		fireTime;			// Amount of time between firings
 		8192,					//	int		range;				// Range of weapon
-		4,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
+		6,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
 		900,						//	int		altFireTime;		// Amount of time between alt-firings
 		8192,					//	int		altRange;			// Range of alt-fire
 		0,						//	int		chargeSubTime;		// ms interval for subtracting ammo during charge
-		700,					//	int		altChargeSubTime;	// above for secondary
+		250,					//	int		altChargeSubTime;	// above for secondary
 		0,						//	int		chargeSub;			// amount to subtract during charge on each interval
-		4,						//	int		altChargeSub;		// above for secondary
+		3,						//	int		altChargeSub;		// above for secondary
 		0,						//	int		maxCharge;			// stop subtracting once charged for this many ms
-		2200					//	int		altMaxCharge;		// above for secondary
+		2100					//	int		altMaxCharge;		// above for secondary
 	},
 	{	// WP_FLECHETTE
 //		"Golan Arms Flechette",	//	char	classname[32];		// Spawning name
 		AMMO_METAL_BOLTS,		//	int		ammoIndex;			// Index to proper ammo slot
 		5,						//	int		ammoLow;			// Count when ammo is low
 		10,						//	int		energyPerShot;		// Amount of energy used per shot
-		550,					//	int		fireTime;			// Amount of time between firings
+		700,					//	int		fireTime;			// Amount of time between firings
 		8192,					//	int		range;				// Range of weapon
 		15,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
 		800,					//	int		altFireTime;		// Amount of time between alt-firings
@@ -201,11 +201,11 @@ weaponData_t weaponData[WP_NUM_WEAPONS] =
 //		"Merr-Sonn Missile System",	//	char	classname[32];		// Spawning name
 		AMMO_ROCKETS,			//	int		ammoIndex;			// Index to proper ammo slot
 		5,						//	int		ammoLow;			// Count when ammo is low
-		20,						//	int		energyPerShot;		// Amount of energy used per shot
-		600,					//	int		fireTime;			// Amount of time between firings
+		1,						//	int		energyPerShot;		// Amount of energy used per shot
+		900,					//	int		fireTime;			// Amount of time between firings
 		8192,					//	int		range;				// Range of weapon
-		25,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
-		800,					//	int		altFireTime;		// Amount of time between alt-firings
+		2,						//	int		altEnergyPerShot;	// Amount of energy used for alt-fire
+		1200,					//	int		altFireTime;		// Amount of time between alt-firings
 		8192,					//	int		altRange;			// Range of alt-fire
 		0,						//	int		chargeSubTime;		// ms interval for subtracting ammo during charge
 		0,						//	int		altChargeSubTime;	// above for secondary
@@ -308,7 +308,7 @@ ammoData_t ammoData[AMMO_MAX] =
 	},
 	{	// AMMO_ROCKETS
 //		"",				//	char	icon[32];	// Name of ammo icon file
-		300				//	int		max;		// Max amount player can hold of ammo
+		25				//	int		max;		// Max amount player can hold of ammo
 	},
 	{	// AMMO_EMPLACED
 //		"",				//	char	icon[32];	// Name of ammo icon file

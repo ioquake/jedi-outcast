@@ -272,6 +272,11 @@ SOURCE=..\cgame\cg_consolecmds.cpp
 # End Source File
 # Begin Source File
 
+SOURCE=..\cgame\cg_credits.cpp
+# ADD CPP /Yu"cg_headers.h"
+# End Source File
+# Begin Source File
+
 SOURCE=..\cgame\cg_draw.cpp
 # ADD CPP /Yu"cg_headers.h"
 # End Source File
@@ -981,6 +986,10 @@ SOURCE=.\characters.h
 # Begin Source File
 
 SOURCE=.\common_headers.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\dmstates.h
 # End Source File
 # Begin Source File
 

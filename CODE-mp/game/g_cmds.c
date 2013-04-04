@@ -32,6 +32,11 @@ void DeathmatchScoreboardMessage( gentity_t *ent ) {
 
 	numSorted = level.numConnectedClients;
 	
+	if (numSorted > MAX_CLIENT_SCORE_SEND)
+	{
+		numSorted = MAX_CLIENT_SCORE_SEND;
+	}
+
 	for (i=0 ; i < numSorted ; i++) {
 		int		ping;
 
@@ -63,11 +68,14 @@ void DeathmatchScoreboardMessage( gentity_t *ent ) {
 			perfect,
 			cl->ps.persistant[PERS_CAPTURES]);
 		j = strlen(entry);
-		if (stringlength + j > 1024)
+		if (stringlength + j > 1022)
 			break;
 		strcpy (string + stringlength, entry);
 		stringlength += j;
 	}
+
+	//still want to know the total # of clients
+	i = level.numConnectedClients;
 
 	trap_SendServerCommand( ent-g_entities, va("scores %i %i %i%s", i, 
 		level.teamScores[TEAM_RED], level.teamScores[TEAM_BLUE],
@@ -234,6 +242,17 @@ void Cmd_Give_f (gentity_t *ent)
 		give_all = qtrue;
 	else
 		give_all = qfalse;
+
+	if (give_all)
+	{
+		i = 0;
+		while (i < HI_NUM_HOLDABLE)
+		{
+			ent->client->ps.stats[STAT_HOLDABLE_ITEMS] |= (1 << i);
+			i++;
+		}
+		i = 0;
+	}
 
 	if (give_all || Q_stricmp( name, "health") == 0)
 	{
@@ -607,6 +626,8 @@ void SetTeam( gentity_t *ent, char *s ) {
 			team = TEAM_BLUE;
 		} else {
 			// pick the team with the least number of players
+			//For now, don't do this. The legalize function will set powers properly now.
+			/*
 			if (g_forceBasedTeams.integer)
 			{
 				if (ent->client->ps.fd.forceSide == FORCE_LIGHTSIDE)
@@ -620,8 +641,9 @@ void SetTeam( gentity_t *ent, char *s ) {
 			}
 			else
 			{
+			*/
 				team = PickTeam( clientNum );
-			}
+			//}
 		}
 
 		if ( g_teamForceBalance.integer  ) {
@@ -632,12 +654,15 @@ void SetTeam( gentity_t *ent, char *s ) {
 
 			// We allow a spread of two
 			if ( team == TEAM_RED && counts[TEAM_RED] - counts[TEAM_BLUE] > 1 ) {
+				//For now, don't do this. The legalize function will set powers properly now.
+				/*
 				if (g_forceBasedTeams.integer && ent->client->ps.fd.forceSide == FORCE_DARKSIDE)
 				{
 					trap_SendServerCommand( ent->client->ps.clientNum, 
 						va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "TOOMANYRED_SWITCH")) );
 				}
 				else
+				*/
 				{
 					trap_SendServerCommand( ent->client->ps.clientNum, 
 						va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "TOOMANYRED")) );
@@ -645,12 +670,15 @@ void SetTeam( gentity_t *ent, char *s ) {
 				return; // ignore the request
 			}
 			if ( team == TEAM_BLUE && counts[TEAM_BLUE] - counts[TEAM_RED] > 1 ) {
+				//For now, don't do this. The legalize function will set powers properly now.
+				/*
 				if (g_forceBasedTeams.integer && ent->client->ps.fd.forceSide == FORCE_LIGHTSIDE)
 				{
 					trap_SendServerCommand( ent->client->ps.clientNum, 
 						va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "TOOMANYBLUE_SWITCH")) );
 				}
 				else
+				*/
 				{
 					trap_SendServerCommand( ent->client->ps.clientNum, 
 						va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "TOOMANYBLUE")) );
@@ -661,6 +689,8 @@ void SetTeam( gentity_t *ent, char *s ) {
 			// It's ok, the team we are switching to has less or same number of players
 		}
 
+		//For now, don't do this. The legalize function will set powers properly now.
+		/*
 		if (g_forceBasedTeams.integer)
 		{
 			if (team == TEAM_BLUE && ent->client->ps.fd.forceSide != FORCE_LIGHTSIDE)
@@ -674,6 +704,7 @@ void SetTeam( gentity_t *ent, char *s ) {
 				return;
 			}
 		}
+		*/
 
 	} else {
 		// force them to spectators if there aren't any spots free
@@ -742,7 +773,7 @@ void SetTeam( gentity_t *ent, char *s ) {
 	// get and distribute relevent paramters
 	ClientUserinfoChanged( clientNum );
 
-	ClientBegin( clientNum );
+	ClientBegin( clientNum, qfalse );
 }
 
 /*
@@ -818,34 +849,34 @@ void Cmd_ForceChanged_f( gentity_t *ent )
 {
 	char fpChStr[1024];
 	const char *buf;
-	int i = 0;
-	int ccount = 0;
 //	Cmd_Kill_f(ent);
 	if (ent->client->sess.sessionTeam == TEAM_SPECTATOR)
 	{ //if it's a spec, just make the changes now
-		trap_SendServerCommand( ent-g_entities, va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "FORCEAPPLIED")) );
+		//trap_SendServerCommand( ent-g_entities, va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "FORCEAPPLIED")) );
+		//No longer print it, as the UI calls this a lot.
 		WP_InitForcePowers( ent );
-		return;
+		goto argCheck;
 	}
 
 	buf = G_GetStripEdString("SVINGAME", "FORCEPOWERCHANGED");
 
 	strcpy(fpChStr, buf);
 
-	while (i < 1024 && fpChStr[i])
-	{
-		if (ccount > 24 && fpChStr[i] == ' ')
-		{
-			fpChStr[i] = '\n';
-			ccount = 0;
-		}
-		ccount++;
-		i++;
-	}
-
-	trap_SendServerCommand( ent-g_entities, va("cp \"%s\n\"", fpChStr) );
+	trap_SendServerCommand( ent-g_entities, va("print \"%s%s\n\"", S_COLOR_GREEN, fpChStr) );
 
 	ent->client->ps.fd.forceDoInit = 1;
+argCheck:
+	if (trap_Argc() > 1)
+	{
+		char	arg[MAX_TOKEN_CHARS];
+
+		trap_Argv( 1, arg, sizeof( arg ) );
+
+		if (arg && arg[0])
+		{ //if there's an arg, assume it's a combo team command from the UI.
+			Cmd_Team_f(ent);
+		}
+	}
 }
 
 /*
@@ -1352,8 +1383,9 @@ static const char *gameNames[] = {
 	"Duel",
 	"Single Player",
 	"Team FFA",
-	"Saga",
-	"Capture the Flag"
+	"N/A",
+	"Capture the Flag",
+	"Capture the Ysalamiri"
 };
 
 /*
@@ -1434,7 +1466,8 @@ void Cmd_CallVote_f( gentity_t *ent ) {
 
 		if (!G_DoesMapSupportGametype(arg2, trap_Cvar_VariableIntegerValue("g_gametype")))
 		{
-			trap_SendServerCommand( ent-g_entities, "print \"You can't vote for this map, it isn't supported by the current gametype.\n\"" );
+			//trap_SendServerCommand( ent-g_entities, "print \"You can't vote for this map, it isn't supported by the current gametype.\n\"" );
+			trap_SendServerCommand( ent-g_entities, va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "NOVOTE_MAPNOTSUPPORTEDBYGAME")) );
 			return;
 		}
 
@@ -1939,19 +1972,22 @@ void Cmd_SaberAttackCycle_f(gentity_t *ent)
 	{
 		selectLevel = FORCE_LEVEL_1;
 	}
+/*
+#ifndef FINAL_BUILD
 	switch ( selectLevel )
 	{
 	case FORCE_LEVEL_1:
-		trap_SendServerCommand( ent-g_entities, va("print \"Saber Attack Set: %sfast\n\"", S_COLOR_GREEN) );
+		trap_SendServerCommand( ent-g_entities, va("print \"Lightsaber Combat Style: %sfast\n\"", S_COLOR_BLUE) );
 		break;
 	case FORCE_LEVEL_2:
-		trap_SendServerCommand( ent-g_entities, va("print \"Saber Attack Set: %smedium\n\"", S_COLOR_YELLOW) );
+		trap_SendServerCommand( ent-g_entities, va("print \"Lightsaber Combat Style: %smedium\n\"", S_COLOR_YELLOW) );
 		break;
 	case FORCE_LEVEL_3:
-		trap_SendServerCommand( ent-g_entities, va("print \"Saber Attack Set: %sstrong\n\"", S_COLOR_RED) );
+		trap_SendServerCommand( ent-g_entities, va("print \"Lightsaber Combat Style: %sstrong\n\"", S_COLOR_RED) );
 		break;
 	}
-
+#endif
+*/
 	if (ent->client->ps.weaponTime <= 0)
 	{ //not busy, set it now
 		ent->client->ps.fd.saberAnimLevel = selectLevel;
@@ -2381,7 +2417,8 @@ void ClientCommand( int clientNum ) {
 	{
 		if (Q_stricmp(cmd, "addbot") == 0)
 		{ //because addbot isn't a recognized command unless you're the server, but it is in the menus regardless
-			trap_SendServerCommand( clientNum, va("print \"You can only add bots as the server.\n\"" ) );
+//			trap_SendServerCommand( clientNum, va("print \"You can only add bots as the server.\n\"" ) );
+			trap_SendServerCommand( clientNum, va("print \"%s.\n\"", G_GetStripEdString("SVINGAME", "ONLY_ADD_BOTS_AS_SERVER")));
 		}
 		else
 		{

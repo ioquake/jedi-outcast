@@ -580,7 +580,7 @@ static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pDa
 			{
 				FS_FCloseFile(hFile);
 			}
-			strcpy(&psFilename[iNameStrlen-3],"wav");
+			strcpy(&psFilename[iNameStrlen-3],"wav");	//put it back to wav
 
 			strncpy(psVoice,"chr_f",5);	// same number of letters as "chars"
 			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cahce this file
@@ -594,6 +594,7 @@ static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pDa
 				FS_FCloseFile(hFile);
 			}
 			strncpy(psVoice,"chars",5);	//put it back to chars
+			strcpy(&psFilename[iNameStrlen-3],"wav");	//put it back to wav
 		}
 
 		// account for foreign voices...
@@ -630,6 +631,45 @@ static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pDa
 			{
 				// yep, so fallback to re-try the english...
 				//
+				
+
+				// this doesn't work that well, there are just FAR too many exception (probetalk, gonktalk, headjump etc)
+				//	that this fails to do english fallback on. If I put the check the other way round, then the list of
+				//	what's not acceptable is also pretty long. Just forget it I guess...
+				//
+#if 0
+/*
+				if (0)	// set to 0 to be disabled
+				{
+					// NEW BIT!!!  We can sort of make this work by only allowing vocal fallback to certain noises,
+					//	this stops foreigners whining that their languages aren't fully localised...
+					//
+					const char *psBasePart = strrchr(psFilename,'/');
+								psBasePart = psBasePart ? psBasePart+1 : psFilename;	// probably irrelevant here, but good practice
+
+					// quicker to say what's allowed than what's forbidden (based on quick dir check)...
+					//
+					if (!	
+							(
+							!strnicmp(psBasePart,"choke",5) ||
+							!strnicmp(psBasePart,"death",5) ||
+							!strnicmp(psBasePart,"drown",5) ||
+							!strnicmp(psBasePart,"falling",7) ||
+							!strnicmp(psBasePart,"gasp",4) ||
+							!strnicmp(psBasePart,"gurp",4) ||
+							!strnicmp(psBasePart,"jump",4) ||
+							!strnicmp(psBasePart,"land",4) ||
+							!strnicmp(psBasePart,"pain",4) ||
+							!strnicmp(psBasePart,"pushed",5)
+							)
+						)
+					{
+						return qfalse;
+					}
+				}
+*/
+#endif
+
 #ifndef FINAL_BUILD
 				Com_Printf(S_COLOR_YELLOW "Foreign file missing: \"%s\"! (using English...)\n",psFilename);
 #endif

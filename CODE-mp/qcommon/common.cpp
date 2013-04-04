@@ -3,7 +3,7 @@
 #include "../game/q_shared.h"
 #include "qcommon.h"
 #include "strip.h"
-#include <setjmp.h>
+#include "../qcommon/game_version.h"
 #ifndef __linux__
 #include <windows.h>
 #endif
@@ -278,6 +278,7 @@ void QDECL Com_Error( int code, const char *fmt, ... ) {
 	va_end (argptr);
 
 	if ( code != ERR_DISCONNECT ) {
+		Cvar_Get("com_errorMessage", "", CVAR_ROM);	//give com_errorMessage a default so it won't come back to life after a resetDefaults
 		Cvar_Set("com_errorMessage", com_errorMessage);
 	}
 
@@ -882,7 +883,7 @@ void *Z_Malloc(int iSize, memtag_t eTag, qboolean bZeroit /* = qfalse */)
 				continue;		// we've dropped at least one sound, so try again with the malloc
 			}
 
-
+#ifndef DEDICATED
 			// ditch any image_t's (and associated GL memory) not used on this level...
 			//
 			extern qboolean RE_RegisterImages_LevelLoadEnd(void);
@@ -891,7 +892,7 @@ void *Z_Malloc(int iSize, memtag_t eTag, qboolean bZeroit /* = qfalse */)
 				gbMemFreeupOccured = qtrue;
 				continue;		// we've dropped at least one image, so try again with the malloc
 			}
-
+#endif
 
 			// ditch the model-binaries cache...  (must be getting desperate here!)
 			//
@@ -1942,10 +1943,10 @@ Hunk_Trash
 =================
 */
 void Hunk_Trash( void ) {
+	return;
+#if 0
 	int length, i, rnd;
 	char *buf, value;
-
-	return;
 
 	if ( s_hunkData == NULL )
 		return;
@@ -1974,6 +1975,7 @@ void Hunk_Trash( void ) {
 			buf[rnd+i] ^= value;
 		}
 	}
+#endif
 }
 
 /*
@@ -2445,6 +2447,10 @@ static void Com_WriteCDKey( const char *filename, const char *ikey ) {
 #endif // USE_CD_KEY
 
 
+#ifdef MEM_DEBUG
+	void SH_Register(void);
+#endif
+
 /*
 =================
 Com_Init
@@ -2485,7 +2491,7 @@ void Com_Init( char *commandLine ) {
 
 		Com_InitJournaling();
 
-		Cbuf_AddText ("exec default.cfg\n");
+		Cbuf_AddText ("exec mpdefault.cfg\n");
 
 		// skip the jk2mpconfig.cfg if "safe" is on the command line
 		if ( !Com_SafeMode() ) {
@@ -2501,7 +2507,7 @@ void Com_Init( char *commandLine ) {
 
 	  // get dedicated here for proper hunk megs initialization
 	#ifdef DEDICATED
-		com_dedicated = Cvar_Get ("dedicated", "1", CVAR_ROM);
+		com_dedicated = Cvar_Get ("dedicated", "2", CVAR_ROM);
 	#else
 		com_dedicated = Cvar_Get ("dedicated", "0", CVAR_LATCH);
 	#endif
@@ -2564,10 +2570,10 @@ void Com_Init( char *commandLine ) {
 		com_version = Cvar_Get ("version", s, CVAR_ROM | CVAR_SERVERINFO );
 
 		SP_Init();
-
+#ifndef __linux__
 		extern void QuickMemTest(void);
 		QuickMemTest();
-
+#endif
 		Sys_Init();
 		Netchan_Init( Com_Milliseconds() & 0xffff );	// pick a port value that should be nice and random
 		VM_Init();
@@ -2588,7 +2594,6 @@ void Com_Init( char *commandLine ) {
 		// add + commands from command line
 		if ( !Com_AddStartupCommands() ) 
 		{
-			#ifdef FINAL_BUILD
 			// if the user didn't give any commands, run default action
 			if ( !com_dedicated->integer ) 
 			{
@@ -2599,7 +2604,6 @@ void Com_Init( char *commandLine ) {
 //					Cvar_Set( "nextmap", "cinematic intro.RoQ" );
 //				}
 			}
-			#endif
 		}
 
 		// start in full screen ui mode
@@ -2609,6 +2613,10 @@ void Com_Init( char *commandLine ) {
 
 		// make sure single player is off by default
 		Cvar_Set("ui_singlePlayerActive", "0");
+
+#ifdef MEM_DEBUG
+		SH_Register();
+#endif
 
 		com_fullyInitialized = qtrue;
 		Com_Printf ("--- Common Initialization Complete ---\n");	
@@ -2841,6 +2849,7 @@ try
 		if ( !com_dedicated->integer ) {
 			CL_Init();
 			Sys_ShowConsole( com_viewlog->integer, qfalse );
+			CL_StartHunkUsers();	//fire up the UI!
 		} else {
 			CL_Shutdown();
 			Sys_ShowConsole( 1, qtrue );
@@ -2926,10 +2935,15 @@ try
 Com_Shutdown
 =================
 */
-void Com_Shutdown (void) {
+void MSG_shutdownHuffman();
+void Com_Shutdown (void) 
+{
+	CM_ClearMap();
+
 	if (logfile) {
 		FS_FCloseFile (logfile);
 		logfile = 0;
+		com_logfile->integer = 0;//don't open up the log file again!!
 	}
 
 	if ( com_journalFile ) {
@@ -2937,6 +2951,16 @@ void Com_Shutdown (void) {
 		com_journalFile = 0;
 	}
 
+	MSG_shutdownHuffman();
+/*
+	// Only used for testing changes to huffman frequency table when tuning.
+	{
+		extern float Huff_GetCR(void);
+		char mess[256];
+		sprintf(mess,"Eff. CR = %f\n",Huff_GetCR());
+		OutputDebugString(mess);
+	}
+*/
 }
 
 #if !( defined __linux__ || defined __FreeBSD__ )  // r010123 - include FreeBSD 

@@ -252,7 +252,9 @@ static void AS_GetTimeBetweenWaves( ambientSet_t &set )
 	//Check for swapped start / end
 	if ( startTime > endTime )
 	{
+		#ifndef FINAL_BUILD
 		Com_Printf(S_COLOR_YELLOW"WARNING: Corrected swapped start / end times in a \"timeBetweenWaves\" keyword\n");
+		#endif
 		
 		int swap = startTime;
 		startTime = endTime;
@@ -287,27 +289,33 @@ static void AS_GetSubWaves( ambientSet_t &set )
 	//Get all the subwaves
 	while ( parsePos <= parseSize )
 	{
-		if ( set.numSubWaves > MAX_WAVES_PER_GROUP )
-		{
-			Com_Printf(S_COLOR_YELLOW"WARNING: Too many subwaves on set \"%s\"\n", set.name );
-		}
-
 		//Get the data
 		sscanf( parseBuffer+parsePos, "%s", &waveBuffer );
 
-		//Construct the wave name (pretty, huh?)
-		strcpy( (char *) waveName, "sound/" );
-		strncat( (char *) waveName, (const char *) dirBuffer, 1024 );
-		strncat( (char *) waveName, "/", 512 );
-		strncat( (char *) waveName, (const char *) waveBuffer, 512 );
-		strncat( (char *) waveName, ".wav", 512 );
-		
-		//Place this onto the sound directory name
-
-		//Precache the file at this point and store off the ID instead of the name
-		if ( ( set.subWaves[set.numSubWaves++] = S_RegisterSound( waveName ) ) <= 0 )
+		if ( set.numSubWaves > MAX_WAVES_PER_GROUP )
 		{
-			Com_Printf(S_COLOR_YELLOW"WARNING: Unable to load ambient sound \"%s\"\n", waveName);
+			#ifndef FINAL_BUILD
+			Com_Printf(S_COLOR_YELLOW"WARNING: Too many subwaves on set \"%s\"\n", set.name );
+			#endif
+		}
+		else
+		{
+			//Construct the wave name (pretty, huh?)
+			strcpy( (char *) waveName, "sound/" );
+			strncat( (char *) waveName, (const char *) dirBuffer, 1024 );
+			strncat( (char *) waveName, "/", 512 );
+			strncat( (char *) waveName, (const char *) waveBuffer, 512 );
+			strncat( (char *) waveName, ".wav", 512 );
+			
+			//Place this onto the sound directory name
+
+			//Precache the file at this point and store off the ID instead of the name
+			if ( ( set.subWaves[set.numSubWaves++] = S_RegisterSound( waveName ) ) <= 0 )
+			{
+				#ifndef FINAL_BUILD
+				Com_Printf(S_COLOR_YELLOW"WARNING: Unable to load ambient sound \"%s\"\n", waveName);
+				#endif
+			}
 		}
 
 		//Move the pointer past this string
@@ -343,7 +351,9 @@ static void AS_GetLoopedWave( ambientSet_t &set )
 	//Precache the file at this point and store off the ID instead of the name
 	if ( ( set.loopedWave = S_RegisterSound( waveName ) ) <= 0 )
 	{
+		#ifndef FINAL_BUILD
 		Com_Printf(S_COLOR_YELLOW"WARNING: Unable to load ambient sound \"%s\"\n", waveName);
+		#endif
 	}
 
 	AS_SkipLine();
@@ -365,7 +375,9 @@ static void AS_GetVolumeRange( ambientSet_t &set )
 	//Check for swapped min / max
 	if ( min > max )
 	{
+		#ifndef FINAL_BUILD
 		Com_Printf(S_COLOR_YELLOW"WARNING: Corrected swapped min / max range in a \"volRange\" keyword\n");
+		#endif
 		
 		int swap =	min;
 					min = max;
@@ -441,7 +453,9 @@ static void AS_GetGeneralSet( ambientSet_t &set )
 					return;
 
 				//This wasn't a set name, so it's an error
+				#ifndef FINAL_BUILD
 				Com_Printf( S_COLOR_YELLOW"WARNING: Unknown ambient set keyword \"%s\"\n", tempBuffer );
+				#endif
 			}
 
 			return;
@@ -502,7 +516,9 @@ static void AS_GetLocalSet( ambientSet_t &set )
 					return;
 
 				//This wasn't a set name, so it's an error
+				#ifndef FINAL_BUILD
 				Com_Printf( S_COLOR_YELLOW"WARNING: Unknown ambient set keyword \"%s\"\n", tempBuffer );
+				#endif
 			}
 
 			return;
@@ -547,7 +563,9 @@ static void AS_GetBModelSet( ambientSet_t &set )
 					return;
 
 				//This wasn't a set name, so it's an error
+				#ifndef FINAL_BUILD
 				Com_Printf( S_COLOR_YELLOW"WARNING: Unknown ambient set keyword \"%s\"\n", tempBuffer );
+				#endif
 			}
 
 			return;
@@ -727,7 +745,14 @@ AS_AddPrecacheEntry
 
 void AS_AddPrecacheEntry( const char *name )
 {
-	pMap[ name ] = 1;
+	if (!stricmp(name,"#clear"))
+	{
+		pMap.clear();
+	}
+	else
+	{
+		pMap[ name ] = 1;
+	}
 }
 
 /*
@@ -768,8 +793,8 @@ void AS_ParseSets( void )
 		Com_Error( ERR_DROP, "....%d missing sound sets! (see above)\n", iErrorsOccured);
 	}
 
-	//Done with the precache info, it will be rebuilt on a restart
-	pMap.clear();
+//	//Done with the precache info, it will be rebuilt on a restart
+//	pMap.clear();	// do NOT do this here now
 }
 
 /*

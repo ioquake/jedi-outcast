@@ -26,12 +26,13 @@ private:
 			vec2_t			mFogTextureCoords[SHADER_MAX_VERTEXES];
 			unsigned long	mColors[SHADER_MAX_VERTEXES];
 			int				mNextVert;
+			qboolean		mTurnCullBackOn;
 
 			void Flush(void);
 
 public:
-			CQuickSpriteSystem();
-	virtual ~CQuickSpriteSystem();
+			CQuickSpriteSystem(void);
+			~CQuickSpriteSystem(void);
 
 			void StartGroup(textureBundle_t *bundle, unsigned long glbits, unsigned long fogcolor=0x00000000);
 			void EndGroup(void);

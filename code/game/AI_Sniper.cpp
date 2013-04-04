@@ -207,7 +207,7 @@ void NPC_BSSniper_Patrol( void )
 		if ( !(NPCInfo->scriptFlags&SCF_IGNORE_ALERTS) )
 		{
 			//Is there danger nearby
-			int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, qfalse, AEL_SUSPICIOUS );
+			int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, -1, qfalse, AEL_SUSPICIOUS );
 			if ( NPC_CheckForDanger( alertEvent ) )
 			{
 				NPC_UpdateAngles( qtrue, qtrue );
@@ -461,22 +461,24 @@ static void Sniper_CheckFireState( void )
 	//continue to fire on their last position
 	if ( !Q_irand( 0, 1 ) && NPCInfo->enemyLastSeenTime && level.time - NPCInfo->enemyLastSeenTime < ((5-NPCInfo->stats.aim)*1000) )//FIXME: incorporate skill too?
 	{
-		//Fire on the last known position
-		vec3_t	muzzle, dir, angles;
+		if ( !VectorCompare( vec3_origin, NPCInfo->enemyLastSeenLocation ) )
+		{
+			//Fire on the last known position
+			vec3_t	muzzle, dir, angles;
 
-		CalcEntitySpot( NPC, SPOT_WEAPON, muzzle );
-		VectorSubtract( NPCInfo->enemyLastSeenLocation, muzzle, dir );
+			CalcEntitySpot( NPC, SPOT_WEAPON, muzzle );
+			VectorSubtract( NPCInfo->enemyLastSeenLocation, muzzle, dir );
 
-		VectorNormalize( dir );
+			VectorNormalize( dir );
 
-		vectoangles( dir, angles );
+			vectoangles( dir, angles );
 
-		NPCInfo->desiredYaw		= angles[YAW];
-		NPCInfo->desiredPitch	= angles[PITCH];
+			NPCInfo->desiredYaw		= angles[YAW];
+			NPCInfo->desiredPitch	= angles[PITCH];
 
-		shoot = qtrue;
-		//faceEnemy = qfalse;
-
+			shoot = qtrue;
+			//faceEnemy = qfalse;
+		}
 		return;
 	}
 	else if ( level.time - NPCInfo->enemyLastSeenTime > 10000 )
@@ -651,7 +653,7 @@ void NPC_BSSniper_Attack( void )
 		return;
 	}
 
-	if ( TIMER_Done( NPC, "flee" ) && NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, qfalse, AEL_DANGER ) ) )
+	if ( TIMER_Done( NPC, "flee" ) && NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, -1, qfalse, AEL_DANGER ) ) )
 	{//going to run
 		NPC_UpdateAngles( qtrue, qtrue );
 		return;
@@ -668,7 +670,7 @@ void NPC_BSSniper_Attack( void )
 	faceEnemy = qfalse;
 	shoot = qfalse;
 	enemyDist = DistanceSquared( NPC->currentOrigin, NPC->enemy->currentOrigin );
-	if ( enemyDist < 16384 )
+	if ( enemyDist < 16384 )//128 squared
 	{//too close, so switch to primary fire
 		if ( NPC->client->ps.weapon == WP_DISRUPTOR )
 		{//sniping... should be assumed
@@ -688,12 +690,27 @@ void NPC_BSSniper_Attack( void )
 			//FIXME: switch back if he gets far away again?
 		}
 	}
+	else if ( enemyDist > 65536 )//256 squared
+	{
+		if ( NPC->client->ps.weapon == WP_DISRUPTOR )
+		{//sniping... should be assumed
+			if ( !(NPCInfo->scriptFlags&SCF_ALT_FIRE) )
+			{//use primary fire
+				NPCInfo->scriptFlags |= SCF_ALT_FIRE;
+				//reset fire-timing variables
+				NPC_ChangeWeapon( WP_DISRUPTOR );
+				NPC_UpdateAngles( qtrue, qtrue );
+				return;
+			}
+		}
+	}
 
 	Sniper_UpdateEnemyPos();
 	//can we see our target?
 	if ( NPC_ClearLOS( NPC->enemy ) )//|| (NPCInfo->stats.aim >= 5 && gi.inPVS( NPC->client->renderInfo.eyePoint, NPC->enemy->currentOrigin )) )
 	{
 		NPCInfo->enemyLastSeenTime = level.time;
+		VectorCopy( NPC->enemy->currentOrigin, NPCInfo->enemyLastSeenLocation );
 		enemyLOS = qtrue;
 		float maxShootDist = NPC_MaxDistSquaredForWeapon();
 		if ( enemyDist < maxShootDist )
@@ -709,7 +726,6 @@ void NPC_BSSniper_Attack( void )
 			//can we shoot our target?
 			if ( Sniper_EvaluateShot( hit ) )
 			{
-				VectorCopy( NPC->enemy->currentOrigin, NPCInfo->enemyLastSeenLocation );
 				enemyCS = qtrue;
 			}
 		}
@@ -770,6 +786,20 @@ void NPC_BSSniper_Attack( void )
 		TIMER_Set( NPC, "duck", -1 );
 	}
 
+	if ( TIMER_Done( NPC, "duck" ) 
+		&& TIMER_Done( NPC, "watch" ) 
+		&& (TIMER_Get( NPC, "attackDelay" )-level.time) > 1000 
+		&& NPC->attackDebounceTime < level.time )
+	{
+		if ( enemyLOS && (NPCInfo->scriptFlags&SCF_ALT_FIRE) )
+		{
+			if ( NPC->fly_sound_debounce_time < level.time )
+			{
+				NPC->fly_sound_debounce_time = level.time + 2000;
+			}
+		}
+	}
+
 	if ( !faceEnemy )
 	{//we want to face in the dir we're running
 		if ( move )
@@ -796,6 +826,10 @@ void NPC_BSSniper_Attack( void )
 		if ( TIMER_Done( NPC, "attackDelay" ) )
 		{
 			WeaponThink( qtrue );
+			if ( ucmd.buttons&(BUTTON_ATTACK|BUTTON_ALT_ATTACK) )
+			{
+				G_SoundOnEnt( NPC, CHAN_WEAPON, "sound/null.wav" );
+			}
 
 			//took a shot, now hide
 			if ( !(NPC->spawnflags&SPF_NO_HIDE) && !Q_irand( 0, 1 ) )

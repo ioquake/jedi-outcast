@@ -224,6 +224,7 @@ typedef enum {
 	G_COS,
 	G_ATAN2,
 	G_SQRT,
+	G_MATRIXMULTIPLY,
 	G_ANGLEVECTORS,
 	G_PERPENDICULARVECTOR,
 	G_FLOOR,
@@ -235,7 +236,6 @@ typedef enum {
 	G_ACOS,
 	G_ASIN,
 
-	G_MATRIXMULTIPLY,
 	//END VM STUFF
 
 	BOTLIB_SETUP = 200,				// ( void );

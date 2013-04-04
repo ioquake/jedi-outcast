@@ -144,8 +144,6 @@ static int CIN_HandleForVideo(void) {
 }
 
 
-extern int CL_ScaledMilliseconds(void);
-
 //-----------------------------------------------------------------------------
 // RllSetupTable
 //
@@ -594,27 +592,6 @@ static void ROQ_GenYUVTables( void )
 	*d++ = *b;	\
 	a++; b++; }
 
-/******************************************************************************
-*
-* Function:		
-*
-* Description:	
-*
-******************************************************************************/
-
-static unsigned short yuv_to_rgb( long y, long u, long v )
-{ 
-	long r,g,b,YY = (long)(ROQ_YY_tab[(y)]);
-
-	r = (YY + ROQ_VR_tab[v]) >> 9;
-	g = (YY + ROQ_UG_tab[u] + ROQ_VG_tab[v]) >> 8;
-	b = (YY + ROQ_UB_tab[u]) >> 9;
-	
-	if (r<0) r = 0; if (g<0) g = 0; if (b<0) b = 0;
-	if (r > 31) r = 31; if (g > 63) g = 63; if (b > 31) b = 31;
-
-	return (unsigned short)((r<<11)+(g<<5)+(b));
-}
 
 /******************************************************************************
 *
@@ -990,7 +967,7 @@ redump:
 		case	ZA_SOUND_MONO:
 			if (!cinTable[currentHandle].silent) {
 				ssize = RllDecodeMonoToStereo( framedata, sbuf, cinTable[currentHandle].RoQFrameSize, 0, (unsigned short)cinTable[currentHandle].roq_flags);
-                                S_RawSamples( ssize, 22050, 2, 1, (byte *)sbuf, 1.0f );
+                S_RawSamples( ssize, 22050, 2, 1, (byte *)sbuf, s_volume->value );
 			}
 			break;
 		case	ZA_SOUND_STEREO:
@@ -1000,15 +977,14 @@ redump:
 					s_rawend = s_soundtime;
 				}
 				ssize = RllDecodeStereoToStereo( framedata, sbuf, cinTable[currentHandle].RoQFrameSize, 0, (unsigned short)cinTable[currentHandle].roq_flags);
-                                S_RawSamples( ssize, 22050, 2, 2, (byte *)sbuf, 1.0f );
+                S_RawSamples( ssize, 22050, 2, 2, (byte *)sbuf, s_volume->value );
 			}
 			break;
 		case	ROQ_QUAD_INFO:
 			if (cinTable[currentHandle].numQuads == -1) {
 				readQuadInfo( framedata );
 				setupQuad( 0, 0 );
-				// we need to use CL_ScaledMilliseconds because of the smp mode calls from the renderer
-				cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = CL_ScaledMilliseconds()*com_timescale->value;
+				cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = Sys_Milliseconds()*com_timescale->value;
 			}
 			if (cinTable[currentHandle].numQuads != 1) cinTable[currentHandle].numQuads = 0;
 			break;
@@ -1080,8 +1056,7 @@ redump:
 
 static void RoQ_init( void )
 {
-	// we need to use CL_ScaledMilliseconds because of the smp mode calls from the renderer
-	cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = CL_ScaledMilliseconds()*com_timescale->value;
+	cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = Sys_Milliseconds()*com_timescale->value;
 
 	cinTable[currentHandle].RoQPlayed = 24;
 
@@ -1213,13 +1188,11 @@ e_status CIN_RunCinematic (int handle)
 		return cinTable[currentHandle].status;
 	}
 
-	// we need to use CL_ScaledMilliseconds because of the smp mode calls from the renderer
-	thisTime = CL_ScaledMilliseconds()*com_timescale->value;
+	thisTime = Sys_Milliseconds()*com_timescale->value;
 	if (cinTable[currentHandle].shader && (abs(thisTime - cinTable[currentHandle].lastTime))>100) {
 		cinTable[currentHandle].startTime += thisTime - cinTable[currentHandle].lastTime;
 	}
-	// we need to use CL_ScaledMilliseconds because of the smp mode calls from the renderer
-	cinTable[currentHandle].tfps = ((((CL_ScaledMilliseconds()*com_timescale->value) - cinTable[currentHandle].startTime)*3)/100);
+	cinTable[currentHandle].tfps = ((((Sys_Milliseconds()*com_timescale->value) - cinTable[currentHandle].startTime)*cinTable[currentHandle].roqFPS)/1000);
 
 	start = cinTable[currentHandle].startTime;
 	while(  (cinTable[currentHandle].tfps != cinTable[currentHandle].numQuads)
@@ -1227,9 +1200,8 @@ e_status CIN_RunCinematic (int handle)
 	{
 		RoQInterrupt();
 		if (start != cinTable[currentHandle].startTime) {
-			// we need to use CL_ScaledMilliseconds because of the smp mode calls from the renderer
-		  cinTable[currentHandle].tfps = ((((CL_ScaledMilliseconds()*com_timescale->value)
-							  - cinTable[currentHandle].startTime)*3)/100);
+		  cinTable[currentHandle].tfps = ((((Sys_Milliseconds()*com_timescale->value)
+							  - cinTable[currentHandle].startTime)*cinTable[currentHandle].roqFPS)/1000);
 			start = cinTable[currentHandle].startTime;
 		}
 	}
@@ -1288,7 +1260,7 @@ int CIN_PlayCinematic( const char *arg, int x, int y, int w, int h, int systemBi
 	cinTable[currentHandle].ROQSize = FS_FOpenFileRead (cinTable[currentHandle].fileName, &cinTable[currentHandle].iFile, qtrue);
 
 	if (cinTable[currentHandle].ROQSize<=0) {
-		Com_Printf("cinematic failed to open %s\n", arg);
+		Com_DPrintf("cinematic failed to open %s\n", arg);
 		cinTable[currentHandle].fileName[0] = 0;
 		return -1;
 	}

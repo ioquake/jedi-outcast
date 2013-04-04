@@ -166,3 +166,4 @@ void		G2_ConstructGhoulSkeleton( CGhoul2Info_v &ghoul2, const int frameNum, qhan
 #ifdef _SOF2
 void		G2API_AddSkinGore(CGhoul2Info_v &ghoul2,SSkinGoreData &gore);
 #endif // _SOF2
+

@@ -1154,12 +1154,17 @@ static qboolean ParseStage( shaderStage_t *stage, const char **text )
 			}
 			else
 			{
+#ifdef DEDICATED
+				stage->bundle[0].image[0] = NULL;
+				return qfalse;
+#else
 				stage->bundle[0].image[0] = R_FindImageFile( token, (qboolean)!shader.noMipMaps, (qboolean)!shader.noPicMip, (qboolean)!shader.noTC, GL_REPEAT );
 				if ( !stage->bundle[0].image[0] )
 				{
 					ri.Printf( PRINT_WARNING, "WARNING: R_FindImageFile could not find '%s' in shader '%s'\n", token, shader.name );
 					return qfalse;
 				}
+#endif // !DEDICATED
 			}
 		}
 		//
@@ -1173,13 +1178,17 @@ static qboolean ParseStage( shaderStage_t *stage, const char **text )
 				ri.Printf( PRINT_WARNING, "WARNING: missing parameter for 'clampmap' keyword in shader '%s'\n", shader.name );
 				return qfalse;
 			}
-
+#ifdef DEDICATED
+			stage->bundle[0].image[0] = NULL;
+			return qfalse;
+#else
 			stage->bundle[0].image[0] = R_FindImageFile( token, (qboolean)!shader.noMipMaps, (qboolean)!shader.noPicMip, (qboolean)!shader.noTC, GL_CLAMP );
 			if ( !stage->bundle[0].image[0] )
 			{
 				ri.Printf( PRINT_WARNING, "WARNING: R_FindImageFile could not find '%s' in shader '%s'\n", token, shader.name );
 				return qfalse;
 			}
+#endif
 		}
 		//
 		// animMap <frequency> <image1> .... <imageN>
@@ -1208,6 +1217,10 @@ static qboolean ParseStage( shaderStage_t *stage, const char **text )
 				}
 				num = stage->bundle[0].numImageAnimations;
 				if ( num < MAX_IMAGE_ANIMATIONS ) {
+#ifdef DEDICATED
+					stage->bundle[0].image[num] = NULL;
+					return qfalse;
+#else
 					stage->bundle[0].image[num] = R_FindImageFile( token, (qboolean)!shader.noMipMaps, (qboolean)!shader.noPicMip, (qboolean)!shader.noTC, bClamp?GL_CLAMP:GL_REPEAT );
 					if ( !stage->bundle[0].image[num] )
 					{
@@ -1215,6 +1228,7 @@ static qboolean ParseStage( shaderStage_t *stage, const char **text )
 						return qfalse;
 					}
 					stage->bundle[0].numImageAnimations++;
+#endif
 				}
 			}
 		}
@@ -1806,6 +1820,9 @@ static void ParseSkyParms( const char **text ) {
 	if ( strcmp( token, "-" ) ) {
 		for (i=0 ; i<6 ; i++) {
 			Com_sprintf( pathname, sizeof(pathname), "%s_%s", token, suf[i] );
+#ifdef DEDICATED
+			shader.sky.outerbox[i] = NULL;
+#else
 			shader.sky.outerbox[i] = R_FindImageFile( ( char * ) pathname, qtrue, qtrue, (qboolean)!shader.noTC, GL_CLAMP );
 			if ( !shader.sky.outerbox[i] ) {
 				if (i) {
@@ -1814,6 +1831,7 @@ static void ParseSkyParms( const char **text ) {
 					shader.sky.outerbox[i] = tr.defaultImage;
 				}
 			}
+#endif
 		}
 	}
 
@@ -1827,8 +1845,9 @@ static void ParseSkyParms( const char **text ) {
 	if ( !shader.sky.cloudHeight ) {
 		shader.sky.cloudHeight = 512;
 	}
+#ifndef DEDICATED
 	R_InitSkyTexCoords( shader.sky.cloudHeight );
-
+#endif
 
 	// innerbox
 	token = COM_ParseExt( text, qfalse );
@@ -1839,6 +1858,9 @@ static void ParseSkyParms( const char **text ) {
 	if ( strcmp( token, "-" ) ) {
 		for (i=0 ; i<6 ; i++) {
 			Com_sprintf( pathname, sizeof(pathname), "%s_%s", token, suf[i] );
+#ifdef DEDICATED
+			shader.sky.innerbox[i] = NULL;
+#else
 			shader.sky.innerbox[i] = R_FindImageFile( ( char * ) pathname, qtrue, qtrue, (qboolean)!shader.noTC, GL_CLAMP );
 			if ( !shader.sky.innerbox[i] ) {
 				if (i) {
@@ -1847,6 +1869,7 @@ static void ParseSkyParms( const char **text ) {
 					shader.sky.innerbox[i] = tr.defaultImage;
 				}
 			}
+#endif // !DEDICATED
 		}
 	}
 
@@ -2536,11 +2559,14 @@ static qboolean CollapseMultitexture( void ) {
 	if ( collapse[i].blendA == -1 ) {
 		return qfalse;
 	}
-
+#ifdef DEDICATED
+	return qfalse;
+#else
 	// GL_ADD is a separate extension
 	if ( collapse[i].multitextureEnv == GL_ADD && !glConfig.textureEnvAddAvailable ) {
 		return qfalse;
 	}
+#endif //!DEDICATED
 
 	// make sure waveforms have identical parameters
 	if ( ( stages[0].rgbGen != stages[1].rgbGen ) ||
@@ -2721,6 +2747,8 @@ what it is supposed to look like.
   OUTPUT:  Number of stages after the collapse (in the case of surfacesprites this isn't one).
 =================
 */
+//rww - no longer used, at least for now. destroys alpha shaders completely.
+#if 0
 static int VertexLightingCollapse( void ) {
 	int		stage, nextopenstage;
 	shaderStage_t	*bestStage;
@@ -2822,6 +2850,7 @@ static int VertexLightingCollapse( void ) {
 
 	return finalstagenum;
 }
+#endif
 
 /*
 =========================
@@ -3342,13 +3371,17 @@ shader_t *R_FindShader( const char *name, const int *lightmapIndex, const byte *
 	// look for a single TGA, BMP, or PCX
 	//
 	COM_StripExtension(name,fileName);
+#ifdef DEDICATED
+	shader.defaultShader = qtrue;
+	return FinishShader();
+#else
 	image = R_FindImageFile( fileName, mipRawImage, mipRawImage, qtrue, mipRawImage ? GL_REPEAT : GL_CLAMP );
 	if ( !image ) {
 		ri.Printf( PRINT_DEVELOPER, "Couldn't find image for shader %s\n", name );
 		shader.defaultShader = qtrue;
 		return FinishShader();
 	}
-
+#endif //!DEDICATED
 	//
 	// create the default shading commands
 	//

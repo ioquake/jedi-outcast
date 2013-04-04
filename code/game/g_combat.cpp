@@ -11,23 +11,24 @@
 #include "g_functions.h"
 #include "anims.h"
 #include "objectives.h"
-#include "..\cgame\cg_local.h"
+#include "../cgame/cg_local.h"
 #include "g_icarus.h"
 #include "wp_saber.h"
 #include "Q3_Interface.h"
+#include "../qcommon/stripPublic.h"
 
 extern	cvar_t	*g_debugDamage;
 extern qboolean	stop_icarus;
 extern cvar_t	*g_dismemberment;
 extern cvar_t	*g_dismemberProbabilities;
-extern cvar_t	*g_realisticSaberDamage;
+extern cvar_t	*g_saberRealisticCombat;
 extern cvar_t		*g_timescale;
 extern cvar_t		*d_slowmodeath;
 extern gentity_t *player;
 
 gentity_t *g_lastClientDamaged;
 
-int killPlayerTimer = 0;
+extern int killPlayerTimer;
 
 extern void NPC_TempLookTarget ( gentity_t *self, int lookEntNum, int minLookTime, int maxLookTime );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
@@ -61,9 +62,11 @@ extern qboolean PM_SaberInStart( int move );
 extern qboolean PM_SaberInReturn( int move );
 extern int PM_AnimLength( int index, animNumber_t anim );
 
-qboolean G_CheckForLedge( gentity_t *self, vec3_t fallCheckDir );
+qboolean G_CheckForLedge( gentity_t *self, vec3_t fallCheckDir, float checkDist );
 static int G_CheckSpecialDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, int hitLoc );
 static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, int hitLoc );
+static void G_TrackWeaponUsage( gentity_t *self, gentity_t *inflictor, int add, int mod );
+static qboolean G_Dismemberable( gentity_t *self, int hitLoc );
 extern gitem_t	*FindItemForAmmo( ammo_t ammo );
 /*
 ============
@@ -88,11 +91,11 @@ Toss the weapon and powerups for the killed player
 =================
 */
 extern gentity_t *WP_DropThermal( gentity_t *ent );
-extern void WP_SaberLose( gentity_t *self, vec3_t throwDir );
+extern qboolean WP_SaberLose( gentity_t *self, vec3_t throwDir );
 gentity_t *TossClientItems( gentity_t *self ) 
 {
 	gentity_t	*dropped = NULL;
-	gitem_t		*item;
+	gitem_t		*item = NULL;
 	int			weapon;
 
 	if ( self->client->NPC_class == CLASS_SEEKER || self->client->NPC_class == CLASS_REMOTE )
@@ -105,24 +108,35 @@ gentity_t *TossClientItems( gentity_t *self )
 	weapon = self->s.weapon;
 	if ( weapon == WP_SABER )
 	{
-		WP_SaberLose( self, NULL );
-		if ( self->client->NPC_class == CLASS_SHADOWTROOPER )
-		{//drop a force crystal
-			item = FindItemForAmmo( AMMO_FORCE );
-			Drop_Item( self, item, 0, qtrue );
+		if ( self->weaponModel < 0 || WP_SaberLose( self, NULL ) )
+		{
+			self->s.weapon = WP_NONE;
 		}
+	}
+	else if ( weapon == WP_BLASTER_PISTOL )
+	{//FIXME: either drop the pistol and make the pickup only give ammo or drop ammo
 	}
 	else if ( weapon > WP_SABER && weapon <= MAX_PLAYER_WEAPONS )//&& self->client->ps.ammo[ weaponData[weapon].ammoIndex ]
 	{
-		// find the item type for this weapon
-		item = FindItemForWeapon( (weapon_t) weapon );
+		self->s.weapon = WP_NONE;
 
-		if ( weapon == WP_THERMAL && (self->client->ps.torsoAnim == BOTH_ATTACK10))
-		{//drop it! 
-			self->client->ps.weaponChargeTime = level.time - FRAMETIME;//so it just kind of drops it
-			dropped = WP_DropThermal( self );
+		if ( weapon == WP_THERMAL )
+		{//using thermal
+			if ( self->client->ps.torsoAnim == BOTH_ATTACK10 )
+			{//we were getting ready to throw one, drop it! 
+				self->client->ps.weaponChargeTime = level.time - FRAMETIME;//so it just kind of drops it
+				dropped = WP_DropThermal( self );
+			}
+			else
+			{//drop the belt
+				item = FindItemForAmmo( AMMO_THERMAL );
+			}
 		}
 		else
+		{// find the item type for this weapon
+			item = FindItemForWeapon( (weapon_t) weapon );
+		}
+		if ( item && !dropped )
 		{
 			// spawn the item
 			dropped = Drop_Item( self, item, 0, qtrue );
@@ -144,7 +158,7 @@ gentity_t *TossClientItems( gentity_t *self )
 					dropped->count = 20;
 					break;
 				case WP_BLASTER:
-					dropped->count = 25;
+					dropped->count = 15;
 					break;
 				case WP_DISRUPTOR:
 					dropped->count = 20;
@@ -165,7 +179,7 @@ gentity_t *TossClientItems( gentity_t *self )
 					dropped->count = 3;
 					break;
 				case WP_THERMAL:
-					dropped->count = 3;
+					dropped->count = 4;
 					break;
 				case WP_TRIP_MINE:
 					dropped->count = 3;
@@ -181,17 +195,17 @@ gentity_t *TossClientItems( gentity_t *self )
 					break;
 				}
 			}
+			// well, dropped weapons are G2 models, so they have to be initialised if they want to draw..give us a radius so we don't get prematurely culled
+			if ( weapon != WP_THERMAL )
+			{
+				gi.G2API_InitGhoul2Model( dropped->ghoul2, item->world_model, G_ModelIndex( item->world_model ));
+				dropped->s.radius = 10;
+			}
 		}
-
-
-		// well, dropped weapons are G2 models, so they have to be initialised if they want to draw..give us a radius so we don't get prematurely culled
-		gi.G2API_InitGhoul2Model( dropped->ghoul2, item->world_model, G_ModelIndex( item->world_model ));
-		dropped->s.radius = 10;
-
 	}
 //	else if (( self->client->NPC_class == CLASS_SENTRY ) || ( self->client->NPC_class == CLASS_PROBE )) // Looks dumb, Steve told us to take it out.
 //	{
-//		item = FindItemForAmmo( AMMO_BLASTER );
+//		item = FindItemForAmmo( AMMO_BLASTER ); 
 //		Drop_Item( self, item, 0, qtrue );
 //	}
 	else if ( self->client->NPC_class == CLASS_MARK1 ) 
@@ -226,44 +240,20 @@ gentity_t *TossClientItems( gentity_t *self )
 
 void G_DropKey( gentity_t *self )
 {//drop whatever security key I was holding
-	gitem_t		*item = FindItemForInventory( INV_SECURITY_KEY1 );
+	gitem_t		*item = NULL;
+	if ( !Q_stricmp( "goodie", self->message ) )
+	{
+		item = FindItemForInventory( INV_GOODIE_KEY );
+	}
+	else
+	{
+		item = FindItemForInventory( INV_SECURITY_KEY );
+	}
 	gentity_t	*dropped = Drop_Item( self, item, 0, qtrue );
 	//Don't throw the key
 	VectorClear( dropped->s.pos.trDelta );
 	dropped->message = G_NewString( self->message );
 	self->message = NULL;
-}
-
-/*
-==================
-LookAtKiller
-==================
-*/
-void LookAtKiller( gentity_t *self, gentity_t *inflictor, gentity_t *attacker ) {
-	vec3_t		dir;
-	//vec3_t		angles;
-
-	if ( attacker && attacker != self ) 
-	{
-		VectorSubtract( attacker->s.pos.trBase, self->s.pos.trBase, dir );
-	} 
-	else if ( inflictor && inflictor != self ) 
-	{
-		VectorSubtract( inflictor->s.pos.trBase, self->s.pos.trBase, dir );
-	}
-	else 
-	{
-		self->client->ps.stats[STAT_DEAD_YAW] = self->currentAngles[YAW];
-		return;
-	}
-
-	self->client->ps.stats[STAT_DEAD_YAW] = vectoyaw ( dir );
-
-	/*
-	angles[YAW] = vectoyaw ( dir );
-	angles[PITCH] = 0; 
-	angles[ROLL] = 0;
-	*/
 }
 
 void ObjectDie (gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath )
@@ -353,14 +343,23 @@ void G_CheckVictoryScript(gentity_t *self)
 			self->NPC->blockedSpeechDebounceTime = 0;//get them ready to taunt
 			return;
 		}
-		//FIXME: any way to not say this *right away*?  Wait for victim's death anim/scream to finish?
-		if ( self->NPC && self->NPC->group && self->NPC->group->commander && self->NPC->group->commander->NPC->rank > self->NPC->rank && !Q_irand( 0, 2 ) )
-		{//sometimes have the group commander speak instead
-			G_AddVoiceEvent( self->NPC->group->commander, Q_irand(EV_VICTORY1, EV_VICTORY3), 2000 );
-		}
-		else
+		if ( self->client && self->client->NPC_class == CLASS_GALAKMECH )
 		{
-			G_AddVoiceEvent( self, Q_irand(EV_VICTORY1, EV_VICTORY3), 2000 );
+			self->wait = 1;
+			TIMER_Set( self, "gloatTime", Q_irand( 5000, 8000 ) );
+			self->NPC->blockedSpeechDebounceTime = 0;//get him ready to taunt
+			return;
+		}
+		//FIXME: any way to not say this *right away*?  Wait for victim's death anim/scream to finish?
+		if ( self->NPC && self->NPC->group && self->NPC->group->commander && self->NPC->group->commander->NPC && self->NPC->group->commander->NPC->rank > self->NPC->rank && !Q_irand( 0, 2 ) )
+		{//sometimes have the group commander speak instead
+			self->NPC->group->commander->NPC->greetingDebounceTime = level.time + Q_irand( 2000, 5000 );
+			//G_AddVoiceEvent( self->NPC->group->commander, Q_irand(EV_VICTORY1, EV_VICTORY3), 2000 );
+		}
+		else if ( self->NPC )
+		{
+			self->NPC->greetingDebounceTime = level.time + Q_irand( 2000, 5000 );
+			//G_AddVoiceEvent( self, Q_irand(EV_VICTORY1, EV_VICTORY3), 2000 );
 		}
 	}
 }
@@ -456,6 +455,10 @@ void G_AlertTeam( gentity_t *victim, gentity_t *attacker, float radius, float so
 
 		//Skip the requested avoid radiusEnts[i] if present
 		if ( radiusEnts[i] == victim )
+			continue;
+
+		//Skip the attacker
+		if ( radiusEnts[i] == attacker )
 			continue;
 
 		//Must be on the same team
@@ -562,13 +565,13 @@ void DeathFX( gentity_t *ent )
 		VectorCopy( ent->currentOrigin, effectPos );
 		effectPos[2] -= 20;
 		G_PlayEffect( "env/small_explode", effectPos );
+		G_SoundOnEnt( ent, CHAN_AUTO, "sound/chars/mouse/misc/death1" );
 		break;
 
 	case CLASS_PROBE:
 		VectorCopy( ent->currentOrigin, effectPos );
 		effectPos[2] += 50;
 		G_PlayEffect( "probeexplosion1", effectPos );
-//		G_PlayEffect( "small_chunks", effectPos );
 		break;
 		
 	case CLASS_ATST: 
@@ -576,7 +579,6 @@ void DeathFX( gentity_t *ent )
 		VectorMA( ent->currentOrigin, 20, right, effectPos );
 		effectPos[2] += 180;
 		G_PlayEffect( "droidexplosion1", effectPos );
-//		G_PlayEffect( "small_chunks", effectPos );
 		VectorMA( effectPos, -40, right, effectPos );
 		G_PlayEffect( "droidexplosion1", effectPos );
 		break;
@@ -587,31 +589,41 @@ void DeathFX( gentity_t *ent )
 		break;
 
 	case CLASS_GONK:
+		VectorCopy( ent->currentOrigin, effectPos );
+		effectPos[2] -= 5;
 //		statusTextIndex = Q_irand( IGT_RESISTANCEISFUTILE, IGT_NAMEIS8OF12 );
 		G_SoundOnEnt( ent, CHAN_AUTO, va("sound/chars/gonk/misc/death%d.wav",Q_irand( 1, 3 )) );
-		// fall through, Gonk should still explode like the rest
+		G_PlayEffect( "env/med_explode", effectPos );
+		break;
 
 	// should list all remaining droids here, hope I didn't miss any
 	case CLASS_R2D2:
-
 		VectorCopy( ent->currentOrigin, effectPos );
-		effectPos[2] -= 15;
-		G_PlayEffect( "r2_droidexplosion", effectPos );
-//		G_PlayEffect( "small_chunks", effectPos );
+		effectPos[2] -= 10;
+		G_PlayEffect( "env/med_explode", effectPos );
+		G_SoundOnEnt( ent, CHAN_AUTO, "sound/chars/mark2/misc/mark2_explo" );
 		break;
 
+	case CLASS_PROTOCOL://??
 	case CLASS_R5D2:
 		VectorCopy( ent->currentOrigin, effectPos );
-		effectPos[2] -= 15;
-		G_PlayEffect( "r5_droidexplosion", effectPos );
+		effectPos[2] -= 10;
+		G_PlayEffect( "env/med_explode", effectPos );
+		G_SoundOnEnt( ent, CHAN_AUTO, "sound/chars/mark2/misc/mark2_explo" );
+		break;
 
-	case CLASS_PROTOCOL:
 	case CLASS_MARK2:
+		VectorCopy( ent->currentOrigin, effectPos );
+		effectPos[2] -= 15;
+		G_PlayEffect( "droidexplosion1", effectPos );
+		G_SoundOnEnt( ent, CHAN_AUTO, "sound/chars/mark2/misc/mark2_explo" );
+		break;
+
 	case CLASS_INTERROGATOR:
 		VectorCopy( ent->currentOrigin, effectPos );
 		effectPos[2] -= 15;
 		G_PlayEffect( "droidexplosion1", effectPos );
-//		G_PlayEffect( "small_chunks", effectPos );
+		G_SoundOnEnt( ent, CHAN_AUTO, "sound/chars/interrogator/misc/int_droid_explo" );
 		break;
 
 	case CLASS_MARK1:
@@ -623,11 +635,11 @@ void DeathFX( gentity_t *ent )
 		G_PlayEffect( "droidexplosion1", effectPos );
 		VectorMA( effectPos, -20, right, effectPos );
 		G_PlayEffect( "droidexplosion1", effectPos );
-//		G_PlayEffect( "small_chunks", effectPos );
+		G_SoundOnEnt( ent, CHAN_AUTO, "sound/chars/mark1/misc/mark1_explo" );
 		break;
 
 	case CLASS_SENTRY:
-		G_SoundOnEnt( ent, CHAN_AUTO, "sound/chars/sentry/misc/death.wav");
+		G_SoundOnEnt( ent, CHAN_AUTO, "sound/chars/sentry/misc/sentry_explo" );
 		VectorCopy( ent->currentOrigin, effectPos );
 		G_PlayEffect( "env/med_explode", effectPos );
 		break;
@@ -749,18 +761,6 @@ void G_MakeTeamVulnerable( void )
 		{
 			continue;
 		}
-		if ( !ent->client->squadname )
-		{
-			continue;
-		}
-		if ( !ent->client->squadname[0] )
-		{
-			continue;
-		}
-		if ( Q_stricmp(self->client->squadname, ent->client->squadname) )
-		{
-			continue;
-		}
 		ent->flags &= ~FL_UNDYING;
 		newhealth = Q_irand( 5, 40 );
 		if ( ent->health > newhealth )
@@ -840,7 +840,7 @@ qboolean G_JediInRoom( vec3_t from )
 	return qfalse;
 }
 
-qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hitLoc, vec3_t point, vec3_t dir, vec3_t bladeDir )
+qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hitLoc, vec3_t point, vec3_t dir, vec3_t bladeDir, int mod )
 {
 	qboolean dismember = qfalse;
 
@@ -946,7 +946,7 @@ qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hit
 		{
 			*hitLoc = HL_GENERIC1;
 		}
-		else if (!Q_stricmp("torso_shield",surfName))
+		else if (!Q_stricmp("torso_shield_off",surfName))
 		{
 			*hitLoc = HL_GENERIC2;
 		}
@@ -1017,21 +1017,17 @@ qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hit
 			{//hit at waist
 				*hitLoc = HL_WAIST;
 			}
-			else if ( upSide > -3 )
-			{//hit at waist
-				*hitLoc = HL_HEAD;
-			}
 			else
 			{//hit on upper torso
-				if ( rightSide > 10 )
+				if ( rightSide > 4 )
 				{
 					*hitLoc = HL_ARM_RT;
 				}
-				else if ( rightSide < -10 )
+				else if ( rightSide < -4 )
 				{
 					*hitLoc = HL_ARM_LT;
 				}
-				else if ( rightSide > 4 )
+				else if ( rightSide > 2 )
 				{
 					if ( frontSide > 0 )
 					{
@@ -1042,7 +1038,7 @@ qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hit
 						*hitLoc = HL_BACK_RT;
 					}
 				}
-				else if ( rightSide < -4 )
+				else if ( rightSide < -2 )
 				{
 					if ( frontSide > 0 )
 					{
@@ -1053,7 +1049,7 @@ qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hit
 						*hitLoc = HL_BACK_LT;
 					}
 				}
-				else if ( upSide > -3 )
+				else if ( upSide > -3 && mod == MOD_SABER )
 				{
 					*hitLoc = HL_HEAD;
 				}
@@ -1160,88 +1156,102 @@ qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hit
 			}
 		}
 	}
-	else if ( !Q_strncmp( "r_hand", surfName, 6 ) )
-	{
+	else if ( !Q_strncmp( "r_hand", surfName, 6 ) || !Q_strncmp( "w_", surfName, 2 ) )
+	{//right hand or weapon
 		*hitLoc = HL_HAND_RT;
 	}
 	else if ( !Q_strncmp( "l_hand", surfName, 6 ) )
 	{
 		*hitLoc = HL_HAND_LT;
 	}
-	if ( g_realisticSaberDamage->integer )
+#ifdef _DEBUG
+	else
+	{
+		Com_Printf( "ERROR: surface %s does not belong to any hitLocation!!!\n", surfName );
+	}
+#endif //_DEBUG
+
+	if ( g_saberRealisticCombat->integer )
 	{
 		dismember = qtrue;
 	}
-	else if ( g_dismemberment->integer > 3 || !ent->client->dismembered )
+	else if ( g_dismemberment->integer >= 11381138 || !ent->client->dismembered )
 	{
-		if ( dir && (dir[0] || dir[1] || dir[2]) &&
+		if ( ent->client && ent->client->NPC_class == CLASS_PROTOCOL )
+		{
+			dismember = qtrue;
+		}
+		else if ( dir && (dir[0] || dir[1] || dir[2]) &&
 			bladeDir && (bladeDir[0] || bladeDir[1] || bladeDir[2]) )
 		{//we care about direction (presumably for dismemberment)
-			char *tagName = NULL;
-			float	aoa = 0.5f;
-			//dir must be roughly perpendicular to the hitLoc's cap bolt
-			switch ( *hitLoc )
-			{
-				case HL_LEG_RT:
-					tagName = "*hips_cap_r_leg";
-					break;
-				case HL_LEG_LT:
-					tagName = "*hips_cap_l_leg";
-					break;
-				case HL_WAIST:
-					tagName = "*hips_cap_torso";
-					aoa = 0.25f;
-					break;
-				case HL_CHEST_RT:
-				case HL_ARM_RT:
-				case HL_BACK_RT:
-					tagName = "*torso_cap_r_arm";
-					break;
-				case HL_CHEST_LT:
-				case HL_ARM_LT:
-				case HL_BACK_LT:
-					tagName = "*torso_cap_l_arm";
-					break;
-				case HL_HAND_RT:
-					tagName = "*r_arm_cap_r_hand";
-					break;
-				case HL_HAND_LT:
-					tagName = "*l_arm_cap_l_hand";
-					break;
-				case HL_HEAD:
-					tagName = "*torso_cap_head";
-					aoa = 0.25f;
-					break;
-				case HL_CHEST:
-				case HL_BACK:
-				case HL_FOOT_RT:
-				case HL_FOOT_LT:
-				default:
-					//no dismemberment possible with these, so no checks needed
-					break;
-			}
-			if ( tagName )
-			{
-				int tagBolt = gi.G2API_AddBolt( &ent->ghoul2[ent->playerModel], tagName );
-				if ( tagBolt != -1 )
+			if ( g_dismemberProbabilities->value<=0.0f||G_Dismemberable( ent, *hitLoc ) )
+			{//either we don't care about probabilties or the probability let us continue
+				char *tagName = NULL;
+				float	aoa = 0.5f;
+				//dir must be roughly perpendicular to the hitLoc's cap bolt
+				switch ( *hitLoc )
 				{
-					mdxaBone_t	boltMatrix;
-					vec3_t	tagOrg, tagDir, angles;
-					VectorSet( angles, 0, ent->currentAngles[YAW], 0 );
-					gi.G2API_GetBoltMatrix( ent->ghoul2, ent->playerModel, tagBolt, 
-									&boltMatrix, angles, ent->currentOrigin,
-									actualTime, NULL, ent->s.modelScale );
-					gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, tagOrg );
-					gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, tagDir );
-					if ( DistanceSquared( point, tagOrg ) < 256 )
-					{//hit close
-						float dot = DotProduct( dir, tagDir );
-						if ( dot < aoa && dot > -aoa )
-						{//hit roughly perpendicular
-							dot = DotProduct( bladeDir, tagDir );
+					case HL_LEG_RT:
+						tagName = "*hips_cap_r_leg";
+						break;
+					case HL_LEG_LT:
+						tagName = "*hips_cap_l_leg";
+						break;
+					case HL_WAIST:
+						tagName = "*hips_cap_torso";
+						aoa = 0.25f;
+						break;
+					case HL_CHEST_RT:
+					case HL_ARM_RT:
+					case HL_BACK_LT:
+						tagName = "*torso_cap_r_arm";
+						break;
+					case HL_CHEST_LT:
+					case HL_ARM_LT:
+					case HL_BACK_RT:
+						tagName = "*torso_cap_l_arm";
+						break;
+					case HL_HAND_RT:
+						tagName = "*r_arm_cap_r_hand";
+						break;
+					case HL_HAND_LT:
+						tagName = "*l_arm_cap_l_hand";
+						break;
+					case HL_HEAD:
+						tagName = "*torso_cap_head";
+						aoa = 0.25f;
+						break;
+					case HL_CHEST:
+					case HL_BACK:
+					case HL_FOOT_RT:
+					case HL_FOOT_LT:
+					default:
+						//no dismemberment possible with these, so no checks needed
+						break;
+				}
+				if ( tagName )
+				{
+					int tagBolt = gi.G2API_AddBolt( &ent->ghoul2[ent->playerModel], tagName );
+					if ( tagBolt != -1 )
+					{
+						mdxaBone_t	boltMatrix;
+						vec3_t	tagOrg, tagDir, angles;
+						VectorSet( angles, 0, ent->currentAngles[YAW], 0 );
+						gi.G2API_GetBoltMatrix( ent->ghoul2, ent->playerModel, tagBolt, 
+										&boltMatrix, angles, ent->currentOrigin,
+										actualTime, NULL, ent->s.modelScale );
+						gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, tagOrg );
+						gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, tagDir );
+						if ( DistanceSquared( point, tagOrg ) < 256 )
+						{//hit close
+							float dot = DotProduct( dir, tagDir );
 							if ( dot < aoa && dot > -aoa )
-							{//blade was roughly perpendicular
-								dismember = qtrue;
+							{//hit roughly perpendicular
+								dot = DotProduct( bladeDir, tagDir );
+								if ( dot < aoa && dot > -aoa )
+								{//blade was roughly perpendicular
+									dismember = qtrue;
+								}
 							}
 						}
 					}
@@ -1249,7 +1259,6 @@ qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hit
 			}
 		}
 	}
-
 	return dismember;
 }
 
@@ -1606,13 +1615,30 @@ void LimbThink( gentity_t *ent )
 			}
 			else
 			{//lay flat
-				if ( ent->currentAngles[0] > 90 || ent->currentAngles[0] < -90 )
+				if ( ent->owner 
+					&& ent->owner->client 
+					&& ent->owner->client->NPC_class == CLASS_PROTOCOL 
+					&& ent->count == BOTH_DISMEMBER_TORSO1 )
 				{
-					flatAngles[0] = 180;
+					if ( ent->currentAngles[0] > 0 || ent->currentAngles[0] < -180 )
+					{
+						flatAngles[0] = -90;
+					}
+					else
+					{
+						flatAngles[0] = 90;
+					}
 				}
 				else
 				{
-					flatAngles[0] = 0;
+					if ( ent->currentAngles[0] > 90 || ent->currentAngles[0] < -90 )
+					{
+						flatAngles[0] = 180;
+					}
+					else
+					{
+						flatAngles[0] = 0;
+					}
 				}
 			}
 			//yaw
@@ -1664,7 +1690,40 @@ float hitLocHealthPercentage[HL_MAX] =
 	0.05f,	//HL_ARM_LT,
 	0.01f,	//HL_HAND_RT,
 	0.01f,	//HL_HAND_LT,
-	0.10f	//HL_HEAD
+	0.10f,	//HL_HEAD
+	0.0f,	//HL_GENERIC1,
+	0.0f,	//HL_GENERIC2,
+	0.0f,	//HL_GENERIC3,
+	0.0f,	//HL_GENERIC4,
+	0.0f,	//HL_GENERIC5,
+	0.0f	//HL_GENERIC6
+};
+
+char *hitLocName[HL_MAX] = 
+{
+	"none",	//HL_NONE = 0,
+	"right foot",	//HL_FOOT_RT,
+	"left foot",	//HL_FOOT_LT,
+	"right leg",	//HL_LEG_RT,
+	"left leg",	//HL_LEG_LT,
+	"waist",	//HL_WAIST,
+	"back right shoulder",	//HL_BACK_RT,
+	"back left shoulder",	//HL_BACK_LT,
+	"back",	//HL_BACK,
+	"front right shouler",	//HL_CHEST_RT,
+	"front left shoulder",	//HL_CHEST_LT,
+	"chest",	//HL_CHEST,
+	"right arm",	//HL_ARM_RT,
+	"left arm",	//HL_ARM_LT,
+	"right hand",	//HL_HAND_RT,
+	"left hand",	//HL_HAND_LT,
+	"head",	//HL_HEAD
+	"generic1",	//HL_GENERIC1,
+	"generic2",	//HL_GENERIC2,
+	"generic3",	//HL_GENERIC3,
+	"generic4",	//HL_GENERIC4,
+	"generic5",	//HL_GENERIC5,
+	"generic6"	//HL_GENERIC6
 };
 
 qboolean G_LimbLost( gentity_t *ent, int hitLoc )
@@ -1761,7 +1820,7 @@ qboolean G_LimbLost( gentity_t *ent, int hitLoc )
 	}
 }
 
-qboolean G_Dismember( gentity_t *ent, vec3_t point, 
+static qboolean G_Dismember( gentity_t *ent, vec3_t point, 
 				 const char *limbBone, const char *rotateBone, char *limbName, 
 				 char *limbCapName, char *stubCapName, char *limbTagName, char *stubTagName, 
 				 int limbAnim, float limbRollBase, float limbPitchBase,
@@ -1834,6 +1893,19 @@ qboolean G_Dismember( gentity_t *ent, vec3_t point,
 							BONE_ANIM_OVERRIDE_FREEZE, 1, cg.time);
 	}
 	*/
+	if ( limbBone && hitLoc == HL_WAIST && ent->client->NPC_class == CLASS_PROTOCOL )
+	{//play the dismember anim on the limb?
+		gi.G2API_StopBoneAnim( &limb->ghoul2[limb->playerModel], "model_root" );
+		gi.G2API_StopBoneAnim( &limb->ghoul2[limb->playerModel], "motion" );
+		gi.G2API_StopBoneAnim( &limb->ghoul2[limb->playerModel], "pelvis" );
+		gi.G2API_StopBoneAnim( &limb->ghoul2[limb->playerModel], "upper_lumbar" );
+		//FIXME: screws up origin
+		animation_t *animations = level.knownAnimFileSets[ent->client->clientInfo.animFileIndex].animations;
+		//play the proper dismember anim on the limb
+		gi.G2API_SetBoneAnim(&limb->ghoul2[limb->playerModel], 0, animations[limbAnim].firstFrame, 
+							animations[limbAnim].numFrames + animations[limbAnim].firstFrame,
+							BONE_ANIM_OVERRIDE_FREEZE, 1, cg.time );
+	}
 	if ( rotateBone )
 	{
  		gi.G2API_SetNewOrigin( &limb->ghoul2[0], gi.G2API_AddBolt( &limb->ghoul2[0], rotateBone ) );
@@ -1907,36 +1979,49 @@ qboolean G_Dismember( gentity_t *ent, vec3_t point,
 	limb->classname = "limb";
 	limb->owner = ent;
 	limb->enemy = ent->enemy;
-	if ( ent->weaponModel != -1 && !ent->client->ps.saberInFlight )
+	if ( ent->weaponModel >= 0 && !ent->client->ps.saberInFlight )
 	{//the corpse hasn't dropped their weapon
 		if ( limbAnim == BOTH_DISMEMBER_RARM || limbAnim == BOTH_DISMEMBER_TORSO1 )//&& ent->s.weapon == WP_SABER && ent->weaponModel != -1 )
 		{//FIXME: is this first check needed with this lower one?
 			if ( !gi.G2API_GetSurfaceRenderStatus( &limb->ghoul2[0], "r_hand" ) )
 			{//only copy the weapon over if the right hand is actually on this limb...
-				limb->s.weapon = ent->s.weapon;
-				limb->weaponModel = ent->weaponModel;
+				//copy it to limb
+				if ( ent->s.weapon != WP_NONE )
+				{//only if they actually still have a weapon
+					limb->s.weapon = ent->s.weapon;
+					limb->weaponModel = ent->weaponModel;
+				}//else - weaponModel is not -1 but don't have a weapon?  Oops, somehow G2 model wasn't removed?
+				//remove it on owner
+				if ( ent->weaponModel >= 0 )
+				{
+					gi.G2API_RemoveGhoul2Model( ent->ghoul2, ent->weaponModel );
+					ent->weaponModel = -1;
+				}
+				if ( ent->client->ps.saberEntityNum != ENTITYNUM_NONE && ent->client->ps.saberEntityNum > 0 )
+				{//remove the owner ent's saber model and entity
+					if ( g_entities[ent->client->ps.saberEntityNum].inuse )
+					{
+						G_FreeEntity( &g_entities[ent->client->ps.saberEntityNum] );
+					}
+					ent->client->ps.saberEntityNum = ENTITYNUM_NONE;
+				}
 			}
 			else
 			{
-				gi.G2API_RemoveGhoul2Model( limb->ghoul2, ent->weaponModel );
-				limb->weaponModel = -1;
-			}
-			//remove the owner ent's saber model and entity
-			if ( ent->client->ps.saberEntityNum != ENTITYNUM_NONE && ent->client->ps.saberEntityNum > 0 )
-			{
-				gi.G2API_RemoveGhoul2Model( ent->ghoul2, ent->weaponModel );
-				ent->weaponModel = -1;
-				if ( g_entities[ent->client->ps.saberEntityNum].inuse )
+				if ( ent->weaponModel >= 0 )
 				{
-					G_FreeEntity( &g_entities[ent->client->ps.saberEntityNum] );
+					gi.G2API_RemoveGhoul2Model( limb->ghoul2, ent->weaponModel );
+					limb->weaponModel = -1;
 				}
-				ent->client->ps.saberEntityNum = ENTITYNUM_NONE;
 			}
 		}
 		else
 		{
-			gi.G2API_RemoveGhoul2Model( limb->ghoul2, ent->weaponModel );
-			limb->weaponModel = -1;
+			if ( ent->weaponModel >= 0 )
+			{
+				gi.G2API_RemoveGhoul2Model( limb->ghoul2, ent->weaponModel );
+				limb->weaponModel = -1;
+			}
 		}
 	}
 
@@ -2032,13 +2117,13 @@ qboolean G_Dismember( gentity_t *ent, vec3_t point,
 	return qtrue;
 }
 
-static qboolean G_Dismemberable( gentity_t *self, int hitLoc, int damage )
+static qboolean G_Dismemberable( gentity_t *self, int hitLoc )
 {
 	if ( self->client->dismembered )
 	{//cannot dismember me right now
 		return qfalse;
 	}
-	if ( g_dismemberment->integer < 4 && !g_realisticSaberDamage->integer )
+	if ( g_dismemberment->integer < 11381138 && !g_saberRealisticCombat->integer )
 	{
 		if ( g_dismemberProbabilities->value > 0.0f )
 		{//use the ent-specific dismemberProbabilities
@@ -2074,14 +2159,26 @@ static qboolean G_Dismemberable( gentity_t *self, int hitLoc, int damage )
 				break;
 			}
 
-			//check probability of this hapening on this npc
-			if ( floor((Q_flrand( 0, 100 )*g_dismemberProbabilities->value)) > dismemberProb )
+			//check probability of this happening on this npc
+			if ( floor((Q_flrand( 1, 100 )*g_dismemberProbabilities->value)) > dismemberProb*2.0f )//probabilities seemed really really low, had to crank them up
 			{	
 				return qfalse;
 			}
 		}
-		else
-		{//else add the passed-in damage to the locationDamage array, check to see if it's taken enough damage to actually dismember
+	}
+	return qtrue;
+}
+
+static qboolean G_Dismemberable2( gentity_t *self, int hitLoc )
+{
+	if ( self->client->dismembered )
+	{//cannot dismember me right now
+		return qfalse;
+	}
+	if ( g_dismemberment->integer < 11381138 && !g_saberRealisticCombat->integer )
+	{
+		if ( g_dismemberProbabilities->value <= 0.0f )
+		{//add the passed-in damage to the locationDamage array, check to see if it's taken enough damage to actually dismember
 			if ( self->locationDamage[hitLoc] < (self->client->ps.stats[STAT_MAX_HEALTH]*hitLocHealthPercentage[hitLoc]) )
 			{//this location has not taken enough damage to dismember
 				return qfalse;
@@ -2094,13 +2191,19 @@ static qboolean G_Dismemberable( gentity_t *self, int hitLoc, int damage )
 extern qboolean G_StandardHumanoid( const char *modelName );
 qboolean G_DoDismemberment( gentity_t *self, vec3_t point, int mod, int damage, int hitLoc, qboolean force = qfalse )
 {
+extern cvar_t	*g_iscensored;
 	// dismemberment -- FIXME: should have a check for how long npc has been dead so people can't
 	// continue to dismember a dead body long after it's been dead
-	//NOTE that you can only cut one thing off unless the super dismemberment is > 3
-	if ( g_dismemberment->integer && mod == MOD_SABER )//only lightsaber
+	//NOTE that you can only cut one thing off unless the dismemberment is >= 11381138
+#ifdef GERMAN_CENSORED
+	if ( 0 ) //germany == censorship
+#else
+	if ( !g_iscensored->integer && ( g_dismemberment->integer || g_saberRealisticCombat->integer > 1 ) && mod == MOD_SABER )//only lightsaber
+#endif
 	{//FIXME: don't do strcmps here
-		if ( G_StandardHumanoid( self->NPC_type ) && (force||G_Dismemberable( self, hitLoc, damage)) )
-		{//temp hack because only these models are set up the right way so far
+		if ( G_StandardHumanoid( self->NPC_type ) 
+			&& (force||g_dismemberProbabilities->value>0.0f||G_Dismemberable2( self, hitLoc )) )
+		{//either it's a forced dismemberment or we're using probabilities (which are checked before this) or we've done enough damage to this location
 			//FIXME: check the hitLoc and hitDir against the cap tag for the place 
 			//where the split will be- if the hit dir is roughly perpendicular to 
 			//the direction of the cap, then the split is allowed, otherwise we
@@ -2292,6 +2395,454 @@ static int G_CheckSpecialDeathAnim( gentity_t *self, vec3_t point, int damage, i
 			deathAnim = BOTH_DEATH_SPIN_90_L;	//# Death anim when facing 90 degrees left
 		}
 	}
+	else if ( PM_InKnockDown( &self->client->ps ) )
+	{//since these happen a lot, let's handle them case by case
+		int animLength = PM_AnimLength( self->client->clientInfo.animFileIndex, (animNumber_t)self->client->ps.legsAnim );
+		switch ( self->client->ps.legsAnim )
+		{
+		case BOTH_KNOCKDOWN1:
+			if ( animLength - self->client->ps.legsAnimTimer > 100 )
+			{//on our way down
+				if ( self->client->ps.legsAnimTimer > 600 )
+				{//still partially up
+					deathAnim = BOTH_DEATH_FALLING_UP;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			break;
+		case BOTH_KNOCKDOWN2:
+			if ( animLength - self->client->ps.legsAnimTimer > 700 )
+			{//on our way down
+				if ( self->client->ps.legsAnimTimer > 600 )
+				{//still partially up
+					deathAnim = BOTH_DEATH_FALLING_UP;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			break;
+		case BOTH_KNOCKDOWN3:
+			if ( animLength - self->client->ps.legsAnimTimer > 100 )
+			{//on our way down
+				if ( self->client->ps.legsAnimTimer > 1300 )
+				{//still partially up
+					deathAnim = BOTH_DEATH_FALLING_DN;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_DN;
+				}
+			}
+			break;
+		case BOTH_KNOCKDOWN4:
+			if ( animLength - self->client->ps.legsAnimTimer > 300 )
+			{//on our way down
+				if ( self->client->ps.legsAnimTimer > 350 )
+				{//still partially up
+					deathAnim = BOTH_DEATH_FALLING_UP;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			else
+			{//crouch death
+				vec3_t fwd;
+				AngleVectors( self->currentAngles, fwd, NULL, NULL );
+				float	thrown = DotProduct( fwd, self->client->ps.velocity );
+				if ( thrown < -150 )
+				{
+					deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
+				}
+			}
+			break;
+		case BOTH_KNOCKDOWN5:
+			if ( self->client->ps.legsAnimTimer < 750 )
+			{//flat
+				deathAnim = BOTH_DEATH_LYING_DN;
+			}
+			break;
+		case BOTH_GETUP1:
+			if ( self->client->ps.legsAnimTimer < 350 )
+			{//standing up
+			}
+			else if ( self->client->ps.legsAnimTimer < 800 )
+			{//crouching
+				vec3_t fwd;
+				AngleVectors( self->currentAngles, fwd, NULL, NULL );
+				float	thrown = DotProduct( fwd, self->client->ps.velocity );
+				if ( thrown < -150 )
+				{
+					deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
+				}
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 450 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_UP;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			break;
+		case BOTH_GETUP2:
+			if ( self->client->ps.legsAnimTimer < 150 )
+			{//standing up
+			}
+			else if ( self->client->ps.legsAnimTimer < 850 )
+			{//crouching
+				vec3_t fwd;
+				AngleVectors( self->currentAngles, fwd, NULL, NULL );
+				float	thrown = DotProduct( fwd, self->client->ps.velocity );
+				if ( thrown < -150 )
+				{
+					deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
+				}
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 500 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_UP;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			break;
+		case BOTH_GETUP3:
+			if ( self->client->ps.legsAnimTimer < 250 )
+			{//standing up
+			}
+			else if ( self->client->ps.legsAnimTimer < 600 )
+			{//crouching
+				vec3_t fwd;
+				AngleVectors( self->currentAngles, fwd, NULL, NULL );
+				float	thrown = DotProduct( fwd, self->client->ps.velocity );
+				if ( thrown < -150 )
+				{
+					deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
+				}
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 150 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_DN;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_DN;
+				}
+			}
+			break;
+		case BOTH_GETUP4:
+			if ( self->client->ps.legsAnimTimer < 250 )
+			{//standing up
+			}
+			else if ( self->client->ps.legsAnimTimer < 600 )
+			{//crouching
+				vec3_t fwd;
+				AngleVectors( self->currentAngles, fwd, NULL, NULL );
+				float	thrown = DotProduct( fwd, self->client->ps.velocity );
+				if ( thrown < -150 )
+				{
+					deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
+				}
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 850 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_DN;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			break;
+		case BOTH_GETUP5:
+			if ( self->client->ps.legsAnimTimer > 850 )
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 1500 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_DN;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_DN;
+				}
+			}
+			break;
+		case BOTH_GETUP_CROUCH_B1:
+			if ( self->client->ps.legsAnimTimer < 800 )
+			{//crouching
+				vec3_t fwd;
+				AngleVectors( self->currentAngles, fwd, NULL, NULL );
+				float	thrown = DotProduct( fwd, self->client->ps.velocity );
+				if ( thrown < -150 )
+				{
+					deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
+				}
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 400 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_UP;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			break;
+		case BOTH_GETUP_CROUCH_F1:
+			if ( self->client->ps.legsAnimTimer < 800 )
+			{//crouching
+				vec3_t fwd;
+				AngleVectors( self->currentAngles, fwd, NULL, NULL );
+				float	thrown = DotProduct( fwd, self->client->ps.velocity );
+				if ( thrown < -150 )
+				{
+					deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
+				}
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 150 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_DN;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_DN;
+				}
+			}
+			break;
+		case BOTH_FORCE_GETUP_B1:
+			if ( self->client->ps.legsAnimTimer < 325 )
+			{//standing up
+			}
+			else if ( self->client->ps.legsAnimTimer < 725 )
+			{//spinning up
+				deathAnim = BOTH_DEATH_SPIN_180;	//# Death anim when facing backwards
+			}
+			else if ( self->client->ps.legsAnimTimer < 900 )
+			{//crouching
+				vec3_t fwd;
+				AngleVectors( self->currentAngles, fwd, NULL, NULL );
+				float	thrown = DotProduct( fwd, self->client->ps.velocity );
+				if ( thrown < -150 )
+				{
+					deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
+				}
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 50 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_UP;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			break;
+		case BOTH_FORCE_GETUP_B2:
+			if ( self->client->ps.legsAnimTimer < 575 )
+			{//standing up
+			}
+			else if ( self->client->ps.legsAnimTimer < 875 )
+			{//spinning up
+				deathAnim = BOTH_DEATH_SPIN_180;	//# Death anim when facing backwards
+			}
+			else if ( self->client->ps.legsAnimTimer < 900 )
+			{//crouching
+				vec3_t fwd;
+				AngleVectors( self->currentAngles, fwd, NULL, NULL );
+				float	thrown = DotProduct( fwd, self->client->ps.velocity );
+				if ( thrown < -150 )
+				{
+					deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
+				}
+			}
+			else
+			{//lying down
+				//partially up
+				deathAnim = BOTH_DEATH_FALLING_UP;
+			}
+			break;
+		case BOTH_FORCE_GETUP_B3:
+			if ( self->client->ps.legsAnimTimer < 150 )
+			{//standing up
+			}
+			else if ( self->client->ps.legsAnimTimer < 775 )
+			{//flipping
+				deathAnim = BOTH_DEATHBACKWARD2; //backflip
+			}
+			else
+			{//lying down
+				//partially up
+				deathAnim = BOTH_DEATH_FALLING_UP;
+			}
+			break;
+		case BOTH_FORCE_GETUP_B4:
+			if ( self->client->ps.legsAnimTimer < 325 )
+			{//standing up
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 150 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_UP;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			break;
+		case BOTH_FORCE_GETUP_B5:
+			if ( self->client->ps.legsAnimTimer < 550 )
+			{//standing up
+			}
+			else if ( self->client->ps.legsAnimTimer < 1025 )
+			{//kicking up
+				deathAnim = BOTH_DEATHBACKWARD2; //backflip
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 50 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_UP;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			break;
+		case BOTH_FORCE_GETUP_B6:
+			if ( self->client->ps.legsAnimTimer < 225 )
+			{//standing up
+			}
+			else if ( self->client->ps.legsAnimTimer < 425 )
+			{//crouching up
+				vec3_t fwd;
+				AngleVectors( self->currentAngles, fwd, NULL, NULL );
+				float	thrown = DotProduct( fwd, self->client->ps.velocity );
+				if ( thrown < -150 )
+				{
+					deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
+				}
+			}
+			else if ( self->client->ps.legsAnimTimer < 825 )
+			{//flipping up
+				deathAnim = BOTH_DEATHFORWARD3; //backflip
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 225 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_UP;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_UP;
+				}
+			}
+			break;
+		case BOTH_FORCE_GETUP_F1:
+			if ( self->client->ps.legsAnimTimer < 275 )
+			{//standing up
+			}
+			else if ( self->client->ps.legsAnimTimer < 750 )
+			{//flipping
+				deathAnim = BOTH_DEATH14;
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 100 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_DN;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_DN;
+				}
+			}
+			break;
+		case BOTH_FORCE_GETUP_F2:
+			if ( self->client->ps.legsAnimTimer < 1200 )
+			{//standing
+			}
+			else
+			{//lying down
+				if ( animLength - self->client->ps.legsAnimTimer > 225 )
+				{//partially up
+					deathAnim = BOTH_DEATH_FALLING_DN;
+				}
+				else
+				{//down
+					deathAnim = BOTH_DEATH_LYING_DN;
+				}
+			}
+			break;
+		}
+	}
 	else if ( PM_InOnGroundAnim( &self->client->ps ) )
 	{
 		if ( AngleNormalize180(self->client->renderInfo.torsoAngles[PITCH]) < 0 )
@@ -2303,20 +2854,23 @@ static int G_CheckSpecialDeathAnim( gentity_t *self, vec3_t point, int damage, i
 			deathAnim = BOTH_DEATH_LYING_DN;	//# Death anim when lying on front
 		}
 	}
-	else if ( PM_InKnockDown( &self->client->ps ) )
+	else if ( PM_CrouchAnim( self->client->ps.legsAnim ) )
 	{
-		if ( AngleNormalize180(self->client->renderInfo.torsoAngles[PITCH]) < 0 )
+		vec3_t fwd;
+		AngleVectors( self->currentAngles, fwd, NULL, NULL );
+		float	thrown = DotProduct( fwd, self->client->ps.velocity );
+		if ( thrown < -200 )
 		{
-			deathAnim = BOTH_DEATH_FALLING_UP;	//# Death anim when falling on back
+			deathAnim = BOTH_DEATHBACKWARD1;	//# Death anim when crouched and thrown back
+			if ( self->client->ps.velocity[2] > 0 && self->client->ps.velocity[2] < 100 )
+			{
+				self->client->ps.velocity[2] = 100;
+			}
 		}
 		else
 		{
-			deathAnim = BOTH_DEATH_FALLING_DN;	//# Death anim when falling on face
+			deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
 		}
-	}
-	else if ( PM_CrouchAnim( self->client->ps.legsAnim ) )
-	{
-		deathAnim = BOTH_DEATH_CROUCHED;	//# Death anim when crouched
 	}
 
 	return deathAnim;
@@ -2396,6 +2950,12 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 	case BOTH_DEAD17:			//# 
 	case BOTH_DEAD18:			//# 
 	case BOTH_DEAD19:			//# 
+	case BOTH_DEAD20:			//# 
+	case BOTH_DEAD21:			//# 
+	case BOTH_DEAD22:			//# 
+	case BOTH_DEAD23:			//# 
+	case BOTH_DEAD24:			//# 
+	case BOTH_DEAD25:			//# 
 	case BOTH_LYINGDEAD1:		//# Killed lying down death finished pose
 	case BOTH_STUMBLEDEAD1:		//# Stumble forward death finished pose
 	case BOTH_FALLDEAD1LAND:		//# Fall forward and splat death finished pose
@@ -2410,8 +2970,15 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 	case BOTH_DEATH17:			//# 
 	case BOTH_DEATH18:			//# 
 	case BOTH_DEATH19:			//# 
+	case BOTH_DEATH20:			//# 
+	case BOTH_DEATH21:			//# 
+	case BOTH_DEATH22:			//# 
+	case BOTH_DEATH23:			//# 
+	case BOTH_DEATH24:			//# 
+	case BOTH_DEATH25:			//# 
 	case BOTH_DEATHFORWARD1:		//# First Death in which they get thrown forward
 	case BOTH_DEATHFORWARD2:		//# Second Death in which they get thrown forward
+	case BOTH_DEATHFORWARD3:		//# Second Death in which they get thrown forward
 	case BOTH_DEATHBACKWARD1:	//# First Death in which they get thrown backward
 	case BOTH_DEATHBACKWARD2:	//# Second Death in which they get thrown backward
 	case BOTH_DEATH1IDLE:		//# Idle while close to death
@@ -2443,28 +3010,44 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 
 		if ( deathAnim == -1 )
 		{//base on hitLoc
+			vec3_t fwd;
+			AngleVectors( self->currentAngles, fwd, NULL, NULL );
+			float	thrown = DotProduct( fwd, self->client->ps.velocity );
 			//death anims
 			switch( hitLoc )
 			{
 			case HL_FOOT_RT:
-			case HL_FOOT_LT:
-				if ( !Q_irand( 0, 2 ) )
+				if ( !Q_irand( 0, 2 ) && thrown < 250 )
 				{
-					deathAnim = BOTH_DEATH4;//back: forward
+					deathAnim = BOTH_DEATH24;//right foot trips up, spin
 				}
 				else if ( !Q_irand( 0, 1 ) )
 				{
-					deathAnim = BOTH_DEATH5;//same as 4
+					deathAnim = BOTH_DEATH4;//back: forward
 				}
 				else
 				{
-					deathAnim = BOTH_DEATH15;//back: forward
+					deathAnim = BOTH_DEATH5;//same as 4
+				}
+				break;
+			case HL_FOOT_LT:
+				if ( !Q_irand( 0, 2 ) && thrown < 250 )
+				{
+					deathAnim = BOTH_DEATH25;//left foot trips up, spin
+				}
+				else if ( !Q_irand( 0, 1 ) )
+				{
+					deathAnim = BOTH_DEATH4;//back: forward
+				}
+				else
+				{
+					deathAnim = BOTH_DEATH5;//same as 4
 				}
 				break;
 			case HL_LEG_RT:
-				if ( !Q_irand( 0, 2 ) )
+				if ( !Q_irand( 0, 2 ) && thrown < 250 )
 				{
-					deathAnim = BOTH_DEATH4;//back: forward
+					deathAnim = BOTH_DEATH3;//right leg collapse
 				}
 				else if ( !Q_irand( 0, 1 ) )
 				{
@@ -2472,13 +3055,13 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 				}
 				else
 				{
-					deathAnim = BOTH_DEATH15;//back: forward
+					deathAnim = BOTH_DEATH4;//back: forward
 				}
 				break;
 			case HL_LEG_LT:
-				if ( !Q_irand( 0, 2 ) )
+				if ( !Q_irand( 0, 2 ) && thrown < 250 )
 				{
-					deathAnim = BOTH_DEATH4;//back: forward
+					deathAnim = BOTH_DEATH7;//left leg collapse
 				}
 				else if ( !Q_irand( 0, 1 ) )
 				{
@@ -2486,11 +3069,11 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 				}
 				else
 				{
-					deathAnim = BOTH_DEATH15;//back: forward
+					deathAnim = BOTH_DEATH4;//back: forward
 				}
 				break;
 			case HL_BACK:
-				if ( VectorLengthSquared( self->client->ps.velocity ) < 256 )
+				if ( fabs(thrown) < 50 || (fabs(thrown) < 200&&!Q_irand(0,3)) )
 				{
 					if ( Q_irand( 0, 1 ) )
 					{
@@ -2503,60 +3086,63 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 				}
 				else
 				{
-					if ( !Q_irand( 0, 2 ) )
+					if ( !Q_irand( 0, 1 ) )
 					{
 						deathAnim = BOTH_DEATH4;//back: forward
 					}
-					else if ( !Q_irand( 0, 1 ) )
-					{
-						deathAnim = BOTH_DEATH5;//same as 4
-					}
 					else
 					{
-						deathAnim = BOTH_DEATH15;//back: forward
+						deathAnim = BOTH_DEATH5;//same as 4
 					}
 				}
 				break;
 			case HL_HAND_RT:
 			case HL_CHEST_RT:
 			case HL_ARM_RT:
-			case HL_BACK_RT:
-				if ( deathAnim == -1 )
+			case HL_BACK_LT:
+				if ( (damage <= self->max_health*0.25&&Q_irand(0,1)) || (fabs(thrown)<200&&!Q_irand(0,2)) || !Q_irand( 0, 10 ) )
 				{
-					if ( damage <= self->max_health*0.25 )
+					if ( Q_irand( 0, 1 ) )
 					{
 						deathAnim = BOTH_DEATH9;//chest right: snap, fall forward
 					}
-					else if ( damage <= self->max_health*0.5 )
+					else
 					{
-						deathAnim = BOTH_DEATH3;//chest right: back
+						deathAnim = BOTH_DEATH20;//chest right: snap, fall forward
 					}
-					else if ( damage <= self->max_health*0.75 )
+				}
+				else if ( (damage <= self->max_health*0.5&&Q_irand(0,1)) || !Q_irand( 0, 10 ) )
+				{
+					deathAnim = BOTH_DEATH3;//chest right: back
+				}
+				else if ( (damage <= self->max_health*0.75&&Q_irand(0,1)) || !Q_irand( 0, 10 ) )
+				{
+					deathAnim = BOTH_DEATH6;//chest right: spin
+				}
+				else 
+				{
+					//TEMP HACK: play spinny deaths less often
+					if ( Q_irand( 0, 1 ) )
 					{
-						deathAnim = BOTH_DEATH6;//chest right: spin
+						deathAnim = BOTH_DEATH8;//chest right: spin high
 					}
-					else 
+					else
 					{
-						//TEMP HACK: play spinny deaths less often
-						if ( Q_irand( 0, 1 ) )
+						switch ( Q_irand( 0, 3 ) )
 						{
-							deathAnim = BOTH_DEATH8;//chest right: spin high
-						}
-						else
-						{
-							switch ( Q_irand( 0, 2 ) )
-							{
-							default:
-							case 0:
-								deathAnim = BOTH_DEATH9;//chest right: snap, fall forward
-								break;
-							case 1:
-								deathAnim = BOTH_DEATH3;//chest right: back
-								break;
-							case 2:
-								deathAnim = BOTH_DEATH6;//chest right: spin
-								break;
-							}
+						default:
+						case 0:
+							deathAnim = BOTH_DEATH9;//chest right: snap, fall forward
+							break;
+						case 1:
+							deathAnim = BOTH_DEATH3;//chest right: back
+							break;
+						case 2:
+							deathAnim = BOTH_DEATH6;//chest right: spin
+							break;
+						case 3:
+							deathAnim = BOTH_DEATH20;//chest right: spin
+							break;
 						}
 					}
 				}
@@ -2564,16 +3150,23 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 			case HL_CHEST_LT:
 			case HL_ARM_LT:
 			case HL_HAND_LT:
-			case HL_BACK_LT:
-				if ( damage <= self->max_health*0.25 )
+			case HL_BACK_RT:
+				if ( (damage <= self->max_health*0.25&&Q_irand(0,1)) || (fabs(thrown)<200&&!Q_irand(0,2)) || !Q_irand(0, 10) )
 				{
-					deathAnim = BOTH_DEATH11;//chest left: snap, fall forward
+					if ( Q_irand( 0, 1 ) )
+					{
+						deathAnim = BOTH_DEATH11;//chest left: snap, fall forward
+					}
+					else
+					{
+						deathAnim = BOTH_DEATH21;//chest left: snap, fall forward
+					}
 				}
-				else if ( damage <= self->max_health*0.5 )
+				else if ( (damage <= self->max_health*0.5&&Q_irand(0,1)) || !Q_irand(0, 10) )
 				{
 					deathAnim = BOTH_DEATH7;//chest left: back
 				}
-				else if ( damage <= self->max_health*0.75 )
+				else if ( (damage <= self->max_health*0.75&&Q_irand(0,1)) || !Q_irand(0, 10) )
 				{
 					deathAnim = BOTH_DEATH12;//chest left: spin
 				}
@@ -2586,7 +3179,7 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 					}
 					else
 					{
-						switch ( Q_irand( 0, 2 ) )
+						switch ( Q_irand( 0, 3 ) )
 						{
 						default:
 						case 0:
@@ -2598,13 +3191,16 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 						case 2:
 							deathAnim = BOTH_DEATH12;//chest left: spin
 							break;
+						case 3:
+							deathAnim = BOTH_DEATH21;//chest left: spin
+							break;
 						}
 					}
 				}
 				break;
 			case HL_CHEST:
 			case HL_WAIST:
-				if ( damage <= self->max_health*0.25 || !VectorLengthSquared( self->client->ps.velocity ) )
+				if ( (damage <= self->max_health*0.25&&Q_irand(0,1)) || thrown > -50 )
 				{
 					if ( !Q_irand( 0, 1 ) )
 					{
@@ -2615,11 +3211,37 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 						deathAnim = BOTH_DEATH19;//gut: fall left
 					}
 				}
-				else if ( damage <= self->max_health*0.5 )
+				else if ( (damage <= self->max_health*0.5&&!Q_irand(0,1)) || (fabs(thrown)<200&&!Q_irand(0,3)) )
 				{
-					deathAnim = BOTH_DEATH2;//chest: backward short
+					if ( Q_irand( 0, 2 ) )
+					{
+						deathAnim = BOTH_DEATH2;//chest: backward short
+					}
+					else if ( Q_irand( 0, 1 ) )
+					{
+						deathAnim = BOTH_DEATH22;//chest: backward short
+					}
+					else
+					{
+						deathAnim = BOTH_DEATH23;//chest: backward short
+					}
 				}
-				else //if ( damage <= self->max_health*0.75 )
+				else if ( thrown < -300 && Q_irand( 0, 1 ) )
+				{
+					if ( Q_irand( 0, 1 ) )
+					{
+						deathAnim = BOTH_DEATHBACKWARD1;//chest: fly back
+					}
+					else
+					{
+						deathAnim = BOTH_DEATHBACKWARD2;//chest: flip back
+					}
+				}
+				else if ( thrown < -200 && Q_irand( 0, 1 ) )
+				{
+					deathAnim = BOTH_DEATH15;//chest: roll backward
+				}
+				else 
 				{
 					if ( !Q_irand( 0, 1 ) )
 					{
@@ -2632,13 +3254,20 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 				}
 				break;
 			case HL_HEAD:
-				if ( damage <= self->max_health*0.5 )
+				if ( damage <= self->max_health*0.5 && Q_irand(0,2) )
 				{
 					deathAnim = BOTH_DEATH17;//head/back: croak
 				}
 				else
 				{
-					deathAnim = BOTH_DEATH13;//head: stumble, fall back
+					if ( Q_irand( 0, 2 ) )
+					{
+						deathAnim = BOTH_DEATH13;//head: stumble, fall back
+					}
+					else
+					{
+						deathAnim = BOTH_DEATH10;//head: stumble, fall back
+					}
 				}
 				break;
 			default:
@@ -2651,10 +3280,90 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 	if ( deathAnim == -1 || !PM_HasAnimation( self, deathAnim ))
 	{
 		// I guess we'll take what we can get.....
-		deathAnim = PM_PickAnim( self, BOTH_DEATH1, BOTH_DEATH19 );
+		deathAnim = PM_PickAnim( self, BOTH_DEATH1, BOTH_DEATH25 );
 	}
 
 	return deathAnim;
+}
+
+int G_CheckLedgeDive( gentity_t *self, float checkDist, vec3_t checkVel, qboolean tryOpposite, qboolean tryPerp )
+{
+	//		Intelligent Ledge-Diving Deaths:
+	//		If I'm an NPC, check for nearby ledges and fall off it if possible
+	//		How should/would/could this interact with knockback if we already have some?
+	//		Ideally - apply knockback if there are no ledges or a ledge in that dir
+	//		But if there is a ledge and it's not in the dir of my knockback, fall off the ledge instead
+	if ( !self || !self->client )
+	{
+		return 0;
+	}
+
+	vec3_t	fallForwardDir, fallRightDir;
+	vec3_t	angles = {0};
+	int		cliff_fall = 0;
+
+	if ( checkVel && !VectorCompare( checkVel, vec3_origin ) )
+	{//already moving in a dir
+		angles[1] = vectoyaw( self->client->ps.velocity );
+		AngleVectors( angles, fallForwardDir, fallRightDir, NULL );
+	}
+	else
+	{//try forward first
+		angles[1] = self->client->ps.viewangles[1];
+		AngleVectors( angles, fallForwardDir, fallRightDir, NULL );
+	}
+	VectorNormalize( fallForwardDir );
+	float fallDist = G_CheckForLedge( self, fallForwardDir, checkDist );
+	if ( fallDist >= 128 )
+	{
+		VectorClear( self->client->ps.velocity );
+		G_Throw( self, fallForwardDir, 85 );
+		self->client->ps.velocity[2] = 100;
+		self->client->ps.groundEntityNum = ENTITYNUM_NONE;
+	}
+	else if ( tryOpposite )
+	{
+		VectorScale( fallForwardDir, -1, fallForwardDir );
+		fallDist = G_CheckForLedge( self, fallForwardDir, checkDist );
+		if ( fallDist >= 128 )
+		{
+			VectorClear( self->client->ps.velocity );
+			G_Throw( self, fallForwardDir, 85 );
+			self->client->ps.velocity[2] = 100;
+			self->client->ps.groundEntityNum = ENTITYNUM_NONE;
+		}
+	}
+	if ( !cliff_fall && tryPerp )
+	{//try sides
+		VectorNormalize( fallRightDir );
+		fallDist = G_CheckForLedge( self, fallRightDir, checkDist );
+		if ( fallDist >= 128 )
+		{
+			VectorClear( self->client->ps.velocity );
+			G_Throw( self, fallRightDir, 85 );
+			self->client->ps.velocity[2] = 100;
+		}
+		else 
+		{
+			VectorScale( fallRightDir, -1, fallRightDir );
+			fallDist = G_CheckForLedge( self, fallRightDir, checkDist );
+			if ( fallDist >= 128 )
+			{
+				VectorClear( self->client->ps.velocity );
+				G_Throw( self, fallRightDir, 85 );
+				self->client->ps.velocity[2] = 100;
+			}
+		}
+	}
+	if ( fallDist >= 256 )
+	{
+		cliff_fall = 2;
+	}
+	else if ( fallDist >= 128 )
+	{
+		cliff_fall = 1;
+	}
+	return cliff_fall;
 }
 /*
 ==================
@@ -2672,30 +3381,44 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 	int			contents;
 	qboolean	deathScript = qfalse;
 	qboolean	lastInGroup = qfalse;
-	qboolean	cliff_fall = qfalse;
 	qboolean	specialAnim = qfalse;
+	qboolean	holdingSaber = qfalse;
+	int			cliff_fall = 0;
 
 	//FIXME: somehow people are sometimes not completely dying???
 	if ( self->client->ps.pm_type == PM_DEAD && (meansOfDeath != MOD_SNIPER || (self->flags & FL_DISINTEGRATED)) )
 	{//do dismemberment/twitching
-		anim = G_PickDeathAnim( self, self->pos1, damage, meansOfDeath, hitLoc );
-		if ( dflags & DAMAGE_DISMEMBER )
+		if ( self->client->NPC_class == CLASS_MARK1 )
 		{
-			G_DoDismemberment( self, self->pos1, meansOfDeath, damage, hitLoc );
+			DeathFX(self);
+			self->takedamage = qfalse;
+			self->client->ps.eFlags |= EF_NODRAW;
+			self->contents = 0;
+			// G_FreeEntity( self ); // Is this safe?  I can't see why we'd mark it nodraw and then just leave it around??
+			self->e_ThinkFunc = thinkF_G_FreeEntity;
+			self->nextthink = level.time + FRAMETIME;
 		}
-		if ( anim >= 0 )
+		else
 		{
-			NPC_SetAnim(self, SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_RESTART|SETANIM_FLAG_HOLD);
+			anim = G_PickDeathAnim( self, self->pos1, damage, meansOfDeath, hitLoc );
+			if ( dflags & DAMAGE_DISMEMBER )
+			{
+				G_DoDismemberment( self, self->pos1, meansOfDeath, damage, hitLoc );
+			}
+			if ( anim >= 0 )
+			{
+				NPC_SetAnim(self, SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_RESTART|SETANIM_FLAG_HOLD);
+			}
 		}
 		return;
 	}
 
-#ifndef _FINAL_BUILD
+#ifndef FINAL_BUILD
 	if ( d_saberCombat->integer && attacker && attacker->client )
 	{
 		gi.Printf( S_COLOR_YELLOW"combatant %s died, killer anim = %s\n", self->targetname, animTable[attacker->client->ps.torsoAnim].name );
 	}
-#endif//_FINAL_BUILD
+#endif//FINAL_BUILD
 
 	if ( self->NPC )
 	{
@@ -2743,6 +3466,10 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 	{
 		attacker->NPC->group->enemy = NULL;
 	}
+	if ( self->s.weapon == WP_SABER )
+	{
+		holdingSaber = qtrue;
+	}
 	if ( self->client->ps.saberEntityNum != ENTITYNUM_NONE && self->client->ps.saberEntityNum > 0 )
 	{
 		if ( self->client->ps.saberInFlight )
@@ -2754,8 +3481,24 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			if ( (hitLoc != HL_HAND_RT 
 				|| self->client->dismembered
 				|| meansOfDeath != MOD_SABER )//if might get hand cut off, leave saber in hand
+				&& holdingSaber
 				&& ( Q_irand( 0, 1 ) 
 					|| meansOfDeath == MOD_EXPLOSIVE 
+					|| meansOfDeath == MOD_REPEATER_ALT
+					|| meansOfDeath == MOD_FLECHETTE_ALT
+					|| meansOfDeath == MOD_ROCKET
+					|| meansOfDeath == MOD_ROCKET_ALT
+					|| meansOfDeath == MOD_THERMAL
+					|| meansOfDeath == MOD_THERMAL_ALT
+					|| meansOfDeath == MOD_DETPACK
+					|| meansOfDeath == MOD_LASERTRIP
+					|| meansOfDeath == MOD_LASERTRIP_ALT
+					|| meansOfDeath == MOD_MELEE
+					|| meansOfDeath == MOD_FORCE_GRIP
+					|| meansOfDeath == MOD_KNOCKOUT
+					|| meansOfDeath == MOD_CRUSH
+					|| meansOfDeath == MOD_IMPACT
+					|| meansOfDeath == MOD_FALLING
 					|| meansOfDeath == MOD_EXPLOSIVE_SPLASH ) )
 			{//drop it
 				TossClientItems( self );
@@ -2770,6 +3513,12 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			}
 		}
 	}
+	if ( self->client->NPC_class == CLASS_SHADOWTROOPER )
+	{//drop a force crystal
+		gitem_t		*item;
+		item = FindItemForAmmo( AMMO_FORCE );
+		Drop_Item( self, item, 0, qtrue );
+	}
 	//Use any target we had
 	if ( meansOfDeath != MOD_KNOCKOUT )
 	{
@@ -2780,7 +3529,17 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 	{
 		if ( attacker->client && !attacker->s.number )
 		{
-			attacker->client->sess.missionStats.enemiesKilled++;
+			if ( self->client )
+			{//killed a client
+				if ( self->client->playerTeam == TEAM_ENEMY || (self->NPC && self->NPC->charmedTime > level.time) )
+				{//killed an enemy
+					attacker->client->sess.missionStats.enemiesKilled++;
+				}
+			}
+			if ( attacker != self )
+			{
+				G_TrackWeaponUsage( attacker, inflictor, 30, meansOfDeath );
+			}
 		}
 		G_CheckVictoryScript(attacker);
 		//player killing a jedi with a lightsaber spawns a matrix-effect entity
@@ -2812,7 +3571,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 					}
 				}
 				if ( !attacker->s.number 
-					&& self->s.weapon == WP_SABER 
+					&& holdingSaber
 					&& meansOfDeath == MOD_SABER 
 					&& attacker->client 
 					&& attacker->client->ps.weapon == WP_SABER 
@@ -2829,7 +3588,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 					&& attacker->client 
 					&& attacker->client->ps.weapon == WP_SABER 
 					&& !attacker->client->ps.saberInFlight 
-					&& (d_slowmodeath->integer > 4||lastInGroup))//either slow mo death level 5 (any enemy) or 4 and I was the last in my group
+					&& (d_slowmodeath->integer > 4||lastInGroup||holdingSaber))//either slow mo death level 5 (any enemy) or 4 and I was the last in my group or I'm a saber user
 				{//Matrix!
 					G_StartMatrixEffect( self );
 				}
@@ -2882,8 +3641,8 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 
 	// if client is in a nodrop area, don't drop anything
 	contents = gi.pointcontents( self->currentOrigin, -1 );
-	if ( self->s.weapon != WP_SABER 
-		&& self->s.number != 0 
+	if ( !holdingSaber
+		//&& self->s.number != 0 
 		&& !( contents & CONTENTS_NODROP ) 
 		&& meansOfDeath != MOD_SNIPER 
 		&& (!self->client||self->client->NPC_class!=CLASS_GALAKMECH))
@@ -2900,7 +3659,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 		}
 	}
 
-	if ( self->s.weapon == WP_SABER )
+	if ( holdingSaber )
 	{//never drop a lightsaber!
 		if ( self->client->ps.saberActive )
 		{
@@ -2915,17 +3674,18 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			}
 		}
 	}
-	else
+	else if ( self->s.weapon != WP_BLASTER_PISTOL )
 	{// Sigh...borg shouldn't drop their weapon attachments when they die..
 		self->s.weapon = WP_NONE;
-		if ( self->weaponModel != -1 && self->ghoul2.size())
+		if ( self->weaponModel >= 0 && self->ghoul2.size())
 		{
 			gi.G2API_RemoveGhoul2Model( self->ghoul2, self->weaponModel );
 			self->weaponModel = -1;
 		}
 	}
 
-	self->s.powerups = 0;
+	self->s.powerups &= ~PW_REMOVE_AT_DEATH;//removes everything but electricity and force push
+
 	//FIXME: do this on a callback?  So people can't walk through long death anims?
 	//Maybe set on last frame?  Would be cool for big blocking corpses if the never got set?
 	//self->contents = CONTENTS_CORPSE;//now done a second after death
@@ -2951,7 +3711,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 	//FACING==========================================================
 	if ( attacker && self->s.number == 0 )
 	{
-		LookAtKiller( self, inflictor, attacker );
+		self->client->ps.stats[STAT_DEAD_YAW] = AngleNormalize180( self->client->ps.viewangles[YAW] );
 	}
 	self->currentAngles[PITCH] = 0; 
 	self->currentAngles[ROLL] = 0;
@@ -2968,13 +3728,29 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 	{//I was the player's viewentity and I died, kick him back to his normal view
 		G_ClearViewEntity( player );
 	}
+	else if ( !self->s.number && self->client->ps.viewEntity > 0 && self->client->ps.viewEntity < ENTITYNUM_NONE )
+	{
+		G_ClearViewEntity( self );
+	}
+	else if ( !self->s.number && self->client->ps.viewEntity > 0 && self->client->ps.viewEntity < ENTITYNUM_NONE )
+	{
+		G_ClearViewEntity( self );
+	}
 
 	self->s.loopSound = 0;
 
 	// remove powerups
 	memset( self->client->ps.powerups, 0, sizeof(self->client->ps.powerups) );
 
-	if ( self->client->NPC_class == CLASS_GALAKMECH )
+	if ( self->client->NPC_class == CLASS_MARK1 )
+	{
+		Mark1_die( self, inflictor, attacker, damage, meansOfDeath, dflags, hitLoc );
+	}
+	else if ( self->client->NPC_class == CLASS_INTERROGATOR )
+	{
+		Interrogator_die( self, inflictor, attacker, damage, meansOfDeath, dflags, hitLoc );
+	}
+	else if ( self->client->NPC_class == CLASS_GALAKMECH )
 	{//FIXME: need keyframed explosions?
 		NPC_SetAnim( self, SETANIM_BOTH, BOTH_DEATH1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 		G_AddEvent( self, Q_irand(EV_DEATH1, EV_DEATH3), self->health );
@@ -2985,7 +3761,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 		{
 			G_DrivableATSTDie( self );
 		}
-		anim = PM_PickAnim( self, BOTH_DEATH1, BOTH_DEATH19 );	//initialize to good data
+		anim = PM_PickAnim( self, BOTH_DEATH1, BOTH_DEATH25 );	//initialize to good data
 		if ( anim != -1 )
 		{
 			NPC_SetAnim( self, SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
@@ -3000,7 +3776,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			anim = BOTH_DEATH4;
 			break;
 		case 1:
-			anim = BOTH_DEATH15;
+			anim = BOTH_DEATH21;
 			break;
 		case 2:
 			anim = BOTH_DEATH17;
@@ -3095,80 +3871,14 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			{//electrocuted
 				anim = BOTH_DEATH17;
 			}
+			else if ( meansOfDeath == MOD_WATER )
+			{//drowned
+				anim = BOTH_DEATH17;
+			}
 			else if ( meansOfDeath != MOD_SNIPER )
 			{
-				//		Intelligent Ledge-Diving Deaths:
-				//		If I'm an NPC, check for nearby ledges and fall off it if possible
-				//		How should/would/could this interact with knockback if we already have some?
-				//		Ideally - apply knockback if there are no ledges or a ledge in that dir
-				//		But if there is a ledge and it's not in the dir of my knockback, fall off the ledge instead
-				vec3_t	fallForwardDir, fallRightDir;
-				vec3_t	angles = {0};
-
-				if ( !VectorCompare( self->client->ps.velocity, vec3_origin ) )
-				{//already moving in a dir
-					angles[1] = vectoyaw( self->client->ps.velocity );
-					AngleVectors( angles, fallForwardDir, fallRightDir, NULL );
-				}
-				else
-				{//try forward first
-					angles[1] = self->client->ps.viewangles[1];
-					AngleVectors( angles, fallForwardDir, fallRightDir, NULL );
-				}
-				VectorNormalize( fallForwardDir );
-				float fallDist = G_CheckForLedge( self, fallForwardDir );
-				if ( fallDist >= 128 )
-				{
-					VectorClear( self->client->ps.velocity );
-					G_Throw( self, fallForwardDir, 85 );
-					self->client->ps.velocity[2] = 100;
-					self->client->ps.groundEntityNum = ENTITYNUM_NONE;
-					if ( fallDist >= 256 )
-					{
-						cliff_fall = qtrue;
-					}
-				}
-				else 
-				{
-					VectorScale( fallForwardDir, -1, fallForwardDir );
-					fallDist = G_CheckForLedge( self, fallForwardDir );
-					if ( fallDist >= 128 )
-					{
-						VectorClear( self->client->ps.velocity );
-						G_Throw( self, fallForwardDir, 85 );
-						self->client->ps.velocity[2] = 100;
-						self->client->ps.groundEntityNum = ENTITYNUM_NONE;
-						if ( fallDist >= 256 )
-						{
-							cliff_fall = qtrue;
-						}
-					}
-					else
-					{//try sides
-						/*
-						VectorNormalize( fallRightDir );
-						if ( G_CheckForLedge( self, fallRightDir ) )
-						{
-							VectorClear( self->client->ps.velocity );
-							G_Throw( self, fallRightDir, 85 );
-							self->client->ps.velocity[2] = 100;
-							cliff_fall = qtrue;
-						}
-						else 
-						{
-							VectorScale( fallRightDir, -1, fallRightDir );
-							if ( G_CheckForLedge( self, fallRightDir ) )
-							{
-								VectorClear( self->client->ps.velocity );
-								G_Throw( self, fallRightDir, 85 );
-								self->client->ps.velocity[2] = 100;
-								cliff_fall = qtrue;
-							}
-						}
-						*/
-					}
-				}
-				if ( cliff_fall )
+				cliff_fall = G_CheckLedgeDive( self, 128, self->client->ps.velocity, qtrue, qfalse );
+				if ( cliff_fall == 2 )
 				{
 					if ( !FlyingCreature( self ) && g_gravity->value > 0 )
 					{
@@ -3192,73 +3902,108 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 					AngleVectors(self->currentAngles, forward, NULL, NULL);
 					thrown = VectorNormalize2(self->client->ps.velocity, throwdir);
 					dot = DotProduct(forward, throwdir);
-					if(thrown > 100) 
+					if ( thrown > 100 ) 
 					{
 						if ( dot > 0.3 )
 						{//falling forward
-							if ( cliff_fall && PM_HasAnimation( self, BOTH_FALLDEATH1 ) )
+							if ( cliff_fall == 2 && PM_HasAnimation( self, BOTH_FALLDEATH1 ) )
 							{
 								anim = BOTH_FALLDEATH1;
 							}
-							else if ( PM_HasAnimation( self, BOTH_DEATHFORWARD1 ))
+							else
 							{
-								self->client->ps.gravity *= 0.8;
-								self->client->ps.friction = 0;
-								if ( PM_HasAnimation( self, BOTH_DEATHFORWARD2) ) 
+								switch ( Q_irand( 0, 7 ) )
 								{
-									anim = Q_irand(BOTH_DEATHFORWARD1, BOTH_DEATHFORWARD2);//okay, i assume he has 2 since he has 1
-								} 
-								else 
-								{
-									anim = BOTH_DEATHFORWARD1;
+								case 0:
+								case 1:
+								case 2:
+									anim = BOTH_DEATH4;
+									break;
+								case 3:
+								case 4:
+								case 5:
+									anim = BOTH_DEATH5;
+									break;
+								case 6:
+									anim = BOTH_DEATH8;
+									break;
+								case 7:
+									anim = BOTH_DEATH14;
+									break;
 								}
-							}
-						}
-						else if ( dot < -0.3 && PM_HasAnimation( self, BOTH_DEATHBACKWARD1 )) 
-						{
-							self->client->ps.gravity *= 0.8;
-							self->client->ps.friction = 0;
-							switch ( Q_irand( 0, 12 ) )
-							{
-							case 0:
-							case 1:
-							case 2:
-							case 3:
-								anim = BOTH_DEATH1;
-								break;
-							case 4:
-							case 5:
-							case 6:
-							case 7:
-								anim = BOTH_DEATH2;
-								break;
-							case 8:
-							case 9:
-							case 10:
-							case 11:
-								anim = BOTH_DEATHBACKWARD1;
-								break;
-							case 12:
-								if ( thrown >= 250 )
+								if ( PM_HasAnimation( self, anim ))
 								{
-									anim = BOTH_DEATHBACKWARD2;
+									self->client->ps.gravity *= 0.8;
+									self->client->ps.friction = 0;
+									if ( self->client->ps.velocity[2] > 0 && self->client->ps.velocity[2] < 100 )
+									{
+										self->client->ps.velocity[2] = 100;
+									}
 								}
 								else
 								{
+									anim = -1;
+								}
+							}
+						}
+						else if ( dot < -0.3 ) 
+						{
+							if ( thrown >= 250 && !Q_irand( 0, 3 ) )
+							{
+								if ( Q_irand( 0, 1 ) )
+								{
 									anim = BOTH_DEATHBACKWARD1;
 								}
-								break;
+								else
+								{
+									anim = BOTH_DEATHBACKWARD2;
+								}
 							}
-							if ( !PM_HasAnimation( self, anim ) ) 
+							else
+							{
+								switch ( Q_irand( 0, 7 ) )
+								{
+								case 0:
+								case 1:
+									anim = BOTH_DEATH1;
+									break;
+								case 2:
+								case 3:
+									anim = BOTH_DEATH2;
+									break;
+								case 4:
+								case 5:
+									anim = BOTH_DEATH22;
+									break;
+								case 6:
+								case 7:
+									anim = BOTH_DEATH23;
+									break;
+								}
+							}
+							if ( PM_HasAnimation( self, anim ) ) 
+							{
+								self->client->ps.gravity *= 0.8;
+								self->client->ps.friction = 0;
+								if ( self->client->ps.velocity[2] > 0 && self->client->ps.velocity[2] < 100 )
+								{
+									self->client->ps.velocity[2] = 100;
+								}
+							}
+							else
 							{
 								anim = -1;
 							} 
 						}
 						else
 						{//falling to one of the sides
-							if ( cliff_fall && PM_HasAnimation( self, BOTH_FALLDEATH1 ) )
+							if ( cliff_fall == 2 && PM_HasAnimation( self, BOTH_FALLDEATH1 ) )
 							{
 								anim = BOTH_FALLDEATH1;
+								if ( self->client->ps.velocity[2] > 0 && self->client->ps.velocity[2] < 100 )
+								{
+									self->client->ps.velocity[2] = 100;
+								}
 							}
 						}
 					}
@@ -3272,8 +4017,9 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 
 		if ( anim == -1 )
 		{
-			if ( meansOfDeath == MOD_ELECTROCUTE )
-			{
+			if ( meansOfDeath == MOD_ELECTROCUTE 
+				|| (meansOfDeath == MOD_CRUSH && self->s.eFlags&EF_FORCE_GRIPPED) )
+			{//electrocuted or choked to death
 				anim = BOTH_DEATH17;
 			}
 			else
@@ -3283,11 +4029,11 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 		}
 		if ( anim == -1 )
 		{
-			anim = PM_PickAnim( self, BOTH_DEATH1, BOTH_DEATH19 );	//initialize to good data
+			anim = PM_PickAnim( self, BOTH_DEATH1, BOTH_DEATH25 );	//initialize to good data
 			//TEMP HACK: these spinny deaths should happen less often
 			if ( ( anim == BOTH_DEATH8 || anim == BOTH_DEATH14 ) && Q_irand( 0, 1 ) )
 			{
-				anim = PM_PickAnim( self, BOTH_DEATH1, BOTH_DEATH19 );	//initialize to good data
+				anim = PM_PickAnim( self, BOTH_DEATH1, BOTH_DEATH25 );	//initialize to good data
 			}
 		}
 
@@ -3312,10 +4058,12 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			VectorCopy( self->currentOrigin, spot );
 			
 			self->flags |= FL_DISINTEGRATED;
+			self->svFlags |= SVF_BROADCAST;
 			tent = G_TempEntity( spot, EV_DISINTEGRATION );
 			tent->s.eventParm = PW_DISRUPTION;
+			tent->svFlags |= SVF_BROADCAST;
 			tent->owner = self;
-	
+
 			G_AlertTeam( self, attacker, 512, 88 );
 
 			if ( self->playerModel >= 0 )
@@ -3339,8 +4087,20 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 		}
 		else 
 		{
-			if ( hitLoc == HL_HEAD )
-			{//no sound when killed by headshot
+			if ( hitLoc == HL_HEAD 
+				&& !(dflags&DAMAGE_RADIUS)
+				&& meansOfDeath!=MOD_REPEATER_ALT
+				&& meansOfDeath!=MOD_FLECHETTE_ALT
+				&& meansOfDeath!=MOD_ROCKET
+				&& meansOfDeath!=MOD_ROCKET_ALT
+				&& meansOfDeath!=MOD_THERMAL
+				&& meansOfDeath!=MOD_THERMAL_ALT
+				&& meansOfDeath!=MOD_DETPACK
+				&& meansOfDeath!=MOD_LASERTRIP
+				&& meansOfDeath!=MOD_LASERTRIP_ALT
+				&& meansOfDeath!=MOD_EXPLOSIVE
+				&& meansOfDeath!=MOD_EXPLOSIVE_SPLASH )
+			{//no sound when killed by headshot (explosions don't count)
 				G_AlertTeam( self, attacker, 512, 0 );
 				if ( gi.VoiceVolume[self->s.number] )
 				{//I was talking, so cut it off... with a jump sound?
@@ -3349,7 +4109,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			}
 			else 
 			{
-				if ( !cliff_fall )
+				if ( cliff_fall != 2 )
 				{
 					if ( meansOfDeath == MOD_KNOCKOUT || meansOfDeath == MOD_MELEE )
 					{
@@ -3375,7 +4135,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			//FIXME: danger event so that others will run away from this area since it's obviously dangerous
 		}
 
-		if ( anim != -1 )
+		if ( anim >= 0 )//can be -1 if it fails, -2 if it's already in a death anim
 		{
 			NPC_SetAnim(self, SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
 		}
@@ -3384,7 +4144,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 	//do any dismemberment if there's any to do...
 	if ( (dflags&DAMAGE_DISMEMBER) && G_DoDismemberment( self, self->pos1, meansOfDeath, damage, hitLoc ) && !specialAnim )
 	{//we did dismemberment and our death anim is okay to override
-		if ( hitLoc == HL_HAND_RT && self->locationDamage[hitLoc] >= Q3_INFINITE && !cliff_fall && self->client->ps.groundEntityNum != ENTITYNUM_NONE )
+		if ( hitLoc == HL_HAND_RT && self->locationDamage[hitLoc] >= Q3_INFINITE && cliff_fall != 2 && self->client->ps.groundEntityNum != ENTITYNUM_NONE )
 		{//just lost our right hand and we're on the ground, use the special anim
 			NPC_SetAnim( self, SETANIM_BOTH, BOTH_RIGHTHANDCHOPPEDOFF, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 		}
@@ -3418,9 +4178,13 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 		deathScript = qtrue;
 	}
 	
-	if ( self->NPC && (self->NPC->scriptFlags&SCF_FFDEATH) && G_ActivateBehavior( self, BSET_FFDEATH ) )  
-	{//FIXME: should running this preclude running the normal deathscript?
-		deathScript = qtrue;
+	if ( self->NPC && (self->NPC->scriptFlags&SCF_FFDEATH) )
+	{
+		if ( G_ActivateBehavior( self, BSET_FFDEATH ) )  
+		{//FIXME: should running this preclude running the normal deathscript?
+			deathScript = qtrue;
+		}
+		G_UseTargets2( self, self, self->target4 );
 	}
 	
 	if ( !deathScript && !(self->svFlags&SVF_KILLED_SELF) )
@@ -3647,6 +4411,142 @@ int CheckArmor (gentity_t *ent, int damage, int dflags)
 	}
 }
 
+extern void NPC_SetPainEvent( gentity_t *self );
+void G_Knockdown( gentity_t *self, gentity_t *attacker, vec3_t pushDir, float strength, qboolean breakSaberLock )
+{
+	if ( !self || !self->client || !attacker || !attacker->client )
+	{
+		return;
+	}
+
+	//break out of a saberLock?
+	if ( breakSaberLock )
+	{
+		self->client->ps.saberLockTime = 0;
+		self->client->ps.saberLockEnemy = ENTITYNUM_NONE;
+	}
+
+	if ( self->health > 0 )
+	{
+		if ( !self->s.number )
+		{
+			NPC_SetPainEvent( self );
+		}
+		else
+		{
+			GEntity_PainFunc( self, attacker, attacker, self->currentOrigin, 0, MOD_MELEE );
+		}
+		G_CheckLedgeDive( self, 72, pushDir, qfalse, qfalse );
+
+		if ( !PM_SpinningSaberAnim( self->client->ps.legsAnim ) 
+			&& !PM_FlippingAnim( self->client->ps.legsAnim ) 
+			&& !PM_RollingAnim( self->client->ps.legsAnim ) 
+			&& !PM_InKnockDown( &self->client->ps ) )
+		{
+			int knockAnim = BOTH_KNOCKDOWN1;//default knockdown
+			if ( !self->s.number && ( !g_spskill->integer || strength < 300 ) )
+			{//player only knocked down if pushed *hard*
+				return;
+			}
+			else if ( PM_CrouchAnim( self->client->ps.legsAnim ) )
+			{//crouched knockdown
+				knockAnim = BOTH_KNOCKDOWN4;
+			}
+			else
+			{//plain old knockdown
+				vec3_t pLFwd, pLAngles = {0,self->client->ps.viewangles[YAW],0};
+				AngleVectors( pLAngles, pLFwd, NULL, NULL );
+				if ( DotProduct( pLFwd, pushDir ) > 0.2f )
+				{//pushing him from behind
+					knockAnim = BOTH_KNOCKDOWN3;
+				}
+				else
+				{//pushing him from front
+					knockAnim = BOTH_KNOCKDOWN1;
+				}
+			}
+			if ( knockAnim == BOTH_KNOCKDOWN1 && strength > 150 )
+			{//push *hard*
+				knockAnim = BOTH_KNOCKDOWN2;
+			}
+			NPC_SetAnim( self, SETANIM_BOTH, knockAnim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+			if ( self->s.number )
+			{//randomize getup times
+				int addTime = Q_irand( -300, 1000 );
+				self->client->ps.legsAnimTimer += addTime;
+				self->client->ps.torsoAnimTimer += addTime;
+			}
+		}
+	}
+}
+
+void G_CheckKnockdown( gentity_t *targ, gentity_t *attacker, vec3_t newDir, int dflags, int mod )
+{
+	if ( !targ || !attacker )
+	{
+		return;
+	}
+	if ( !(dflags&DAMAGE_RADIUS) )
+	{//not inherently explosive damage, check mod
+		if ( mod!=MOD_REPEATER_ALT
+			&&mod!=MOD_FLECHETTE_ALT
+			&&mod!=MOD_ROCKET
+			&&mod!=MOD_ROCKET_ALT
+			&&mod!=MOD_THERMAL
+			&&mod!=MOD_THERMAL_ALT
+			&&mod!=MOD_DETPACK
+			&&mod!=MOD_LASERTRIP
+			&&mod!=MOD_LASERTRIP_ALT
+			&&mod!=MOD_EXPLOSIVE
+			&&mod!=MOD_EXPLOSIVE_SPLASH )
+		{
+			return;
+		}
+	}
+
+	if ( !targ->client || targ->client->NPC_class == CLASS_PROTOCOL || !G_StandardHumanoid( targ->NPC_type ) )
+	{
+		return;
+	}
+
+	if ( targ->client->ps.groundEntityNum == ENTITYNUM_NONE )
+	{//already in air
+		return;
+	}
+
+	if ( !targ->s.number )
+	{//player less likely to be knocked down
+		if ( !g_spskill->integer )
+		{//never in easy
+			return;
+		}
+		if ( !cg.renderingThirdPerson || cg.zoomMode )
+		{//never if not in chase camera view (so more likely with saber out)
+			return;
+		}
+		if ( g_spskill->integer == 1 )
+		{//33% chance on medium
+			if ( Q_irand( 0, 2 ) )
+			{
+				return;
+			}
+		}
+		else
+		{//50% chance on hard
+			if ( Q_irand( 0, 1 ) )
+			{
+				return;
+			}
+		}
+	}
+
+	float strength = VectorLength( targ->client->ps.velocity );
+	if ( targ->client->ps.velocity[2] > 100 && strength > Q_irand( 150, 350 ) )//600 ) )
+	{//explosive concussion possibly do a knockdown?
+		G_Knockdown( targ, attacker, newDir, strength, qtrue );
+	}
+}
+
 void G_ApplyKnockback( gentity_t *targ, vec3_t newDir, float knockback )
 {
 	vec3_t	kvel;
@@ -3711,12 +4611,12 @@ void G_ApplyKnockback( gentity_t *targ, vec3_t newDir, float knockback )
 	}
 }
 
-int G_CheckForLedge( gentity_t *self, vec3_t fallCheckDir )
+int G_CheckForLedge( gentity_t *self, vec3_t fallCheckDir, float checkDist )
 {
 	vec3_t	start, end;
 	trace_t	tr;
 
-	VectorMA( self->currentOrigin, 128, fallCheckDir, end );
+	VectorMA( self->currentOrigin, checkDist, fallCheckDir, end );
 	//Should have clip burshes masked out by now and have bbox resized to death size
 	gi.trace( &tr, self->currentOrigin, self->mins, self->maxs, end, self->s.number, self->clipmask );
 	if ( tr.allsolid || tr.startsolid )
@@ -3793,8 +4693,113 @@ float damageModifier[HL_MAX] =
 	1.0f,	//HL_GENERIC5,
 	1.0f,	//HL_GENERIC6,
 };
-/*
 
+void G_TrackWeaponUsage( gentity_t *self, gentity_t *inflictor, int add, int mod )
+{
+	if ( !self || !self->client || self->s.number )
+	{//player only
+		return;
+	}
+	int weapon = WP_NONE;
+	//FIXME: need to check the MOD to find out what weapon (if *any*) actually did the killing
+	if ( inflictor && !inflictor->client && mod != MOD_SABER && inflictor->lastEnemy && inflictor->lastEnemy != self )
+	{//a missile that was reflected, ie: not owned by me originally
+		if ( inflictor->owner == self && self->s.weapon == WP_SABER )
+		{//we reflected it
+			weapon = WP_SABER;
+		}
+	}
+	if ( weapon == WP_NONE )
+	{
+		switch ( mod )
+		{
+		case MOD_SABER:
+			weapon = WP_SABER;
+			break;
+		case MOD_BRYAR:
+		case MOD_BRYAR_ALT:
+			weapon = WP_BRYAR_PISTOL;
+			break;
+		case MOD_BLASTER:
+		case MOD_BLASTER_ALT:
+			weapon = WP_BLASTER;
+			break;
+		case MOD_DISRUPTOR:
+		case MOD_SNIPER:
+			weapon = WP_DISRUPTOR;
+			break;
+		case MOD_BOWCASTER:
+		case MOD_BOWCASTER_ALT:
+			weapon = WP_BOWCASTER;
+			break;
+		case MOD_REPEATER:
+		case MOD_REPEATER_ALT:
+			weapon = WP_REPEATER;
+			break;
+		case MOD_DEMP2:
+		case MOD_DEMP2_ALT:
+			weapon = WP_DEMP2;
+			break;
+		case MOD_FLECHETTE:
+		case MOD_FLECHETTE_ALT:
+			weapon = WP_FLECHETTE;
+			break;
+		case MOD_ROCKET:
+		case MOD_ROCKET_ALT:
+			weapon = WP_ROCKET_LAUNCHER;
+			break;
+		case MOD_THERMAL:
+		case MOD_THERMAL_ALT:
+			weapon = WP_THERMAL;
+			break;
+		case MOD_DETPACK:
+			weapon = WP_DET_PACK;
+			break;
+		case MOD_LASERTRIP:
+		case MOD_LASERTRIP_ALT:
+			weapon = WP_TRIP_MINE;
+			break;
+		case MOD_MELEE:
+			if ( self->s.weapon == WP_STUN_BATON )
+			{
+				weapon = WP_STUN_BATON;
+			}
+			else if ( self->s.weapon == WP_MELEE )
+			{
+				weapon = WP_MELEE;
+			}
+			break;
+		}
+	}
+	if ( weapon != WP_NONE )
+	{
+		self->client->sess.missionStats.weaponUsed[weapon] += add;
+	}
+}
+
+qboolean G_NonLocationSpecificDamage( int meansOfDeath )
+{
+	if ( meansOfDeath == MOD_EXPLOSIVE 
+		|| meansOfDeath == MOD_REPEATER_ALT
+		|| meansOfDeath == MOD_FLECHETTE_ALT
+		|| meansOfDeath == MOD_ROCKET
+		|| meansOfDeath == MOD_ROCKET_ALT
+		|| meansOfDeath == MOD_THERMAL
+		|| meansOfDeath == MOD_THERMAL_ALT
+		|| meansOfDeath == MOD_DETPACK
+		|| meansOfDeath == MOD_LASERTRIP
+		|| meansOfDeath == MOD_LASERTRIP_ALT
+		|| meansOfDeath == MOD_MELEE
+		|| meansOfDeath == MOD_FORCE_GRIP
+		|| meansOfDeath == MOD_KNOCKOUT
+		|| meansOfDeath == MOD_CRUSH
+		|| meansOfDeath == MOD_EXPLOSIVE_SPLASH )
+	{
+		return qtrue;
+	}
+	return qfalse;
+}
+/*
 ============
 T_Damage
 
@@ -3840,7 +4845,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 	}
 
 	// if we are the player and we are locked to an emplaced gun, we have to reroute damage to the gun....sigh.
-	if ( targ->s.eFlags & EF_LOCKED_TO_WEAPON && targ->s.number == 0 && targ->owner )
+	if ( targ->s.eFlags & EF_LOCKED_TO_WEAPON && targ->s.number == 0 && targ->owner && !( targ->owner->flags & FL_GODMODE ))
 	{
 		// swapping the gun into our place to absorb our damage
 		targ = targ->owner;
@@ -3940,18 +4945,33 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 		if ( client->ps.stats[STAT_ARMOR] > 0 )
 		{//shields are up
 			dflags &= ~DAMAGE_NO_ARMOR;//always affect armor
-			if ( mod == MOD_ELECTROCUTE )
+			if ( mod == MOD_ELECTROCUTE 
+				|| mod == MOD_DEMP2
+				|| mod == MOD_DEMP2_ALT )
 			{//shield protects us from this
 				damage = 0;
 			}
 		}
 		else
 		{//shields down
-			if ( mod == MOD_MELEE || (mod == MOD_CRUSH && attacker && attacker->client) )
+			if ( mod == MOD_MELEE 
+				|| (mod == MOD_CRUSH && attacker && attacker->client) )
 			{//Galak takes no impact damage
 				return;
 			}
-			if ( (dflags & DAMAGE_RADIUS) || mod == MOD_SABER )
+			if ( (dflags & DAMAGE_RADIUS) 
+				|| mod == MOD_REPEATER_ALT
+				|| mod == MOD_FLECHETTE_ALT
+				|| mod == MOD_ROCKET
+				|| mod == MOD_ROCKET_ALT
+				|| mod == MOD_THERMAL
+				|| mod == MOD_THERMAL_ALT
+				|| mod == MOD_DETPACK
+				|| mod == MOD_LASERTRIP
+				|| mod == MOD_LASERTRIP_ALT
+				|| mod == MOD_EXPLOSIVE_SPLASH
+				|| mod == MOD_ENERGY_SPLASH
+				|| mod == MOD_SABER )
 			{//galak without shields takes quarter damage from explosives and lightsaber
 				damage = ceil((float)damage/4.0f);
 			}
@@ -3970,7 +4990,8 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 				damage *= 2;
 			}
 			else if ( client->NPC_class == CLASS_PROBE || client->NPC_class == CLASS_INTERROGATOR ||
-						client->NPC_class == CLASS_MARK1 || client->NPC_class == CLASS_MARK2 || client->NPC_class == CLASS_SENTRY )
+						client->NPC_class == CLASS_MARK1 || client->NPC_class == CLASS_MARK2 || client->NPC_class == CLASS_SENTRY ||
+						client->NPC_class == CLASS_ATST )
 			{
 				// DEMP2 does way more damage to these guys.
 				damage *= 5;
@@ -4013,12 +5034,16 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 	if ( knockback && !(dflags&DAMAGE_DEATH_KNOCKBACK) ) //&& targ->client 
 	{
 		G_ApplyKnockback( targ, newDir, knockback );
+		G_CheckKnockdown( targ, attacker, newDir, dflags, mod );
 	}
 
 	// check for godmode, completely getting out of the damage
 	if ( targ->flags & FL_GODMODE && !(dflags&DAMAGE_NO_PROTECTION) ) 
 	{
-		if ( targ->client && attacker->client && targ->client->playerTeam == attacker->client->playerTeam )
+		if ( targ->client 
+			&& attacker->client 
+			&& targ->client->playerTeam == attacker->client->playerTeam 
+			&& (!targ->NPC || !targ->NPC->charmedTime) )
 		{//complain, but don't turn on them
 			G_FriendlyFireReaction( targ, attacker, dflags );
 		}
@@ -4057,11 +5082,6 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 		}
 	}
 	*/
-
-	if ( !(dflags&DAMAGE_NO_HIT_LOC) )
-	{
-		damage *= damageModifier[hitLoc];
-	}
 
 	// add to the attacker's hit counter
 	if ( attacker->client && targ != attacker && targ->health > 0 ) {
@@ -4102,10 +5122,16 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 		}
 		take -= asave;
 	}
+	if ( !(dflags&DAMAGE_NO_HIT_LOC) || !(dflags&DAMAGE_RADIUS))
+	{
+		if ( !G_NonLocationSpecificDamage( mod ) )
+		{//certain kinds of damage don't care about hitlocation
+			take = ceil( (float)take*damageModifier[hitLoc] );
+		}
+	}
 
 	if ( g_debugDamage->integer ) {
-		gi.Printf( "[%d]client:%i health:%i damage:%i armor:%i\n", level.time, targ->s.number,
-			targ->health, take, asave );
+		gi.Printf( "[%d]client:%i health:%i damage:%i armor:%i hitloc:%s\n", level.time, targ->s.number, targ->health, take, asave, hitLocName[hitLoc] );
 	}
 
 	// add to the damage inflicted on a player this frame
@@ -4145,8 +5171,11 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 				add = take;
 			}
 			add += asave;
-			//FIXME: need to check the MOD to find out what weapon (if *any*) actually did the killing
-			attacker->client->sess.missionStats.weaponUsed[attacker->client->ps.weapon]++;
+			add = ceil(add/10.0f);
+			if ( attacker != targ )
+			{
+				G_TrackWeaponUsage( attacker, inflictor, add, mod );
+			}
 		}
 	}
 	if ( take || (dflags&DAMAGE_NO_DAMAGE) ) 
@@ -4268,10 +5297,19 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 							targ->health = 1;
 						}
 					}
-					else if (targ->health < 0)
+					else if ( !alreadyDead && (((targ->flags&FL_UNDYING) && !(dflags&DAMAGE_NO_PROTECTION) && !attacker->s.number && !targ->s.number) || (dflags&DAMAGE_NO_KILL)) )
+					{// player is undying and he's attacking himself, don't let him die
+						if ( targ->health < 1 )
+						{
+							G_ActivateBehavior( targ, BSET_DEATH );
+							
+							targ->health = 1;
+						}
+					}
+					else if ( targ->health < 0 )
 					{
 						targ->health = 0;
-						if( attacker->s.number == 0 && targ->NPC )
+						if ( attacker->s.number == 0 && targ->NPC )
 						{
 							targ->NPC->scriptFlags |= SCF_FFDEATH;
 						}
@@ -4280,7 +5318,10 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 				
 				if ( yellAtAttacker )
 				{
-					G_FriendlyFireReaction( targ, attacker, dflags );
+					if ( !targ->NPC || !targ->NPC->charmedTime )
+					{
+						G_FriendlyFireReaction( targ, attacker, dflags );
+					}
 				}
 			}
 		}
@@ -4330,7 +5371,6 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 		}
 		if ( targ->health <= 0 ) 
 		{
-
 			if ( knockback && (dflags&DAMAGE_DEATH_KNOCKBACK) )//&& targ->client 
 			{//only do knockback on death
 				if ( mod == MOD_FLECHETTE )
@@ -4363,8 +5403,8 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 					VectorCopy( targ->currentOrigin, targ->pos1 );
 				}
 			}
-			if ( !alreadyDead || !targ->enemy )
-			{//just killed or didn't have an enemy before
+			if ( !alreadyDead && !targ->enemy )
+			{//just killed and didn't have an enemy before
 				targ->enemy = attacker;
 			}
 			GEntity_DieFunc( targ, inflictor, attacker, take, mod, dflags, hitLoc );

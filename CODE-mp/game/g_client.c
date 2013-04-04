@@ -69,7 +69,6 @@ void SP_info_player_intermission( gentity_t *ent ) {
 
 #define JMSABER_RESPAWN_TIME 20000 //in case it gets stuck somewhere no one can reach
 
-
 void ThrowSaberToAttacker(gentity_t *self, gentity_t *attacker)
 {
 	gentity_t *ent = &g_entities[self->client->ps.saberIndex];
@@ -78,7 +77,26 @@ void ThrowSaberToAttacker(gentity_t *self, gentity_t *attacker)
 
 	if (!ent || ent->enemy != self)
 	{ //something has gone very wrong (this should never happen)
-		return;
+		//but in case it does.. find the saber manually
+#ifdef _DEBUG
+		Com_Printf("Lost the saber! Attempting to use global pointer..\n");
+#endif
+		ent = gJMSaberEnt;
+
+		if (!ent)
+		{
+#ifdef _DEBUG
+			Com_Printf("The global pointer was NULL. This is a bad thing.\n");
+#endif
+			return;
+		}
+
+#ifdef _DEBUG
+		Com_Printf("Got it (%i). Setting enemy to client %i.\n", ent->s.number, self->s.number);
+#endif
+
+		ent->enemy = self;
+		self->client->ps.saberIndex = ent->s.number;
 	}
 
 	trap_SetConfigstring ( CS_CLIENT_JEDIMASTER, "-1" );
@@ -180,7 +198,7 @@ void JMSaberThink(gentity_t *ent)
 void JMSaberTouch(gentity_t *self, gentity_t *other, trace_t *trace)
 {
 	int i = 0;
-	gentity_t *te;
+//	gentity_t *te;
 
 	if (!other || !other->client || other->health < 1)
 	{
@@ -253,9 +271,12 @@ void JMSaberTouch(gentity_t *self, gentity_t *other, trace_t *trace)
 	self->s.modelGhoul2 = 0;
 	self->s.eType = ET_GENERAL;
 
+	/*
 	te = G_TempEntity( vec3_origin, EV_DESTROY_GHOUL2_INSTANCE );
 	te->r.svFlags |= SVF_BROADCAST;
 	te->s.eventParm = self->s.number;
+	*/
+	G_KillG2Queue(self->s.number);
 
 	return;
 }
@@ -290,6 +311,8 @@ void SP_info_jedimaster_start(gentity_t *ent)
 	VectorSet( ent->r.mins, -3, -3, -3 );
 	ent->r.contents = CONTENTS_TRIGGER;
 	ent->clipmask = MASK_SOLID;
+
+	ent->isSaberEntity = qtrue;
 
 	ent->bounceCount = -5;
 
@@ -621,6 +644,11 @@ void CopyToBodyQue( gentity_t *ent ) {
 	gentity_t		*body;
 	int			contents;
 
+	if (level.intermissiontime)
+	{
+		return;
+	}
+
 	trap_UnlinkEntity (ent);
 
 	// if client is in a nodrop area, don't leave the body
@@ -922,7 +950,7 @@ static void ClientCleanName( const char *in, char *out, int outSize ) {
 
 	// don't allow empty names
 	if( *p == 0 || colorlessLen == 0 ) {
-		Q_strncpyz( p, "UnnamedPlayer", outSize );
+		Q_strncpyz( p, "Padawan", outSize );
 	}
 }
 
@@ -1085,7 +1113,7 @@ void ClientUserinfoChanged( int clientNum ) {
 	int		teamTask, teamLeader, team, health;
 	char	*s;
 	char	model[MAX_QPATH];
-	char	headModel[MAX_QPATH];
+	//char	headModel[MAX_QPATH];
 	char	forcePowers[MAX_QPATH];
 	char	oldname[MAX_STRING_CHARS];
 	gclient_t	*client;
@@ -1148,10 +1176,10 @@ void ClientUserinfoChanged( int clientNum ) {
 	// set model
 	if( g_gametype.integer >= GT_TEAM ) {
 		Q_strncpyz( model, Info_ValueForKey (userinfo, "team_model"), sizeof( model ) );
-		Q_strncpyz( headModel, Info_ValueForKey (userinfo, "team_headmodel"), sizeof( headModel ) );
+		//Q_strncpyz( headModel, Info_ValueForKey (userinfo, "team_headmodel"), sizeof( headModel ) );
 	} else {
 		Q_strncpyz( model, Info_ValueForKey (userinfo, "model"), sizeof( model ) );
-		Q_strncpyz( headModel, Info_ValueForKey (userinfo, "headmodel"), sizeof( headModel ) );
+		//Q_strncpyz( headModel, Info_ValueForKey (userinfo, "headmodel"), sizeof( headModel ) );
 	}
 
 	Q_strncpyz( forcePowers, Info_ValueForKey (userinfo, "forcepowers"), sizeof( forcePowers ) );
@@ -1228,13 +1256,13 @@ void ClientUserinfoChanged( int clientNum ) {
 	// send over a subset of the userinfo keys so other clients can
 	// print scoreboards, display models, and play custom sounds
 	if ( ent->r.svFlags & SVF_BOT ) {
-		s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\skill\\%s\\tt\\%d\\tl\\%d",
-			client->pers.netname, team, model, headModel, c1, c2, 
+		s = va("n\\%s\\t\\%i\\model\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\skill\\%s\\tt\\%d\\tl\\%d",
+			client->pers.netname, team, model,  c1, c2, 
 			client->pers.maxHealth, client->sess.wins, client->sess.losses,
 			Info_ValueForKey( userinfo, "skill" ), teamTask, teamLeader );
 	} else {
-		s = va("n\\%s\\t\\%i\\model\\%s\\hmodel\\%s\\g_redteam\\%s\\g_blueteam\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\tt\\%d\\tl\\%d",
-			client->pers.netname, client->sess.sessionTeam, model, headModel, redTeam, blueTeam, c1, c2, 
+		s = va("n\\%s\\t\\%i\\model\\%s\\g_redteam\\%s\\g_blueteam\\%s\\c1\\%s\\c2\\%s\\hc\\%i\\w\\%i\\l\\%i\\tt\\%d\\tl\\%d",
+			client->pers.netname, client->sess.sessionTeam, model, redTeam, blueTeam, c1, c2, 
 			client->pers.maxHealth, client->sess.wins, client->sess.losses, teamTask, teamLeader);
 	}
 
@@ -1287,7 +1315,9 @@ char *ClientConnect( int clientNum, qboolean firstTime, qboolean isBot ) {
 		value = Info_ValueForKey (userinfo, "password");
 		if ( g_password.string[0] && Q_stricmp( g_password.string, "none" ) &&
 			strcmp( g_password.string, value) != 0) {
-			return "Invalid password";
+			static char sTemp[1024];
+			Q_strncpyz(sTemp, G_GetStripEdString("SVINGAME","INVALID_PASSWORD"), sizeof (sTemp) );
+			return sTemp;// return "Invalid password";
 		}
 	}
 
@@ -1344,6 +1374,8 @@ char *ClientConnect( int clientNum, qboolean firstTime, qboolean isBot ) {
 	return NULL;
 }
 
+void G_WriteClientSessionData( gclient_t *client );
+
 /*
 ===========
 ClientBegin
@@ -1353,7 +1385,7 @@ to be placed into the level.  This will happen every level load,
 and on transition between teams, but doesn't happen on respawns
 ============
 */
-void ClientBegin( int clientNum ) {
+void ClientBegin( int clientNum, qboolean allowTeamReset ) {
 	gentity_t	*ent;
 	gclient_t	*client;
 	gentity_t	*tent;
@@ -1361,6 +1393,47 @@ void ClientBegin( int clientNum ) {
 	char		userinfo[MAX_INFO_VALUE], *modelname;
 
 	ent = g_entities + clientNum;
+
+	if ((ent->r.svFlags & SVF_BOT) && g_gametype.integer >= GT_TEAM)
+	{
+		if (allowTeamReset)
+		{
+			const char *team = "Red";
+			int preSess;
+
+			//SetTeam(ent, "");
+			ent->client->sess.sessionTeam = PickTeam(-1);
+			trap_GetUserinfo(clientNum, userinfo, MAX_INFO_STRING);
+
+			if (ent->client->sess.sessionTeam == TEAM_SPECTATOR)
+			{
+				ent->client->sess.sessionTeam = TEAM_RED;
+			}
+
+			if (ent->client->sess.sessionTeam == TEAM_RED)
+			{
+				team = "Red";
+			}
+			else
+			{
+				team = "Blue";
+			}
+
+			Info_SetValueForKey( userinfo, "team", team );
+
+			trap_SetUserinfo( clientNum, userinfo );
+
+			ent->client->ps.persistant[ PERS_TEAM ] = ent->client->sess.sessionTeam;
+
+			preSess = ent->client->sess.sessionTeam;
+			G_ReadSessionData( ent->client );
+			ent->client->sess.sessionTeam = preSess;
+			G_WriteClientSessionData(ent->client);
+			ClientUserinfoChanged( clientNum );
+			ClientBegin(clientNum, qfalse);
+			return;
+		}
+	}
 
 	client = level.clients + clientNum;
 
@@ -1480,6 +1553,7 @@ void ClientSpawn(gentity_t *ent) {
 	forcedata_t			savedForce;
 	void		*ghoul2save;
 	int		saveSaberNum = ENTITYNUM_NONE;
+	int		wDisable = 0;
 
 	index = ent - g_entities;
 	client = ent->client;
@@ -1638,7 +1712,16 @@ void ClientSpawn(gentity_t *ent) {
 		}
 	}
 
-	if (!g_weaponDisable.integer || !(g_weaponDisable.integer & (1 << WP_BRYAR_PISTOL)))
+	if (g_gametype.integer == GT_TOURNAMENT)
+	{
+		wDisable = g_duelWeaponDisable.integer;
+	}
+	else
+	{
+		wDisable = g_weaponDisable.integer;
+	}
+
+	if (!wDisable || !(wDisable & (1 << WP_BRYAR_PISTOL)))
 	{
 		client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_BRYAR_PISTOL );
 	}

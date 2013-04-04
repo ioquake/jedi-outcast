@@ -659,6 +659,20 @@ qboolean BG_ParseAnimationFile(const char *filename)
 		bgGlobalAnimations[animNum].initialLerp = ceil(1000.0f / fabs(fps));
 	}
 
+#ifdef _DEBUG
+	//Check the array, and print the ones that have nothing in them.
+	for(i = 0; i < MAX_ANIMATIONS; i++)
+	{	
+		if (animTable[i].name != NULL)		// This animation reference exists.
+		{
+			if (bgGlobalAnimations[i].firstFrame <= 0 && bgGlobalAnimations[i].numFrames <=0)
+			{	// This is an empty animation reference.
+				Com_Printf("***ANIMTABLE reference #%d (%s) is empty!\n", i, animTable[i].name);
+			}
+		}
+	}
+#endif // _DEBUG
+
 	BGPAFtextLoaded = qtrue;
 	return qtrue;
 }
@@ -752,16 +766,6 @@ void PM_StartTorsoAnim( int anim ) {
 
 	pm->ps->torsoAnim = ( ( pm->ps->torsoAnim & ANIM_TOGGLEBIT ) ^ ANIM_TOGGLEBIT )
 		| anim;
-}
-
-static void PM_ContinueTorsoAnim( int anim ) {
-	if ( ( pm->ps->torsoAnim & ~ANIM_TOGGLEBIT ) == anim ) {
-		return;
-	}
-	if ( pm->ps->torsoTimer > 0 ) {
-		return;		// a high priority animation is running
-	}
-	PM_StartTorsoAnim( anim);
 }
 
 
@@ -955,6 +959,9 @@ setAnimDone:
 // Imported from single-player, this function is mainly intended to make porting from SP easier.
 void PM_SetAnim(int setAnimParts,int anim,int setAnimFlags, int blendTime)
 {	
+	assert(	bgGlobalAnimations[anim].firstFrame != 0 || 
+			bgGlobalAnimations[anim].numFrames != 0);
+
 	if (BG_InSpecialJump(anim))
 	{
 		setAnimFlags |= SETANIM_FLAG_RESTART;

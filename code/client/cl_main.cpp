@@ -31,6 +31,7 @@ cvar_t	*cl_avidemo;
 cvar_t	*cl_pano;
 cvar_t	*cl_panoNumShots;
 cvar_t	*cl_skippingcin;
+cvar_t	*cl_endcredits;
 
 cvar_t	*cl_freelook;
 cvar_t	*cl_sensitivity;
@@ -43,9 +44,7 @@ cvar_t	*cl_VidFadeDown;
 cvar_t	*cl_framerate;
 
 cvar_t	*m_pitch;
-cvar_t	*m_pitchOverride;
 cvar_t	*m_yaw;
-cvar_t	*m_yawOverride;
 cvar_t	*m_forward;
 cvar_t	*m_side;
 cvar_t	*m_filter;
@@ -263,7 +262,6 @@ void CL_Disconnect( void ) {
 	cls.state = CA_DISCONNECTED;
 
 	// allow cheats locally
-	Cvar_Set( "sv_cheats", "1" );
 	Cvar_Set( "timescale", "1" );//jic we were skipping
 	Cvar_Set( "skippingCinematic", "0" );//jic we were skipping
 }
@@ -438,6 +436,9 @@ void CL_Snd_Restart_f( void ) {
 
 	extern void S_ReloadAllUsedSounds(void);
 	S_ReloadAllUsedSounds();
+
+	extern void AS_ParseSets(void);
+	AS_ParseSets();
 }
 /*
 ==================
@@ -520,7 +521,7 @@ void CL_CheckForResend( void ) {
 
 	case CA_CHALLENGING:
 	// sending back the challenge
-		port = Cvar_VariableValue ("qport");
+		port = Cvar_VariableIntegerValue("qport");
 
 		UI_UpdateConnectionString( va("(%i)", clc.connectPacketCount ) );
 
@@ -628,7 +629,7 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 				NET_AdrToString( clc.serverAddress ) );
 			return;
 		}
-		Netchan_Setup (NS_CLIENT, &clc.netchan, from, Cvar_VariableValue( "qport" ) );
+		Netchan_Setup (NS_CLIENT, &clc.netchan, from, Cvar_VariableIntegerValue( "qport" ) );
 		cls.state = CA_CONNECTED;
 		clc.lastPacketSentTime = -9999;		// send first packet immediately
 		return;
@@ -862,7 +863,7 @@ void CL_Frame ( int msec,float fractionMsec ) {
 		cl_noprint->integer = oldnoprint;
 	}
 
-	if (cl_skippingcin->integer) {
+	if (cl_skippingcin->integer && !cl_endcredits->integer) {
 		if (cl_skippingcin->modified){
 			S_StopSounds();		//kill em all but music	
 			cl_skippingcin->modified=qfalse;
@@ -1065,7 +1066,9 @@ CL_Init
 void CL_Init( void ) {
 	Com_Printf( "----- Client Initialization -----\n" );
 
-	Con_Init ();	
+	SP_Register("con_text", SP_REGISTER_REQUIRED);	//reference is CON_TEXT
+	
+	Con_Init ();
 
 	CL_ClearState ();
 
@@ -1093,6 +1096,7 @@ void CL_Init( void ) {
 	cl_pano = Cvar_Get ("pano", "0", 0);
 	cl_panoNumShots= Cvar_Get ("panoNumShots", "10", CVAR_ARCHIVE);
 	cl_skippingcin = Cvar_Get ("skippingCinematic", "0", CVAR_ROM);
+	cl_endcredits = Cvar_Get ("cg_endcredits", "0", 0);
 
 	cl_yawspeed = Cvar_Get ("cl_yawspeed", "140", CVAR_ARCHIVE);
 	cl_pitchspeed = Cvar_Get ("cl_pitchspeed", "140", CVAR_ARCHIVE);
@@ -1101,7 +1105,7 @@ void CL_Init( void ) {
 	cl_maxpackets = Cvar_Get ("cl_maxpackets", "30", CVAR_ARCHIVE );
 	cl_packetdup = Cvar_Get ("cl_packetdup", "1", CVAR_ARCHIVE );
 
-	cl_run = Cvar_Get ("cl_run", "0", CVAR_ARCHIVE);
+	cl_run = Cvar_Get ("cl_run", "1", CVAR_ARCHIVE);
 	cl_sensitivity = Cvar_Get ("sensitivity", "5", CVAR_ARCHIVE);
 	cl_mouseAccel = Cvar_Get ("cl_mouseAccel", "0", CVAR_ARCHIVE);
 	cl_freelook = Cvar_Get( "cl_freelook", "1", CVAR_ARCHIVE );
@@ -1119,9 +1123,7 @@ void CL_Init( void ) {
 	Cvar_Get ("cg_autoswitch", "1", CVAR_ARCHIVE);
 
 	m_pitch = Cvar_Get ("m_pitch", "0.022", CVAR_ARCHIVE);
-	m_pitchOverride = Cvar_Get ("m_pitchOverride", "0", 0 );
 	m_yaw = Cvar_Get ("m_yaw", "0.022", CVAR_ARCHIVE);
-	m_yawOverride = Cvar_Get ("m_yawOverride", "0", 0 );
 	m_forward = Cvar_Get ("m_forward", "0.25", CVAR_ARCHIVE);
 	m_side = Cvar_Get ("m_side", "0.25", CVAR_ARCHIVE);
 	m_filter = Cvar_Get ("m_filter", "0", CVAR_ARCHIVE);

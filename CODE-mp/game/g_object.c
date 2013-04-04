@@ -312,7 +312,7 @@ void G_RunObject( gentity_t *ent )
 			G_StopObjectMoving( ent );
 		}
 	}
-	else
+	else if (ent->s.weapon != WP_SABER)
 	{
 		ent->s.apos.trType = TR_STATIONARY;
 		pitch_roll_for_slope( ent, tr.plane.normal );

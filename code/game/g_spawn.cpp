@@ -273,6 +273,7 @@ field_t fields[] = {
 	{"NPC_targetname", FOFS(NPC_targetname), F_LSTRING},
 	{"NPC_target", FOFS(NPC_target), F_LSTRING},
 	{"NPC_target2", FOFS(target2), F_LSTRING},//NPC_spawner only
+	{"NPC_target4", FOFS(target4), F_LSTRING},//NPC_spawner only
 	{"NPC_type", FOFS(NPC_type), F_LSTRING},
 	{"ownername", FOFS(ownername), F_LSTRING},
 	//freaky camera shit
@@ -782,7 +783,7 @@ void G_ParseField( const char *key, const char *value, gentity_t *ent ) {
 				assert(_iFieldsRead==3);
 				if (_iFieldsRead!=3)
 				{
-#ifndef _FINAL_BUILD
+#ifndef FINAL_BUILD
 					gi.Printf (S_COLOR_YELLOW"G_ParseField: VEC3 sscanf() failed to read 3 floats ('angle' key bug?)\n");
 #endif
 				}
@@ -797,7 +798,7 @@ void G_ParseField( const char *key, const char *value, gentity_t *ent ) {
 				assert(_iFieldsRead==4);
 				if (_iFieldsRead!=4)
 				{
-#ifndef _FINAL_BUILD
+#ifndef FINAL_BUILD
 					gi.Printf (S_COLOR_YELLOW"G_ParseField: VEC4 sscanf() failed to read 4 floats\n");
 #endif
 				}
@@ -847,7 +848,7 @@ void G_ParseField( const char *key, const char *value, gentity_t *ent ) {
 					}
 					else
 					{
-#ifndef _FINAL_BUILD
+#ifndef FINAL_BUILD
 						gi.Printf (S_COLOR_YELLOW"WARNING: G_ParseField: can't find flag for key %s\n", key);
 #endif
 					}
@@ -860,7 +861,7 @@ void G_ParseField( const char *key, const char *value, gentity_t *ent ) {
 			return;
 		}
 	}
-#ifndef _FINAL_BUILD
+#ifndef FINAL_BUILD
 	//didn't find it?
 	gi.Printf ( S_COLOR_YELLOW"WARNING: G_ParseField: no such field: %s\n", key );
 #endif

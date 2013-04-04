@@ -3,12 +3,10 @@
 #include "client.h"
 #include "..\strings\con_text.h"
 #include "..\qcommon\strip.h"
+#include "../qcommon/game_version.h"
 
 
 int g_console_field_width = 78;
-
-
-extern	console_t	con;
 
 console_t	con;
 
@@ -44,7 +42,7 @@ void Con_ToggleConsole_f (void) {
 Con_MessageMode_f
 ================
 */
-void Con_MessageMode_f (void) {
+void Con_MessageMode_f (void) {	//yell
 	chat_playerNum = -1;
 	chat_team = qfalse;
 	Field_Clear( &chatField );
@@ -58,7 +56,7 @@ void Con_MessageMode_f (void) {
 Con_MessageMode2_f
 ================
 */
-void Con_MessageMode2_f (void) {
+void Con_MessageMode2_f (void) {	//team chat
 	chat_playerNum = -1;
 	chat_team = qtrue;
 	Field_Clear( &chatField );
@@ -71,7 +69,7 @@ void Con_MessageMode2_f (void) {
 Con_MessageMode3_f
 ================
 */
-void Con_MessageMode3_f (void) {
+void Con_MessageMode3_f (void) {		//target chat
 	chat_playerNum = VM_Call( cgvm, CG_CROSSHAIR_PLAYER );
 	if ( chat_playerNum < 0 || chat_playerNum >= MAX_CLIENTS ) {
 		chat_playerNum = -1;
@@ -88,7 +86,7 @@ void Con_MessageMode3_f (void) {
 Con_MessageMode4_f
 ================
 */
-void Con_MessageMode4_f (void) {
+void Con_MessageMode4_f (void) {	//attacker
 	chat_playerNum = VM_Call( cgvm, CG_LAST_ATTACKER );
 	if ( chat_playerNum < 0 || chat_playerNum >= MAX_CLIENTS ) {
 		chat_playerNum = -1;
@@ -132,7 +130,7 @@ void Con_Dump_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf(SP_GetStringText(CON_TEXT_DUMP_USAGE));
+		Com_Printf (SP_GetStringText(CON_TEXT_DUMP_USAGE));
 		return;
 	}
 
@@ -141,7 +139,7 @@ void Con_Dump_f (void)
 	f = FS_FOpenFileWrite( Cmd_Argv( 1 ) );
 	if (!f)
 	{
-		Com_Printf ("ERROR: couldn't open.\n");
+		Com_Printf (S_COLOR_RED"ERROR: couldn't open.\n");
 		return;
 	}
 
@@ -205,22 +203,31 @@ void Con_CheckResize (void)
 	int		i, j, width, oldwidth, oldtotallines, numlines, numchars;
 	MAC_STATIC short	tbuf[CON_TEXTSIZE];
 
-	width = (SCREEN_WIDTH / SMALLCHAR_WIDTH) - 2;
+//	width = (SCREEN_WIDTH / SMALLCHAR_WIDTH) - 2;
+	width = (cls.glconfig.vidWidth / SMALLCHAR_WIDTH) - 2;
 
 	if (width == con.linewidth)
 		return;
 
+
 	if (width < 1)			// video hasn't been initialized yet
 	{
+		con.xadjust = 1;
+		con.yadjust = 1;
 		width = DEFAULT_CONSOLE_WIDTH;
 		con.linewidth = width;
 		con.totallines = CON_TEXTSIZE / con.linewidth;
 		for(i=0; i<CON_TEXTSIZE; i++)
-
+		{
 			con.text[i] = (ColorIndex(COLOR_WHITE)<<8) | ' ';
+		}
 	}
 	else
 	{
+		// on wide screens, we will center the text
+		con.xadjust = 640.0f / cls.glconfig.vidWidth;
+		con.yadjust = 480.0f / cls.glconfig.vidHeight;
+
 		oldwidth = con.linewidth;
 		con.linewidth = width;
 		oldtotallines = con.totallines;
@@ -338,19 +345,6 @@ void CL_ConsolePrint( char *txt ) {
 		con.linewidth = -1;
 		Con_CheckResize ();
 		con.initialized = qtrue;
-
-		con.xadjust = 0;
-		con.yadjust = 0;
-	}
-
-
-	if (!con.xadjust && !con.yadjust &&
-		cls.glconfig.vidWidth && cls.glconfig.vidHeight)
-	{
-		//Our adjust values are still 0 and we now have proper glconfig height/width values (we don't on init always),
-		//so fill the values in.
-		con.xadjust = 640.0f / cls.glconfig.vidWidth;
-		con.yadjust = 480.0f / cls.glconfig.vidHeight;
 	}
 
 	color = ColorIndex(COLOR_WHITE);
@@ -545,10 +539,6 @@ void Con_DrawSolidConsole( float frac ) {
 
 	if (lines > cls.glconfig.vidHeight )
 		lines = cls.glconfig.vidHeight;
-
-	// on wide screens, we will center the text
-	con.xadjust = 640.0f / cls.glconfig.vidWidth;
-	con.yadjust = 480.0f / cls.glconfig.vidHeight;
 
 	// draw the background
 	y = (int) (frac * SCREEN_HEIGHT - 2);

@@ -47,6 +47,7 @@ static void CacheChunkEffects( material_t material )
 	case MAT_DRK_STONE:
 	case MAT_LT_STONE:
 	case MAT_GREY_STONE:
+	case MAT_WHITE_METAL: // what is this crap really supposed to be??
 		G_EffectIndex( "chunks/rockbreaklg" );
 		G_EffectIndex( "chunks/rockbreakmed" );
 		break;
@@ -193,19 +194,44 @@ void funcBBrushUse (gentity_t *self, gentity_t *other, gentity_t *activator)
 
 void funcBBrushPain(gentity_t *self, gentity_t *inflictor, gentity_t *attacker, vec3_t point, int damage, int mod,int hitLoc)
 {
-	if(self->painDebounceTime > level.time)
+	if ( self->painDebounceTime > level.time )
 	{
 		return;
 	}
 
-	if(self->paintarget)
+	if ( self->paintarget )
 	{
 		G_UseTargets2 (self, self->activator, self->paintarget);
 	}
 
 	G_ActivateBehavior( self, BSET_PAIN );
 
-	if(self->wait == -1)
+	if ( self->material == MAT_DRK_STONE
+		|| self->material == MAT_LT_STONE
+		|| self->material == MAT_GREY_STONE )
+	{
+		vec3_t	org, dir;
+		float	scale;
+		VectorSubtract( self->absmax, self->absmin, org );// size
+		// This formula really has no logical basis other than the fact that it seemed to be the closest to yielding the results that I wanted.
+		// Volume is length * width * height...then break that volume down based on how many chunks we have
+		scale = VectorLength( org ) / 100.0f;
+		VectorMA( self->absmin, 0.5, org, org );
+		VectorAdd( self->absmin,self->absmax, org );
+		VectorScale( org, 0.5f, org );
+		if ( attacker != NULL && attacker->client )
+		{
+			VectorSubtract( attacker->currentOrigin, org, dir );
+			VectorNormalize( dir );
+		}
+		else
+		{
+			VectorSet( dir, 0, 0, 1 );
+		} 
+		CG_Chunks( self->s.number, org, dir, self->mins, self->maxs, 300, Q_irand( 1, 3 ), self->material, 0, scale );
+	}
+
+	if ( self->wait == -1 )
 	{
 		self->e_PainFunc = painF_NULL;
 		return;
@@ -328,6 +354,7 @@ Don't know if these work:
 12 = MAT_GRATE1		(grate chunks--looks horrible right now)
 13 = MAT_ROPE		(for yavin_trial, no chunks, just wispy bits )
 14 = MAT_CRATE2		(red multi-colored crate chunks)
+15 = MAT_WHITE_METAL (white angular chunks for Stu, NS_hideout )
 
 */
 void SP_func_breakable( gentity_t *self ) 
@@ -361,7 +388,7 @@ void SP_func_breakable( gentity_t *self )
 
 	self->e_UseFunc = useF_funcBBrushUse;
 
-	if(self->paintarget)
+	//if ( self->paintarget )
 	{
 		self->e_PainFunc = painF_funcBBrushPain;
 	}
@@ -831,7 +858,7 @@ Damage: default is none
 12 = MAT_GRATE1		(grate chunks--looks horrible right now)
 13 = MAT_ROPE		(for yavin_trial, no chunks, just wispy bits )
 14 = MAT_CRATE2		(red multi-colored crate chunks)
-
+15 = MAT_WHITE_METAL (white angular chunks for Stu, NS_hideout )
 FIXME/TODO: 
 set size better?
 multiple damage models?

@@ -212,6 +212,8 @@ extern	cvar_t	*sv_pure;
 extern	cvar_t	*sv_floodProtect;
 extern	cvar_t	*sv_allowAnonymous;
 
+extern	cvar_t	*sv_debugserver;
+
 
 //===========================================================
 

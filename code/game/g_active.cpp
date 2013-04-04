@@ -52,10 +52,15 @@ extern qboolean PM_InForceGetUp( playerState_t *ps );
 extern void G_CreateG2AttachedWeaponModel( gentity_t *ent, const char *weaponModel );
 extern qboolean FlyingCreature( gentity_t *ent );
 
-extern	bool		in_camera;
-extern	qboolean	player_locked;
+extern bool		in_camera;
+extern qboolean	player_locked;
 extern qboolean	stop_icarus;
-extern	cvar_t		*g_spskill;
+extern cvar_t	*g_spskill;
+extern cvar_t	*g_timescale;
+extern cvar_t	*g_saberMoveSpeed;
+extern cvar_t	*g_saberAutoBlocking;
+extern vmCvar_t	cg_thirdPersonAlpha;
+extern vmCvar_t	cg_thirdPersonAutoAlpha;
 
 void ClientEndPowerUps( gentity_t *ent );
 
@@ -123,7 +128,7 @@ int G_FindLookItem( gentity_t *self )
 		VectorSubtract( ent->currentOrigin, center, dir );
 		rating = (1.0f-(VectorNormalize( dir )/radius));
 		rating *= DotProduct( forward, dir );
-		if ( ent->item->giType == IT_HOLDABLE && ent->item->giTag == INV_SECURITY_KEY1 )
+		if ( ent->item->giType == IT_HOLDABLE && ent->item->giTag == INV_SECURITY_KEY )
 		{//security keys are of the highest importance
 			rating *= 2.0f;
 		}
@@ -136,14 +141,28 @@ int G_FindLookItem( gentity_t *self )
 	return bestEntNum;
 }
 
+extern void CG_SetClientViewAngles( vec3_t angles, qboolean overrideViewEnt );
 qboolean G_ClearViewEntity( gentity_t *ent )
 {
 	if ( !ent->client->ps.viewEntity )
 		return qfalse;
 
-	if ( &g_entities[ent->client->ps.viewEntity] )
+	if ( ent->client->ps.viewEntity > 0 && ent->client->ps.viewEntity < ENTITYNUM_NONE )
 	{
-		g_entities[ent->client->ps.viewEntity].svFlags &= ~SVF_BROADCAST;
+		if ( &g_entities[ent->client->ps.viewEntity] )
+		{
+			g_entities[ent->client->ps.viewEntity].svFlags &= ~SVF_BROADCAST;
+			if ( g_entities[ent->client->ps.viewEntity].NPC )
+			{
+				g_entities[ent->client->ps.viewEntity].NPC->controlledTime = 0;
+				SetClientViewAngle( &g_entities[ent->client->ps.viewEntity], g_entities[ent->client->ps.viewEntity].currentAngles );
+				G_SetAngles( &g_entities[ent->client->ps.viewEntity], g_entities[ent->client->ps.viewEntity].currentAngles );
+				VectorCopy( g_entities[ent->client->ps.viewEntity].currentAngles, g_entities[ent->client->ps.viewEntity].NPC->lastPathAngles );
+				g_entities[ent->client->ps.viewEntity].NPC->desiredYaw = g_entities[ent->client->ps.viewEntity].currentAngles[YAW];
+			}
+		}
+		CG_SetClientViewAngles( ent->pos4, qtrue );
+		SetClientViewAngle( ent, ent->pos4 );
 	}
 	ent->client->ps.viewEntity = 0;
 	return qtrue;
@@ -161,12 +180,48 @@ void G_SetViewEntity( gentity_t *self, gentity_t *viewEntity )
 		// yeah, it should really toggle them so it plays the end sound....
 		cg.zoomMode = 0;
 	}
-
+	if ( viewEntity->s.number == self->client->ps.viewEntity )
+	{
+		return;
+	}
 	//clear old one first
 	G_ClearViewEntity( self );
 	//set new one
 	self->client->ps.viewEntity = viewEntity->s.number;
 	viewEntity->svFlags |= SVF_BROADCAST;
+	//remember current angles
+	VectorCopy( self->client->ps.viewangles, self->pos4 );
+	if ( viewEntity->client )
+	{
+		//vec3_t	clear = {0,0,0};
+		CG_SetClientViewAngles( viewEntity->client->ps.viewangles, qtrue );
+		//SetClientViewAngle( self, viewEntity->client->ps.viewangles );
+		//SetClientViewAngle( viewEntity, clear );
+		/*
+		VectorCopy( viewEntity->client->ps.viewangles, self->client->ps.viewangles );
+		for ( int i = 0; i < 3; i++ )
+		{
+			self->client->ps.delta_angles[i] = viewEntity->client->ps.delta_angles[i];
+		}
+		*/
+	}
+	if ( !self->s.number )
+	{
+		CG_CenterPrint( "@INGAME_EXIT_VIEW", SCREEN_HEIGHT * 0.95 );
+	}
+}
+
+qboolean G_ControlledByPlayer( gentity_t *self )
+{
+	if ( self && self->NPC && self->NPC->controlledTime > level.time )
+	{//being controlled
+		gentity_t *controller = &g_entities[0];
+		if ( controller->client && controller->client->ps.viewEntity == self->s.number )
+		{//we're the player's viewEntity
+			return qtrue;
+		}
+	}
+	return qfalse;
 }
 
 qboolean G_ValidateLookEnemy( gentity_t *self, gentity_t *enemy )
@@ -192,22 +247,27 @@ qboolean G_ValidateLookEnemy( gentity_t *self, gentity_t *enemy )
 			&& enemy->noDamageTeam != self->client->playerTeam
 			&& enemy->health > 0 )
 		{//a turret
-			return qtrue;
+			//return qtrue;
 		}
-		return qfalse;
-	}
-
-	if ( enemy->health <= 0 && ((level.time-enemy->s.time) > 3000||!InFront(enemy->currentOrigin,self->currentOrigin,self->client->ps.viewangles,0.2f)||DistanceHorizontal(enemy->currentOrigin,self->currentOrigin)>16384))//>128
-	{//corpse, been dead too long or too out of sight to be interesting
-		if ( !enemy->message )
+		else
 		{
 			return qfalse;
 		}
 	}
+	else 
+	{
+		if ( enemy->client->playerTeam == self->client->playerTeam )
+		{//on same team
+			return qfalse;
+		}
 
-	if ( enemy->client->playerTeam == self->client->playerTeam )
-	{//on same team
-		return qfalse;
+		if ( enemy->health <= 0 && ((level.time-enemy->s.time) > 3000||!InFront(enemy->currentOrigin,self->currentOrigin,self->client->ps.viewangles,0.2f)||DistanceHorizontal(enemy->currentOrigin,self->currentOrigin)>16384))//>128
+		{//corpse, been dead too long or too out of sight to be interesting
+			if ( !enemy->message )
+			{
+				return qfalse;
+			}
+		}
 	}
 
 	if ( (!InFront( enemy->currentOrigin, self->currentOrigin, self->client->ps.viewangles, 0.0f) || !G_ClearLOS( self, self->client->renderInfo.eyePoint, enemy ) ) 
@@ -395,7 +455,7 @@ Check for lava / slime contents and drowning
 =============
 */
 void P_WorldEffects( gentity_t *ent ) {
-	int			waterlevel;
+	int			mouthContents = 0;
 
 	if ( ent->client->noclip ) 
 	{
@@ -403,11 +463,14 @@ void P_WorldEffects( gentity_t *ent ) {
 		return;
 	}
 
-	waterlevel = ent->waterlevel;
+	if ( !in_camera )
+	{
+		mouthContents = gi.pointcontents( ent->client->renderInfo.eyePoint, ent->s.number );
+	}
 	//
 	// check for drowning
 	//
-	if ( waterlevel == 3 && !(ent->watertype&CONTENTS_LADDER) ) 
+	if ( (mouthContents&(CONTENTS_WATER|CONTENTS_SLIME)) ) 
 	{
 		if ( ent->client->NPC_class == CLASS_SWAMPTROOPER )
 		{//they have air tanks
@@ -451,14 +514,14 @@ void P_WorldEffects( gentity_t *ent ) {
 	//
 	// check for sizzle damage (move to pmove?)
 	//
-	if (waterlevel && 
+	if (ent->waterlevel && 
 		(ent->watertype&(CONTENTS_LAVA|CONTENTS_SLIME)) ) {
 		if (ent->health > 0
 			&& ent->painDebounceTime < level.time	) {
 
 			if (ent->watertype & CONTENTS_LAVA) {
 				G_Damage (ent, NULL, NULL, NULL, NULL, 
-					15*waterlevel, 0, MOD_LAVA);
+					15*ent->waterlevel, 0, MOD_LAVA);
 			}
 
 			if (ent->watertype & CONTENTS_SLIME) {
@@ -627,7 +690,7 @@ void DoImpact( gentity_t *self, gentity_t *other, qboolean damageSelf )
 			}
 		}
 
-		if ( damageSelf && self->takedamage )
+		if ( damageSelf && self->takedamage && !(self->flags&FL_NO_IMPACT_DMG))
 		{
 			//Now damage me
 			//FIXME: more lenient falling damage, especially for when driving a vehicle
@@ -767,6 +830,9 @@ void	G_TouchTriggersLerped( gentity_t *ent ) {
 #endif// _DEBUG
 	VectorSubtract( ent->currentOrigin, ent->lastOrigin, diff );
 	dist = VectorNormalize( diff );
+#ifdef _DEBUG
+	assert( (dist<1024) && "insane distance in G_TouchTriggersLerped!" );
+#endif// _DEBUG
 
 	memset (touched, qfalse, sizeof(touched) );
 
@@ -1006,7 +1072,7 @@ void G_MatchPlayerWeapon( gentity_t *ent )
 		}
 		if ( newWeap != WP_NONE && ent->client->ps.weapon != newWeap )
 		{
-			if ( ent->weaponModel != -1 )
+			if ( ent->weaponModel >= 0 )
 			{
 				gi.G2API_RemoveGhoul2Model(ent->ghoul2, ent->weaponModel);
 			}
@@ -1103,6 +1169,10 @@ void ClientTimerActions( gentity_t *ent, int msec ) {
 	{
 		client->timeResidual -= 1000;
 
+		if ( ent->s.weapon != WP_NONE )
+		{
+			ent->client->sess.missionStats.weaponUsed[ent->s.weapon]++;
+		}
 		// if we've got the seeker powerup, see if we can shoot it at someone
 /*		if ( ent->client->ps.powerups[PW_SEEKER] > level.time )
 		{
@@ -1212,18 +1282,26 @@ void ClientEvents( gentity_t *ent, int oldEventSequence ) {
 	//by the way, if you have your saber in hand and it's on, do the damage trace
 	if ( client->ps.weapon == WP_SABER )
 	{
-		if ( client->ps.saberDamageDebounceTime <= level.time )
+		if ( g_timescale->value >= 1.0f || !(client->ps.forcePowersActive&(1<<FP_SPEED)) )
 		{
-			WP_SaberDamageTrace( ent );
-			WP_SaberUpdateOldBladeData( ent );
 			int wait = FRAMETIME/2;
-			/*
-			if ( g_timescale->value&&client->ps.clientNum==0&&!player_locked&&!MatrixMode&&client->ps.forcePowersActive&(1<<FP_SPEED) )
-			{
-				wait = floor( (float)wait*g_timescale->value );
+			//sanity check
+			if ( client->ps.saberDamageDebounceTime - level.time > wait )
+			{//when you unpause the game with force speed on, the time gets *really* wiggy...
+				client->ps.saberDamageDebounceTime = level.time + wait;
 			}
-			*/
-			client->ps.saberDamageDebounceTime = level.time + wait;
+			if ( client->ps.saberDamageDebounceTime <= level.time )
+			{
+				WP_SaberDamageTrace( ent );
+				WP_SaberUpdateOldBladeData( ent );
+				/*
+				if ( g_timescale->value&&client->ps.clientNum==0&&!player_locked&&!MatrixMode&&client->ps.forcePowersActive&(1<<FP_SPEED) )
+				{
+					wait = floor( (float)wait*g_timescale->value );
+				}
+				*/
+				client->ps.saberDamageDebounceTime = level.time + wait;
+			}
 		}
 	}
 }
@@ -1270,7 +1348,7 @@ qboolean G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 	if ( ent->client->ps.saberMove == LS_A_LUNGE )
 	{//can't move during lunge
 		ucmd->rightmove = ucmd->upmove = 0;
-		if ( ent->client->ps.legsAnimTimer > 500 )
+		if ( ent->client->ps.legsAnimTimer > 500 && (ent->s.number || !player_locked) )
 		{
 			ucmd->forwardmove = 127;
 		}
@@ -1278,21 +1356,33 @@ qboolean G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 		{
 			ucmd->forwardmove = 0;
 		}
+		if ( ent->NPC )
+		{//invalid now
+			VectorClear( ent->client->ps.moveDir );
+		}
 	}
 
 	if ( ent->client->ps.saberMove == LS_A_JUMP_T__B_ )
 	{//can't move during leap
-		if ( ent->client->ps.groundEntityNum != ENTITYNUM_NONE )
+		if ( ent->client->ps.groundEntityNum != ENTITYNUM_NONE || (!ent->s.number && player_locked) )
 		{//hit the ground
 			ucmd->forwardmove = 0;
 		}
 		ucmd->rightmove = ucmd->upmove = 0;
+		if ( ent->NPC )
+		{//invalid now
+			VectorClear( ent->client->ps.moveDir );
+		}
 	}
 
 	if ( ent->client->ps.saberMove == LS_A_BACK || ent->client->ps.saberMove == LS_A_BACK_CR 
 		|| ent->client->ps.saberMove == LS_A_BACKSTAB )
 	{//can't move or turn during back attacks
 		ucmd->forwardmove = ucmd->rightmove = 0;
+		if ( ent->NPC )
+		{
+			VectorClear( ent->client->ps.moveDir );
+		}
 		if ( (overridAngles = (PM_AdjustAnglesForBackAttack( ent, ucmd )?qtrue:overridAngles)) == qtrue )
 		{
 			//pull back the view
@@ -1347,28 +1437,42 @@ qboolean G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 
 	if ( PM_InRoll( &ent->client->ps ) )
 	{
-		PM_CmdForRoll( ent->client->ps.legsAnim, ucmd );
+		if ( ent->s.number || !player_locked )
+		{
+			PM_CmdForRoll( ent->client->ps.legsAnim, ucmd );
+		}
+		if ( ent->NPC )
+		{//invalid now
+			VectorClear( ent->client->ps.moveDir );
+		}
 		ent->client->ps.speed = 400;
 	}
 
 	if ( PM_InCartwheel( ent->client->ps.legsAnim ) )
 	{//can't keep moving in cartwheel
 		ucmd->forwardmove = ucmd->rightmove = ucmd->upmove = 0;
-		switch ( ent->client->ps.legsAnim )
+		if ( ent->NPC )
+		{//invalid now
+			VectorClear( ent->client->ps.moveDir );
+		}
+		if ( ent->s.number || !player_locked )
 		{
-		case BOTH_ARIAL_LEFT:
-		case BOTH_CARTWHEEL_LEFT:
-			ucmd->rightmove = -127;
-			break;
-		case BOTH_ARIAL_RIGHT:
-		case BOTH_CARTWHEEL_RIGHT:
-			ucmd->rightmove = 127;
-			break;
-		case BOTH_ARIAL_F1:
-			ucmd->forwardmove = 127;
-			break;
-		default:
-			break;
+			switch ( ent->client->ps.legsAnim )
+			{
+			case BOTH_ARIAL_LEFT:
+			case BOTH_CARTWHEEL_LEFT:
+				ucmd->rightmove = -127;
+				break;
+			case BOTH_ARIAL_RIGHT:
+			case BOTH_CARTWHEEL_RIGHT:
+				ucmd->rightmove = 127;
+				break;
+			case BOTH_ARIAL_F1:
+				ucmd->forwardmove = 127;
+				break;
+			default:
+				break;
+			}
 		}
 	}
 
@@ -1377,12 +1481,16 @@ qboolean G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 	return overridAngles;
 }
 
-void BG_AddPushVecToUcmd(gentity_t *self, usercmd_t *ucmd)
+void BG_AddPushVecToUcmd( gentity_t *self, usercmd_t *ucmd )
 {
 	vec3_t	forward, right, moveDir;
 	float	pushSpeed, fMove, rMove;
 
-	pushSpeed = VectorLengthSquared(self->s.pushVec);
+	if ( !self->client )
+	{
+		return;
+	}
+	pushSpeed = VectorLengthSquared(self->client->pushVec);
 	if(!pushSpeed)
 	{//not being pushed
 		return;
@@ -1393,7 +1501,7 @@ void BG_AddPushVecToUcmd(gentity_t *self, usercmd_t *ucmd)
 	VectorMA(moveDir, ucmd->rightmove/127.0f * self->client->ps.speed, right, moveDir);
 	//moveDir is now our intended move velocity
 
-	VectorAdd(moveDir, self->s.pushVec, moveDir);
+	VectorAdd(moveDir, self->client->pushVec, moveDir);
 	self->client->ps.speed = VectorNormalize(moveDir);
 	//moveDir is now our intended move velocity plus our push Vector
 
@@ -1402,7 +1510,10 @@ void BG_AddPushVecToUcmd(gentity_t *self, usercmd_t *ucmd)
 	ucmd->forwardmove = floor(fMove);//If in the same dir , will be positive
 	ucmd->rightmove = floor(rMove);//If in the same dir , will be positive
 
-	VectorClear(self->s.pushVec);
+	if ( self->client->pushVecTime < level.time )
+	{
+		VectorClear( self->client->pushVec );
+	}
 }
 
 void NPC_Accelerate( gentity_t *ent, qboolean fullWalkAcc, qboolean fullRunAcc )
@@ -1613,6 +1724,11 @@ extern void CG_ChangeWeapon( int num );
 		}
 	}
 
+	if ( ent->client->ps.weapon == WP_SABER )
+	{
+		 ent->client->ps.saberActive = ent->owner->alt_fire;
+	}
+
 	// We'll leave the gun pointed in the direction it was last facing, though we'll cut out the pitch
 	if ( ent->client )
 	{
@@ -1670,7 +1786,7 @@ extern void CG_ChangeWeapon( int num );
 
 void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd )
 {
-	if (( (*ucmd)->buttons & BUTTON_USE || (*ucmd)->forwardmove < 0 ) && ent->owner && ent->owner->delay + 500 < level.time )
+	if (( (*ucmd)->buttons & BUTTON_USE || (*ucmd)->forwardmove < 0 || (*ucmd)->upmove > 0 ) && ent->owner && ent->owner->delay + 500 < level.time )
 	{
 		ent->owner->s.loopSound = 0;
 
@@ -1682,7 +1798,7 @@ void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd )
 	else
 	{
 		// this is a crappy way to put sounds on a moving emplaced gun....
-		if ( ent->owner )
+/*		if ( ent->owner )
 		{
 			if ( !VectorCompare( ent->owner->pos3, ent->owner->movedir ))
 			{
@@ -1699,7 +1815,7 @@ void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd )
 
 			VectorCopy( ent->owner->pos3, ent->owner->movedir );
 		}
-
+*/
 		// don't allow movement, weapon switching, and most kinds of button presses
 		(*ucmd)->forwardmove = 0;
 		(*ucmd)->rightmove = 0;
@@ -1829,18 +1945,27 @@ void G_CheckMovingLoopingSounds( gentity_t *ent, usercmd_t *ucmd )
 			|| (ucmd->upmove&&FlyingCreature( ent ))//flier using ucmds to move
 			|| (FlyingCreature( ent )&&!VectorCompare( vec3_origin, ent->client->ps.velocity )&&ent->health>0))//flier using velocity to move
 		{
-			if ( ent->client->NPC_class == CLASS_R2D2 )
+			switch( ent->client->NPC_class )
 			{
+			case CLASS_R2D2:
+			case CLASS_R5D2:
 				ent->s.loopSound = G_SoundIndex( "sound/chars/r2d2/misc/r2_move_lp.wav" );
-			}
-			if ( ent->client->NPC_class == CLASS_R5D2 )
-			{
-				ent->s.loopSound = G_SoundIndex( "sound/chars/r2d2/misc/r2_move_lp2.wav" );
+				break;
+			case CLASS_MARK2:
+				ent->s.loopSound = G_SoundIndex( "sound/chars/mark2/misc/mark2_move_lp" );
+				break;
+			case CLASS_MOUSE:
+				ent->s.loopSound = G_SoundIndex( "sound/chars/mouse/misc/mouse_lp" );
+				break;
+			case CLASS_PROBE:
+				ent->s.loopSound = G_SoundIndex( "sound/chars/probe/misc/probedroidloop" );
 			}
 		}
 		else
 		{//not moving under your own control, stop loopSound
-			if ( ent->client->NPC_class == CLASS_R2D2 || ent->client->NPC_class == CLASS_R5D2 )
+			if ( ent->client->NPC_class == CLASS_R2D2 || ent->client->NPC_class == CLASS_R5D2 
+					|| ent->client->NPC_class == CLASS_MARK2 || ent->client->NPC_class == CLASS_MOUSE 
+					|| ent->client->NPC_class == CLASS_PROBE )
 			{
 				ent->s.loopSound = 0;
 			}
@@ -1867,6 +1992,7 @@ void ClientThink_real( gentity_t *ent, usercmd_t *ucmd )
 	int			oldEventSequence;
 	int			msec;
 	qboolean	inSpinFlipAttack = PM_AdjustAnglesForSpinningFlip( ent, ucmd, qfalse );
+	qboolean	controlledByPlayer = qfalse;
 
 	//Don't let the player do anything if in a camera
 	if ( ent->s.number == 0 ) 
@@ -1882,7 +2008,9 @@ extern cvar_t	*g_skippingcin;
 		{
 			NPC_SetLookTarget( ent, ent->client->ps.saberLockEnemy, level.time+1000 );
 		}
-		if ( ent->client->renderInfo.lookTargetClearTime < level.time && ent->health > 0 )//NOTE: here this is used as a debounce, not an actual timer
+		if ( ent->client->renderInfo.lookTargetClearTime < level.time //NOTE: here this is used as a debounce, not an actual timer
+			&& ent->health > 0 //must be alive
+			&& (!ent->enemy || ent->client->ps.saberMove != LS_A_BACKSTAB) )//don't update if in backstab unless don't currently have an enemy
 		{//NOTE: doesn't keep updating to nearest enemy once you're dead
 			int	newLookTarget;
 			if ( !G_ValidateLookEnemy( ent, ent->enemy ) )
@@ -2039,9 +2167,11 @@ extern cvar_t	*g_skippingcin;
 		}
 		if ( player && player->client && player->client->ps.viewEntity == ent->s.number )
 		{
+			controlledByPlayer = qtrue;
 			int sav_weapon = ucmd->weapon;
 			memcpy( ucmd, &player->client->usercmd, sizeof( usercmd_t ) );
 			ucmd->weapon = sav_weapon;
+			ent->client->usercmd = *ucmd;
 		}
 		G_NPCMunroMatchPlayerWeapon( ent );
 	}
@@ -2149,6 +2279,7 @@ extern cvar_t	*g_skippingcin;
 				}
 				else
 				{//a corpse?  Shit
+					//Hmm, corpses should probably *always* knockdown...
 					ent->clipmask &= ~CONTENTS_BODY;
 				}
 				//FIXME: need impact sound event
@@ -2157,7 +2288,11 @@ extern cvar_t	*g_skippingcin;
 				{//can't knock down desann unless you're luke
 					//FIXME: should he smack you away like Galak Mech?
 				}
-				else if ( ((groundEnt->s.number||(!Q_irand( 0, 3 )&&cg.renderingThirdPerson&&!cg.zoomMode))&&groundEnt->client->playerTeam != ent->client->playerTeam) || ent->client->NPC_class == CLASS_DESANN )
+				else if ( 
+					( ( (groundEnt->s.number&&(groundEnt->s.weapon!=WP_SABER||!groundEnt->NPC||groundEnt->NPC->rank<Q_irand(RANK_CIVILIAN,RANK_CAPTAIN+1)))  //an NPC who is either not a saber user or passed the rank-based probability test
+							|| ((!ent->s.number||G_ControlledByPlayer(groundEnt)) && !Q_irand( 0, 3 )&&cg.renderingThirdPerson&&!cg.zoomMode) )//or a player in third person, 25% of the time
+						&& groundEnt->client->playerTeam != ent->client->playerTeam ) //and not on the same team
+					|| ent->client->NPC_class == CLASS_DESANN )//desann always knocks people down
 				{
 					int knockAnim = BOTH_KNOCKDOWN1;
 					if ( PM_CrouchAnim( groundEnt->client->ps.legsAnim ) )
@@ -2254,7 +2389,7 @@ extern cvar_t	*g_skippingcin;
 							ent->NPC->desiredSpeed = NPC_GetRunSpeed( ent );//ent->NPC->stats.runSpeed;
 						}
 
-						if ( ent->NPC->currentSpeed >= 80 )
+						if ( ent->NPC->currentSpeed >= 80 && !controlledByPlayer )
 						{//At higher speeds, need to slow down close to stuff
 							//Slow down as you approach your goal
 						//	if ( ent->NPC->distToGoal < SLOWDOWN_DIST && client->race != RACE_BORG && !(ent->NPC->aiFlags&NPCAI_NO_SLOWDOWN) )//128
@@ -2441,10 +2576,18 @@ extern cvar_t	*g_skippingcin;
 					client->ps.speed *= 0.45f;
 					break;
 				}
+				if ( g_saberMoveSpeed->value != 1.0f )
+				{
+					client->ps.speed *= g_saberMoveSpeed->value;
+				}
 			}
 			else if ( PM_SpinningSaberAnim( client->ps.legsAnim ) )
 			{
 				client->ps.speed *= 0.5f;
+				if ( g_saberMoveSpeed->value != 1.0f )
+				{
+					client->ps.speed *= g_saberMoveSpeed->value;
+				}
 			}
 			else if ( client->ps.weapon == WP_SABER && ( ucmd->buttons & BUTTON_ATTACK ) )
 			{//if attacking with saber while running, drop your speed
@@ -2457,6 +2600,10 @@ extern cvar_t	*g_skippingcin;
 				case FORCE_LEVEL_3:
 					client->ps.speed *= 0.70f;
 					break;
+				}
+				if ( g_saberMoveSpeed->value != 1.0f )
+				{
+					client->ps.speed *= g_saberMoveSpeed->value;
 				}
 			}
 		}
@@ -2514,7 +2661,7 @@ extern cvar_t	*g_skippingcin;
 
 	G_CheckClampUcmd( ent, ucmd );
 
-	if ( ucmd->buttons&BUTTON_BLOCKING )
+	if ( (ucmd->buttons&BUTTON_BLOCKING) && !g_saberAutoBlocking->integer )
 	{//blocking with saber
 		ent->client->ps.saberBlockingTime = level.time + FRAMETIME;
 	}
@@ -2547,6 +2694,37 @@ extern cvar_t	*g_skippingcin;
 	{
 		cg.overrides.active |= (CG_OVERRIDE_3RD_PERSON_RNG|CG_OVERRIDE_3RD_PERSON_POF|CG_OVERRIDE_3RD_PERSON_VOF);
 		cg.overrides.thirdPersonRange = 240;
+		if ( cg_thirdPersonAutoAlpha.integer )
+		{
+			if ( ent->health > 0 && ent->client->ps.viewangles[PITCH] < 15 && ent->client->ps.viewangles[PITCH] > 0 )
+			{
+				cg.overrides.active |= CG_OVERRIDE_3RD_PERSON_APH;
+				if ( cg.overrides.thirdPersonAlpha > 0.525f )
+				{
+					cg.overrides.thirdPersonAlpha -= 0.025f;
+				}
+				else if ( cg.overrides.thirdPersonAlpha > 0.5f )
+				{
+					cg.overrides.thirdPersonAlpha = 0.5f;
+				}
+			}
+			else if ( cg.overrides.active&CG_OVERRIDE_3RD_PERSON_APH )
+			{
+				if ( cg.overrides.thirdPersonAlpha > cg_thirdPersonAlpha.value )
+				{
+					cg.overrides.active &= ~CG_OVERRIDE_3RD_PERSON_APH;
+				}
+				else if ( cg.overrides.thirdPersonAlpha < cg_thirdPersonAlpha.value-0.1f )
+				{
+					cg.overrides.thirdPersonAlpha += 0.1f;
+				}
+				else if ( cg.overrides.thirdPersonAlpha < cg_thirdPersonAlpha.value )
+				{
+					cg.overrides.thirdPersonAlpha = cg_thirdPersonAlpha.value;
+					cg.overrides.active &= ~CG_OVERRIDE_3RD_PERSON_APH;
+				}
+			}
+		}
 		if ( ent->client->ps.viewangles[PITCH] > 0 )
 		{
 			cg.overrides.thirdPersonPitchOffset = ent->client->ps.viewangles[PITCH]*-0.75;
@@ -2680,36 +2858,38 @@ extern cvar_t	*g_skippingcin;
 			// pressing attack or use is the normal respawn method
 			if ( ucmd->buttons & ( BUTTON_ATTACK ) ) 
 			{
-				if (!cg.missionStatusShow)	// Has Mission Status screen shown yet?
-				{
-					cg.missionStatusShowTime = level.time + 1000;
-					cg.missionStatusShow = 1;
-				}
-				else if (cg.missionStatusShowTime < level.time)
-				{
-					respawn( ent );
-				}
+				respawn( ent );
 //				gi.SendConsoleCommand( va("disconnect;wait;wait;wait;wait;wait;wait;devmap %s\n",level.mapname) );
 			}
 		}
-		if ( ent && !ent->s.number && ent->enemy )
+		if ( ent 
+			&& !ent->s.number 
+			&& ent->enemy 
+			&& ent->enemy != ent 
+			&& ent->enemy->s.number < ENTITYNUM_WORLD 
+			&& ent->enemy->inuse 
+			&& !(cg.overrides.active&CG_OVERRIDE_3RD_PERSON_ANG) )
 		{//keep facing enemy
 			vec3_t deadDir;
+			float deadYaw;
 			VectorSubtract( ent->enemy->currentOrigin, ent->currentOrigin, deadDir );
-			ent->client->ps.stats[STAT_DEAD_YAW] = vectoyaw ( deadDir );
+			deadYaw = AngleNormalize180( vectoyaw ( deadDir ) );
+			if ( deadYaw > ent->client->ps.stats[STAT_DEAD_YAW] + 1 )
+			{
+				ent->client->ps.stats[STAT_DEAD_YAW]++;
+			}
+			else if ( deadYaw < ent->client->ps.stats[STAT_DEAD_YAW] - 1 )
+			{
+				ent->client->ps.stats[STAT_DEAD_YAW]--;
+			}
+			else
+			{
+				ent->client->ps.stats[STAT_DEAD_YAW] = deadYaw;
+			}
 		}
 		return;
 	}
 
-	if ((cg.missionStatusShow) && ((cg.missionStatusDeadTime + 1) < level.time))
-	{
-		if ( ucmd->buttons & ( BUTTON_ATTACK ) ) 
-		{
-//			cg.missionStatusShow = 0;
-//			ScoreBoardReset();
-//			Q3_TaskIDComplete( ent, TID_MISSIONSTATUS );
-		}
-	}
 	// perform once-a-second actions
 	ClientTimerActions( ent, msec );
 
@@ -2736,6 +2916,7 @@ A new command has arrived from the client
 ==================
 */
 extern void PM_CheckForceUseButton( gentity_t *ent, usercmd_t *ucmd  );
+extern qboolean PM_GentCantJump( gentity_t *gent );
 void ClientThink( int clientNum, usercmd_t *ucmd ) {
 	gentity_t *ent;
 	qboolean restore_ucmd = qfalse;
@@ -2743,38 +2924,76 @@ void ClientThink( int clientNum, usercmd_t *ucmd ) {
 
 	ent = g_entities + clientNum;
 
-	if ( ent->client->ps.viewEntity > 0 && ent->client->ps.viewEntity < ENTITYNUM_WORLD )
-	{//you're controlling another NPC
-		if ( ucmd->upmove > 0 )//if ( (ucmd->buttons&BUTTON_BLOCKING) )
-		{//jumping gets you out of it FIXME: check some other button instead... like ESCAPE... so you could even have total control over an NPC?
-			G_ClearViewEntity( ent );
-			ucmd->upmove = 0;//ucmd->buttons = 0;
+	if ( !ent->s.number )
+	{
+		if ( ent->client->ps.viewEntity > 0 && ent->client->ps.viewEntity < ENTITYNUM_WORLD )
+		{//you're controlling another NPC
+			gentity_t *controlled = &g_entities[ent->client->ps.viewEntity];
+			qboolean freed = qfalse;
+			if ( controlled->NPC 
+				&& controlled->NPC->controlledTime
+				&& ent->client->ps.forcePowerLevel[FP_TELEPATHY] > FORCE_LEVEL_3 )
+			{//An NPC I'm controlling with mind trick
+				if ( controlled->NPC->controlledTime < level.time )
+				{//time's up!
+					G_ClearViewEntity( ent );
+					freed = qtrue;
+				}
+			}
+			else if ( controlled->NPC //an NPC
+				&& PM_GentCantJump( controlled ) //that cannot jump
+				&& controlled->NPC->stats.moveType != MT_FLYSWIM ) //and does not use upmove to fly
+			{//these types use jump to get out
+				if ( ucmd->upmove > 0 )
+				{//jumping gets you out of it FIXME: check some other button instead... like ESCAPE... so you could even have total control over an NPC?
+					G_ClearViewEntity( ent );
+					ucmd->upmove = 0;//ucmd->buttons = 0;
+					//stop player from doing anything for a half second after
+					ent->aimDebounceTime = level.time + 500;
+					freed = qtrue;
+				}
+			}
+			else
+			{//others use the blocking key, button3
+				if ( (ucmd->buttons&BUTTON_BLOCKING) )
+				{//jumping gets you out of it FIXME: check some other button instead... like ESCAPE... so you could even have total control over an NPC?
+					G_ClearViewEntity( ent );
+					ucmd->buttons = 0;
+					freed = qtrue;
+				}
+			}
+			if ( !freed )
+			{//still controlling, save off my ucmd and clear it for my actual run through pmove
+				restore_ucmd = qtrue;
+				memcpy( &sav_ucmd, ucmd, sizeof( usercmd_t ) );
+				memset( ucmd, 0, sizeof( usercmd_t ) );
+				//to keep pointing in same dir, need to set ucmd->angles
+				ucmd->angles[PITCH] = ANGLE2SHORT( ent->client->ps.viewangles[PITCH] ) - ent->client->ps.delta_angles[PITCH];
+				ucmd->angles[YAW] = ANGLE2SHORT( ent->client->ps.viewangles[YAW] ) - ent->client->ps.delta_angles[YAW];
+				ucmd->angles[ROLL] = 0;
+			}
+			else
+			{
+				ucmd->angles[PITCH] = ANGLE2SHORT( ent->client->ps.viewangles[PITCH] ) - ent->client->ps.delta_angles[PITCH];
+				ucmd->angles[YAW] = ANGLE2SHORT( ent->client->ps.viewangles[YAW] ) - ent->client->ps.delta_angles[YAW];
+				ucmd->angles[ROLL] = 0;
+			}
 		}
-		else
+		else if ( ent->client->NPC_class == CLASS_ATST )
 		{
-			restore_ucmd = qtrue;
-			memcpy( &sav_ucmd, ucmd, sizeof( usercmd_t ) );
-			memset( ucmd, 0, sizeof( usercmd_t ) );
-			//to keep pointing in same dir, need to set ucmd->angles
-			ucmd->angles[PITCH] = ucmd->angles[ROLL] = 0;
-			ucmd->angles[YAW] = ANGLE2SHORT( ent->client->ps.viewangles[YAW] ) - ent->client->ps.delta_angles[YAW];
+			if ( ucmd->upmove > 0 )
+			{//get out of ATST
+				GEntity_UseFunc( ent->activator, ent, ent );
+				ucmd->upmove = 0;//ucmd->buttons = 0;
+			}
 		}
-	}
-	else if ( ent->client->NPC_class == CLASS_ATST )
-	{
-		if ( ucmd->upmove > 0 )//if ( (ucmd->buttons&BUTTON_BLOCKING) )
-		{//get out of ATST
-			GEntity_UseFunc( ent->activator, ent, ent );
-			ucmd->upmove = 0;//ucmd->buttons = 0;
+
+		if ( (ucmd->buttons&BUTTON_BLOCKING) && !g_saberAutoBlocking->integer )
+		{
+			ucmd->buttons &= ~(BUTTON_ATTACK|BUTTON_ALT_ATTACK);
 		}
+		PM_CheckForceUseButton( ent, ucmd );
 	}
-
-
-	if ( (ucmd->buttons&BUTTON_BLOCKING) )
-	{
-		ucmd->buttons &= ~(BUTTON_ATTACK|BUTTON_ALT_ATTACK);
-	}
-	PM_CheckForceUseButton( ent, ucmd );
 
 	ent->client->usercmd = *ucmd;
 
@@ -2782,10 +3001,15 @@ void ClientThink( int clientNum, usercmd_t *ucmd ) {
 	{
 		ClientThink_real( ent, ucmd );
 	}
-
-	if ( restore_ucmd )
+	// ClientThink_real can end up freeing this ent, need to check
+	if ( restore_ucmd && ent->client )
 	{//restore ucmd for later so NPC you're controlling can refer to them
 		memcpy( &ent->client->usercmd, &sav_ucmd, sizeof( usercmd_t ) );
+	}
+
+	if ( ent->s.number )
+	{//NPCs drown, burn from lava, etc, also
+		P_WorldEffects( ent );
 	}
 }
 

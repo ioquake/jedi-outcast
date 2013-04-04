@@ -611,3 +611,22 @@ int CM_WriteAreaBits (byte *buffer, int area)
 	return bytes;
 }
 
+void CM_SnapPVS(vec3_t origin,byte *buffer)
+{
+	int		clientarea;
+	int		leafnum;
+	int		i;
+	
+	leafnum = CM_PointLeafnum (origin);
+	clientarea = CM_LeafArea (leafnum);
+
+	// calculate the visible areas
+	memset(buffer,0,MAX_MAP_AREA_BYTES);
+	CM_WriteAreaBits(buffer,clientarea);
+	for ( i = 0 ; i < MAX_MAP_AREA_BYTES/4 ; i++ ) {
+		((int *)buffer)[i] = ((int *)buffer)[i] ^ -1;
+	}
+
+}
+
+

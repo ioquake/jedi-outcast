@@ -59,7 +59,7 @@ extern float cg_zoomFov;	//from cg_view.cpp
 
 void CG_ToggleBinoculars( void )
 {
-	if ( in_camera)
+	if ( in_camera || !cg.snap)
 	{
 		return;
 	}

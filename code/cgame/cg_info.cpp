@@ -328,21 +328,25 @@ static void CG_LoadScreen_PersonalInfo(void)
 
 static void CG_LoadBar(void)
 {
-	int			x,y,i,xLength,height,pad;
-
-	y = 442;
-	pad = 5;
-	x = 202 + pad;
-	height = 12;
-	xLength = 21;
+	const int numticks = 9, tickwidth = 40, tickheight = 8;
+	const int tickpadx = 20, tickpady = 12;
+	const int capwidth = 8;
+	const int barwidth = numticks*tickwidth+tickpadx*2+capwidth*2, barleft = ((640-barwidth)/2);
+	const int barheight = tickheight + tickpady*2, bartop = 480-barheight;
+	const int capleft = barleft+tickpadx, tickleft = capleft+capwidth, ticktop = bartop+tickpady;
 
 	cgi_R_SetColor( colorTable[CT_WHITE]);
-	CG_DrawPic(166,428,640-(164*2), 32, cgs.media.levelLoad);
+	// Draw background
+	CG_DrawPic(barleft, bartop, barwidth, barheight, cgs.media.levelLoad);
 
-	for (i=0;i < cg.loadLCARSStage;i++)
-	{
-		CG_DrawPic(x + (i*pad) + (i*xLength),y, 32, 8, cgs.media.loadTick);
-	}	
+	// Draw left cap (backwards)
+	CG_DrawPic(tickleft, ticktop, -capwidth, tickheight, cgs.media.loadTickCap);
+
+	// Draw bar
+	CG_DrawPic(tickleft, ticktop, tickwidth*cg.loadLCARSStage, tickheight, cgs.media.loadTick);
+
+	// Draw right cap
+	CG_DrawPic(tickleft+tickwidth*cg.loadLCARSStage, ticktop, capwidth, tickheight, cgs.media.loadTickCap);
 }
 
 /*
@@ -376,12 +380,13 @@ void CG_DrawInformation( void ) {
 		CG_DrawPic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, levelshot );
 	}
 
-	if ( !strcmp(s,"kejim_post") )//special case for first map!
+	if ( g_eSavedGameJustLoaded != eFULL && !strcmp(s,"kejim_post") )//special case for first map!
 	{
 		char	text[1024]={0};
 		cgi_SP_GetStringTextString( "INGAME_ALONGTIME", text, sizeof(text) );
-		int w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontMedium, 1.5f);
-		cgi_R_Font_DrawString((320)-(w/2), 140, text,  colorTable[CT_ICON_BLUE], cgs.media.qhFontMedium, -1, 1.5f);
+
+		int w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontMedium, 1.0f);
+		cgi_R_Font_DrawString((320)-(w/2), 140, text,  colorTable[CT_ICON_BLUE], cgs.media.qhFontMedium, -1, 1.0f);
 	}
 	else
 	if (cg_missionstatusscreen.integer )

@@ -9,6 +9,9 @@
 //Global navigator
 extern CNavigator	navigator;
 extern	cvar_t		*d_altRoutes;
+extern	cvar_t		*d_patched;
+extern vec3_t playerMins;
+extern vec3_t playerMaxs;
 
 qboolean NAV_CheckAhead( gentity_t *self, vec3_t end, trace_t &trace, int clipmask );
 qboolean NAV_TestForBlocked( gentity_t *self, gentity_t *goal, gentity_t *blocker, float distance, int &flags );
@@ -87,7 +90,12 @@ void NAVNEW_PushBlocker( gentity_t *self, gentity_t *blocker, vec3_t right, qboo
 		return;
 	}
 
-	if ( !VectorCompare( blocker->s.pushVec, vec3_origin ) )
+	if ( !blocker->s.number )
+	{//never push the player
+		return;
+	}
+
+	if ( !blocker->client || !VectorCompare( blocker->client->pushVec, vec3_origin ) )
 	{//someone else is pushing him, wait until they give up?
 		return;
 	}
@@ -114,7 +122,8 @@ void NAVNEW_PushBlocker( gentity_t *self, gentity_t *blocker, vec3_t right, qboo
 	
 	if ( leftSucc >= 1.0f )
 	{//it's clear, shove him that way
-		VectorScale( right, -moveamt, blocker->s.pushVec );
+		VectorScale( right, -moveamt, blocker->client->pushVec );
+		blocker->client->pushVecTime = level.time + 2000;
 	}
 	else
 	{
@@ -131,21 +140,28 @@ void NAVNEW_PushBlocker( gentity_t *self, gentity_t *blocker, vec3_t right, qboo
 		
 		if ( leftSucc == 0.0f && rightSucc == 0.0f )
 		{//both sides failed
+			if ( d_patched->integer )
+			{//use patch-style navigation
+				blocker->client->pushVecTime = 0;
+			}
 			return;
 		}
 
 		if ( rightSucc >= 1.0f )
 		{//it's clear, shove him that way
-			VectorScale( right, moveamt, blocker->s.pushVec );
+			VectorScale( right, moveamt, blocker->client->pushVec );
+			blocker->client->pushVecTime = level.time + 2000;
 		}
 		//if neither are enough, we probably can't get around him, but keep trying
 		else if ( leftSucc >= rightSucc )
 		{//favor the left, all things being equal
-			VectorScale( right, -moveamt, blocker->s.pushVec );
+			VectorScale( right, -moveamt, blocker->client->pushVec );
+			blocker->client->pushVecTime = level.time + 2000;
 		}
 		else
 		{
-			VectorScale( right, moveamt, blocker->s.pushVec );
+			VectorScale( right, moveamt, blocker->client->pushVec );
+			blocker->client->pushVecTime = level.time + 2000;
 		}
 	}
 
@@ -453,6 +469,10 @@ qboolean NAVNEW_AvoidCollision( gentity_t *self, gentity_t *goal, navInfo_t &inf
 		{
 			if ( self->NPC->consecutiveBlockedMoves > blockedMovesLimit  )
 			{
+				if ( d_patched->integer )
+				{//use patch-style navigation
+					self->NPC->consecutiveBlockedMoves++;
+				}
 				NPC_SetBlocked( self, info.blocker );
 				return qfalse;
 			}
@@ -497,6 +517,55 @@ qboolean NAVNEW_AvoidCollision( gentity_t *self, gentity_t *goal, navInfo_t &inf
 	return qtrue;
 }
 
+qboolean NAVNEW_TestNodeConnectionBlocked( int wp1, int wp2, gentity_t *ignoreEnt, int goalEntNum, qboolean checkWorld, qboolean checkEnts )
+{//see if the direct path between 2 nodes is blocked by architecture or an ent
+	vec3_t	pos1, pos2, mins, maxs;
+	trace_t	trace;
+	int		clipmask = MASK_NPCSOLID|CONTENTS_BOTCLIP;
+	int ignoreEntNum;
+
+	if ( !checkWorld && !checkEnts )
+	{//duh, nothing to trace against
+		return qfalse;
+	}
+	navigator.GetNodePosition( wp1, pos1 );
+	navigator.GetNodePosition( wp2, pos2 );
+
+	if ( !checkWorld )
+	{
+		clipmask &= ~(CONTENTS_SOLID|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP);
+	}
+	if ( !checkEnts )
+	{
+		clipmask &= ~CONTENTS_BODY;
+	}
+	if ( ignoreEnt )
+	{
+		VectorCopy( ignoreEnt->mins, mins );
+		VectorCopy( ignoreEnt->maxs, maxs );
+		ignoreEntNum = ignoreEnt->s.number;
+	}
+	else
+	{
+		VectorCopy( playerMins, mins );
+		VectorCopy( playerMaxs, mins );
+		ignoreEntNum = ENTITYNUM_NONE;
+	}
+	mins[2] += STEPSIZE;
+	//don't let box get inverted
+	if ( mins[2] > maxs[2] )
+	{	
+		mins[2] = maxs[2];
+	}
+
+	gi.trace( &trace, pos1, mins, maxs, pos2, ignoreEntNum, clipmask );
+	if ( trace.fraction >= 1.0f || trace.entityNum == goalEntNum )
+	{//clear or hit goal
+		return qfalse;
+	}
+	//hit something we weren't supposed to
+	return qtrue;
+}
 /*
 -------------------------
 NAVNEW_MoveToGoal
@@ -580,6 +649,7 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 		}
 		*/
 		navigator.GetNodePosition( bestNode, origin );
+		/*
 		if ( !goalWPFailed )
 		{//we haven't already tried to go straight to goal or goal's wp
 			if ( bestNode == self->NPC->goalEntity->waypoint )
@@ -595,6 +665,7 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 				}
 			}
 		}
+		*/
 		if ( !inGoalWP )
 		{//not heading straight for goal
 			if ( bestNode == self->waypoint )
@@ -646,6 +717,15 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 			NPC_ClearBlocked( self );
 			//Take the dir
 			memcpy( &info, &tempInfo, sizeof( info ) );
+			if ( self->s.weapon == WP_SABER )
+			{//jedi
+				if ( info.direction[2] * info.distance > 64 )
+				{
+					self->NPC->aiFlags |= NPCAI_BLOCKED;
+					VectorCopy( origin, NPCInfo->blockedDest );
+					goto failed;
+				}
+			}
 		}
 		else
 		{//blocked by ent!
@@ -675,7 +755,15 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 			{//we headed toward our next waypoint (instead of our waypoint) and failed
 				if ( d_altRoutes->integer )
 				{//mark this edge failed and try our waypoint
-					navigator.AddFailedEdge( self->s.number, self->waypoint, bestNode );
+					//NOTE: don't assume there is something blocking the direct path
+					//			between my waypoint and the bestNode... I could be off
+					//			that path because of collision avoidance...
+					if ( d_patched->integer &&//use patch-style navigation
+ 						( !navigator.NodesAreNeighbors( self->waypoint, bestNode )
+						|| NAVNEW_TestNodeConnectionBlocked( self->waypoint, bestNode, self, self->NPC->goalEntity->s.number, qfalse, qtrue ) ) )
+					{//the direct path between these 2 nodes is blocked by an ent
+						navigator.AddFailedEdge( self->s.number, self->waypoint, bestNode );
+					}
 					bestNode = self->waypoint;
 				}
 				else

@@ -624,6 +624,48 @@ void UI_DrawProportionalString( int x, int y, const char* str, int style, vec4_t
 	CG_Text_Paint(x, y, 1.0, color, str, 0, 0, iStyle, iMenuFont);
 }
 
+void UI_DrawScaledProportionalString( int x, int y, const char* str, int style, vec4_t color, float scale) 
+{
+	// having all these different style defines (1 for UI, one for CG, and now one for the re->font stuff) 
+	//	is dumb, but for now...
+	//
+	int iStyle = 0;
+
+	switch (style & (UI_LEFT|UI_CENTER|UI_RIGHT))
+	{
+		default:
+		case UI_LEFT:
+		{
+			// nada...
+		}
+		break;
+
+		case UI_CENTER:
+		{
+			x -= CG_Text_Width(str, scale, FONT_MEDIUM) / 2;
+		}
+		break;
+
+		case UI_RIGHT:
+		{
+			x -= CG_Text_Width(str, scale, FONT_MEDIUM) / 2;
+		}
+		break;
+	}
+
+	if (style & UI_DROPSHADOW)
+	{
+		iStyle = ITEM_TEXTSTYLE_SHADOWED;
+	}
+	else
+	if ( style & (UI_BLINK|UI_PULSE) )
+	{
+		iStyle = ITEM_TEXTSTYLE_BLINK;
+	}
+
+	CG_Text_Paint(x, y, scale, color, str, 0, 0, iStyle, FONT_MEDIUM);
+}
+
 
 
 

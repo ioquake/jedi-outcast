@@ -310,9 +310,10 @@ void CG_MiscModelExplosion( vec3_t mins, vec3_t maxs, int size, material_t chunk
 		ct = 8;
 		break;
 	case MAT_ROPE:
-		ct = 1;
+		ct = 20;
 		effect = "chunks/ropebreak";
 		break;
+	case MAT_WHITE_METAL: //not sure what this crap is really supposed to be..
 	case MAT_DRK_STONE:
 	case MAT_LT_STONE:
 	case MAT_GREY_STONE:
@@ -335,7 +336,7 @@ void CG_MiscModelExplosion( vec3_t mins, vec3_t maxs, int size, material_t chunk
 
 	ct += 7 * size;
 
-	// FIXME: real precache
+	// FIXME: real precache .. VERify that these need to be here...don't think they would because the effects should be registered in g_breakable
 	theFxScheduler.RegisterEffect( effect );
 
 	if ( effect2 )
@@ -412,6 +413,7 @@ void CG_Chunks( int owner, vec3_t origin, const vec3_t normal, const vec3_t mins
 	case MAT_DRK_STONE:
 	case MAT_LT_STONE:
 	case MAT_GREY_STONE:
+	case MAT_WHITE_METAL:  // not quite sure what this stuff is supposed to be...it's for Stu
 		cgi_S_StartSound( NULL, owner, CHAN_BODY, cgs.media.rockBreakSound );
 		bounce = LEBS_ROCK;
 		speedMod = 0.5f; // rock blows up less
@@ -420,11 +422,13 @@ void CG_Chunks( int owner, vec3_t origin, const vec3_t normal, const vec3_t mins
 		cgi_S_StartSound( NULL, owner, CHAN_BODY, cgs.media.glassChunkSound ); // FIXME: should probably have a custom sound
 		bounce = LEBS_METAL;
 		break;
+	case MAT_CRATE1:
+	case MAT_CRATE2:
+		cgi_S_StartSound( NULL, owner, CHAN_BODY, cgs.media.crateBreakSound[Q_irand(0,1)] );
+		break;
 	case MAT_METAL:
 	case MAT_METAL2:
 	case MAT_METAL3:
-	case MAT_CRATE1:
-	case MAT_CRATE2:
 	case MAT_ELEC_METAL:// FIXME: maybe have its own sound?
 		cgi_S_StartSound( NULL, owner, CHAN_BODY, cgs.media.chunkSound );
 		bounce = LEBS_METAL;
@@ -470,6 +474,9 @@ void CG_Chunks( int owner, vec3_t origin, const vec3_t normal, const vec3_t mins
 				break;
 			case MAT_DRK_STONE://brown
 				chunkModel = cgs.media.chunkModels[CHUNK_ROCK3][Q_irand(0, 3)];
+				break;
+			case MAT_WHITE_METAL:
+				chunkModel = cgs.media.chunkModels[CHUNK_WHITE_METAL][Q_irand(0, 3)];
 				break;
 			case MAT_CRATE1://yellow multi-colored crate chunks
 				chunkModel = cgs.media.chunkModels[CHUNK_CRATE1][Q_irand(0, 3)];

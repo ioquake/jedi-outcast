@@ -15,6 +15,7 @@
 #define MIN_DISTANCE		24
 #define MIN_DISTANCE_SQR	( MIN_DISTANCE * MIN_DISTANCE )
 
+extern gitem_t	*FindItemForAmmo( ammo_t ammo );
 
 //Local state enums
 enum
@@ -29,13 +30,20 @@ gentity_t *CreateMissile( vec3_t org, vec3_t dir, float vel, int life, gentity_t
 
 void NPC_Mark2_Precache( void )
 {
-	G_EffectIndex( "small_chunks" );
+	G_SoundIndex( "sound/chars/mark2/misc/mark2_explo" );// blows up on death
+	G_SoundIndex( "sound/chars/mark2/misc/mark2_pain" );
+	G_SoundIndex( "sound/chars/mark2/misc/mark2_fire" );
+	G_SoundIndex( "sound/chars/mark2/misc/mark2_move_lp" );
+
 	G_EffectIndex( "droidexplosion1" );
-	G_EffectIndex( "mouseexplosion1" );
+	G_EffectIndex( "env/med_explode2" );
 	G_EffectIndex( "blaster/smoke_bolton" );
 	G_EffectIndex( "bryar/muzzle_flash" );
-	G_SoundIndex( "sound/chars/mark1/misc/shoot1.wav" );
 
+	RegisterItem( FindItemForWeapon( WP_BRYAR_PISTOL ));
+	RegisterItem( FindItemForAmmo( 	AMMO_METAL_BOLTS));
+	RegisterItem( FindItemForAmmo( AMMO_POWERCELL ));
+	RegisterItem( FindItemForAmmo( AMMO_BLASTER ));
 }
 
 /*
@@ -43,10 +51,24 @@ void NPC_Mark2_Precache( void )
 NPC_Mark2_Part_Explode
 -------------------------
 */
-void NPC_Mark2_Part_Explode(gentity_t *self,int bolt)
+void NPC_Mark2_Part_Explode( gentity_t *self, int bolt )
 {
-	G_PlayEffect( "small_chunks", self->playerModel, bolt, self->s.number);
-	G_PlayEffect( "mouseexplosion1", self->playerModel, bolt, self->s.number);
+	if ( bolt >=0 )
+	{
+		mdxaBone_t	boltMatrix;
+		vec3_t		org, dir;
+
+		gi.G2API_GetBoltMatrix( self->ghoul2, self->playerModel, 
+					bolt,
+					&boltMatrix, self->currentAngles, self->currentOrigin, (cg.time?cg.time:level.time),
+					NULL, self->s.modelScale );
+
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, org );
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, dir );
+
+		G_PlayEffect( "env/med_explode2", org, dir );
+	}
+
 	G_PlayEffect( "blaster/smoke_bolton", self->playerModel, bolt, self->s.number);
 
 	self->count++;	// Count of pods blown off
@@ -80,6 +102,8 @@ void NPC_Mark2_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, ve
 			}
 		}
 	}
+
+	G_Sound( self, G_SoundIndex( "sound/chars/mark2/misc/mark2_pain" ));
 
 	// If any pods were blown off, kill him
 	if (self->count > 0)
@@ -141,7 +165,7 @@ void Mark2_FireBlaster(qboolean advance)
 
 	G_PlayEffect( "bryar/muzzle_flash", muzzle1, forward );
 
-	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/shoot1.wav"));
+	G_Sound( NPC, G_SoundIndex("sound/chars/mark2/misc/mark2_fire"));
 
 	missile = CreateMissile( muzzle1, forward, 1600, 10000, NPC );
 

@@ -101,6 +101,7 @@ static void R_SurfaceSpriteFrameUpdate(void)
 		curWindSpeed = r_windSpeed->value;
 		nextGustTime = 0;
 		gustLeft = 0;
+		curWindGrassDir[0]=curWindGrassDir[1]=curWindGrassDir[2]=0.0f;
 	}
 
 	// Reset the last entity drawn, since this is a new frame.

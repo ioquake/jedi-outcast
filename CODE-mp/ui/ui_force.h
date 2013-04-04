@@ -10,15 +10,15 @@ extern int uiForceAvailable;
 extern qboolean gTouchedForce;
 extern int uiForcePowersRank[NUM_FORCE_POWERS];
 extern int uiForcePowerDarkLight[NUM_FORCE_POWERS];
-extern int uiForcePowerCost[NUM_FORCE_POWERS][NUM_FORCE_POWER_LEVELS];
 extern int uiSaberColorShaders[NUM_SABER_COLORS];
 // Dots above or equal to a given rank carry a certain color.
-extern vmCvar_t	ui_freeSaber;
+extern vmCvar_t	ui_freeSaber, ui_forcePowerDisable;
 
 void UI_InitForceShaders(void);
+void UI_ReadLegalForce(void);
 void UI_DrawTotalForceStars(rectDef_t *rect, float scale, vec4_t color, int textStyle);
 void UI_DrawForceStars(rectDef_t *rect, float scale, vec4_t color, int textStyle, int findex, int val, int min, int max) ;
-void UI_UpdateClientForcePowers();
+void UI_UpdateClientForcePowers(const char *teamArg);
 void UI_SaveForceTemplate();
 void UI_UpdateForcePowers();
 qboolean UI_SkinColor_HandleKey(int flags, float *special, int key, int num, int min, int max, int type);

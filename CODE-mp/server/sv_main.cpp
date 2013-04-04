@@ -30,6 +30,8 @@ cvar_t	*sv_pure;
 cvar_t	*sv_floodProtect;
 cvar_t	*sv_allowAnonymous;
 
+cvar_t	*sv_debugserver;
+
 /*
 =============================================================================
 

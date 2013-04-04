@@ -899,8 +899,11 @@ void UnLockDoors(gentity_t *const ent)
 	//go through and unlock the door and all the slaves
 	gentity_t	*slave = ent;
 	do 
-	{
-		slave->targetname = NULL;//not usable ever again
+	{	// want to allow locked toggle doors, so keep the targetname
+		if( !(slave->spawnflags & MOVER_TOGGLE) )
+		{
+			slave->targetname = NULL;//not usable ever again
+		}
 		slave->spawnflags &= ~MOVER_LOCKED;
 		slave->s.frame = 1;//second stage of anim
 		slave = slave->teamchain;
@@ -962,7 +965,7 @@ void Use_BinaryMover( gentity_t *ent, gentity_t *other, gentity_t *activator )
 			key = INV_GoodieKeyCheck( activator );
 			if (key)
 			{//activator has a goodie key, remove it
-				activator->client->ps.inventory[key] = 0;		
+				activator->client->ps.inventory[key]--;		
 				G_Sound( activator, G_SoundIndex( "sound/movers/goodie_pass.wav" ) );
 				// once the goodie mover has been used, it no longer requires a goodie key
 				ent->spawnflags &= ~MOVER_GOODIE;
@@ -971,7 +974,7 @@ void Use_BinaryMover( gentity_t *ent, gentity_t *other, gentity_t *activator )
 			{	//don't have a goodie key
 				G_Sound( activator, G_SoundIndex( "sound/movers/goodie_fail.wav" ) );
 				ent->fly_sound_debounce_time = level.time + 5000;
-				text = "cp \"You need a key to open\"";
+				text = "cp @INGAME_NEED_KEY_TO_OPEN";
 				//FIXME: temp message, only on certain difficulties?, graphic instead of text?
 				gi.SendServerCommand( NULL, text );
 				return;
@@ -1121,16 +1124,19 @@ void Blocked_Door( gentity_t *ent, gentity_t *other ) {
 	// remove anything other than a client -- no longer the case
 
 	// don't remove security keys or goodie keys
-	if ( (other->s.eType == ET_ITEM) && (other->item->giTag >= INV_GOODIE_KEY1 && other->item->giTag <= INV_SECURITY_KEY5) )
+	if ( (other->s.eType == ET_ITEM) && (other->item->giTag >= INV_GOODIE_KEY && other->item->giTag <= INV_SECURITY_KEY) )
 	{
 		// should we be doing anything special if a key blocks it... move it somehow..?
 	}
 	// if your not a client, or your a dead client remove yourself...
 	else if ( other->s.number && (!other->client || (other->client && other->health <= 0 && other->contents == CONTENTS_CORPSE && !other->message)) )
 	{
-		// if an item or weapon can we do a little explosion..?
-		G_FreeEntity( other );
-		return;
+		if ( !other->taskManager || !other->taskManager->IsRunning() )
+		{
+			// if an item or weapon can we do a little explosion..?
+			G_FreeEntity( other );
+			return;
+		}
 	}
 
 	if ( ent->damage ) {
@@ -1740,6 +1746,13 @@ The wait time at a corner has completed, so start moving again
 ===============
 */
 void Think_BeginMoving( gentity_t *ent ) {
+
+	if ( ent->spawnflags & 2048 ) 
+	{
+		// this tie fighter hack is done for doom_detention, where the shooting gallery takes place. let them draw again when they start moving
+		ent->s.eFlags &= ~EF_NODRAW;
+	}
+
 	ent->s.pos.trTime = level.time;
 	if ( ent->alt_fire )
 	{
@@ -1831,12 +1844,23 @@ void Reached_Train( gentity_t *ent ) {
 		}
 	}
 
+	// This is for the tie fighter shooting gallery on doom detention, you could see them waiting under the bay, but the architecture couldn't easily be changed..
+	if (( next->spawnflags & 2 ))
+	{
+		ent->s.eFlags |= EF_NODRAW; // make us invisible until we start moving again
+	}
+
 	// if there is a "wait" value on the target, don't start moving yet
 	if ( next->wait ) 
 	{
 		ent->nextthink = level.time + next->wait * 1000;
 		ent->e_ThinkFunc = thinkF_Think_BeginMoving;
 		ent->s.pos.trType = TR_STATIONARY;
+	}
+	else if (!( next->spawnflags & 2 ))
+	{
+		// we aren't waiting to start, so let us draw right away
+		ent->s.eFlags &= ~EF_NODRAW;
 	}
 }
 
@@ -1859,7 +1883,7 @@ void Think_SetupTrainTargets( gentity_t *ent ) {
 	if ( !ent->nextTrain ) {
 		gi.Printf( "func_train at %s with an unfound target\n",
 			vtos(ent->absmin) );
-		//Free me?
+		//Free me?`
 		return;
 	}
 
@@ -1918,9 +1942,11 @@ void Think_SetupTrainTargets( gentity_t *ent ) {
 
 
 
-/*QUAKED path_corner (.5 .3 0) (-8 -8 -8) (8 8 8) TURN_TRAIN
+/*QUAKED path_corner (.5 .3 0) (-8 -8 -8) (8 8 8) TURN_TRAIN INVISIBLE
 
 TURN_TRAIN	func_train moving on this path will turn to face the next path_corner within 2 seconds
+INVISIBLE - train will become invisible ( but still solid ) when it reaches this path_corner.  
+		It will become visible again at the next path_corner that does not have this option checked
 
 Train path corners.
 Target: next path corner and other targets to fire
@@ -2147,9 +2173,25 @@ void func_rotating_use( gentity_t *self, gentity_t *other, gentity_t *activator 
 	if(	self->s.apos.trType == TR_LINEAR )
 	{
 		self->s.apos.trType = TR_STATIONARY;
+		// stop the sound if it stops moving
+		self->s.loopSound = 0;
+		// play stop sound too?
+		if ( VALIDSTRING( self->soundSet ) == true )
+		{
+			G_AddEvent( self, EV_BMODEL_SOUND, CAS_GetBModelSound( self->soundSet, BMS_END ));
+		}
 	}
 	else
 	{
+		if ( VALIDSTRING( self->soundSet ) == true )
+		{
+			G_AddEvent( self, EV_BMODEL_SOUND, CAS_GetBModelSound( self->soundSet, BMS_START ));
+			self->s.loopSound = CAS_GetBModelSound( self->soundSet, BMS_MID );
+			if ( self->s.loopSound < 0 )
+			{
+				self->s.loopSound = 0;
+			}
+		}
 		self->s.apos.trType = TR_LINEAR;
 	}
 }
@@ -2452,7 +2494,10 @@ void SP_func_wall( gentity_t *ent )
 
 void security_panel_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 {
-
+	if ( !activator )
+	{
+		return;
+	}
 	if ( INV_SecurityKeyCheck( activator, self->message ) )
 	{//congrats!
 		gi.SendServerCommand( NULL, "cp @INGAME_SECURITY_KEY_UNLOCKEDDOOR" );
@@ -2473,7 +2518,7 @@ void security_panel_use( gentity_t *self, gentity_t *other, gentity_t *activator
 	}
 	else
 	{//failure sound/display
-		if ( self->message )
+		if ( activator->message )
 		{//have a key, just the wrong one
 			gi.SendServerCommand( NULL, "cp @INGAME_INCORRECT_KEY" );
 		}

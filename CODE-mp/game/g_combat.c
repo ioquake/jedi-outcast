@@ -8,8 +8,6 @@
 void BotDamageNotification(gclient_t *bot, gentity_t *attacker);
 //end rww
 
-extern int protectHitSound;
-
 void ThrowSaberToAttacker(gentity_t *self, gentity_t *attacker);
 
 void ObjectDie (gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath )
@@ -738,6 +736,12 @@ void GibEntity( gentity_t *self, int killer ) {
 	self->r.contents = 0;
 }
 
+void BodyRid(gentity_t *ent)
+{
+	trap_UnlinkEntity( ent );
+	ent->physicsObject = qfalse;
+}
+
 /*
 ==================
 body_die
@@ -745,16 +749,49 @@ body_die
 */
 void body_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath ) {
 	// NOTENOTE No gibbing right now, this is star wars.
-	if(1)		//	if ( self->health > GIB_HEALTH )
+	qboolean doDisint = qfalse;
+
+	if (self->health < (GIB_HEALTH+1))
+	{
+		self->health = GIB_HEALTH+1;
+
+		if (self->client && (level.time - self->client->respawnTime) < 2000)
+		{
+			doDisint = qfalse;
+		}
+		else
+		{
+			doDisint = qtrue;
+		}
+	}
+
+	if (self->client && (self->client->ps.eFlags & EF_DISINTEGRATION))
 	{
 		return;
 	}
-	if ( !g_blood.integer ) {
-		self->health = GIB_HEALTH+1;
+	else if (self->s.eFlags & EF_DISINTEGRATION)
+	{
 		return;
 	}
 
-	GibEntity( self, 0 );
+	if (doDisint)
+	{
+		if (self->client)
+		{
+			self->client->ps.eFlags |= EF_DISINTEGRATION;
+			VectorCopy(self->client->ps.origin, self->client->ps.lastHitLoc);
+		}
+		else
+		{
+			self->s.eFlags |= EF_DISINTEGRATION;
+			VectorCopy(self->r.currentOrigin, self->s.origin2);
+
+			//since it's the corpse entity, tell it to "remove" itself
+			self->think = BodyRid;
+			self->nextthink = level.time + 1000;
+		}
+		return;
+	}
 }
 
 
@@ -1168,6 +1205,26 @@ static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, 
 
 void G_CheckForDismemberment(gentity_t *ent, vec3_t point, int damage, int deathAnim);
 
+gentity_t *G_GetJediMaster(void)
+{
+	int i = 0;
+	gentity_t *ent;
+
+	while (i < MAX_CLIENTS)
+	{
+		ent = &g_entities[i];
+
+		if (ent && ent->inuse && ent->client && ent->client->ps.isJediMaster)
+		{
+			return ent;
+		}
+
+		i++;
+	}
+
+	return NULL;
+}
+
 /*
 ==================
 player_die
@@ -1276,7 +1333,33 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 		attacker->client->lastkilled_client = self->s.number;
 
 		if ( attacker == self || OnSameTeam (self, attacker ) ) {
-			AddScore( attacker, self->r.currentOrigin, -1 );
+			if (g_gametype.integer == GT_TOURNAMENT)
+			{ //in duel, if you kill yourself, the person you are dueling against gets a kill for it
+				int otherClNum = -1;
+				if (level.sortedClients[0] == self->s.number)
+				{
+					otherClNum = level.sortedClients[1];
+				}
+				else if (level.sortedClients[1] == self->s.number)
+				{
+					otherClNum = level.sortedClients[0];
+				}
+
+				if (otherClNum >= 0 && otherClNum < MAX_CLIENTS &&
+					g_entities[otherClNum].inuse && g_entities[otherClNum].client &&
+					otherClNum != attacker->s.number)
+				{
+					AddScore( &g_entities[otherClNum], self->r.currentOrigin, 1 );
+				}
+				else
+				{
+					AddScore( attacker, self->r.currentOrigin, -1 );
+				}
+			}
+			else
+			{
+				AddScore( attacker, self->r.currentOrigin, -1 );
+			}
 			if (g_gametype.integer == GT_JEDIMASTER)
 			{
 				if (self->client && self->client->ps.isJediMaster)
@@ -1299,6 +1382,15 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 					{
 						ThrowSaberToAttacker(self, attacker);
 						self->client->ps.isJediMaster = qfalse;
+					}
+				}
+				else
+				{
+					gentity_t *jmEnt = G_GetJediMaster();
+
+					if (jmEnt && jmEnt->client)
+					{
+						AddScore( jmEnt, self->r.currentOrigin, 1 );
 					}
 				}
 			}
@@ -1343,7 +1435,34 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 			ThrowSaberToAttacker(self, NULL);
 			self->client->ps.isJediMaster = qfalse;
 		}
-		AddScore( self, self->r.currentOrigin, -1 );
+
+		if (g_gametype.integer == GT_TOURNAMENT)
+		{ //in duel, if you kill yourself, the person you are dueling against gets a kill for it
+			int otherClNum = -1;
+			if (level.sortedClients[0] == self->s.number)
+			{
+				otherClNum = level.sortedClients[1];
+			}
+			else if (level.sortedClients[1] == self->s.number)
+			{
+				otherClNum = level.sortedClients[0];
+			}
+
+			if (otherClNum >= 0 && otherClNum < MAX_CLIENTS &&
+				g_entities[otherClNum].inuse && g_entities[otherClNum].client &&
+				otherClNum != self->s.number)
+			{
+				AddScore( &g_entities[otherClNum], self->r.currentOrigin, 1 );
+			}
+			else
+			{
+				AddScore( self, self->r.currentOrigin, -1 );
+			}
+		}
+		else
+		{
+			AddScore( self, self->r.currentOrigin, -1 );
+		}
 	}
 
 	// Add team bonuses
@@ -1494,8 +1613,8 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 		// the body can still be gibbed
 		self->die = body_die;
 
-		//rww - even though we have no gibbing, if you shoot the body it will disappear unless it doesn't take damage
-		self->takedamage = qfalse;
+		//It won't gib, it will disintegrate (because this is Star Wars).
+		self->takedamage = qtrue;
 
 		// globally cycle through the different death animations
 		i = ( i + 1 ) % 3;
@@ -2004,6 +2123,26 @@ void G_CheckForDismemberment(gentity_t *ent, vec3_t point, int damage, int death
 	G_Dismember(ent, boltPoint, hitLocUse, 90, 0, deathAnim);
 }
 
+qboolean G_ThereIsAMaster(void)
+{
+	int i = 0;
+	gentity_t *ent;
+
+	while (i < MAX_CLIENTS)
+	{
+		ent = &g_entities[i];
+
+		if (ent && ent->client && ent->client->ps.isJediMaster)
+		{
+			return qtrue;
+		}
+
+		i++;
+	}
+
+	return qfalse;
+}
+
 /*
 ============
 T_Damage
@@ -2059,10 +2198,18 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 		{
 			return;
 		}
+		else if (attacker && attacker->client && mod != MOD_SABER)
+		{
+			return;
+		}
 	}
 	if (attacker && attacker->client && attacker->client->ps.duelInProgress)
 	{
 		if (targ && targ->client && targ->s.number != attacker->client->ps.duelIndex)
+		{
+			return;
+		}
+		else if (targ && targ->client && mod != MOD_SABER)
 		{
 			return;
 		}
@@ -2141,6 +2288,12 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 		VectorScale (dir, g_knockback.value * (float)knockback / mass, kvel);
 		VectorAdd (targ->client->ps.velocity, kvel, targ->client->ps.velocity);
 
+		if (attacker && attacker->client && attacker != targ)
+		{
+			targ->client->ps.otherKiller = attacker->s.number;
+			targ->client->ps.otherKillerTime = level.time + 5000;
+			targ->client->ps.otherKillerDebounceTime = level.time + 100;
+		}
 		// set the timer so that the other client can't cancel
 		// out the movement immediately
 		if ( !targ->client->ps.pm_time ) {
@@ -2167,6 +2320,14 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 			if ( !g_friendlyFire.integer ) {
 				return;
 			}
+		}
+
+		if (g_gametype.integer == GT_JEDIMASTER && !g_friendlyFire.integer &&
+			targ && targ->client && attacker && attacker->client &&
+			targ != attacker && !targ->client->ps.isJediMaster && !attacker->client->ps.isJediMaster &&
+			G_ThereIsAMaster())
+		{
+			return;
 		}
 
 		if (targ->client && targ->s.shouldtarget && targ->s.teamowner &&
@@ -2321,12 +2482,13 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 		{
 			int maxtake = take;
 
-			G_Sound(targ, CHAN_AUTO, protectHitSound);
+			//G_Sound(targ, CHAN_AUTO, protectHitSound);
+			G_PreDefSound(targ->client->ps.origin, PDSOUND_PROTECTHIT);
 
 			if (targ->client->ps.fd.forcePowerLevel[FP_PROTECT] == FORCE_LEVEL_1)
 			{
 				famt = 1;
-				hamt = 0.5;
+				hamt = 0.40;
 
 				if (maxtake > 100)
 				{
@@ -2336,7 +2498,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 			else if (targ->client->ps.fd.forcePowerLevel[FP_PROTECT] == FORCE_LEVEL_2)
 			{
 				famt = 0.5;
-				hamt = 0.75;
+				hamt = 0.60;
 
 				if (maxtake > 200)
 				{
@@ -2346,7 +2508,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 			else if (targ->client->ps.fd.forcePowerLevel[FP_PROTECT] == FORCE_LEVEL_3)
 			{
 				famt = 0.25;
-				hamt = 1;
+				hamt = 0.80;
 
 				if (maxtake > 400)
 				{
@@ -2357,6 +2519,10 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 			if (!targ->client->ps.powerups[PW_FORCE_BOON])
 			{
 				targ->client->ps.fd.forcePower -= maxtake*famt;
+			}
+			else
+			{
+				targ->client->ps.fd.forcePower -= (maxtake*famt)/2;
 			}
 			subamt = (maxtake*hamt)+(take-maxtake);
 			if (targ->client->ps.fd.forcePower < 0)
@@ -2412,7 +2578,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 	if (take) {
 		if (targ->client && (targ->client->ps.fd.forcePowersActive & (1 << FP_RAGE)) && (inflictor->client || attacker->client))
 		{
-			take /= (targ->client->ps.fd.forcePowerLevel[FP_RAGE]);
+			take /= (targ->client->ps.fd.forcePowerLevel[FP_RAGE]+1);
 		}
 		targ->health = targ->health - take;
 		if ( targ->client ) {

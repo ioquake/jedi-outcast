@@ -36,6 +36,7 @@ to the new value before sending out any replies.
 cvar_t		*showpackets;
 cvar_t		*showdrop;
 cvar_t		*qport;
+cvar_t		*net_killdroppedfragments;
 
 static char *netsrcString[2] = {
 	"client",
@@ -53,6 +54,7 @@ void Netchan_Init( int port ) {
 	showpackets = Cvar_Get ("showpackets", "0", CVAR_TEMP );
 	showdrop = Cvar_Get ("showdrop", "0", CVAR_TEMP );
 	qport = Cvar_Get ("net_qport", va("%i", port), CVAR_INIT );
+	net_killdroppedfragments = Cvar_Get ("net_killdroppedfragments", "0", CVAR_TEMP);
 }
 
 /*
@@ -234,8 +236,13 @@ void Netchan_Transmit( netchan_t *chan, int length, const byte *data ) {
 	}
 	chan->unsentFragmentStart = 0;
 
+	if (chan->unsentFragments)
+	{
+		Com_Printf("[ISM] Stomping Unsent Fragments %s\n",netsrcString[ chan->sock ]);
+	}
 	// fragment large reliable messages
-	if ( length >= FRAGMENT_SIZE ) {
+	if ( length >= FRAGMENT_SIZE ) 
+	{
 		chan->unsentFragments = qtrue;
 		chan->unsentLength = length;
 		Com_Memcpy( chan->unsentBuffer, data, length );
@@ -383,6 +390,18 @@ qboolean Netchan_Process( netchan_t *chan, msg_t *msg ) {
 			}
 			// we can still keep the part that we have so far,
 			// so we don't need to clear chan->fragmentLength
+
+			//rww - not clearing this will allow us to piece together fragments belonging to other packets
+			//that happen to have the same sequence (or so it seems). I am just going to clear it and force
+			//the packet to be dropped.
+
+			// hell yeah we have to dump the whole thing -gil
+			// but I am scared - mw
+			/*
+			chan->fragmentLength = 0;
+			chan->incomingSequence = sequence;
+			chan->fragmentSequence = 0;
+			*/
 			return qfalse;
 		}
 
@@ -418,12 +437,18 @@ qboolean Netchan_Process( netchan_t *chan, msg_t *msg ) {
 		// make sure the sequence number is still there
 		*(int *)msg->data = LittleLong( sequence );
 
+		if ( chan->fragmentLength + 4 > MAX_MSGLEN ) 
+		{
+			Com_Error( ERR_DROP, "Netchan_Process: length = %i",chan->fragmentLength + 4);
+		}
 		Com_Memcpy( msg->data + 4, chan->fragmentBuffer, chan->fragmentLength );
 		msg->cursize = chan->fragmentLength + 4;
 		chan->fragmentLength = 0;
 		msg->readcount = 4;	// past the sequence number
 		msg->bit = 32;	// past the sequence number
 
+		// but I am a wuss -mw 
+		// chan->incomingSequence = sequence;   // lets not accept any more with this sequence number -gil
 		return qtrue;
 	}
 

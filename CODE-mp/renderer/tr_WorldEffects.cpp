@@ -437,8 +437,8 @@ void CMistyFog::Update(CWorldEffectsSystem *system, float elapseTime)
 
 	// translate
 
-	forwardWind = DotProduct(mWindTransform, backEnd.viewParms.or.axis[0]);
-	rightWind = DotProduct(mWindTransform, backEnd.viewParms.or.axis[1]);
+	forwardWind = DotProduct(mWindTransform, backEnd.viewParms.ori.axis[0]);
+	rightWind = DotProduct(mWindTransform, backEnd.viewParms.ori.axis[1]);
 
 	mTextureCoords[0][0] += rightWind / mSpeed;
 	mTextureCoords[1][0] += rightWind / mSpeed;
@@ -587,8 +587,8 @@ void CMistyFog::CreateTextureCoords(void)
 
 	mSpeed = flrand(200.0f, 700.0f);
 
-	forwardWind = DotProduct(mWindTransform, backEnd.viewParms.or.axis[0]);
-	rightWind = DotProduct(mWindTransform, backEnd.viewParms.or.axis[1]);
+	forwardWind = DotProduct(mWindTransform, backEnd.viewParms.ori.axis[0]);
+	rightWind = DotProduct(mWindTransform, backEnd.viewParms.ori.axis[1]);
 
 	if (forwardWind > 0.5)
 	{	// moving away, so make the size smaller
@@ -698,13 +698,13 @@ bool CMistyFog2::Command(const char *command)
 	}
 
 	token = COM_ParseExt((const char **)&command, qfalse);
-	if (strcmpi(token, "fog") != 0)
+	if (Q_stricmp(token, "fog") != 0)
 	{
 		return false;
 	}
 
 	token = COM_ParseExt((const char **)&command, qfalse);
-	if (strcmpi(token, "density") == 0)
+	if (Q_stricmp(token, "density") == 0)
 	{
 		token = COM_ParseExt((const char **)&command, qfalse);
 		mAlpha = atof(token);
@@ -1012,7 +1012,7 @@ void CWind::Update(CWorldEffectsSystem *system, float elapseTime)
 		return;
 	}
 
-	VectorSubtract(backEnd.viewParms.or.origin, mPoint, difference);
+	VectorSubtract(backEnd.viewParms.ori.origin, mPoint, difference);
 	if (VectorLength(difference) > 300.0)
 	{
 		return;
@@ -1346,7 +1346,7 @@ bool CSnowSystem::Command(const char *command)
 
 	token = COM_ParseExt((const char **)&command, qfalse);
 
-	if (strcmpi(token, "wind") == 0)
+	if (Q_stricmp(token, "wind") == 0)
 	{	// snow wind ( windOriginX windOriginY windOriginZ ) ( windVelocityX windVelocityY windVelocityZ ) ( sizeX sizeY sizeZ )
 		vec3_t	origin, velocity, size;
 
@@ -1358,46 +1358,46 @@ bool CSnowSystem::Command(const char *command)
 
 		return true;
 	}
-	else if (strcmpi(token, "fog") == 0)
+	else if (Q_stricmp(token, "fog") == 0)
 	{	// snow fog
 		AddWorldEffect(new CMistyFog2);
 		mWindChange = 0;
 		return true;
 	}
-	else if (strcmpi(token, "alpha") == 0)
+	else if (Q_stricmp(token, "alpha") == 0)
 	{	// snow alpha <float>											default: 0.09
 		token = COM_ParseExt((const char **)&command, qfalse);
 		mAlpha = atof(token);
 		return true;
 	}
-	else if (strcmpi(token, "spread") == 0)
+	else if (Q_stricmp(token, "spread") == 0)
 	{	// snow spread ( minX minY minZ ) ( maxX maxY maxZ )			default: ( -600 -600 -200 ) ( 600 600 250 )
 		ParseVector((const char **)&command, 3, mMinSpread);
 		ParseVector((const char **)&command, 3, mMaxSpread);
 		return true;
 	}
-	else if (strcmpi(token, "velocity") == 0)
+	else if (Q_stricmp(token, "velocity") == 0)
 	{	// snow velocity ( minX minY minZ ) ( maxX maxY maxZ )			default: ( -15 -15 -20 ) ( 15 15 -70 )
 		ParseVector((const char **)&command, 3, mMinSpread);
 		ParseVector((const char **)&command, 3, mMaxSpread);
 		return true;
 	}
-	else if (strcmpi(token, "blowing") == 0)
+	else if (Q_stricmp(token, "blowing") == 0)
 	{	
 		token = COM_ParseExt((const char **)&command, qfalse);
-		if (strcmpi(token, "duration") == 0)
+		if (Q_stricmp(token, "duration") == 0)
 		{	// snow blowing duration <int>									default: 2
 			token = COM_ParseExt((const char **)&command, qfalse);
 			mWindDuration = atol(token);
 			return true;
 		}
-		else if (strcmpi(token, "low") == 0)
+		else if (Q_stricmp(token, "low") == 0)
 		{	// snow blowing low <int>										default: 3
 			token = COM_ParseExt((const char **)&command, qfalse);
 			mWindLow = atol(token);
 			return true;
 		}
-		else if (strcmpi(token, "velocity") == 0)
+		else if (Q_stricmp(token, "velocity") == 0)
 		{	// snow blowing velocity ( min max )							default: ( 30 70 )
 			float	data[2];
 
@@ -1406,7 +1406,7 @@ bool CSnowSystem::Command(const char *command)
 			mWindMax = data[1];
 			return true;
 		}
-		else if (strcmpi(token, "size") == 0)
+		else if (Q_stricmp(token, "size") == 0)
 		{	// snow blowing size ( minX minY minZ )							default: ( 1000 300 300 )
 			ParseVector((const char **)&command, 3, mWindSize);
 			return true;
@@ -1446,7 +1446,7 @@ void CSnowSystem::Update(float elapseTime)
 		CWorldEffectsSystem::Update(elapseTime);
 	}
 
-	VectorCopy(backEnd.viewParms.or.origin, origin);
+	VectorCopy(backEnd.viewParms.ori.origin, origin);
 
 	mNextWindGust -= elapseTime;
 	if (mNextWindGust < 0.0)
@@ -1683,7 +1683,7 @@ void CSnowSystem::Render(void)
 
 	CWorldEffectsSystem::Render();
 
-	VectorAdd(backEnd.viewParms.or.origin, mMinSpread, origin);
+	VectorAdd(backEnd.viewParms.ori.origin, mMinSpread, origin);
 
 	qglColor4f(0.8, 0.8, 0.8, mAlpha);
 
@@ -1856,13 +1856,13 @@ bool CRainSystem::Command(const char *command)
 
 	token = COM_ParseExt((const char **)&command, qfalse);
 
-	if (strcmpi(token, "fog") == 0)
+	if (Q_stricmp(token, "fog") == 0)
 	{	// rain fog
 		AddWorldEffect(new CMistyFog2);
 		mWindChange = 0;
 		return true;
 	}
-	else if (strcmpi(token, "fall") == 0)
+	else if (Q_stricmp(token, "fall") == 0)
 	{	// rain fall ( minVelocity maxVelocity )			default: ( -60 -50 )
 		float	data[2];
 
@@ -1873,24 +1873,24 @@ bool CRainSystem::Command(const char *command)
 		}
 		return true;
 	}
-	else if (strcmpi(token, "spread") == 0)
+	else if (Q_stricmp(token, "spread") == 0)
 	{	// rain spread ( radius height )					default: ( 20 20 )
 		ParseVector((const char **)&command, 2, &mSpread[1]);
 		return true;
 	}
-	else if (strcmpi(token, "alpha") == 0)
+	else if (Q_stricmp(token, "alpha") == 0)
 	{	// rain alpha <float>								default: 0.15
 		token = COM_ParseExt((const char **)&command, qfalse);
 		mAlpha = atof(token);
 		return true;
 	}
-	else if (strcmpi(token, "height") == 0)
+	else if (Q_stricmp(token, "height") == 0)
 	{	// rain height <float>								default: 1.5
 		token = COM_ParseExt((const char **)&command, qfalse);
 		mRainHeight = atof(token);
 		return true;
 	}
-	else if (strcmpi(token, "angle") == 0)
+	else if (Q_stricmp(token, "angle") == 0)
 	{	// rain angle <float>								default: 1.0
 		token = COM_ParseExt((const char **)&command, qfalse);
 		mWindAngle = atof(token);
@@ -1994,8 +1994,8 @@ void CRainSystem::Render(void)
 		return;
 	}
 
-	VectorScale(backEnd.viewParms.or.axis[0], 1, forward);		// forward
-	VectorScale(backEnd.viewParms.or.axis[1], 0.2, left);		// left
+	VectorScale(backEnd.viewParms.ori.axis[0], 1, forward);		// forward
+	VectorScale(backEnd.viewParms.ori.axis[1], 0.2, left);		// left
 	down[0] = 0 - mWindDirection[0] * mRainHeight * mWindAngle;
 	down[1] = 0 - mWindDirection[1] * mRainHeight * mWindAngle;
 	down[2] = -mRainHeight;
@@ -2008,7 +2008,7 @@ void CRainSystem::Render(void)
 
 	qglMatrixMode(GL_MODELVIEW);
 	qglPushMatrix();
-    qglTranslatef (backEnd.viewParms.or.origin[0], backEnd.viewParms.or.origin[1],  backEnd.viewParms.or.origin[2]);
+    qglTranslatef (backEnd.viewParms.ori.origin[0], backEnd.viewParms.ori.origin[1],  backEnd.viewParms.ori.origin[2]);
 
 	item = mRainList;
 	qglBegin(GL_TRIANGLES );
@@ -2120,7 +2120,7 @@ void RB_RenderWorldEffects(void)
 //	qglPushMatrix();
 	qglLoadMatrixf( backEnd.viewParms.world.modelMatrix );
 
-	originContents = ri.CM_PointContents(backEnd.viewParms.or.origin, 0);
+	originContents = ri.CM_PointContents(backEnd.viewParms.ori.origin, 0);
 
 	if (rainSystem)
 	{
@@ -2176,12 +2176,12 @@ void R_WorldEffectCommand(const char *command)
 	origCommand = command;
 	token = COM_ParseExt((const char **)&command, qfalse);
 
-	if (strcmpi(token, "snow") == 0)
+	if (Q_stricmp(token, "snow") == 0)
 	{
 		origCommand = command;
 
 		token = COM_ParseExt((const char **)&command, qfalse);
-		if (strcmpi(token, "init") == 0)
+		if (Q_stricmp(token, "init") == 0)
 		{	//	snow init <particles>
 			token = COM_ParseExt((const char **)&command, qfalse);
 			if (snowSystem)
@@ -2190,7 +2190,7 @@ void R_WorldEffectCommand(const char *command)
 			}
 			snowSystem = new CSnowSystem(atoi(token));
 		}
-		else if (strcmpi(token, "remove") == 0)
+		else if (Q_stricmp(token, "remove") == 0)
 		{	//	snow remove
 			if (snowSystem)
 			{
@@ -2203,12 +2203,12 @@ void R_WorldEffectCommand(const char *command)
 			snowSystem->Command(origCommand);
 		}
 	}
-	else if (strcmpi(token, "rain") == 0)
+	else if (Q_stricmp(token, "rain") == 0)
 	{
 		origCommand = command;
 
 		token = COM_ParseExt((const char **)&command, qfalse);
-		if (strcmpi(token, "init") == 0)
+		if (Q_stricmp(token, "init") == 0)
 		{	//	rain init <particles>
 			token = COM_ParseExt((const char **)&command, qfalse);
 			if (rainSystem)
@@ -2217,7 +2217,7 @@ void R_WorldEffectCommand(const char *command)
 			}
 			rainSystem = new CRainSystem(atoi(token));
 		}
-		else if (strcmpi(token, "remove") == 0)
+		else if (Q_stricmp(token, "remove") == 0)
 		{	//	rain remove
 			if (rainSystem)
 			{
@@ -2230,21 +2230,21 @@ void R_WorldEffectCommand(const char *command)
 			rainSystem->Command(origCommand);
 		}
 	}
-	else if (strcmpi(token, "debug") == 0)
+	else if (Q_stricmp(token, "debug") == 0)
 	{
 		token = COM_ParseExt((const char **)&command, qfalse);
-		if (strcmpi(token, "wind") == 0)
+		if (Q_stricmp(token, "wind") == 0)
 		{
 			debugShowWind = !debugShowWind;
 		}
-		else if (strcmpi(token, "blah") == 0)
+		else if (Q_stricmp(token, "blah") == 0)
 		{
 			R_WorldEffectCommand("snow init 1000");
 			R_WorldEffectCommand("snow alpha 1");
 			R_WorldEffectCommand("snow fog");
 		}
 	}
-	else if (strcmpi(token, "exec") == 0)
+	else if (Q_stricmp(token, "exec") == 0)
 	{
 		ri.Cmd_ExecuteText(EXEC_NOW, command);
 	}

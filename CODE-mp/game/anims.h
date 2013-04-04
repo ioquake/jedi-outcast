@@ -1231,7 +1231,6 @@ typedef enum //# animNumber_e
 	FACE_SMILE,				//# 
 	FACE_FROWN,				//# 
 	FACE_DEAD,				//# 
-	FACE_GALAK,			//# This has to be last for Galak Mech to talk
 
 	//# #eol
 	MAX_ANIMATIONS,

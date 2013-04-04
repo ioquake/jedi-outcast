@@ -85,6 +85,13 @@ int CSequencer::Free( void )
 	m_numCommands = 0;
 	m_curSequence = NULL;
 
+	bstream_t *streamToDel;
+	while(!m_streamsCreated.empty())
+	{
+		streamToDel = m_streamsCreated.back();
+		DeleteStream(streamToDel);
+	}
+
 	return SEQ_OK;
 }
 
@@ -116,7 +123,7 @@ int CSequencer::Flush( CSequence *owner )
 		m_sequenceMap.erase( (*sli)->GetID() );
 		
 		//Delete it, and remove all references
-		RemoveSequence( (*sli), false, false );
+		RemoveSequence( (*sli) );
 		m_owner->DeleteSequence( (*sli) );
 		
 		//Delete from the sequence list and move on
@@ -146,6 +153,8 @@ bstream_t *CSequencer::AddStream( void )
 	stream->stream = new CBlockStream;	//deleted in Route()
 	stream->last = m_curStream;
 
+	m_streamsCreated.push_back(stream);
+
 	return stream;
 }
 
@@ -158,6 +167,12 @@ Deletes parsing stream
 */
 void CSequencer::DeleteStream( bstream_t *bstream )
 {
+	vector<bstream_t*>::iterator finder = find(m_streamsCreated.begin(), m_streamsCreated.end(), bstream);
+	if(finder != m_streamsCreated.end())
+	{
+		m_streamsCreated.erase(finder);
+	}
+
 	bstream->stream->Free();
 	
 	delete bstream->stream;
@@ -341,6 +356,8 @@ int CSequencer::ParseRun( CBlock *block )
 	if ( buffer_size <= 0 )
 	{
 		m_ie->I_DPrintf( WL_ERROR, "'%s' : could not open file\n", (char*) block->GetMemberData( 0 ));
+		delete block;
+		block = NULL;
 		return SEQ_FAILED;
 	}
 
@@ -351,6 +368,8 @@ int CSequencer::ParseRun( CBlock *block )
 	if (!new_stream->stream->Open( buffer, buffer_size ))
 	{
 		m_ie->I_DPrintf( WL_ERROR, "invalid stream" );
+		delete block;
+		block = NULL;
 		return SEQ_FAILED;
 	}
 
@@ -363,6 +382,8 @@ int CSequencer::ParseRun( CBlock *block )
 	if ( S_FAILED( Route( new_sequence, new_stream )) )
 	{
 		//Error code is set inside of Route()
+		delete block;
+		block = NULL;
 		return SEQ_FAILED;
 	}
 
@@ -395,6 +416,8 @@ int CSequencer::ParseIf( CBlock *block, bstream_t *bstream )
 	if ( sequence == NULL )
 	{
 		m_ie->I_DPrintf( WL_ERROR, "ParseIf: failed to allocate container sequence" );
+		delete block;
+		block = NULL;
 		return SEQ_FAILED;
 	}
 
@@ -425,6 +448,10 @@ Parses an else statement
 
 int CSequencer::ParseElse( CBlock *block, bstream_t *bstream )
 {
+	//The else is not retained
+	delete block;
+	block = NULL;
+	
 	CSequence	*sequence;
 		
 	//Create the container sequence
@@ -451,10 +478,6 @@ int CSequencer::ParseElse( CBlock *block, bstream_t *bstream )
 	
 	m_elseOwner->SetFlag( BF_ELSE );
 
-	//The else is not retained
-	delete block;
-	block = NULL;
-	
 	//Recursively obtain the conditional body
 	Route( sequence, bstream );
 
@@ -487,6 +510,8 @@ int CSequencer::ParseLoop( CBlock *block, bstream_t *bstream )
 	if ( sequence == NULL )
 	{
 		m_ie->I_DPrintf( WL_ERROR, "ParseLoop : failed to allocate container sequence" );
+		delete block;
+		block = NULL;	
 		return SEQ_FAILED;
 	}
 
@@ -615,12 +640,16 @@ int CSequencer::ParseAffect( CBlock *block, bstream_t *bstream )
 						//only string is acceptable for affect, store result in p1
 						if ( m_ie->I_GetString( m_ownerID, type, name, &p1 ) == false)
 						{
+							delete block;
+							block = NULL;
 							return false;
 						}
 						break;
 					default:
 						//FIXME: Make an enum id for the error...
 						m_ie->I_DPrintf( WL_ERROR, "Invalid parameter type on affect _1" );
+						delete block;
+						block = NULL;
 						return false;
 						break;
 				}
@@ -631,6 +660,8 @@ int CSequencer::ParseAffect( CBlock *block, bstream_t *bstream )
 			default:
 			//FIXME: Make an enum id for the error...
 				m_ie->I_DPrintf( WL_ERROR, "Invalid parameter type on affect _2" );
+				delete block;
+				block = NULL;
 				return false;
 				break;
 		}//end id switch
@@ -656,20 +687,24 @@ int CSequencer::ParseAffect( CBlock *block, bstream_t *bstream )
 		m_ie->I_DPrintf( WL_WARNING, "'%s' : invalid affect() target\n", entname );
 		
 		//Fast-forward out of this affect block onto the next valid code
-		CSequence	*backSeq, *trashSeq = m_owner->GetSequence();
+		CSequence *backSeq = m_curSequence;
 
-		backSeq = m_curSequence;
+		CSequence *trashSeq = m_owner->GetSequence();
 		Route( trashSeq, bstream );
-		RemoveSequence( trashSeq, true, true );
+		Recall();
+		DestroySequence( trashSeq );
 		m_curSequence = backSeq;
-
-		m_owner->DeleteSequence( trashSeq );
-
+		delete block;
+		block = NULL;
 		return SEQ_OK;
 	}
 
 	if S_FAILED ( stream_sequencer->AddAffect( bstream, (int) m_curSequence->HasFlag( SQ_RETAIN ), &ret ) )
+	{
+		delete block;
+		block = NULL;
 		return SEQ_FAILED;
+	}
 
 	//Hold onto the id for later use
 	//FIXME: If the target sequence is freed, what then?		(!suspect!)
@@ -713,6 +748,8 @@ int CSequencer::ParseTask( CBlock *block, bstream_t *bstream )
 	if ( group == NULL )
 	{
 		m_ie->I_DPrintf( WL_ERROR, "error : unable to allocate a new task group" );
+		delete block;
+		block = NULL;
 		return SEQ_FAILED;
 	}
 
@@ -1990,7 +2027,11 @@ int CSequencer::Callback( CTaskManager *taskManager, CBlock *block, int returnCo
 	{
 		//There are no more pending commands
 		if ( m_curSequence == NULL )
+		{
+			delete block;
+			block = NULL;
 			return SEQ_OK;
+		}
 
 		//Check to retain the command
 		if ( m_curSequence->HasFlag( SQ_RETAIN ) )	//This isn't true for affect sequences...?
@@ -2040,7 +2081,15 @@ int CSequencer::Recall( void )
 
 	while ( ( block = m_taskManager->RecallTask() ) != NULL )
 	{
-		PushCommand( block, PUSH_BACK );
+		if (m_curSequence)
+		{
+			PushCommand( block, PUSH_BACK );
+		}
+		else
+		{
+			delete block;
+			block = NULL;
+		}
 	}
 
 	return true;
@@ -2066,8 +2115,6 @@ int CSequencer::Affect( int id, int type )
 
 	case TYPE_FLUSH:
 
-		Recall();
-
 		//Get rid of all old code
 		Flush( sequence );
 
@@ -2080,9 +2127,9 @@ int CSequencer::Affect( int id, int type )
 		break;
 		
 	case TYPE_INSERT:
-		
-		Recall();
 
+		Recall();
+		
 		sequence->SetReturn( m_curSequence );
 		
 		sequence->RemoveFlag( SQ_PENDING, true );
@@ -2180,16 +2227,9 @@ RemoveSequence
 
 //NOTENOTE: This only removes references to the sequence, IT DOES NOT FREE THE ALLOCATED MEMORY!  You've be warned! =)
 
-int CSequencer::RemoveSequence( CSequence *sequence, bool eraseSequence, bool removeChildren )
+int CSequencer::RemoveSequence( CSequence *sequence )
 {
 	CSequence *temp;
-
-	if ( eraseSequence )
-	{
-		//Remove it from the list
-		m_sequenceMap.erase( sequence->GetID() );
-		m_sequences.remove( sequence );
-	}
 
 	int numChildren = sequence->GetNumChildren();
 
@@ -2210,9 +2250,44 @@ int CSequencer::RemoveSequence( CSequence *sequence, bool eraseSequence, bool re
 		temp->SetParent( NULL );
 		temp->SetReturn( NULL );
 
-		if ( removeChildren )
-			RemoveSequence( temp, eraseSequence, removeChildren );
 	}
+		
+	return SEQ_OK;
+}
+
+int CSequencer::DestroySequence( CSequence *sequence )
+{
+	m_sequenceMap.erase( sequence->GetID() );
+	m_sequences.remove( sequence );
+
+	taskSequence_m::iterator	tsi;
+	for ( tsi = m_taskSequences.begin(); tsi != m_taskSequences.end(); )
+	{
+		if((*tsi).second == sequence)
+		{
+			tsi = m_taskSequences.erase(tsi);
+		}
+		else
+		{
+			++tsi;
+		}
+	}
+
+	CSequence* parent = sequence->GetParent();
+	if ( parent )
+	{
+		parent->RemoveChild( sequence );
+		parent = NULL;
+	}
+
+	int curChild = sequence->GetNumChildren();
+	while(curChild)
+	{
+		curChild--;
+		DestroySequence(sequence->GetChild( curChild ));
+	}
+
+	m_owner->DeleteSequence( sequence );
 		
 	return SEQ_OK;
 }

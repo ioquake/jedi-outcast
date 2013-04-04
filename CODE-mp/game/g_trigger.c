@@ -454,7 +454,7 @@ void hurt_touch( gentity_t *self, gentity_t *other, trace_t *trace ) {
 	}
 
 	// play sound
-	if ( !(self->spawnflags & 4) ) {
+	if ( !(self->spawnflags & 4) && self->damage != -1 ) {
 		G_Sound( other, CHAN_AUTO, self->noise_index );
 	}
 
@@ -477,13 +477,20 @@ void hurt_touch( gentity_t *self, gentity_t *other, trace_t *trace ) {
 	}
 	else	
 	{
+		int dmg = self->damage;
+
+		if (dmg == -1)
+		{ //so fall-to-blackness triggers destroy evertyhing
+			dmg = 99999;
+			self->timestamp = 0;
+		}
 		if (self->activator && self->activator->inuse && self->activator->client)
 		{
-			G_Damage (other, self->activator, self->activator, NULL, NULL, self->damage, dflags, MOD_TRIGGER_HURT);
+			G_Damage (other, self->activator, self->activator, NULL, NULL, dmg, dflags|DAMAGE_NO_PROTECTION, MOD_TRIGGER_HURT);
 		}
 		else
 		{
-			G_Damage (other, self, self, NULL, NULL, self->damage, dflags, MOD_TRIGGER_HURT);
+			G_Damage (other, self, self, NULL, NULL, dmg, dflags|DAMAGE_NO_PROTECTION, MOD_TRIGGER_HURT);
 		}
 	}
 }

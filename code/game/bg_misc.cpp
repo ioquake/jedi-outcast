@@ -88,7 +88,7 @@ Ammo for Imperial Heavy Repeater and the Golan Arms Flechette
 /*QUAKED ammo_rockets (.3 .5 1) (-8 -8 -0) (8 8 16) SUSPEND STARFLEET MONSTER NOTSOLID
 Ammo for Merr-Sonn portable missile launcher
 */
-/*QUAKED ammo_thermal (.3 .5 1) (-8 -8 -0) (8 8 16) SUSPEND STARFLEET MONSTER NOTSOLID
+/*QUAKED ammo_thermal (.3 .5 1) (-16 -16 -0) (16 16 16) SUSPEND STARFLEET MONSTER NOTSOLID
 Belt of thermal detonators
 */
 /*QUAKED ammo_tripmine (.3 .5 1) (-8 -8 -0) (8 8 16) SUSPEND STARFLEET MONSTER NOTSOLID
@@ -201,16 +201,6 @@ gitem_t	*FindItemForInventory( int inv )
 	int		i;
 	gitem_t	*it;
 
-	// this is particularly ugly because we do not have a 1 to 1 correlation between an inventory item and a real item.
-	if ( inv >= INV_GOODIE_KEY1 && inv <= INV_GOODIE_KEY5 )
-	{
-		return &bg_itemlist[ITM_GOODIE_KEY_PICKUP];
-	}
-	else if ( inv >= INV_SECURITY_KEY1 && inv <= INV_SECURITY_KEY5 )
-	{
-		return &bg_itemlist[ITM_SECURITY_KEY_PICKUP];
-	}
-
 	// Now just check for any other kind of item.
 	for ( i = 1 ; i < bg_numItems ; i++ ) 
 	{
@@ -309,6 +299,29 @@ qboolean	BG_CanItemBeGrabbed( const entityState_t *ent, const playerState_t *ps 
 
 		if (item->giTag != AMMO_FORCE)
 		{
+			// since the ammo is the weapon in this case, picking up ammo should actually give you the weapon
+			switch( item->giTag )
+			{
+			case AMMO_THERMAL:
+				if( !(ps->stats[STAT_WEAPONS] & ( 1 << WP_THERMAL ) ) )
+				{
+					return qtrue;
+				}
+				break;
+			case AMMO_DETPACK:
+				if( !(ps->stats[STAT_WEAPONS] & ( 1 << WP_DET_PACK ) ) )
+				{
+					return qtrue;
+				}
+				break;
+			case AMMO_TRIPMINE:
+				if( !(ps->stats[STAT_WEAPONS] & ( 1 << WP_TRIP_MINE ) ) )
+				{
+					return qtrue;
+				}
+				break;
+			}
+
 			if ( ps->ammo[ item->giTag ] >= ammoData[item->giTag].max )	// checkme			
 			{
 				return qfalse;		// can't hold any more
@@ -316,7 +329,7 @@ qboolean	BG_CanItemBeGrabbed( const entityState_t *ent, const playerState_t *ps 
 		}
 		else
 		{
-			if (ps->forcePower >= ammoData[item->giTag].max)
+			if (ps->forcePower >= ammoData[item->giTag].max*2)
 			{
 				return qfalse;		// can't hold any more
 			}
@@ -538,11 +551,11 @@ void PlayerStateToEntityState( playerState_t *ps, entityState_t *s ) {
 
 	s->pos.trType = TR_INTERPOLATE;
 	VectorCopy( ps->origin, s->pos.trBase );
-	SnapVector( s->pos.trBase );
+	//SnapVector( s->pos.trBase );
 
 	s->apos.trType = TR_INTERPOLATE;
 	VectorCopy( ps->viewangles, s->apos.trBase );
-	SnapVector( s->apos.trBase );
+	//SnapVector( s->apos.trBase );
 
 	s->angles2[YAW] = ps->movementDir;
 	s->legsAnim = ps->legsAnim;

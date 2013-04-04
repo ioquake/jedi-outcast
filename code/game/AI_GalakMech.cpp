@@ -7,6 +7,7 @@
 #include "anims.h"
 #include "wp_saber.h"
 
+extern qboolean G_StandardHumanoid( const char *modelName );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
 extern qboolean Q3_TaskIDPending( gentity_t *ent, taskID_t taskType );
 extern void NPC_AimAdjust( int change );
@@ -17,6 +18,7 @@ extern qboolean InFront( vec3_t spot, vec3_t from, vec3_t fromAngles, float thre
 extern void G_SoundAtSpot( vec3_t org, int soundIndex );
 extern void G_SoundOnEnt (gentity_t *ent, soundChannel_t channel, const char *soundPath);
 extern qboolean PM_CrouchAnim( int anim );
+//extern void NPC_Mark1_Part_Explode(gentity_t *self,int bolt);
 
 #define MELEE_DIST_SQUARED 6400//80*80
 #define MIN_LOB_DIST_SQUARED 65536//256*256
@@ -46,16 +48,16 @@ void NPC_GalakMech_Precache( void )
 	G_SoundIndex( "sound/weapons/galak/skewerhit.wav" );
 	G_SoundIndex( "sound/weapons/galak/lasercharge.wav" );
 	G_SoundIndex( "sound/weapons/galak/lasercutting.wav" );
-	G_SoundIndex( "sound/weapons/galak/lasercutting.wav" );
 	G_SoundIndex( "sound/weapons/galak/laserdamage.wav" );
-	G_SoundIndex( "sound/weapons/galak/laserdamage.wav" );
+
 	G_EffectIndex( "galak/trace_beam" );
 	G_EffectIndex( "galak/beam_warmup" );
-	G_EffectIndex( "small_chunks");
-	G_EffectIndex( "mouseexplosion1");
-	G_EffectIndex( "probeexplosion1");
+//	G_EffectIndex( "small_chunks");
+	G_EffectIndex( "env/med_explode2");
+	G_EffectIndex( "env/small_explode2");
+	G_EffectIndex( "galak/explode");
 	G_EffectIndex( "blaster/smoke_bolton");
-	G_EffectIndex( "env/exp_trail_comp");
+//	G_EffectIndex( "env/exp_trail_comp");
 }
 
 void NPC_GalakMech_Init( gentity_t *ent )
@@ -76,6 +78,13 @@ void NPC_GalakMech_Init( gentity_t *ent )
 		TIMER_Set( ent, "beamDelay", 0 );
 		TIMER_Set( ent, "noLob", 0 );
 		TIMER_Set( ent, "noRapid", 0 );
+		TIMER_Set( ent, "talkDebounce", 0 );
+		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_shield_off", TURN_ON );
+		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galakface_off", TURN_OFF );
+		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galakhead_off", TURN_OFF );
+		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_eyes_mouth_off", TURN_OFF );
+		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_collar_off", TURN_OFF );
+		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galaktorso_off", TURN_OFF );
 	}
 	else
 	{
@@ -90,17 +99,45 @@ void NPC_GalakMech_Init( gentity_t *ent )
 
 }
 
+//-----------------------------------------------------------------
+static void GM_CreateExplosion( gentity_t *self, const int boltID, qboolean doSmall = qfalse )
+{
+	if ( boltID >=0 )
+	{
+		mdxaBone_t	boltMatrix;
+		vec3_t		org, dir;
+
+		gi.G2API_GetBoltMatrix( self->ghoul2, self->playerModel, 
+					boltID,
+					&boltMatrix, self->currentAngles, self->currentOrigin, (cg.time?cg.time:level.time),
+					NULL, self->s.modelScale );
+
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, org );
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, dir );
+
+		if ( doSmall )
+		{
+			G_PlayEffect( "env/small_explode2", org, dir );
+		}
+		else
+		{
+			G_PlayEffect( "env/med_explode2", org, dir );
+		}
+	}
+}
 
 /*
 -------------------------
 GM_Dying
 -------------------------
 */
-extern void NPC_Mark1_Part_Explode(gentity_t *self,int bolt);
+
 void GM_Dying( gentity_t *self )
 {
-	if ( level.time - self->s.time < 10000 )
+	if ( level.time - self->s.time < 4000 )
 	{//FIXME: need a real effect
+		self->s.powerups |= ( 1 << PW_SHOCKED );
+		self->client->ps.powerups[PW_SHOCKED] = level.time + 1000;
 		if ( TIMER_Done( self, "dyingExplosion" ) )
 		{
 			int	newBolt;
@@ -110,7 +147,7 @@ void GM_Dying( gentity_t *self )
 			case 1:
 				if (!gi.G2API_GetSurfaceRenderStatus( &self->ghoul2[self->playerModel], "r_hand" ))
 				{//r_hand still there
-					NPC_Mark1_Part_Explode( self, self->handRBolt );
+					GM_CreateExplosion( self, self->handRBolt, qtrue );
 					gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "r_hand", TURN_OFF );
 				}
 				else if (!gi.G2API_GetSurfaceRenderStatus( &self->ghoul2[self->playerModel], "r_arm_middle" ))
@@ -123,7 +160,7 @@ void GM_Dying( gentity_t *self )
 				//FIXME: do only once?
 				if (!gi.G2API_GetSurfaceRenderStatus( &self->ghoul2[self->playerModel], "l_hand" ))
 				{//l_hand still there
-					NPC_Mark1_Part_Explode( self, self->handLBolt );
+					GM_CreateExplosion( self, self->handLBolt );
 					gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "l_hand", TURN_OFF );
 				}
 				else if (!gi.G2API_GetSurfaceRenderStatus( &self->ghoul2[self->playerModel], "l_arm_wrist" ))
@@ -145,48 +182,48 @@ void GM_Dying( gentity_t *self )
 			case 3:
 			case 4:
 				newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*hip_fr" );
-				NPC_Mark1_Part_Explode( self, newBolt );
+				GM_CreateExplosion( self, newBolt );
 				break;
 			case 5:
 			case 6:
 				newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*shldr_l" );
-				NPC_Mark1_Part_Explode( self, newBolt );
+				GM_CreateExplosion( self, newBolt );
 				break;
 			case 7:
 			case 8:
 				newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*uchest_r" );
-				NPC_Mark1_Part_Explode( self, newBolt );
+				GM_CreateExplosion( self, newBolt );
 				break;
 			case 9:
 			case 10:
-				NPC_Mark1_Part_Explode( self, self->headBolt );
+				GM_CreateExplosion( self, self->headBolt );
 				break;
 			case 11:
 				newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*l_leg_knee" );
-				NPC_Mark1_Part_Explode( self, newBolt );
+				GM_CreateExplosion( self, newBolt, qtrue );
 				break;
 			case 12:
 				newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*r_leg_knee" );
-				NPC_Mark1_Part_Explode( self, newBolt );
+				GM_CreateExplosion( self, newBolt, qtrue );
 				break;
 			case 13:
 				newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*l_leg_foot" );
-				NPC_Mark1_Part_Explode( self, newBolt );
+				GM_CreateExplosion( self, newBolt, qtrue );
 				break;
 			case 14:
 				newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*r_leg_foot" );
-				NPC_Mark1_Part_Explode( self, newBolt );
+				GM_CreateExplosion( self, newBolt, qtrue );
 				break;
 			}
 
-			TIMER_Set( self, "dyingExplosion", Q_irand( 100, 600 ) );
+			TIMER_Set( self, "dyingExplosion", Q_irand( 300, 1100 ) );
 		}
 	}
 	else
 	{//one final, huge explosion
-		G_PlayEffect( "probeexplosion1", self->currentOrigin );
-		G_PlayEffect( "small_chunks", self->currentOrigin );
-		G_PlayEffect( "env/exp_trail_comp", self->currentOrigin, self->currentAngles );
+		G_PlayEffect( "galak/explode", self->currentOrigin );
+//		G_PlayEffect( "small_chunks", self->currentOrigin );
+//		G_PlayEffect( "env/exp_trail_comp", self->currentOrigin, self->currentAngles );
 		self->nextthink = level.time + FRAMETIME;
 		self->e_ThinkFunc = thinkF_G_FreeEntity;
 	}
@@ -198,6 +235,7 @@ NPC_GM_Pain
 -------------------------
 */
 
+extern void NPC_SetPainEvent( gentity_t *self );
 void NPC_GM_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, vec3_t point, int damage, int mod,int hitLoc ) 
 {
 	if ( self->client->ps.powerups[PW_GALAK_SHIELD] == 0 )
@@ -208,7 +246,7 @@ void NPC_GM_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, ve
 			int newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*antenna_base" );
 			if ( newBolt != -1 )
 			{
-				NPC_Mark1_Part_Explode(self,newBolt);
+				GM_CreateExplosion( self, newBolt );
 			}
 
 			gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "torso_shield_off", TURN_OFF );
@@ -220,6 +258,7 @@ void NPC_GM_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, ve
 
 			NPC_SetAnim( self, SETANIM_BOTH, BOTH_ALERT1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 			TIMER_Set( self, "attackDelay", self->client->ps.torsoAnimTimer );
+			G_AddEvent( self, Q_irand( EV_DEATH1, EV_DEATH3 ), self->health );
 		}
 	}
 	else
@@ -233,7 +272,43 @@ void NPC_GM_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, ve
 
 	if ( !self->lockCount && !self->client->ps.torsoAnimTimer )
 	{//don't interrupt laser sweep attack or other special attacks/moves
-		NPC_Pain( self, inflictor, attacker, point, damage, mod, hitLoc );
+		if ( self->count < 4 && self->health > 100 && hitLoc != HL_GENERIC1 )
+		{
+			if ( self->delay < level.time )
+			{
+				int speech;
+				switch( self->count )
+				{
+				default:
+				case 0:
+					speech = EV_PUSHED1;
+					break;
+				case 1:
+					speech = EV_PUSHED2;
+					break;
+				case 2:
+					speech = EV_PUSHED3;
+					break;
+				case 3:
+					speech = EV_DETECTED1;
+					break;
+				}
+				self->count++;
+				self->NPC->blockedSpeechDebounceTime = 0;
+				G_AddVoiceEvent( self, speech, Q_irand( 3000, 5000 ) );
+				self->delay = level.time + Q_irand( 5000, 7000 );
+			}
+		}
+		else
+		{
+			NPC_Pain( self, inflictor, attacker, point, damage, mod, hitLoc );
+		}
+	}
+	else if ( hitLoc == HL_GENERIC1 )
+	{
+		NPC_SetPainEvent( self );
+		self->s.powerups |= ( 1 << PW_SHOCKED );
+		self->client->ps.powerups[PW_SHOCKED] = level.time + Q_irand( 500, 2500 );
 	}
 
 	if ( inflictor && inflictor->lastEnemy == self )
@@ -470,7 +545,7 @@ void NPC_GM_StartLaser( void )
 	if ( !NPC->lockCount )
 	{//haven't already started a laser attack
 		//warm up for the beam attack
-		NPC_SetAnim( NPC, SETANIM_BOTH, TORSO_RAISEWEAP2, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+		NPC_SetAnim( NPC, SETANIM_TORSO, TORSO_RAISEWEAP2, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 		TIMER_Set( NPC, "beamDelay", NPC->client->ps.torsoAnimTimer );
 		TIMER_Set( NPC, "attackDelay", NPC->client->ps.torsoAnimTimer+3000 );
 		NPC->lockCount = 1;
@@ -480,6 +555,18 @@ void NPC_GM_StartLaser( void )
 	}
 }
 
+void GM_StartGloat( void )
+{
+	NPC->wait = 0;
+	gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_galakface_off", TURN_ON );
+	gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_galakhead_off", TURN_ON );
+	gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_eyes_mouth_off", TURN_ON );
+	gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_collar_off", TURN_ON );
+	gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_galaktorso_off", TURN_ON );
+	NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_STAND2TO1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+	NPC->client->ps.legsAnimTimer += 500;
+	NPC->client->ps.torsoAnimTimer += 500;
+}
 /*
 -------------------------
 NPC_BSGM_Attack
@@ -496,6 +583,66 @@ void NPC_BSGM_Attack( void )
 	}
 
 	//FIXME: if killed enemy, use victory anim
+	if ( NPC->enemy && NPC->enemy->health <= 0 
+		&& !NPC->enemy->s.number )
+	{//my enemy is dead
+		if ( NPC->client->ps.torsoAnim == BOTH_STAND2TO1 )
+		{
+			if ( NPC->client->ps.torsoAnimTimer <= 500 )
+			{
+				G_AddVoiceEvent( NPC, Q_irand( EV_VICTORY1, EV_VICTORY3 ), 3000 );
+				NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_TRIUMPHANT1START, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+				NPC->client->ps.legsAnimTimer += 500;
+				NPC->client->ps.torsoAnimTimer += 500;
+			}
+		}
+		else if ( NPC->client->ps.torsoAnim == BOTH_TRIUMPHANT1START )
+		{
+			if ( NPC->client->ps.torsoAnimTimer <= 500 )
+			{
+				NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_TRIUMPHANT1STARTGESTURE, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+				NPC->client->ps.legsAnimTimer += 500;
+				NPC->client->ps.torsoAnimTimer += 500;
+			}
+		}
+		else if ( NPC->client->ps.torsoAnim == BOTH_TRIUMPHANT1STARTGESTURE )
+		{
+			if ( NPC->client->ps.torsoAnimTimer <= 500 )
+			{
+				NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_TRIUMPHANT1STOP, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+				NPC->client->ps.legsAnimTimer += 500;
+				NPC->client->ps.torsoAnimTimer += 500;
+			}
+		}
+		else if ( NPC->client->ps.torsoAnim == BOTH_TRIUMPHANT1STOP )
+		{
+			if ( NPC->client->ps.torsoAnimTimer <= 500 )
+			{
+				NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_STAND1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+				NPC->client->ps.legsAnimTimer = -1;
+				NPC->client->ps.torsoAnimTimer = -1;
+			}
+		}
+		else if ( NPC->wait )
+		{
+			if ( TIMER_Done( NPC, "gloatTime" ) )
+			{
+				GM_StartGloat();
+			}
+			else if ( DistanceHorizontalSquared( NPC->client->renderInfo.eyePoint, NPC->enemy->currentOrigin ) > 4096 && (NPCInfo->scriptFlags&SCF_CHASE_ENEMIES) )//64 squared
+			{
+				NPCInfo->goalEntity = NPC->enemy;
+				GM_Move();
+			}
+			else
+			{//got there
+				GM_StartGloat();
+			}
+		}
+		NPC_FaceEnemy( qtrue );
+		NPC_UpdateAngles( qtrue, qtrue );
+		return;
+	}
 	//If we don't have an enemy, just idle
 	if ( NPC_CheckEnemyExt() == qfalse || !NPC->enemy )
 	{
@@ -516,7 +663,7 @@ void NPC_BSGM_Attack( void )
 		NPC->client->ps.torsoAnim == BOTH_ATTACK5 )
 	{
 		shoot = qfalse;
-		if ( TIMER_Done( NPC, "smackTime" ) && !NPCInfo->greetingDebounceTime )
+		if ( TIMER_Done( NPC, "smackTime" ) && !NPCInfo->blockedDebounceTime )
 		{//time to smack
 			//recheck enemyDist and InFront
 			if ( enemyDist < MELEE_DIST_SQUARED && InFront( NPC->enemy->currentOrigin, NPC->currentOrigin, NPC->client->ps.viewangles, 0.3f ) )
@@ -549,7 +696,7 @@ void NPC_BSGM_Attack( void )
 					NPC_SetAnim( NPC->enemy, SETANIM_BOTH, BOTH_KNOCKDOWN5, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 				}
 				//done with the damage
-				NPCInfo->greetingDebounceTime = 1;
+				NPCInfo->blockedDebounceTime = 1;
 			}
 		}
 	}
@@ -594,7 +741,7 @@ void NPC_BSGM_Attack( void )
 				NPC->lockCount = 0;
 				G_FreeEntity( NPCInfo->coverTarg );
 				NPC->s.loopSound = 0;
-				NPC_SetAnim( NPC, SETANIM_BOTH, TORSO_DROPWEAP2, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+				NPC_SetAnim( NPC, SETANIM_TORSO, TORSO_DROPWEAP2, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 				TIMER_Set( NPC, "attackDelay", NPC->client->ps.torsoAnimTimer );
 			}
 			else
@@ -652,7 +799,10 @@ void NPC_BSGM_Attack( void )
 			}
 		}
 		else*/
-		if ( !NPC->client->ps.powerups[PW_GALAK_SHIELD] && enemyDist < MELEE_DIST_SQUARED && InFront( NPC->enemy->currentOrigin, NPC->currentOrigin, NPC->client->ps.viewangles, 0.3f ) )//within 80 and in front
+		if ( !NPC->client->ps.powerups[PW_GALAK_SHIELD] 
+			&& enemyDist < MELEE_DIST_SQUARED 
+			&& InFront( NPC->enemy->currentOrigin, NPC->currentOrigin, NPC->client->ps.viewangles, 0.3f ) 
+			&& G_StandardHumanoid( NPC->enemy->NPC_type ) )//within 80 and in front
 		{//our shield is down, and enemy within 80, if very close, use melee attack to slap away
 			if ( TIMER_Done( NPC, "attackDelay" ) )
 			{
@@ -671,7 +821,7 @@ void NPC_BSGM_Attack( void )
 				TIMER_Set( NPC, "attackDelay", NPC->client->ps.torsoAnimTimer + Q_irand( 1000, 3000 ) );
 				//delay the hurt until the proper point in the anim
 				TIMER_Set( NPC, "smackTime", 600 );
-				NPCInfo->greetingDebounceTime = 0;
+				NPCInfo->blockedDebounceTime = 0;
 				//FIXME: say something?
 			}
 		}
@@ -679,12 +829,15 @@ void NPC_BSGM_Attack( void )
 			&& TIMER_Done( NPC, "attackDelay" )
 			&& InFront( NPC->enemy->currentOrigin, NPC->currentOrigin, NPC->client->ps.viewangles, 0.3f )
 			&& ((!Q_irand( 0, 10*(2-g_spskill->integer))&& enemyDist > MIN_LOB_DIST_SQUARED&& enemyDist < MAX_LOB_DIST_SQUARED)
-				||(!TIMER_Done( NPC, "noLob" )&&!TIMER_Done( NPC, "noRapid" ))) )
+				||(!TIMER_Done( NPC, "noLob" )&&!TIMER_Done( NPC, "noRapid" ))) 
+			&& NPC->enemy->s.weapon != WP_TURRET )
 		{//sometimes use the laser beam attack, but only after he's taken down our generator
 			shoot = qfalse;
 			NPC_GM_StartLaser();
 		}
-		else if ( enemyDist < MIN_LOB_DIST_SQUARED && TIMER_Done( NPC, "noRapid" ) )//256
+		else if ( enemyDist < MIN_LOB_DIST_SQUARED 
+			&& (NPC->enemy->s.weapon != WP_TURRET || Q_stricmp( "PAS", NPC->enemy->classname ))
+			&& TIMER_Done( NPC, "noRapid" ) )//256
 		{//enemy within 256
 			if ( (NPC->client->ps.weapon == WP_REPEATER) && (NPCInfo->scriptFlags & SCF_ALT_FIRE) )
 			{//shooting an explosive, but enemy too close, switch to primary fire
@@ -694,7 +847,8 @@ void NPC_BSGM_Attack( void )
 				NPC_ChangeWeapon( WP_REPEATER );
 			}
 		}
-		else if ( enemyDist > MAX_LOB_DIST_SQUARED && TIMER_Done( NPC, "noLob" ) )//448
+		else if ( (enemyDist > MAX_LOB_DIST_SQUARED || (NPC->enemy->s.weapon == WP_TURRET && !Q_stricmp( "PAS", NPC->enemy->classname )))
+			&& TIMER_Done( NPC, "noLob" ) )//448
 		{//enemy more than 448 away and we are ready to try lob fire again
 			if ( (NPC->client->ps.weapon == WP_REPEATER) && !(NPCInfo->scriptFlags & SCF_ALT_FIRE) )
 			{//enemy far enough away to use lobby explosives
@@ -709,7 +863,7 @@ void NPC_BSGM_Attack( void )
 	//can we see our target?
 	if ( NPC_ClearLOS( NPC->enemy ) )
 	{
-		NPCInfo->enemyLastSeenTime = level.time;
+		NPCInfo->enemyLastSeenTime = level.time;//used here for aim debouncing, not always a clear LOS
 		enemyLOS = qtrue;
 
 		if ( NPC->client->ps.weapon == WP_NONE )
@@ -753,6 +907,39 @@ void NPC_BSGM_Attack( void )
 	}
 	else if ( gi.inPVS( NPC->enemy->currentOrigin, NPC->currentOrigin ) )
 	{
+		if ( TIMER_Done( NPC, "talkDebounce" ) && !Q_irand( 0, 10 ) )
+		{
+			if ( NPCInfo->enemyCheckDebounceTime < 8 )
+			{
+				int speech = -1;
+				switch( NPCInfo->enemyCheckDebounceTime )
+				{
+				case 0:
+				case 1:
+				case 2:
+					speech = EV_CHASE1 + NPCInfo->enemyCheckDebounceTime;
+					break;
+				case 3:
+				case 4:
+				case 5:
+					speech = EV_COVER1 + NPCInfo->enemyCheckDebounceTime-3;
+					break;
+				case 6:
+				case 7:
+					speech = EV_ESCAPING1 + NPCInfo->enemyCheckDebounceTime-6;
+					break;
+				}
+				NPCInfo->enemyCheckDebounceTime++;
+				if ( speech != -1 )
+				{
+					G_AddVoiceEvent( NPC, speech, Q_irand( 3000, 5000 ) );
+					TIMER_Set( NPC, "talkDebounce", Q_irand( 5000, 7000 ) );
+				}
+			}
+		}
+
+		NPCInfo->enemyLastSeenTime = level.time;
+
 		int hit = NPC_ShotEntity( NPC->enemy, impactPos );
 		gentity_t *hitEnt = &g_entities[hit];
 		if ( hit == NPC->enemy->s.number 
@@ -763,7 +950,6 @@ void NPC_BSGM_Attack( void )
 		}
 		else
 		{
-			NPCInfo->enemyLastSeenTime = level.time;
 			faceEnemy = qtrue;
 			NPC_AimAdjust( -1 );//adjust aim worse longer we cannot see enemy
 		}
@@ -787,6 +973,7 @@ void NPC_BSGM_Attack( void )
 	if ( enemyCS )
 	{
 		shoot = qtrue;
+		//NPCInfo->enemyCheckDebounceTime = level.time;//actually used here as a last actual LOS
 	}
 	else
 	{
@@ -871,7 +1058,12 @@ void NPC_BSGM_Attack( void )
 
 	if ( move && !NPC->lockCount )
 	{//move toward goal
-		if ( NPCInfo->goalEntity )
+		if ( NPCInfo->goalEntity 
+			&& NPC->client->ps.legsAnim != BOTH_ALERT1
+			&& NPC->client->ps.legsAnim != BOTH_ATTACK2 
+			&& NPC->client->ps.legsAnim != BOTH_ATTACK4
+			&& NPC->client->ps.legsAnim != BOTH_ATTACK5 
+			&& NPC->client->ps.legsAnim != BOTH_ATTACK7 )
 		{
 			move = GM_Move();
 		}
@@ -928,27 +1120,70 @@ void NPC_BSGM_Attack( void )
 	}
 
 	//also:
-	if ( NPCInfo->touchedByPlayer != NULL && NPCInfo->touchedByPlayer == NPC->enemy && NPC->client->ps.powerups[PW_GALAK_SHIELD] > 0 )
-	{//zap him!
-		//animate me
-		NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_ATTACK6, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
-		TIMER_Set( NPC, "attackDelay", NPC->client->ps.torsoAnimTimer );
-		TIMER_Set( NPC, "standTime", NPC->client->ps.legsAnimTimer );
-		//FIXME: debounce this?
-		NPCInfo->touchedByPlayer = NULL;
-		//FIXME: some shield effect?
-		NPC->client->ps.powerups[PW_BATTLESUIT] = level.time + ARMOR_EFFECT_TIME;
-		vec3_t	smackDir;
-		VectorSubtract( NPC->enemy->currentOrigin, NPC->currentOrigin, smackDir );
-		smackDir[2] += 30;
-		VectorNormalize( smackDir );
-		G_Damage( NPC->enemy, NPC, NPC, smackDir, NPC->currentOrigin, (g_spskill->integer+1)*Q_irand( 5, 10), DAMAGE_NO_KNOCKBACK, MOD_ELECTROCUTE ); 
-		//throw them
-		G_Throw( NPC->enemy, smackDir, 100 );
-		NPC->enemy->s.powerups |= ( 1 << PW_SHOCKED );
-		NPC->enemy->client->ps.powerups[PW_SHOCKED] = level.time + 1000;
-		//stop any attacks
-		ucmd.buttons = 0;
+	if ( NPC->enemy->s.weapon == WP_TURRET && !Q_stricmp( "PAS", NPC->enemy->classname ) )
+	{//crush turrets
+		if ( G_BoundsOverlap( NPC->absmin, NPC->absmax, NPC->enemy->absmin, NPC->enemy->absmax ) )
+		{//have to do this test because placed turrets are not solid to NPCs (so they don't obstruct navigation)
+			if ( NPC->client->ps.powerups[PW_GALAK_SHIELD] > 0 )
+			{
+				NPC->client->ps.powerups[PW_BATTLESUIT] = level.time + ARMOR_EFFECT_TIME;
+				G_Damage( NPC->enemy, NPC, NPC, NULL, NPC->currentOrigin, 100, DAMAGE_NO_KNOCKBACK, MOD_ELECTROCUTE ); 
+			}
+			else
+			{
+				G_Damage( NPC->enemy, NPC, NPC, NULL, NPC->currentOrigin, 100, DAMAGE_NO_KNOCKBACK, MOD_CRUSH ); 
+			}
+		}
+	}
+	else if ( NPCInfo->touchedByPlayer != NULL && NPCInfo->touchedByPlayer == NPC->enemy )
+	{//touched enemy
+		if ( NPC->client->ps.powerups[PW_GALAK_SHIELD] > 0 )
+		{//zap him!
+			//animate me
+			NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_ATTACK6, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+			TIMER_Set( NPC, "attackDelay", NPC->client->ps.torsoAnimTimer );
+			TIMER_Set( NPC, "standTime", NPC->client->ps.legsAnimTimer );
+			//FIXME: debounce this?
+			NPCInfo->touchedByPlayer = NULL;
+			//FIXME: some shield effect?
+			NPC->client->ps.powerups[PW_BATTLESUIT] = level.time + ARMOR_EFFECT_TIME;
+			vec3_t	smackDir;
+			VectorSubtract( NPC->enemy->currentOrigin, NPC->currentOrigin, smackDir );
+			smackDir[2] += 30;
+			VectorNormalize( smackDir );
+			G_Damage( NPC->enemy, NPC, NPC, smackDir, NPC->currentOrigin, (g_spskill->integer+1)*Q_irand( 5, 10), DAMAGE_NO_KNOCKBACK, MOD_ELECTROCUTE ); 
+			//throw them
+			G_Throw( NPC->enemy, smackDir, 100 );
+			NPC->enemy->s.powerups |= ( 1 << PW_SHOCKED );
+			if ( NPC->enemy->client )
+			{
+				NPC->enemy->client->ps.powerups[PW_SHOCKED] = level.time + 1000;
+			}
+			//stop any attacks
+			ucmd.buttons = 0;
+		}
+	}
+
+	if ( NPCInfo->movementSpeech < 3 && NPCInfo->blockedSpeechDebounceTime <= level.time )
+	{
+		if ( NPC->enemy && NPC->enemy->health > 0 && NPC->enemy->painDebounceTime > level.time )
+		{
+			if ( NPC->enemy->health < 50 && NPCInfo->movementSpeech == 2 )
+			{
+				G_AddVoiceEvent( NPC, EV_ANGER2, Q_irand( 2000, 4000 ) );
+				NPCInfo->movementSpeech = 3;
+			}
+			else if ( NPC->enemy->health < 75 && NPCInfo->movementSpeech == 1 )
+			{
+				G_AddVoiceEvent( NPC, EV_ANGER1, Q_irand( 2000, 4000 ) );
+				NPCInfo->movementSpeech = 2;
+			}
+			else if ( NPC->enemy->health < 100 && NPCInfo->movementSpeech == 0 )
+			{
+				G_AddVoiceEvent( NPC, EV_ANGER3, Q_irand( 2000, 4000 ) );
+				NPCInfo->movementSpeech = 1;
+			}
+		}
 	}
 }
 
@@ -959,52 +1194,58 @@ void NPC_BSGM_Default( void )
 		WeaponThink( qtrue );
 	}
 	
+	if ( NPC->client->ps.stats[STAT_ARMOR] <= 0 )
+	{//armor gone
+		if ( !NPCInfo->investigateDebounceTime )
+		{//start regenerating the armor
+			gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_OFF );
+			NPC->flags &= ~FL_SHIELDED;//no more reflections
+			VectorSet( NPC->mins, -20, -20, -24 );
+			VectorSet( NPC->maxs, 20, 20, 64 );
+			NPC->client->crouchheight = NPC->client->standheight = 64;
+			if ( NPC->locationDamage[HL_GENERIC1] < GENERATOR_HEALTH )
+			{//still have the generator bolt-on
+				if ( NPCInfo->investigateCount < 12 )
+				{
+					NPCInfo->investigateCount++;
+				}
+				NPCInfo->investigateDebounceTime = level.time + (NPCInfo->investigateCount * 5000);
+			}
+		}
+		else if ( NPCInfo->investigateDebounceTime < level.time )
+		{//armor regenerated, turn shield back on
+			//do a trace and make sure we can turn this back on?
+			trace_t	tr;
+			gi.trace( &tr, NPC->currentOrigin, shieldMins, shieldMaxs, NPC->currentOrigin, NPC->s.number, NPC->clipmask );
+			if ( !tr.startsolid )
+			{
+				VectorCopy( shieldMins, NPC->mins );
+				VectorCopy( shieldMaxs, NPC->maxs );
+				NPC->client->crouchheight = NPC->client->standheight = shieldMaxs[2];
+				NPC->client->ps.stats[STAT_ARMOR] = GALAK_SHIELD_HEALTH;
+				NPCInfo->investigateDebounceTime = 0;
+				NPC->flags |= FL_SHIELDED;//reflect normal shots
+				NPC->fx_time = level.time;
+				gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_ON );
+			}
+		}
+	}
+	if ( NPC->client->ps.stats[STAT_ARMOR] > 0 )
+	{//armor present
+		NPC->client->ps.powerups[PW_GALAK_SHIELD] = Q3_INFINITE;//temp, for effect
+		gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_ON );
+	}
+	else
+	{
+		gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_OFF );
+	}
+
 	if( !NPC->enemy )
 	{//don't have an enemy, look for one
 		NPC_BSGM_Patrol();
 	}
 	else //if ( NPC->enemy )
 	{//have an enemy
-		if ( NPC->client->ps.stats[STAT_ARMOR] <= 0 )
-		{//armor gone
-			if ( !NPCInfo->investigateDebounceTime )
-			{//start regenerating the armor
-				gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_OFF );
-				NPC->flags &= ~FL_SHIELDED;//no more reflections
-				VectorSet( NPC->mins, -20, -20, -24 );
-				VectorSet( NPC->maxs, 20, 20, 64 );
-				NPC->client->crouchheight = NPC->client->standheight = 64;
-				if ( NPC->locationDamage[HL_GENERIC1] < GENERATOR_HEALTH )
-				{//still have the generator bolt-on
-					if ( NPCInfo->investigateCount < 12 )
-					{
-						NPCInfo->investigateCount++;
-					}
-					NPCInfo->investigateDebounceTime = level.time + (NPCInfo->investigateCount * 5000);
-				}
-			}
-			else if ( NPCInfo->investigateDebounceTime < level.time )
-			{//armor regenerated, turn shield back on
-				//do a trace and make sure we can turn this back on?
-				trace_t	tr;
-				gi.trace( &tr, NPC->currentOrigin, shieldMins, shieldMaxs, NPC->currentOrigin, NPC->s.number, NPC->clipmask );
-				if ( !tr.startsolid )
-				{
-					VectorCopy( shieldMins, NPC->mins );
-					VectorCopy( shieldMaxs, NPC->maxs );
-					NPC->client->crouchheight = NPC->client->standheight = shieldMaxs[2];
-					NPC->client->ps.stats[STAT_ARMOR] = GALAK_SHIELD_HEALTH;
-					NPCInfo->investigateDebounceTime = 0;
-					NPC->flags |= FL_SHIELDED;//reflect normal shots
-					NPC->fx_time = level.time;
-					gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_ON );
-				}
-			}
-		}
-		if ( NPC->client->ps.stats[STAT_ARMOR] > 0 )
-		{//armor present
-			NPC->client->ps.powerups[PW_GALAK_SHIELD] = Q3_INFINITE;//temp, for effect
-		}
 		NPC_BSGM_Attack();
 	}
 }

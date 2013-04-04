@@ -132,7 +132,6 @@ cvar_t	*r_customheight;
 cvar_t	*r_customaspect;
 
 cvar_t	*r_overBrightBits;
-cvar_t	*r_mapOverBrightBits;
 
 cvar_t	*r_debugSurface;
 cvar_t	*r_simpleMipMaps;
@@ -158,6 +157,7 @@ cvar_t	*r_Ghoul2UnSqash;
 cvar_t	*r_Ghoul2TimeBase=0;
 cvar_t	*r_Ghoul2NoLerp;
 cvar_t	*r_Ghoul2NoBlend;
+cvar_t	*r_Ghoul2BlendMultiplier=0;
 cvar_t	*r_Ghoul2UnSqashAfterSmooth;
 
 
@@ -240,20 +240,8 @@ static void InitOpenGL( void )
 	//
 
 	if ( glConfig.vidWidth == 0 )
-	{
-		GLint		temp;
-		
+	{		
 		GLimp_Init();
-
-		// OpenGL driver constants
-		qglGetIntegerv( GL_MAX_TEXTURE_SIZE, &temp );
-		glConfig.maxTextureSize = temp;
-
-		// stubbed or broken drivers may have reported 0...
-		if ( glConfig.maxTextureSize <= 0 ) 
-		{
-			glConfig.maxTextureSize = 0;
-		}
 		// print info the first time only
 		GfxInfo_f();
 	}
@@ -1012,7 +1000,6 @@ void R_Register( void )
 	r_displayRefresh = ri.Cvar_Get( "r_displayRefresh", "0", CVAR_LATCH );
 	AssertCvarRange( r_displayRefresh, 0, 200, qtrue, qfalse );
 	r_fullbright = ri.Cvar_Get ("r_fullbright", "0", CVAR_CHEAT );
-	r_mapOverBrightBits = ri.Cvar_Get ("r_mapOverBrightBits", "1", CVAR_LATCH );
 	r_singleShader = ri.Cvar_Get ("r_singleShader", "0", CVAR_CHEAT | CVAR_LATCH );
 
 	//
@@ -1021,6 +1008,7 @@ void R_Register( void )
 	r_lodCurveError = ri.Cvar_Get( "r_lodCurveError", "250", CVAR_ARCHIVE );
 	r_lodbias = ri.Cvar_Get( "r_lodbias", "0", CVAR_ARCHIVE );
 	r_flares = ri.Cvar_Get ("r_flares", "1", CVAR_ARCHIVE );
+	r_lodscale = ri.Cvar_Get( "r_lodscale", "10", CVAR_ARCHIVE );
 
 	r_znear = ri.Cvar_Get( "r_znear", "4", CVAR_CHEAT );	//if set any lower, you lose a lot of precision in the distance
 	AssertCvarRange( r_znear, 0.001f, 200, qfalse, qfalse );
@@ -1039,8 +1027,8 @@ void R_Register( void )
 #endif
 	r_facePlaneCull = ri.Cvar_Get ("r_facePlaneCull", "1", CVAR_ARCHIVE );
 
-	r_surfaceSprites = ri.Cvar_Get ("r_surfaceSprites", "1", CVAR_CHEAT);
-	r_surfaceWeather = ri.Cvar_Get ("r_surfaceWeather", "0", 0);
+	r_surfaceSprites = ri.Cvar_Get ("r_surfaceSprites", "1", CVAR_TEMP);
+	r_surfaceWeather = ri.Cvar_Get ("r_surfaceWeather", "0", CVAR_TEMP);
 
 	r_windSpeed = ri.Cvar_Get ("r_windSpeed", "0", 0);
 	r_windAngle = ri.Cvar_Get ("r_windAngle", "0", 0);
@@ -1068,7 +1056,7 @@ void R_Register( void )
 	r_nocurves = ri.Cvar_Get ("r_nocurves", "0", CVAR_CHEAT );
 	r_drawworld = ri.Cvar_Get ("r_drawworld", "1", CVAR_CHEAT );
 	r_drawfog = ri.Cvar_Get ("r_drawfog", "1", CVAR_CHEAT );
-	r_lightmap = ri.Cvar_Get ("r_lightmap", "0", 0 );
+	r_lightmap = ri.Cvar_Get ("r_lightmap", "0", CVAR_CHEAT );
 	r_portalOnly = ri.Cvar_Get ("r_portalOnly", "0", CVAR_CHEAT );
 
 	r_flareSize = ri.Cvar_Get ("r_flareSize", "30", 0);
@@ -1078,7 +1066,6 @@ void R_Register( void )
 	r_skipBackEnd = ri.Cvar_Get ("r_skipBackEnd", "0", CVAR_CHEAT);
 
 	r_measureOverdraw = ri.Cvar_Get( "r_measureOverdraw", "0", CVAR_CHEAT );
-	r_lodscale = ri.Cvar_Get( "r_lodscale", "6", CVAR_CHEAT );
 	r_norefresh = ri.Cvar_Get ("r_norefresh", "0", CVAR_CHEAT);
 	r_drawentities = ri.Cvar_Get ("r_drawentities", "1", CVAR_CHEAT );
 	r_ignore = ri.Cvar_Get( "r_ignore", "1", CVAR_TEMP );
@@ -1111,6 +1098,7 @@ Ghoul2 Insert Start
 	r_Ghoul2TimeBase = ri.Cvar_Get( "r_ghoul2timebase", "2", 0);
 	r_Ghoul2NoLerp = ri.Cvar_Get( "r_ghoul2nolerp", "0", 0);
 	r_Ghoul2NoBlend = ri.Cvar_Get( "r_ghoul2noblend", "0", 0);
+	r_Ghoul2BlendMultiplier = ri.Cvar_Get( "r_ghoul2blendmultiplier", "1", 0);
 	r_Ghoul2UnSqashAfterSmooth = ri.Cvar_Get( "r_ghoul2unsquashaftersmooth", "1", 0);
 
 /*

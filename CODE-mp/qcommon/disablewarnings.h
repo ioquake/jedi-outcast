@@ -19,7 +19,7 @@
 #pragma warning(disable : 4305)		// truncation from const double to float
 #pragma warning(disable : 4310)		// cast truncates constant value
 #pragma warning(disable : 4503)		// decorated name length truncated
-#pragma warning(disable:  4505) 	// unreferenced local function has been removed
+//#pragma warning(disable:  4505)!!!remove these to reduce vm size!! // unreferenced local function has been removed
 #pragma warning(disable : 4511)		//copy ctor could not be genned
 #pragma warning(disable : 4512)		//assignment op could not be genned
 #pragma warning(disable : 4514)		// unreffed inline removed

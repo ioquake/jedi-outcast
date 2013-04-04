@@ -17,7 +17,7 @@ CQuickSpriteSystem SQuickSprite;
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-CQuickSpriteSystem::CQuickSpriteSystem()
+CQuickSpriteSystem::CQuickSpriteSystem(void)
 {
 	int i;
 
@@ -38,9 +38,8 @@ CQuickSpriteSystem::CQuickSpriteSystem()
 	}
 }
 
-CQuickSpriteSystem::~CQuickSpriteSystem()
+CQuickSpriteSystem::~CQuickSpriteSystem(void)
 {
-
 }
 
 
@@ -134,6 +133,17 @@ void CQuickSpriteSystem::StartGroup(textureBundle_t *bundle, unsigned long glbit
 		mUseFog = qfalse;
 	}
 
+	int cullingOn;
+	qglGetIntegerv(GL_CULL_FACE,&cullingOn);
+
+	if(cullingOn)
+	{
+		mTurnCullBackOn=true;
+	}
+	else
+	{
+		mTurnCullBackOn=false;
+	}
 	qglDisable(GL_CULL_FACE);
 }
 
@@ -143,7 +153,10 @@ void CQuickSpriteSystem::EndGroup(void)
 	Flush();
 
 	qglColor4ub(255,255,255,255);
-	qglEnable(GL_CULL_FACE);
+	if(mTurnCullBackOn)
+	{
+		qglEnable(GL_CULL_FACE);
+	}
 }
 
 

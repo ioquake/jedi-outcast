@@ -36,20 +36,25 @@ static gentity_t *ent_list[MAX_GENTITIES];
 #define BLASTER_NPC_SPREAD			0.5f
 #define BLASTER_VELOCITY			2300
 #define BLASTER_NPC_VEL_CUT			0.5f
+#define BLASTER_NPC_HARD_VEL_CUT	0.7f
 #define BLASTER_DAMAGE				20
 #define	BLASTER_NPC_DAMAGE_EASY		6
-#define	BLASTER_NPC_DAMAGE_NORMAL	14
-#define	BLASTER_NPC_DAMAGE_HARD		18
+#define	BLASTER_NPC_DAMAGE_NORMAL	12 // 14
+#define	BLASTER_NPC_DAMAGE_HARD		16 // 18
 
 // Tenloss Disruptor
 //----------
 #define DISRUPTOR_MAIN_DAMAGE			14
-#define DISRUPTOR_NPC_MAIN_DAMAGE_CUT	0.25f
+#define DISRUPTOR_NPC_MAIN_DAMAGE_EASY	5
+#define DISRUPTOR_NPC_MAIN_DAMAGE_MEDIUM	10
+#define DISRUPTOR_NPC_MAIN_DAMAGE_HARD	15
 
-#define DISRUPTOR_ALT_DAMAGE			4
-#define DISRUPTOR_NPC_ALT_DAMAGE_SCALE	4
+#define DISRUPTOR_ALT_DAMAGE			12
+#define DISRUPTOR_NPC_ALT_DAMAGE_EASY	15
+#define DISRUPTOR_NPC_ALT_DAMAGE_MEDIUM	25
+#define DISRUPTOR_NPC_ALT_DAMAGE_HARD	30
 #define DISRUPTOR_ALT_TRACES			3		// can go through a max of 3 entities
-#define DISRUPTOR_CHARGE_UNIT			50.0f	// distruptor charging gives us one more unit every 50ms--if you change this, you'll have to do the same in bg_pmove
+#define DISRUPTOR_CHARGE_UNIT			150.0f	// distruptor charging gives us one more unit every 150ms--if you change this, you'll have to do the same in bg_pmove
 
 // Wookie Bowcaster
 //----------
@@ -233,9 +238,8 @@ static void WP_TraceSetStart( const gentity_t *ent, vec3_t start, const vec3_t m
 		return;
 	}
 
-	// man, I'm not so sure about this, but....was having some nasty problems with weapon muzzles in walls so this is sort of a last
-	//	desperate attempt to remedy the situation
-	VectorMA( start, -20, forward, newstart );
+	VectorCopy( ent->currentOrigin, newstart );
+	newstart[2] = start[2]; // force newstart to be on the same plane as the muzzle ( start )
 
 	gi.trace( &tr, newstart, entMins, entMaxs, start, ent->s.number, MASK_SOLID|CONTENTS_SHOTCLIP );
 
@@ -559,8 +563,15 @@ static void WP_FireBlasterMissile( gentity_t *ent, vec3_t start, vec3_t dir, qbo
 
 	// If an enemy is shooting at us, lower the velocity so you have a chance to evade
 	if ( ent->client && ent->client->ps.clientNum != 0 )
-	{		
-		velocity *= BLASTER_NPC_VEL_CUT;
+	{
+		if ( g_spskill->integer < 2 )
+		{		
+			velocity *= BLASTER_NPC_VEL_CUT;
+		}
+		else
+		{
+			velocity *= BLASTER_NPC_HARD_VEL_CUT;
+		}
 	}
 
 	WP_TraceSetStart( ent, start, vec3_origin, vec3_origin );//make sure our start point isn't on the other side of a wall
@@ -656,8 +667,8 @@ static void WP_FireBlaster( gentity_t *ent, qboolean alt_fire )
 //---------------------
 //	Tenloss Disruptor
 //---------------------
-extern qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hitLoc, vec3_t point, vec3_t dir, vec3_t bladeDir );
-int G_GetHitLocFromTrace( trace_t *trace )
+extern qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hitLoc, vec3_t point, vec3_t dir, vec3_t bladeDir, int mod );
+int G_GetHitLocFromTrace( trace_t *trace, int mod )
 {
 	int hitLoc = HL_NONE;
 	for (int i=0; i < MAX_G2_COLLISIONS; i++)
@@ -670,7 +681,7 @@ int G_GetHitLocFromTrace( trace_t *trace )
 		CCollisionRecord &coll = trace->G2CollisionMap[i];
 		if ( (coll.mFlags & G2_FRONTFACE) )
 		{
-			G_GetHitLocFromSurfName( &g_entities[coll.mEntityNum], gi.G2API_GetSurfaceName( &g_entities[coll.mEntityNum].ghoul2[coll.mModelIndex], coll.mSurfaceIndex ), &hitLoc, coll.mCollisionPosition, NULL, NULL );
+			G_GetHitLocFromSurfName( &g_entities[coll.mEntityNum], gi.G2API_GetSurfaceName( &g_entities[coll.mEntityNum].ghoul2[coll.mModelIndex], coll.mSurfaceIndex ), &hitLoc, coll.mCollisionPosition, NULL, NULL, mod );
 			//we only want the first "entrance wound", so break
 			break;
 		}
@@ -691,7 +702,19 @@ static void WP_DisruptorMainFire( gentity_t *ent )
 
 	if ( ent->NPC )
 	{
-		damage *= DISRUPTOR_NPC_MAIN_DAMAGE_CUT;
+		switch ( g_spskill->integer )
+		{
+		case 0:
+			damage = DISRUPTOR_NPC_MAIN_DAMAGE_EASY;
+			break;
+		case 1:
+			damage = DISRUPTOR_NPC_MAIN_DAMAGE_MEDIUM;
+			break;
+		case 2:
+		default:
+			damage = DISRUPTOR_NPC_MAIN_DAMAGE_HARD;
+			break;
+		}
 	}
 
 	VectorCopy( muzzle, start );
@@ -733,6 +756,7 @@ static void WP_DisruptorMainFire( gentity_t *ent )
 
 	// always render a shot beam, doing this the old way because I don't much feel like overriding the effect.
 	tent = G_TempEntity( tr.endpos, EV_DISRUPTOR_MAIN_SHOT );
+	tent->svFlags |= SVF_BROADCAST;
 	VectorCopy( muzzle, tent->s.origin2 );
 
 	if ( render_impact )
@@ -747,14 +771,14 @@ static void WP_DisruptorMainFire( gentity_t *ent )
 				ent->client->ps.persistant[PERS_ACCURACY_HITS]++;
 			} 
 
+			int hitLoc = G_GetHitLocFromTrace( &tr, MOD_DISRUPTOR );
 			if ( traceEnt && traceEnt->client && traceEnt->client->NPC_class == CLASS_GALAKMECH )
 			{//hehe
-				int hitLoc = G_GetHitLocFromTrace( &tr );
-				G_Damage( traceEnt, ent, ent, forward, tr.endpos, 3, DAMAGE_DEATH_KNOCKBACK, MOD_DISRUPTOR, hitLoc );			
+				G_Damage( traceEnt, ent, ent, forward, tr.endpos, 3, DAMAGE_DEATH_KNOCKBACK, MOD_DISRUPTOR, hitLoc );
 			}
 			else
 			{
-				G_Damage( traceEnt, ent, ent, forward, tr.endpos, damage, DAMAGE_DEATH_KNOCKBACK, MOD_DISRUPTOR );			
+				G_Damage( traceEnt, ent, ent, forward, tr.endpos, damage, DAMAGE_DEATH_KNOCKBACK, MOD_DISRUPTOR, hitLoc );
 			}
 		}
 		else 
@@ -793,7 +817,19 @@ void WP_DisruptorAltFire( gentity_t *ent )
 	// The trace start will originate at the eye so we can ensure that it hits the crosshair.
 	if ( ent->NPC )
 	{
-		damage *= DISRUPTOR_NPC_ALT_DAMAGE_SCALE;
+		switch ( g_spskill->integer )
+		{
+		case 0:
+			damage = DISRUPTOR_NPC_ALT_DAMAGE_EASY;
+			break;
+		case 1:
+			damage = DISRUPTOR_NPC_ALT_DAMAGE_MEDIUM;
+			break;
+		case 2:
+		default:
+			damage = DISRUPTOR_NPC_ALT_DAMAGE_HARD;
+			break;
+		}
 		VectorCopy( muzzle, start );
 
 		fullCharge = qtrue;
@@ -804,30 +840,30 @@ void WP_DisruptorAltFire( gentity_t *ent )
 		AngleVectors( ent->client->renderInfo.eyeAngles, forward, NULL, NULL );
 
 		// don't let NPC's do charging
-		int count = ( level.time - ent->client->ps.weaponChargeTime ) / DISRUPTOR_CHARGE_UNIT;
+		int count = ( level.time - ent->client->ps.weaponChargeTime - 50 ) / DISRUPTOR_CHARGE_UNIT;
 
 		if ( count < 1 )
 		{
 			count = 1;
 		}
-		else if ( count >= 30 )
+		else if ( count >= 10 )
 		{
-			count = 30;
+			count = 10;
 			fullCharge = qtrue;
 		}
 
 		// more powerful charges go through more things
-		if ( count < 10 )
+		if ( count < 3 )
 		{
 			traces = 1;
 		}
-		else if ( count < 20 )
+		else if ( count < 6 )
 		{
 			traces = 2;
 		}
 		//else do full traces
 
-		damage *= count + DISRUPTOR_MAIN_DAMAGE * 0.75f; // give a boost to low charge shots
+		damage = damage * count + DISRUPTOR_MAIN_DAMAGE * 0.5f; // give a boost to low charge shots
 	}
 
 	skip = ent->s.number;
@@ -866,6 +902,7 @@ void WP_DisruptorAltFire( gentity_t *ent )
 
 		// always render a shot beam, doing this the old way because I don't much feel like overriding the effect.
 		tent = G_TempEntity( tr.endpos, EV_DISRUPTOR_SNIPER_SHOT );
+		tent->svFlags |= SVF_BROADCAST;
 		tent->alt_fire = fullCharge; // mark us so we can alter the effect
 
 		VectorCopy( muzzle2, tent->s.origin2 );
@@ -887,28 +924,30 @@ void WP_DisruptorAltFire( gentity_t *ent )
 		{
 			if ( render_impact )
 			{
-				if ( tr.entityNum < ENTITYNUM_WORLD && traceEnt->takedamage )
+				if (( tr.entityNum < ENTITYNUM_WORLD && traceEnt->takedamage ) || !Q_stricmp( traceEnt->classname, "misc_model_breakable" ) 
+					|| traceEnt->s.eType == ET_MOVER )
 				{
 					// Create a simple impact type mark that doesn't last long in the world
 					G_PlayEffect( G_EffectIndex( "disruptor/alt_hit" ), tr.endpos, tr.plane.normal );
 
 					if ( traceEnt->client && LogAccuracyHit( traceEnt, ent )) 
-					{
+					{//NOTE: hitting multiple ents can still get you over 100% accuracy
 						ent->client->ps.persistant[PERS_ACCURACY_HITS]++;
 					} 
 
+					int hitLoc = G_GetHitLocFromTrace( &tr, MOD_DISRUPTOR );
 					if ( traceEnt && traceEnt->client && traceEnt->client->NPC_class == CLASS_GALAKMECH )
 					{//hehe
-						int hitLoc = G_GetHitLocFromTrace( &tr );
-						G_Damage( traceEnt, ent, ent, forward, tr.endpos, 10, DAMAGE_NO_KNOCKBACK, fullCharge ? MOD_SNIPER : MOD_DISRUPTOR, hitLoc );			
+						G_Damage( traceEnt, ent, ent, forward, tr.endpos, 10, DAMAGE_NO_KNOCKBACK|DAMAGE_NO_HIT_LOC, fullCharge ? MOD_SNIPER : MOD_DISRUPTOR, hitLoc );			
 						break;
 					}
-					G_Damage( traceEnt, ent, ent, forward, tr.endpos, damage, DAMAGE_NO_KNOCKBACK, fullCharge ? MOD_SNIPER : MOD_DISRUPTOR );			
+					G_Damage( traceEnt, ent, ent, forward, tr.endpos, damage, DAMAGE_NO_KNOCKBACK|DAMAGE_NO_HIT_LOC, fullCharge ? MOD_SNIPER : MOD_DISRUPTOR, hitLoc );
 				}
 				else 
 				{
 					 // we only make this mark on things that can't break or move
 					tent = G_TempEntity( tr.endpos, EV_DISRUPTOR_SNIPER_MISS );
+					tent->svFlags |= SVF_BROADCAST;
 					VectorCopy( tr.plane.normal, tent->pos1 );
 					break; // hit solid, but doesn't take damage, so stop the shot...we _could_ allow it to shoot through walls, might be cool?
 				}
@@ -1022,9 +1061,14 @@ static void WP_BowcasterMainFire( gentity_t *ent )
 
 		vectoangles( forward, angs );
 
-		// add some slop to the alt-fire direction
+		// add some slop to the fire direction
 		angs[PITCH] += crandom() * BOWCASTER_ALT_SPREAD * 0.2f;
 		angs[YAW]	+= ((i+0.5f) * BOWCASTER_ALT_SPREAD - count * 0.5f * BOWCASTER_ALT_SPREAD );
+		if ( ent->NPC )
+		{
+			angs[PITCH] += ( crandom() * (BLASTER_NPC_SPREAD+(6-ent->NPC->currentAim)*0.25f) );
+			angs[YAW]	+= ( crandom() * (BLASTER_NPC_SPREAD+(6-ent->NPC->currentAim)*0.25f) );
+		}
 		
 		AngleVectors( angs, dir, NULL, NULL );
 
@@ -1050,6 +1094,7 @@ static void WP_BowcasterMainFire( gentity_t *ent )
 
 		// we don't want it to bounce
 		missile->bounceCount = 0;
+		ent->client->sess.missionStats.shotsFired++;
 	}
 }
 
@@ -1404,7 +1449,7 @@ void DEMP2_AltRadiusDamage( gentity_t *ent )
 		// push the center of mass higher than the origin so players get knocked into the air more
 		dir[2] += 12;
 
-		G_Damage( gent, NULL, ent, dir, ent->currentOrigin, DEMP2_ALT_DAMAGE, DAMAGE_DEATH_KNOCKBACK, ent->splashMethodOfDeath );
+		G_Damage( gent, ent, ent->owner, dir, ent->currentOrigin, DEMP2_ALT_DAMAGE, DAMAGE_DEATH_KNOCKBACK, ent->splashMethodOfDeath );
 		if ( gent->takedamage && gent->client ) 
 		{
 			gent->s.powerups |= ( 1 << PW_SHOCKED );
@@ -1574,6 +1619,7 @@ static void WP_FlechetteMainFire( gentity_t *ent )
 		missile->bounceCount = Q_irand(1,2);
 
 		missile->s.eFlags |= EF_BOUNCE_SHRAPNEL;
+		ent->client->sess.missionStats.shotsFired++;
 	}
 }
 
@@ -1606,7 +1652,7 @@ void prox_mine_think( gentity_t *ent )
 
 	if ( blow )
 	{
-		G_Sound( ent, G_SoundIndex( "sound/weapons/flechette/warning.wav" ));
+//		G_Sound( ent, G_SoundIndex( "sound/weapons/flechette/warning.wav" ));
 		ent->e_ThinkFunc = thinkF_WP_Explode;
 		ent->nextthink = level.time + 200;
 	}
@@ -1706,6 +1752,7 @@ static void WP_CreateFlechetteBouncyThing( vec3_t start, vec3_t fwd, gentity_t *
 	VectorSet( missile->mins, -3.0f, -3.0f, -3.0f );
 	VectorSet( missile->maxs, 3.0f, 3.0f, 3.0f );
 	missile->clipmask = MASK_SHOT;
+	missile->clipmask &= ~CONTENTS_CORPSE;
 
 	// normal ones bounce, alt ones explode on impact
 	missile->s.pos.trType = TR_GRAVITY;
@@ -1745,6 +1792,7 @@ static void WP_FlechetteAltFire( gentity_t *self )
 		AngleVectors( dir, fwd, NULL, NULL );
 
 		WP_CreateFlechetteBouncyThing( start, fwd, self );
+		self->client->sess.missionStats.shotsFired++;
 	}
 }
 
@@ -1783,6 +1831,22 @@ void rocketThink( gentity_t *ent )
 		VectorCopy( ent->enemy->currentOrigin, org );
 		org[2] += (ent->enemy->mins[2] + ent->enemy->maxs[2]) * 0.5f;
 
+		if ( ent->enemy->client )
+		{
+			switch( ent->enemy->client->NPC_class )
+			{
+			case CLASS_ATST:
+				org[2] += 80;
+				break;
+			case CLASS_MARK1:
+				org[2] += 40;
+				break;
+			case CLASS_PROBE:
+				org[2] += 60;
+				break;
+			}
+		}
+
 		VectorSubtract( org, ent->currentOrigin, targetdir );
 		VectorNormalize( targetdir );
 
@@ -1799,19 +1863,19 @@ void rocketThink( gentity_t *ent )
 			if ( dot2 > 0 )
 			{	
 				// Turn 45 degrees right.
-				VectorMA( ent->movedir, 0.4f, right, newdir );
+				VectorMA( ent->movedir, 0.3f, right, newdir );
 			}
 			else
 			{	
 				// Turn 45 degrees left.
-				VectorMA(ent->movedir, -0.4f, right, newdir);
+				VectorMA(ent->movedir, -0.3f, right, newdir);
 			}
 
 			// Yeah we've adjusted horizontally, but let's split the difference vertically, so we kinda try to move towards it.
 			newdir[2] = ( targetdir[2] + ent->movedir[2] ) * 0.5;
 
-			// let's also slow down a lot
-			vel *= 0.5f;
+			// slowing down coupled with fairly tight turns can lead us to orbit an enemy..looks bad so don't do it!
+//			vel *= 0.5f;
 		}
 		else if ( dot < 0.70f )
 		{	
@@ -1897,10 +1961,10 @@ static void WP_FireRocket( gentity_t *ent, qboolean alt_fire )
 	if ( alt_fire )
 	{
 		int	lockEntNum, lockTime;
-		if ( ent->NPC )
+		if ( ent->NPC && ent->enemy )
 		{
 			lockEntNum = ent->enemy->s.number;
-			lockTime = 1200;
+			lockTime = Q_irand( 600, 1200 );
 		}
 		else
 		{
@@ -2050,7 +2114,7 @@ static void WP_DropDetPack( gentity_t *self, vec3_t start, vec3_t dir )
 	VectorSet( missile->s.modelScale, 1.0f, 1.0f, 1.0f );
 	gi.G2API_InitGhoul2Model( missile->ghoul2, weaponData[WP_DET_PACK].missileMdl, G_ModelIndex( weaponData[WP_DET_PACK].missileMdl ));
 
-	AddSoundEvent( NULL, missile->currentOrigin, 128, AEL_MINOR );
+	AddSoundEvent( NULL, missile->currentOrigin, 128, AEL_MINOR, qtrue );
 	AddSightEvent( NULL, missile->currentOrigin, 128, AEL_SUSPICIOUS, 10 );
 }
 
@@ -2188,7 +2252,7 @@ void WP_prox_mine_think( gentity_t *ent )
 
 	if ( blow )
 	{
-		G_Sound( ent, G_SoundIndex( "sound/weapons/flechette/warning.wav" ));
+//		G_Sound( ent, G_SoundIndex( "sound/weapons/flechette/warning.wav" ));
 		ent->e_ThinkFunc = thinkF_WP_Explode;
 		ent->nextthink = level.time + 200;
 	}
@@ -2664,9 +2728,10 @@ gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean alt_fire )
 	bolt->mass = 10;
 
 	// How 'bout we give this thing a size...
-	VectorSet( bolt->mins, -6.0f, -6.0f, -6.0f );
-	VectorSet( bolt->maxs, 6.0f, 6.0f, 6.0f );
+	VectorSet( bolt->mins, -4.0f, -4.0f, -4.0f );
+	VectorSet( bolt->maxs, 4.0f, 4.0f, 4.0f );
 	bolt->clipmask = MASK_SHOT;
+	bolt->clipmask &= ~CONTENTS_CORPSE;
 	bolt->contents = CONTENTS_SHOTCLIP;
 	bolt->takedamage = qtrue;
 	bolt->health = 15;
@@ -2827,15 +2892,15 @@ void WP_ATSTMainFire( gentity_t *ent )
 {
 	float vel = ATST_MAIN_VEL;
 
-	if ( ent->client && (ent->client->ps.eFlags & EF_IN_ATST ))
-	{
-		vel = 4500.0f;
-	}
+//	if ( ent->client && (ent->client->ps.eFlags & EF_IN_ATST ))
+//	{
+//		vel = 4500.0f;
+//	}
 
 	if ( !ent->s.number )
 	{
 		// player shoots faster
-		vel *= 1.5f;
+		vel *= 1.6f;
 	}
 
 	gentity_t	*missile = CreateMissile( muzzle, forward, vel, 10000, ent );
@@ -2970,12 +3035,12 @@ void WP_FireStunBaton( gentity_t *ent, qboolean alt_fire )
 
 	VectorMA( start, STUN_BATON_RANGE, forward, end );
 
-	VectorSet( maxs, 6, 6, 6 );
+	VectorSet( maxs, 5, 5, 5 );
 	VectorScale( maxs, -1, mins );
 
-	gi.trace ( &tr, start, mins, maxs, end, ent->s.number, MASK_SHOT );
+	gi.trace ( &tr, start, mins, maxs, end, ent->s.number, CONTENTS_SOLID|CONTENTS_BODY|CONTENTS_SHOTCLIP );
 
-	if ( tr.entityNum >= ENTITYNUM_WORLD )
+	if ( tr.entityNum >= ENTITYNUM_WORLD || tr.entityNum < 0 )
 	{
 		return;
 	}
@@ -2990,14 +3055,11 @@ void WP_FireStunBaton( gentity_t *ent, qboolean alt_fire )
 //		G_Sound( tr_ent, G_SoundIndex( va("sound/weapons/melee/punch%d", Q_irand(1, 4)) ) );
 		tr_ent->client->ps.powerups[PW_SHOCKED] = level.time + 1500;
 
-		if ( alt_fire )
-		{
-			G_Damage( tr_ent, ent, ent, forward, tr.endpos, STUN_BATON_ALT_DAMAGE, 0, MOD_MELEE );
-		}
-		else
-		{
-			G_Damage( tr_ent, ent, ent, forward, tr.endpos, STUN_BATON_DAMAGE, DAMAGE_NO_KNOCKBACK, MOD_MELEE );
-		}
+		G_Damage( tr_ent, ent, ent, forward, tr.endpos, STUN_BATON_DAMAGE, DAMAGE_NO_KNOCKBACK, MOD_MELEE );
+	}
+	else if ( tr_ent->svFlags & SVF_GLASS_BRUSH || ( tr_ent->svFlags & SVF_BBRUSH && tr_ent->material == 12 )) // material grate...we are breaking a grate!
+	{
+		G_Damage( tr_ent, ent, ent, forward, tr.endpos, 999, DAMAGE_NO_KNOCKBACK, MOD_MELEE ); // smash that puppy
 	}
 }
 
@@ -3062,6 +3124,22 @@ void AddLeanOfs(const gentity_t *const ent, vec3_t point)
 }
 
 //---------------------------------------------------------
+void SubtractLeanOfs(const gentity_t *const ent, vec3_t point)
+//---------------------------------------------------------
+{
+	if(ent->client)
+	{
+		if(ent->client->ps.leanofs)
+		{
+			vec3_t	right;
+			//add leaning offset
+			AngleVectors( ent->client->ps.viewangles, NULL, right, NULL );
+			VectorMA( point, ent->client->ps.leanofs*-1, right, point );
+		}
+	}
+}
+
+//---------------------------------------------------------
 void ViewHeightFix(const gentity_t *const ent)
 //---------------------------------------------------------
 {
@@ -3088,6 +3166,79 @@ void ViewHeightFix(const gentity_t *const ent)
 		if ( ent->client->ps.viewheight!=ent->client->standheight + STANDARD_VIEWHEIGHT_OFFSET )
 			ent->client->ps.viewheight = ent->client->standheight + STANDARD_VIEWHEIGHT_OFFSET;
 	}
+}
+
+qboolean W_AccuracyLoggableWeapon( int weapon, qboolean alt_fire, int mod )
+{
+	if ( mod != MOD_UNKNOWN )
+	{
+		switch( mod ) 
+		{
+		//standard weapons
+		case MOD_BRYAR:
+		case MOD_BRYAR_ALT:
+		case MOD_BLASTER:
+		case MOD_BLASTER_ALT:
+		case MOD_DISRUPTOR:
+		case MOD_SNIPER:
+		case MOD_BOWCASTER:
+		case MOD_BOWCASTER_ALT:
+		case MOD_ROCKET:
+		case MOD_ROCKET_ALT:
+			return qtrue;
+			break;
+		//non-alt standard
+		case MOD_REPEATER:
+		case MOD_DEMP2:
+		case MOD_FLECHETTE:
+			return qtrue;
+			break;
+		//emplaced gun
+		case MOD_EMPLACED:
+			return qtrue;
+			break;
+		//atst
+		case MOD_ENERGY:
+		case MOD_EXPLOSIVE:
+			if ( weapon == WP_ATST_MAIN || weapon == WP_ATST_SIDE )
+			{
+				return qtrue;
+			}
+			break;
+		}
+	}
+	else if ( weapon != WP_NONE )
+	{	
+		switch( weapon ) 
+		{
+		case WP_BRYAR_PISTOL:
+		case WP_BLASTER:
+		case WP_DISRUPTOR:
+		case WP_BOWCASTER:
+		case WP_ROCKET_LAUNCHER:
+			return qtrue;
+			break;
+		//non-alt standard
+		case WP_REPEATER:
+		case WP_DEMP2:
+		case WP_FLECHETTE:
+			if ( !alt_fire )
+			{
+				return qtrue;
+			}
+			break;
+		//emplaced gun
+		case WP_EMPLACED_GUN:
+			return qtrue;
+			break;
+		//atst
+		case WP_ATST_MAIN:
+		case WP_ATST_SIDE:
+			return qtrue;
+			break;
+		}
+	}
+	return qfalse;
 }
 
 /*
@@ -3225,7 +3376,7 @@ void CalcMuzzlePoint( gentity_t *const ent, vec3_t forward, vec3_t right, vec3_t
 void FireWeapon( gentity_t *ent, qboolean alt_fire ) 
 //---------------------------------------------------------
 {
-	qboolean alert = qtrue;
+	float alert = 256;
 
 	// track shots taken for accuracy tracking. 
 	ent->client->ps.persistant[PERS_ACCURACY_SHOTS]++;
@@ -3351,6 +3502,7 @@ void FireWeapon( gentity_t *ent, qboolean alt_fire )
 		break;
 
 	case WP_DISRUPTOR:
+		alert = 50; // if you want it to alert enemies, remove this
 		WP_FireDisruptor( ent, alt_fire );
 		break;
 
@@ -3379,12 +3531,12 @@ void FireWeapon( gentity_t *ent, qboolean alt_fire )
 		break;
 
 	case WP_TRIP_MINE:
-		alert = qfalse; // if you want it to alert enemies, remove this
+		alert = 0; // if you want it to alert enemies, remove this
 		WP_PlaceLaserTrap( ent, alt_fire );
 		break;
 
 	case WP_DET_PACK:
-		alert = qfalse; // if you want it to alert enemies, remove this
+		alert = 0; // if you want it to alert enemies, remove this
 		WP_FireDetPack( ent, alt_fire );
 		break;
 
@@ -3398,6 +3550,7 @@ void FireWeapon( gentity_t *ent, qboolean alt_fire )
 		break;
 
 	case WP_MELEE:
+		alert = 0; // if you want it to alert enemies, remove this
 		WP_Melee( ent );
 		break;
 
@@ -3462,13 +3615,19 @@ void FireWeapon( gentity_t *ent, qboolean alt_fire )
 
 	if ( !ent->s.number )
 	{
-		ent->client->sess.missionStats.shotsFired++;
+		if ( ent->s.weapon == WP_FLECHETTE || (ent->s.weapon == WP_BOWCASTER && !alt_fire) )
+		{//these can fire multiple shots, count them individually within the firing functions
+		}
+		else if ( W_AccuracyLoggableWeapon( ent->s.weapon, alt_fire, MOD_UNKNOWN ) )
+		{
+			ent->client->sess.missionStats.shotsFired++;
+		}
 	}
 	// We should probably just use this as a default behavior, in special cases, just set alert to false.
-	if ( ent->s.number == 0 && alert )
+	if ( ent->s.number == 0 && alert > 0 )
 	{
-		AddSoundEvent( ent, muzzle, 256, AEL_DISCOVERED );
-		AddSightEvent( ent, muzzle, 512, AEL_DISCOVERED, 20 );
+		AddSoundEvent( ent, muzzle, alert, AEL_DISCOVERED );
+		AddSightEvent( ent, muzzle, alert*2, AEL_DISCOVERED, 20 );
 	}
 }
 
@@ -3485,7 +3644,7 @@ void FireWeapon( gentity_t *ent, qboolean alt_fire )
  FACING - player must be facing relatively in the same direction as the gun in order to use it
  VULNERABLE - allow the gun to take damage
 
- count - how much ammo to give this gun ( default 400 )
+ count - how much ammo to give this gun ( default 999 )
  health - how much damage the gun can take before it blows ( default 250 )
  delay - ONLY AFFECTS NPCs - time between shots ( default 200 on hardest setting )
  wait - ONLY AFFECTS NPCs - time between bursts ( default 800 on hardest setting )
@@ -3514,6 +3673,12 @@ void emplaced_gun_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 		return; // only a client can use it.
 	}
 
+	if ( self->activator )
+	{
+		// someone is already in the gun.
+		return;
+	}
+
 	// We'll just let the designers duke this one out....I mean, as to whether they even want to limit such a thing.
 	if ( self->spawnflags & EMPLACED_FACING )
 	{
@@ -3537,6 +3702,11 @@ void emplaced_gun_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 	{
 		int	oldWeapon = activator->s.weapon;
 
+		if ( oldWeapon == WP_SABER )
+		{
+			self->alt_fire = activator->client->ps.saberActive;
+		}
+
 		// swap the users weapon with the emplaced gun and add the ammo the gun has to the player
 		activator->client->ps.weapon = self->s.weapon;
 		Add_Ammo( activator, WP_EMPLACED_GUN, self->count );
@@ -3546,7 +3716,7 @@ void emplaced_gun_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 		activator->owner = self; // kind of dumb, but when we are locked to the weapon, we are owned by it.
 		self->activator = activator;
 
-		if ( activator->weaponModel != -1 )
+		if ( activator->weaponModel >= 0 )
 		{
 			// rip that gun out of their hands....
 			gi.G2API_RemoveGhoul2Model( activator->ghoul2, activator->weaponModel );
@@ -3556,7 +3726,7 @@ void emplaced_gun_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 extern void ChangeWeapon( gentity_t *ent, int newWeapon );
 		if ( activator->NPC )
 		{
-			if ( activator->weaponModel != -1 )
+			if ( activator->weaponModel >= 0 )
 			{
 				// rip that gun out of their hands....
 				gi.G2API_RemoveGhoul2Model( activator->ghoul2, activator->weaponModel );
@@ -3574,6 +3744,7 @@ extern void ChangeWeapon( gentity_t *ent, int newWeapon );
 		{
 			// we don't want for it to draw the weapon select stuff
 			cg.weaponSelect = WP_EMPLACED_GUN;
+			CG_CenterPrint( "@INGAME_EXIT_VIEW", SCREEN_HEIGHT * 0.95 );
 		}
 		// Since we move the activator inside of the gun, we reserve a solid spot where they were standing in order to be able to get back out without being in solid
 		if ( self->nextTrain )
@@ -3717,9 +3888,10 @@ void emplaced_gun_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacke
 	ugly[ROLL] = crandom() * 7;
 	gi.G2API_SetBoneAnglesIndex( &self->ghoul2[self->playerModel], self->lowerLumbarBone, ugly, BONE_ANGLES_POSTMULT, POSITIVE_Y, POSITIVE_Z, POSITIVE_X, NULL ); 
 
-	VectorSet( org, 0, 0, 1 );
+	VectorCopy( self->currentOrigin,  org );
+	org[2] += 20;
 
-	G_PlayEffect( "emplaced/explode", self->currentOrigin, org );
+	G_PlayEffect( "emplaced/explode", org );
 
 	// create some persistent smoke by using a dynamically created fx runner
 	gentity_t *ent = G_Spawn();
@@ -3765,9 +3937,11 @@ void SP_emplaced_gun( gentity_t *ent )
 	VectorSet( ent->mins, -30, -30, -5 );
 	VectorSet( ent->maxs, 30, 30, 60 );
 
-	if ( ent->spawnflags & EMPLACED_VULNERABLE )
+	ent->takedamage = qtrue;
+
+	if ( !( ent->spawnflags & EMPLACED_VULNERABLE ))
 	{
-		ent->takedamage = qtrue;
+		ent->flags |= FL_GODMODE;
 	}
 
 	ent->s.radius = 110;
@@ -3785,7 +3959,7 @@ void SP_emplaced_gun( gentity_t *ent )
 	G_SoundIndex( "sound/weapons/emplaced/emplaced_move_lp.wav" );
 
 	// Set up our defaults and override with custom amounts as necessary
-	G_SpawnInt( "count", "600", &ent->count );
+	G_SpawnInt( "count", "999", &ent->count );
 	G_SpawnInt( "health", "250", &ent->health );
 	G_SpawnInt( "splashDamage", "80", &ent->splashDamage );
 	G_SpawnInt( "splashRadius", "128", &ent->splashRadius );

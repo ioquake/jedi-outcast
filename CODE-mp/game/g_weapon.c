@@ -48,7 +48,7 @@ static	vec3_t	muzzle;
 // Heavy Repeater
 //----------
 #define REPEATER_SPREAD				1.4f
-#define	REPEATER_DAMAGE				8
+#define	REPEATER_DAMAGE				14
 #define	REPEATER_VELOCITY			1600
 
 #define REPEATER_ALT_SIZE				3	// half of bbox size
@@ -70,9 +70,9 @@ static	vec3_t	muzzle;
 
 // Golan Arms Flechette
 //---------
-#define FLECHETTE_SHOTS				6
+#define FLECHETTE_SHOTS				5
 #define FLECHETTE_SPREAD			4.0f
-#define FLECHETTE_DAMAGE			10//15
+#define FLECHETTE_DAMAGE			12//15
 #define FLECHETTE_VEL				3500
 #define FLECHETTE_SIZE				1
 #define FLECHETTE_MINE_RADIUS_CHECK	256
@@ -810,6 +810,28 @@ static void WP_BowcasterMainFire( gentity_t *ent )
 		count--;
 	}
 
+	//scale the damage down based on how many are about to be fired
+	if (count <= 1)
+	{
+		damage = 50;
+	}
+	else if (count == 2)
+	{
+		damage = 45;
+	}
+	else if (count == 3)
+	{
+		damage = 40;
+	}
+	else if (count == 4)
+	{
+		damage = 35;
+	}
+	else
+	{
+		damage = 30;
+	}
+
 	for (i = 0; i < count; i++ )
 	{
 		// create a range of different velocities
@@ -1075,7 +1097,10 @@ void DEMP2_AltRadiusDamage( gentity_t *ent )
 		// push the center of mass higher than the origin so players get knocked into the air more
 		dir[2] += 12;
 
-		G_Damage( gent, myOwner, myOwner, dir, ent->r.currentOrigin, ent->damage, DAMAGE_DEATH_KNOCKBACK, ent->splashMethodOfDeath );
+		if (gent != myOwner)
+		{
+			G_Damage( gent, myOwner, myOwner, dir, ent->r.currentOrigin, ent->damage, DAMAGE_DEATH_KNOCKBACK, ent->splashMethodOfDeath );
+		}
 	}
 
 	// store the last fraction so that next time around we can test against those things that fall between that last point and where the current shockwave edge is
@@ -1633,7 +1658,7 @@ THERMAL DETONATOR
 ======================================================================
 */
 
-#define TD_DAMAGE			100
+#define TD_DAMAGE			70 //only do 70 on a direct impact
 #define TD_SPLASH_RAD		128
 #define TD_SPLASH_DAM		90
 #define TD_VELOCITY			900
@@ -1822,7 +1847,7 @@ void laserTrapExplode( gentity_t *self )
 
 	if (self->activator)
 	{
-		G_RadiusDamage( self->r.currentOrigin, self->activator, self->splashDamage, self->splashRadius, self, MOD_UNKNOWN/*MOD_LT_SPLASH*/ );
+		G_RadiusDamage( self->r.currentOrigin, self->activator, self->splashDamage, self->splashRadius, self, MOD_TRIP_MINE_SPLASH/*MOD_LT_SPLASH*/ );
 	}
 	//FIXME: clear me from owner's list of tripmines?
 
@@ -1978,7 +2003,7 @@ void laserTrapStick( gentity_t *ent, vec3_t endpos, vec3_t normal )
 	{
 		ent->touch = touchLaserTrap;
 		ent->think = laserTrapExplode;
-		ent->nextthink = level.time + 0;//LT_ALT_TIME; // How long 'til she blows
+		ent->nextthink = level.time + LT_ALT_TIME; // How long 'til she blows
 	}
 }
 
@@ -1997,8 +2022,8 @@ void CreateLaserTrap( gentity_t *laserTrap, vec3_t start, gentity_t *owner )
 	laserTrap->splashDamage = LT_SPLASH_DAM;//*2;
 	laserTrap->splashRadius = LT_SPLASH_RAD;//*2;
 	laserTrap->damage = LT_DAMAGE;//*DMG_VAR;
-	laserTrap->methodOfDeath = MOD_UNKNOWN;//MOD_TRIP_WIRE;
-	laserTrap->splashMethodOfDeath = MOD_UNKNOWN;//MOD_TRIP_WIRE;
+	laserTrap->methodOfDeath = MOD_TRIP_MINE_SPLASH;//MOD_TRIP_WIRE;
+	laserTrap->splashMethodOfDeath = MOD_TRIP_MINE_SPLASH;//MOD_TRIP_WIRE;
 	laserTrap->s.eType = ET_GENERAL;
 	laserTrap->r.svFlags = SVF_USE_CURRENT_ORIGIN;
 	laserTrap->s.weapon = WP_TRIP_MINE;
@@ -2116,21 +2141,11 @@ void WP_PlaceLaserTrap( gentity_t *ent, qboolean alt_fire )
 
 	//now make the new one
 	CreateLaserTrap( laserTrap, start, ent );
-	if (alt_fire)
-	{
-		laserTrap->splashRadius /= 2;
-	}
 
 	//set player-created-specific fields
 	laserTrap->setTime = level.time;//remember when we placed it
 
-	if ( alt_fire )
-	{//explode after 2 second
-		//doesn't activate until it latches
-		//laserTrap->think = laserTrap;
-		//laserTrap->nextthink = level.time + LT_TIME; // How long 'til she blows
-	}
-	else
+	if (!alt_fire)
 	{//tripwire
 		laserTrap->count = 1;
 	}
@@ -2201,7 +2216,7 @@ void charge_stick (gentity_t *self, gentity_t *other, trace_t *trace)
 		VectorClear(self->s.apos.trDelta);
 		self->s.apos.trType = TR_STATIONARY;
 
-		G_RadiusDamage( self->r.currentOrigin, self->parent, self->splashDamage, self->splashRadius, self, MOD_UNKNOWN );
+		G_RadiusDamage( self->r.currentOrigin, self->parent, self->splashDamage, self->splashRadius, self, MOD_DET_PACK_SPLASH );
 		VectorCopy(trace->plane.normal, v);
 		VectorCopy(v, self->pos2);
 		self->count = -1;
@@ -2258,7 +2273,7 @@ void DetPackBlow(gentity_t *self)
 	self->die = 0;
 	self->takedamage = qfalse;
 
-	G_RadiusDamage( self->r.currentOrigin, self->parent, self->splashDamage, self->splashRadius, self, MOD_UNKNOWN );
+	G_RadiusDamage( self->r.currentOrigin, self->parent, self->splashDamage, self->splashRadius, self, MOD_DET_PACK_SPLASH );
 	v[0] = 0;
 	v[1] = 0;
 	v[2] = 1;
@@ -2309,8 +2324,8 @@ void drop_charge (gentity_t *self, vec3_t start, vec3_t dir)
 	bolt->damage = 100;
 	bolt->splashDamage = 200;
 	bolt->splashRadius = 200;
-	bolt->methodOfDeath = MOD_UNKNOWN;//MOD_EXPLOSIVE;
-	bolt->splashMethodOfDeath = MOD_UNKNOWN;//MOD_EXPLOSIVE_SPLASH;
+	bolt->methodOfDeath = MOD_DET_PACK_SPLASH;//MOD_EXPLOSIVE;
+	bolt->splashMethodOfDeath = MOD_DET_PACK_SPLASH;//MOD_EXPLOSIVE_SPLASH;
 	bolt->clipmask = MASK_SHOT;
 	bolt->s.solid = 2;
 	bolt->r.contents = MASK_SHOT;
@@ -2321,8 +2336,10 @@ void drop_charge (gentity_t *self, vec3_t start, vec3_t dir)
 	bolt->s.genericenemyindex = self->s.number+1024;
 	//rww - so client prediction knows we own this and won't hit it
 
-	VectorSet( bolt->r.mins, -3, -3, -3 );
-	VectorSet( bolt->r.maxs, 3, 3, 3 );
+//	VectorSet( bolt->r.mins, -3, -3, -3 );
+//	VectorSet( bolt->r.maxs, 3, 3, 3 );
+	VectorSet( bolt->r.mins, -2, -2, -2 );
+	VectorSet( bolt->r.maxs, 2, 2, 2 );
 
 	bolt->health = 1;
 	bolt->takedamage = qtrue;
@@ -2531,14 +2548,8 @@ void WP_FireStunBaton( gentity_t *ent, qboolean alt_fire )
 		// TEMP!
 		G_Sound( tr_ent, CHAN_WEAPON, G_SoundIndex( va("sound/weapons/melee/punch%d", Q_irand(1, 4)) ) );
 
-		if ( alt_fire )
-		{
-			G_Damage( tr_ent, ent, ent, forward, tr.endpos, STUN_BATON_ALT_DAMAGE, DAMAGE_HALF_ABSORB, MOD_STUN_BATON );
-		}
-		else
-		{
-			G_Damage( tr_ent, ent, ent, forward, tr.endpos, STUN_BATON_DAMAGE, (DAMAGE_NO_KNOCKBACK|DAMAGE_HALF_ABSORB), MOD_STUN_BATON );
-		}
+		G_Damage( tr_ent, ent, ent, forward, tr.endpos, STUN_BATON_DAMAGE, (DAMAGE_NO_KNOCKBACK|DAMAGE_HALF_ABSORB), MOD_STUN_BATON );
+		//alt-fire?
 
 		if (tr_ent->client)
 		{ //if it's a player then use the shock effect

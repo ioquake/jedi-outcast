@@ -9,6 +9,7 @@
 #include "../ui/gameinfo.h"
 #include "g_shared.h"
 #include "anims.h"
+#include "dmstates.h"
 
 //==================================================================
 
@@ -47,6 +48,7 @@
 #define FL_LOCK_PLAYER_WEAPONS	0x00010000	// player can't switch weapons... ask james if there's a better spot for this
 #define FL_DISINTEGRATED		0x00020000	// marks that the corpse has already been disintegrated
 #define FL_FORCE_PULLABLE_ONLY	0x00040000	// cannot be force pushed
+#define FL_NO_IMPACT_DMG		0x00080000	// Will not take impact damage
 
 //Pointer safety utilities
 #define VALID( a )		( a != NULL )
@@ -113,6 +115,7 @@ typedef struct alertEvent_s
 	float				light;		//ambient light level at point
 	float				addLight;	//additional light- makes it more noticable, even in darkness
 	int					ID;			//unique... if get a ridiculous number, this will repeat, but should not be a problem as it's just comparing it to your lastAlertID
+	int					timestamp;	//when it was created
 } alertEvent_t;
 
 //
@@ -164,6 +167,8 @@ typedef struct
 	int				numKnownAnimFileSets;
 
 	int				worldFlags;
+
+	int				dmState;		//actually, we do want save/load the dynamic music state
 // =====================================
 //
 // NOTE!!!!!!   The only things beyond this point in the structure should be the ones you do NOT wish to be
@@ -184,7 +189,6 @@ typedef struct
 	int			numCombatPoints;
 	char		spawntarget[MAX_QPATH];		// the targetname of the spawnpoint you want the player to start at
 
-	int			dmState;
 	int			dmDebounceTime;
 	int			dmBeatTime;
 } level_locals_t;
@@ -486,9 +490,9 @@ void G_WriteSessionData( void );
 // NPC_senses.cpp
 //
 extern void AddSightEvent( gentity_t *owner, vec3_t position, float radius, alertEventLevel_e alertLevel, float addLight=0.0f );
-extern void AddSoundEvent( gentity_t *owner, vec3_t position, float radius, alertEventLevel_e alertLevel );
+extern void AddSoundEvent( gentity_t *owner, vec3_t position, float radius, alertEventLevel_e alertLevel, qboolean needLOS = qfalse );
 extern qboolean G_CheckForDanger( gentity_t *self, int alertEvent );
-extern int G_CheckAlertEvents( gentity_t *self, qboolean checkSight, qboolean checkSound, float maxSeeDist, float maxHearDist, qboolean mustHaveOwner = qfalse, int minAlertLevel = AEL_MINOR );
+extern int G_CheckAlertEvents( gentity_t *self, qboolean checkSight, qboolean checkSound, float maxSeeDist, float maxHearDist, int ignoreAlert = -1, qboolean mustHaveOwner = qfalse, int minAlertLevel = AEL_MINOR );
 extern qboolean G_CheckForDanger( gentity_t *self, int alertEvent );
 extern qboolean G_ClearLOS( gentity_t *self, const vec3_t start, const vec3_t end );
 extern qboolean G_ClearLOS( gentity_t *self, gentity_t *ent, const vec3_t end );
@@ -564,15 +568,5 @@ void		TIMER_Remove( gentity_t *ent, const char *identifier );
 
 float NPC_GetHFOVPercentage( vec3_t spot, vec3_t from, vec3_t facing, float hFOV );
 float NPC_GetVFOVPercentage( vec3_t spot, vec3_t from, vec3_t facing, float vFOV );
-
-//dynamic music
-typedef enum
-{
-	DM_SILENCE,
-	DM_EXPLORE,
-	DM_ACTION,
-	DM_BOSS,
-	DM_DEATH
-} dynamicMusic_t;
 
 #endif//#ifndef __G_LOCAL_H__

@@ -8,10 +8,6 @@
 
 #define	SCOREBOARD_WIDTH	(26*BIGCHAR_WIDTH)
 
-static int success,failed;
-static char objectiveString[256];
-static char objectiveString2[256];
-
 
 /*
 static void Scoreboard_Draw( void )
@@ -65,31 +61,6 @@ static void Scoreboard_Draw( void )
 }
 */
 
-/*
-=================
-CG_MissionFailed
-=================
-*/
-void CG_MissionFailedHeroDied(void)
-{
-	char text[1024]={0};
-	int w;
-
-	cgi_R_SetColor( NULL );
-	CG_DrawPic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, cgs.media.levelLoad );
-
-		cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED", text, sizeof(text) );
-	w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 1.0f);	
-	cgi_R_Font_DrawString(320 - w/2, 120, text, colorTable[CT_HUD_RED], cgs.media.qhFontMedium, -1, 1.2f);
-
-		cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED_KYLE", text, sizeof(text) );
-	w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontMedium, 1.2f);	
-	cgi_R_Font_DrawString(320 - w/2, 220, text, colorTable[CT_HUD_RED], cgs.media.qhFontMedium, -1, 1.2f);
-
-		cgi_SP_GetStringTextString( "INGAME_RELOADMISSION", text, sizeof(text) );
-	w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 1.0f);	
-	cgi_R_Font_DrawString(320 - w/2, 390, text, colorTable[CT_CYAN], cgs.media.qhFontSmall, -1, 1.0f);
-}
 
 
 /*
@@ -102,17 +73,18 @@ void CG_MissionFailed(void)
 {
 	char text[1024]={0};
 	int w;
-
-	cgi_R_SetColor( NULL );
-	CG_DrawPic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, cgs.media.levelLoad );
+	int y = 230;
 
 		cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED", text, sizeof(text) );
 
-	w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 1.0f);	
-		cgi_R_Font_DrawString(320 - w/2, 120, text, colorTable[CT_HUD_RED], cgs.media.qhFontMedium, -1, 1.2f);
+	w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontMedium, 1.2f);	
+		cgi_R_Font_DrawString(320 - w/2, y, text, colorTable[CT_HUD_RED], cgs.media.qhFontMedium, -1, 1.2f);
 
 	switch (statusTextIndex)
 	{
+		case -1:	//Our HERO DIED!!!
+			cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED_KYLE", text, sizeof(text) );
+			break;
 		case MISSIONFAILED_JAN:
 			cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED_JAN", text, sizeof(text) );
 			break;
@@ -141,7 +113,7 @@ void CG_MissionFailed(void)
 			cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED_KYLECAPTURE", text, sizeof(text) );
 			break;
 		case MISSIONFAILED_TOOMANYALLIESDIED:
-			cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED_TOOMANYALLIESDIED:", text, sizeof(text) );
+			cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED_TOOMANYALLIESDIED", text, sizeof(text) );
 			break;
 		default:
 			cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED_UNKNOWN", text, sizeof(text) );
@@ -149,11 +121,11 @@ void CG_MissionFailed(void)
 	}
 
 	w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontMedium, 1.2f);	
-		cgi_R_Font_DrawString(320 - w/2, 220, text, colorTable[CT_HUD_RED], cgs.media.qhFontMedium, -1, 1.2f);
+		cgi_R_Font_DrawString(320 - w/2, y+30, text, colorTable[CT_HUD_RED], cgs.media.qhFontMedium, -1, 1.2f);
 
 		cgi_SP_GetStringTextString( "INGAME_RELOADMISSION", text, sizeof(text) );
 	w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 1.0f);	
-		cgi_R_Font_DrawString(320 - w/2, 390, text, colorTable[CT_CYAN], cgs.media.qhFontSmall, -1, 1.0f);
+		cgi_R_Font_DrawString(320 - w/2, 450, text, colorTable[CT_CYAN], cgs.media.qhFontSmall, -1, 1.0f);
 
 }
 
@@ -169,11 +141,8 @@ void CG_MissionCompletion(void)
 	int w,x,y;
 	const int pad = 18;
 
-	cgi_R_SetColor( NULL );
-//	CG_DrawPic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, cgs.media.levelLoad );
-
 	cgi_SP_GetStringTextString( "INGAME_MISSIONCOMPLETION", text, sizeof(text) );
-w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 1.0f);	
+w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontMedium, 1.2f);	
 	cgi_R_Font_DrawString(320 - w/2, 53, text, colorTable[CT_LTGOLD1], cgs.media.qhFontMedium, -1, 1.2f);
 
 	x = 75;
@@ -181,7 +150,12 @@ w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 1.0f);
 	cgi_SP_GetStringTextString( "INGAME_SECRETAREAS", text, sizeof(text) );
 w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);	
 	cgi_R_Font_DrawString(x,    y, text, colorTable[CT_LTGOLD1], cgs.media.qhFontSmall, -1, 0.8f);
-	cgi_R_Font_DrawString(x+w,  y, va("%d of %d", cg_entities[0].gent->client->sess.missionStats.secretsFound, cg_entities[0].gent->client->sess.missionStats.totalSecrets),
+	cgi_SP_GetStringTextString( "INGAME_SECRETAREAS_OF", text, sizeof(text) );
+	cgi_R_Font_DrawString(x+w,  y, va("%d %s %d", 
+										cg_entities[0].gent->client->sess.missionStats.secretsFound, 
+										text,
+										cg_entities[0].gent->client->sess.missionStats.totalSecrets
+										),
 							colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
 
 	y +=pad;
@@ -189,6 +163,15 @@ w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);
 w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);	
 	cgi_R_Font_DrawString(x, y, text, colorTable[CT_LTGOLD1], cgs.media.qhFontSmall, -1, 0.8f);
 	cgi_R_Font_DrawString(x+w,y, va("%d",cg_entities[0].gent->client->sess.missionStats.enemiesKilled), colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
+	/*
+	cgi_SP_GetStringTextString( "INGAME_SECRETAREAS_OF", text, sizeof(text) );
+	cgi_R_Font_DrawString(x+w,y, va("%d %s %d",
+										cg_entities[0].gent->client->sess.missionStats.enemiesKilled,
+										text,
+										cg_entities[0].gent->client->sess.missionStats.enemiesSpawned
+										), 
+							colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
+	*/
 
 	y +=pad;
 	y +=pad;
@@ -237,7 +220,11 @@ w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);
 	const float percent = cg_entities[0].gent->client->sess.missionStats.shotsFired? 100.0f * (float)cg_entities[0].gent->client->sess.missionStats.hits / cg_entities[0].gent->client->sess.missionStats.shotsFired : 0;
 	cgi_R_Font_DrawString(x+w, y, va("%.2f%%",percent), colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
 
-
+	if ( cg_entities[0].gent->client->sess.missionStats.weaponUsed[WP_SABER] <= 0 )
+	{
+		return; //don't have saber yet, so don't print any stats
+	}
+//first column, FORCE POWERS
 	y =180;
 	cgi_SP_GetStringTextString( "INGAME_FORCEUSE", text, sizeof(text) );
 	cgi_R_Font_DrawString(x, y, text, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
@@ -284,7 +271,7 @@ w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);
 	cgi_R_Font_DrawString(x,   y, text, colorTable[CT_LTGOLD1], cgs.media.qhFontSmall, -1, 0.8f);
 	cgi_R_Font_DrawString(x+w, y, va("%d",cg_entities[0].gent->client->sess.missionStats.forceUsed[FP_LIGHTNING]), colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
 
-//second column
+//second column, LIGHT SABER
 	y = 180;
 	x = 140;
 	cgi_SP_GetStringTextString( "INGAME_LIGHTSABERUSE", text, sizeof(text) );
@@ -333,6 +320,7 @@ w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);
 CG_DrawScoreboard
 
 Draw the normal in-game scoreboard
+return value is bool to NOT draw centerstring
 =================
 */
 qboolean CG_DrawScoreboard( void ) 
@@ -344,40 +332,11 @@ qboolean CG_DrawScoreboard( void )
 	}
 
 	// Character is either dead, or a script has brought up the screen
-	if (((cg.predicted_player_state.pm_type == PM_DEAD) && (cg.missionStatusDeadTime < level.time)) || 
-		(cg.missionStatusShow))
+	if (((cg.predicted_player_state.pm_type == PM_DEAD) && (cg.missionStatusDeadTime < level.time)) 
+		|| (cg.missionStatusShow))
 	{
-		if (statusTextIndex>=0)	// Mission failure?
-		{
-			CG_MissionFailed();
-		}
-		else if (!cg.missionStatusShow)
-		{
-			char text[1024]={0};
-			cgi_SP_GetStringTextString( "INGAME_RELOADMISSION", text, sizeof(text) );
-			int w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 1.0f);	
-			cgi_R_Font_DrawString(320 - w/2, 460, text, colorTable[CT_CYAN], cgs.media.qhFontSmall, -1, 1.0f);
-			return qtrue;
-		}
-		else if (cg.missionStatusShow)	// A value means you want to view the Mission Completion screen
-		{
-			CG_MissionFailedHeroDied();
-		}
-
-/*		else if (!cg.missionStatusShow)
-		{
-			#define pText "Press fire button to view mission stats."
-			int w = cgi_R_Font_StrLenPixels(pText, cgs.media.qhFontSmall, 1.0f);	
-			cgi_R_Font_DrawString(320 - w/2, 460, pText, colorTable[CT_CYAN], cgs.media.qhFontSmall, -1, 1.0f);
-			return qtrue;
-		}
-		else if (cg.missionStatusShow)	// A value means you want to view the Mission Completion screen
-		{
-			if (!statusTextIndex)
-			{
-				CG_MissionCompletion();
-			}
-		} */
+		CG_MissionFailed();
+		return qtrue;
 	}
 
 	return qfalse;

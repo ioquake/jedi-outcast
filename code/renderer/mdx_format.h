@@ -294,20 +294,23 @@ static inline int G2_GetVertBoneIndex( const mdxmVertex_t *pVert, const int iWei
 	return iBoneIndex;
 }
 
-static inline float G2_GetVertBoneWeight( const mdxmVertex_t *pVert, const int iWeightNum )
+static inline float G2_GetVertBoneWeight( const mdxmVertex_t *pVert, const int iWeightNum, float &fTotalWeight, int iNumWeights )
 {
-	int iTemp = pVert->BoneWeightings[iWeightNum];
-		iTemp|= (pVert->uiNmWeightsAndBoneIndexes >> (iG2_BONEWEIGHT_TOPBITS_SHIFT+(iWeightNum*2)) ) & iG2_BONEWEIGHT_TOPBITS_AND;
+	float fBoneWeight;
 
-	float fBoneWeight = fG2_BONEWEIGHT_RECIPROCAL_MULT * iTemp;
-
-	if (fBoneWeight == 0.0f)
+	if (iWeightNum == iNumWeights-1)
 	{
-		// special case to fix flatten-to-zero cases for extremely light weightings. Could probably be omitted if desperate...
-		//
-		fBoneWeight = 0.00045f;
+		fBoneWeight = 1.0f-fTotalWeight;
 	}
-			
+	else
+	{
+		int iTemp = pVert->BoneWeightings[iWeightNum];
+			iTemp|= (pVert->uiNmWeightsAndBoneIndexes >> (iG2_BONEWEIGHT_TOPBITS_SHIFT+(iWeightNum*2)) ) & iG2_BONEWEIGHT_TOPBITS_AND;
+
+		fBoneWeight = fG2_BONEWEIGHT_RECIPROCAL_MULT * iTemp;
+		fTotalWeight += fBoneWeight;
+	}
+
 	return fBoneWeight;
 }
 #endif															 

@@ -171,6 +171,9 @@ DeleteSequencer
 
 void ICARUS_Instance::DeleteSequencer( CSequencer *sequencer )
 {
+	// added 2/12/2 to properly delete blocks that were passed to the task manager
+	sequencer->Recall();
+
 	CTaskManager	*taskManager = sequencer->GetTaskManager();
 
 	if ( taskManager )

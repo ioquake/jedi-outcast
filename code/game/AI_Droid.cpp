@@ -6,6 +6,7 @@
 
 //static void R5D2_LookAround( void );
 float NPC_GetPainChance( gentity_t *self, int damage );
+extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
 
 #define TURN_OFF   0x00000100
 
@@ -102,9 +103,11 @@ void Droid_Patrol( void )
 
 	NPC->pos1[1] = AngleNormalize360( NPC->pos1[1]);
 
-	R2D2_PartsMove();		// Get his eye moving.
-
-	R2D2_TurnAnims();
+	if ( NPC->client && NPC->client->NPC_class != CLASS_GONK )
+	{
+		R2D2_PartsMove();		// Get his eye moving.
+		R2D2_TurnAnims();
+	}
 
 	//If we have somewhere to go, then do that
 	if ( UpdateGoal() )
@@ -118,7 +121,7 @@ void Droid_Patrol( void )
 
 			if (TIMER_Done(NPC,"patrolNoise"))
 			{
-				G_Sound(NPC, G_SoundIndex(va("sound/chars/mouse/misc/mousego%d.wav",	Q_irand(1, 3))));
+				G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/mouse/misc/mousego%d.wav", Q_irand(1, 3)) );
 
 				TIMER_Set( NPC, "patrolNoise", Q_irand( 2000, 4000 ) );
 			}
@@ -127,7 +130,7 @@ void Droid_Patrol( void )
 		{
 			if (TIMER_Done(NPC,"patrolNoise"))
 			{
-				G_Sound(NPC, G_SoundIndex(va("sound/chars/r2d2/misc/r2d2talk0%d.wav",	Q_irand(1, 3))));
+				G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/r2d2/misc/r2d2talk0%d.wav",	Q_irand(1, 3)) );
 
 				TIMER_Set( NPC, "patrolNoise", Q_irand( 2000, 4000 ) );
 			}
@@ -136,7 +139,7 @@ void Droid_Patrol( void )
 		{
 			if (TIMER_Done(NPC,"patrolNoise"))
 			{
-				G_Sound(NPC, G_SoundIndex(va("sound/chars/r5d2/misc/r5talk%d.wav",	Q_irand(1, 4))));
+				G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/r5d2/misc/r5talk%d.wav", Q_irand(1, 4)) );
 
 				TIMER_Set( NPC, "patrolNoise", Q_irand( 2000, 4000 ) );
 			}
@@ -145,7 +148,7 @@ void Droid_Patrol( void )
 		{
 			if (TIMER_Done(NPC,"patrolNoise"))
 			{
-				G_Sound(NPC, G_SoundIndex(va("sound/chars/gonk/misc/gonktalk%d.wav",	Q_irand(1, 2))));
+				G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/gonk/misc/gonktalk%d.wav", Q_irand(1, 2)) );
 
 				TIMER_Set( NPC, "patrolNoise", Q_irand( 2000, 4000 ) );
 			}
@@ -403,6 +406,8 @@ void NPC_Mouse_Precache( void )
 	}
 
 	G_EffectIndex( "env/small_explode" );
+	G_SoundIndex( "sound/chars/mouse/misc/death1" );
+	G_SoundIndex( "sound/chars/mouse/misc/mouse_lp" );
 }
 
 /*
@@ -416,12 +421,11 @@ void NPC_R5D2_Precache(void)
 	{
 		G_SoundIndex( va( "sound/chars/r5d2/misc/r5talk%d.wav", i ) );
 	}
+	G_SoundIndex( "sound/chars/mark2/misc/mark2_explo" ); // ??
 	G_SoundIndex( "sound/chars/r2d2/misc/r2_move_lp2.wav" );
-	G_EffectIndex( "r5_droidexplosion");
+	G_EffectIndex( "env/med_explode");
 	G_EffectIndex( "droid_smoke" );
-//	G_EffectIndex( "small_chunks");
 	G_EffectIndex( "r5d2head");
-//	G_EffectIndex( "r5d2headland");
 }
 
 /*
@@ -435,9 +439,9 @@ void NPC_R2D2_Precache(void)
 	{
 		G_SoundIndex( va( "sound/chars/r2d2/misc/r2d2talk0%d.wav", i ) );
 	}
+	G_SoundIndex( "sound/chars/mark2/misc/mark2_explo" ); // ??
 	G_SoundIndex( "sound/chars/r2d2/misc/r2_move_lp.wav" );
-	G_EffectIndex( "r2_droidexplosion");
-//	G_EffectIndex( "small_chunks");
+	G_EffectIndex( "env/med_explode");
 }
 
 /*
@@ -454,6 +458,18 @@ void NPC_Gonk_Precache( void )
 	G_SoundIndex("sound/chars/gonk/misc/death2.wav");
 	G_SoundIndex("sound/chars/gonk/misc/death3.wav");
 
+	G_EffectIndex( "env/med_explode");
+}
+
+/*
+-------------------------
+NPC_Protocol_Precache
+-------------------------
+*/
+void NPC_Protocol_Precache( void )
+{
+	G_SoundIndex( "sound/chars/mark2/misc/mark2_explo" );
+	G_EffectIndex( "env/med_explode");
 }
 
 /*

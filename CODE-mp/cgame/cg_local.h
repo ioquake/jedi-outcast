@@ -78,7 +78,6 @@
 
 #define	DEFAULT_MODEL			"kyle"
 #define	DEFAULT_TEAM_MODEL		"kyle"
-#define	DEFAULT_TEAM_HEAD		"kyle"
 
 #define DEFAULT_FORCEPOWERS		"5-1-000000000000000000"
 //"rank-side-heal.lev.speed.push.pull.tele.grip.lightning.rage.protect.absorb.teamheal.teamforce.drain.see"
@@ -234,6 +233,9 @@ typedef struct centity_s {
 
 	int				trickAlpha;
 	int				trickAlphaTime;
+
+	int				teamPowerEffectTime;
+	qboolean		teamPowerType; //0 regen, 1 heal, 2 drain
 } centity_t;
 
 
@@ -482,8 +484,8 @@ typedef struct {
 	// gameplay
 	char			modelName[MAX_QPATH];
 	char			skinName[MAX_QPATH];
-	char			headModelName[MAX_QPATH];
-	char			headSkinName[MAX_QPATH];
+//	char			headModelName[MAX_QPATH];
+//	char			headSkinName[MAX_QPATH];
 	char			forcePowers[MAX_QPATH];
 	char			redTeam[MAX_TEAMNAME];
 	char			blueTeam[MAX_TEAMNAME];
@@ -506,8 +508,8 @@ typedef struct {
 	qhandle_t		torsoModel;
 	qhandle_t		torsoSkin;
 
-	qhandle_t		headModel;
-	qhandle_t		headSkin;
+	//qhandle_t		headModel;
+	//qhandle_t		headSkin;
 
 	qboolean		ATST;
 
@@ -874,20 +876,22 @@ extern forceTicPos_t ammoTicPos[];
 
 typedef struct cgscreffects_s
 {
-	float	FOV;
-	float	FOV2;
+	float		FOV;
+	float		FOV2;
 
-	float	shake_intensity;
-	int		shake_duration;
-	int		shake_start;
+	float		shake_intensity;
+	int			shake_duration;
+	int			shake_start;
 
-	float	music_volume_mulitplier;
-	int		music_volume_time;
+	float		music_volume_multiplier;
+	int			music_volume_time;
+	qboolean	music_volume_set;
 } cgscreffects_t;
 
 extern cgscreffects_t cgScreenEffects;
 
 void CGCam_Shake( float intensity, int duration );
+void CGCam_SetMusicMult( float multiplier, int duration );
 
 // all of the model, shader, and sound references that are
 // loaded at gamestate time are stored in cgMedia_t
@@ -898,6 +902,7 @@ typedef struct {
 	qhandle_t	whiteShader;
 
 	qhandle_t	loadBarLED;
+	qhandle_t	loadBarLEDCap;
 	qhandle_t	loadBarLEDSurround;
 
 	qhandle_t	bryarFrontFlash;
@@ -990,6 +995,8 @@ typedef struct {
 
 	// Pain view shader
 	qhandle_t	viewPainShader;
+	qhandle_t	viewPainShader_Shields;
+	qhandle_t	viewPainShader_ShieldsAndHealth;
 
 	// powerup shaders
 	qhandle_t	quadShader;
@@ -1006,6 +1013,8 @@ typedef struct {
 
 	qhandle_t	playerShieldDamage;
 	qhandle_t	forceSightBubble;
+	qhandle_t	forceShell;
+	qhandle_t	sightShell;
 
 	// Disruptor zoom graphics
 	qhandle_t	disruptorMask;
@@ -1035,6 +1044,15 @@ typedef struct {
 
 	qhandle_t	heartShader;
 
+	// All the player shells
+	qhandle_t	ysaliredShader;
+	qhandle_t	ysaliblueShader;
+	qhandle_t	ysalimariShader;
+	qhandle_t	boonShader;
+	qhandle_t	endarkenmentShader;
+	qhandle_t	enlightenmentShader;
+	qhandle_t	invulnerabilityShader;
+
 #ifdef JK2AWARDS
 	// medals shown during gameplay
 	qhandle_t	medalImpressive;
@@ -1056,6 +1074,9 @@ typedef struct {
 
 	sfxHandle_t	grenadeBounce1;
 	sfxHandle_t	grenadeBounce2;
+
+	sfxHandle_t teamHealSound;
+	sfxHandle_t teamRegenSound;
 
 	sfxHandle_t	teleInSound;
 	sfxHandle_t	teleOutSound;
@@ -1089,6 +1110,7 @@ typedef struct {
 	sfxHandle_t watrOutSound;
 	sfxHandle_t watrUnSound;
 
+	sfxHandle_t deploySeeker;
 	sfxHandle_t medkitSound;
 
 	// teamplay sounds
@@ -1110,6 +1132,8 @@ typedef struct {
 	sfxHandle_t blueYsalReturnedSound;
 	sfxHandle_t	redTookYsalSound;
 	sfxHandle_t blueTookYsalSound;
+
+	sfxHandle_t	drainSound;
 
 	//music blips
 	sfxHandle_t	happyMusic;
@@ -1288,6 +1312,7 @@ typedef struct {
 	int				dmflags;
 	int				teamflags;
 	int				fraglimit;
+	int				duel_fraglimit;
 	int				capturelimit;
 	int				timelimit;
 	int				maxclients;
@@ -1311,6 +1336,9 @@ typedef struct {
 
 	int				scores1, scores2;		// from configstrings
 	int				jediMaster;
+	int				duelWinner;
+	int				duelist1;
+	int				duelist2;
 	int				redflag, blueflag;		// flag status from configstrings
 	int				flagStatus;
 
@@ -1430,6 +1458,8 @@ extern	vmCvar_t		cg_simpleItems;
 extern	vmCvar_t		cg_fov;
 extern	vmCvar_t		cg_zoomFov;
 
+extern	vmCvar_t		cg_swingAngles;
+
 extern	vmCvar_t		cg_saberContact;
 extern	vmCvar_t		cg_saberTrail;
 
@@ -1469,6 +1499,7 @@ extern	vmCvar_t		cg_teamChatsOnly;
 extern	vmCvar_t		cg_noVoiceChats;
 extern	vmCvar_t		cg_noVoiceText;
 extern  vmCvar_t		cg_scorePlum;
+extern	vmCvar_t		cg_hudFiles;
 extern	vmCvar_t		cg_smoothClients;
 extern	vmCvar_t		pmove_fixed;
 extern	vmCvar_t		pmove_msec;
@@ -1495,6 +1526,8 @@ extern	vmCvar_t		cg_enableBreath;
 extern	vmCvar_t		cg_singlePlayerActive;
 extern  vmCvar_t		cg_recordSPDemo;
 extern  vmCvar_t		cg_recordSPDemoName;
+
+extern	vmCvar_t		ui_myteam;
 /*
 Ghoul2 Insert Start
 */
@@ -1589,6 +1622,7 @@ void CG_ColorForHealth( vec4_t hcolor );
 void CG_GetColorForHealth( int health, int armor, vec4_t hcolor );
 
 void UI_DrawProportionalString( int x, int y, const char* str, int style, vec4_t color );
+void UI_DrawScaledProportionalString( int x, int y, const char* str, int style, vec4_t color, float scale);
 void CG_DrawRect( float x, float y, float width, float height, float size, const float *color );
 void CG_DrawSides(float x, float y, float w, float h, float size);
 void CG_DrawTopBottom(float x, float y, float w, float h, float size);
@@ -1619,6 +1653,7 @@ void CG_SelectNextPlayer(void);
 float CG_GetValue(int ownerDraw);
 qboolean CG_OwnerDrawVisible(int flags);
 void CG_RunMenuScript(char **args);
+qboolean CG_DeferMenuScript(char **args);
 void CG_ShowResponseHead(void);
 void CG_SetPrintString(int type, const char *p);
 void CG_InitTeamChat(void);
@@ -2057,7 +2092,7 @@ void trap_FX_PlayBoltedEffectID( int id, sharedBoltInterface_t *fxObj );
 void trap_FX_AddScheduledEffects( void );
 int	trap_FX_InitSystem( void );	// called in CG_Init to purge the fx system.
 qboolean trap_FX_FreeSystem( void );	// ditches all active effects;
-void trap_FX_AdjustTime( int time );
+void trap_FX_AdjustTime( int time, vec3_t vieworg, vec3_t viewaxis[3] );
 
 void trap_FX_AddPoly( addpolyArgStruct_t *p );
 void trap_FX_AddBezier( addbezierArgStruct_t *p );

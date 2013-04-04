@@ -3,7 +3,9 @@
 #include "../game/q_shared.h"
 #include "qcommon.h"
 
-
+//#ifdef _DEBUG
+//#include <windows.h>
+//#endif
 
 /*
 #if !defined(G_LOCAL_H_INC)
@@ -33,7 +35,7 @@ char FlagList[FLAGLIST_MAX][FLAG_LENGTH];
 
 #else
 
-static cvar_t	*sp_language;
+/*static*/ cvar_t	*sp_language;
 static cvar_t	*sp_show_strip;
 
 #endif
@@ -806,7 +808,7 @@ void cStringsSingle::SetText(const char *newText)
 	if(sp_show_strip->value)
 	{
 		Dest = Text = new char[length + 6];
-		strcpy(Dest,"STRIP-");
+		strcpy(Dest,"SP:");
 		Dest += strlen(Dest);
 	}
 	else
@@ -873,6 +875,13 @@ static void FixIllegalChars(char *psText)
 	{
 		*p = 0x2D;
 	}
+
+	// StripEd and our print code don't support tabs...
+	//
+	while ((p=strchr(psText,0x09))!=NULL)
+	{
+		*p = ' ';
+	}	
 }
 
 bool cStringsSingle::UnderstandToken(int token, char *data)
@@ -887,7 +896,10 @@ bool cStringsSingle::UnderstandToken(int token, char *data)
 			{
 				if (LanguagePair->Name == TK_TEXT_LANGUAGE1 && token == TK_TEXT_LANGUAGE1 && !Text)
 				{	// default to english in case there is no foreign
-					if (LanguagePair->Name == TK_TEXT_LANGUAGE1)
+					if (LanguagePair->Name == TK_TEXT_LANGUAGE1 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE2 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE3
+						)
 					{
 						FixIllegalChars(data);
 					}
@@ -896,7 +908,10 @@ bool cStringsSingle::UnderstandToken(int token, char *data)
 				}
 				else if (LanguagePair->Name == token && LanguagePair->Value == (int)sp_language->value)
 				{
-					if (LanguagePair->Name == TK_TEXT_LANGUAGE1)
+					if (LanguagePair->Name == TK_TEXT_LANGUAGE1 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE2 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE3
+						)
 					{
 						FixIllegalChars(data);
 					}
@@ -1413,6 +1428,15 @@ int cStringPackageSingle::FindStringID(const char *ReferenceLookup)
 		return (*i).second;
 	}
 
+
+//#ifdef _DEBUG
+//	// findmeste
+//	for (map<string, int>::iterator it = ReferenceTable.begin(); it != ReferenceTable.end(); ++it)
+//	{
+//		OutputDebugString(va("%s\n",(*it).first.c_str()));
+//	}
+//#endif
+
 	return -1;
 }
 
@@ -1525,7 +1549,7 @@ cStringPackageSingle *SP_Register(const char *inPackage, unsigned char Registrat
 }
 
 // Update configstrings array on clients and server
-void SP_RegisterServer(const char *Package)
+qboolean SP_RegisterServer(const char *Package)
 {
 	cStringPackageSingle	*sp;
 
@@ -1533,7 +1557,10 @@ void SP_RegisterServer(const char *Package)
 	if (sp)
 	{
 		SV_AddConfigstring(Package,CS_STRING_PACKAGES,MAX_STRING_PACKAGES);
+		return qtrue;
 	}
+
+	return qfalse;
 }
 
 // Unload all packages with the relevant registration bits
@@ -1564,10 +1591,13 @@ void SP_Unload(unsigned char Registration)
 
 // Direct string functions
 
-int SP_GetStringID(const char *Reference)
+int SP_GetStringID(const char *inReference)
 {
 	map<unsigned char,cStringPackageSingle *>::iterator	i;
 	int													ID;
+	char Reference[MAX_QPATH];
+	Q_strncpyz(Reference, inReference, MAX_QPATH);
+	Q_strupr(Reference);
 
 	for(i = SP_ListByID.begin(); i != SP_ListByID.end(); i++)
 	{
@@ -1684,8 +1714,8 @@ static void SP_UpdateLanguage(void)
 
 void SP_Init(void)
 {
-	sp_language = Cvar_Get("sp_language", va("%d", SP_LANGUAGE_ENGLISH), CVAR_ARCHIVE);
-	sp_show_strip = Cvar_Get ("sv_show_strip", "0", 0);
+	sp_language = Cvar_Get("sp_language", va("%d", SP_LANGUAGE_ENGLISH), CVAR_ARCHIVE | CVAR_NORESTART);
+	sp_show_strip = Cvar_Get ("sp_show_strip", "0", 0);
 
 	SP_UpdateLanguage();
 	sp_language->modified = qfalse;

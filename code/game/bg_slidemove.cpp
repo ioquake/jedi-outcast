@@ -22,12 +22,13 @@ Returns qtrue if the velocity was clipped in some way
 ==================
 */
 #define	MAX_CLIP_PLANES	5
+extern qboolean PM_GroundSlideOkay( float zNormal );
 qboolean	PM_SlideMove( float gravMod ) {
 	int			bumpcount, numbumps;
 	vec3_t		dir;
 	float		d;
 	int			numplanes;
-	vec3_t		planes[MAX_CLIP_PLANES];
+	vec3_t		normal, planes[MAX_CLIP_PLANES];
 	vec3_t		primal_velocity;
 	vec3_t		clipVelocity;
 	int			i, j, k;
@@ -43,7 +44,8 @@ qboolean	PM_SlideMove( float gravMod ) {
 
 	VectorCopy (pm->ps->velocity, primal_velocity);
 
-	if ( gravMod ) {
+	if ( gravMod ) 
+	{
 		VectorCopy( pm->ps->velocity, endVelocity );
 		if ( !(pm->ps->eFlags&EF_FORCE_GRIPPED) )
 		{
@@ -51,20 +53,31 @@ qboolean	PM_SlideMove( float gravMod ) {
 		}
 		pm->ps->velocity[2] = ( pm->ps->velocity[2] + endVelocity[2] ) * 0.5;
 		primal_velocity[2] = endVelocity[2];
-		if ( pml.groundPlane ) {
-			// slide along the ground plane
-			PM_ClipVelocity (pm->ps->velocity, pml.groundTrace.plane.normal, 
-				pm->ps->velocity, OVERCLIP );
+		if ( pml.groundPlane ) 
+		{
+			if ( PM_GroundSlideOkay( pml.groundTrace.plane.normal[2] ) )
+			{// slide along the ground plane
+				PM_ClipVelocity( pm->ps->velocity, pml.groundTrace.plane.normal, 
+					pm->ps->velocity, OVERCLIP );
+			}
 		}
 	}
 
 	time_left = pml.frametime;
 
 	// never turn against the ground plane
-	if ( pml.groundPlane ) {
+	if ( pml.groundPlane ) 
+	{
 		numplanes = 1;
 		VectorCopy( pml.groundTrace.plane.normal, planes[0] );
-	} else {
+		if ( !PM_GroundSlideOkay( planes[0][2] ) )
+		{
+			planes[0][2] = 0;
+			VectorNormalize( planes[0] );
+		}
+	} 
+	else 
+	{
 		numplanes = 0;
 	}
 
@@ -80,18 +93,19 @@ qboolean	PM_SlideMove( float gravMod ) {
 		// see if we can make it there
 		pm->trace ( &trace, pm->ps->origin, pm->mins, pm->maxs, end, pm->ps->clientNum, pm->tracemask);
 
-		if (trace.allsolid) {
-			// entity is completely trapped in another solid
+		if ( trace.allsolid ) 
+		{// entity is completely trapped in another solid
 			pm->ps->velocity[2] = 0;	// don't build up falling damage, but allow sideways acceleration
 			return qtrue;
 		}
 
-		if (trace.fraction > 0) {
-			// actually covered some distance
-			VectorCopy (trace.endpos, pm->ps->origin);
+		if ( trace.fraction > 0 ) 
+		{// actually covered some distance
+			VectorCopy( trace.endpos, pm->ps->origin );
 		}
 
-		if (trace.fraction == 1) {
+		if ( trace.fraction == 1 ) 
+		{
 			 break;		// moved the entire distance
 		}
 
@@ -105,7 +119,7 @@ qboolean	PM_SlideMove( float gravMod ) {
 		{
 			damageSelf = qfalse;
 		}
-		else if ( trace.entityNum == ENTITYNUM_WORLD && trace.plane.normal[2] > 0.5 )
+		else if ( trace.entityNum == ENTITYNUM_WORLD && trace.plane.normal[2] > 0.5f )
 		{//if we land on the ground, let falling damage do it's thing itself, otherwise do impact damage
 			damageSelf = qfalse;
 		}
@@ -121,27 +135,34 @@ qboolean	PM_SlideMove( float gravMod ) {
 
 		time_left -= time_left * trace.fraction;
 
-		if (numplanes >= MAX_CLIP_PLANES) {
-			// this shouldn't really happen
+		if ( numplanes >= MAX_CLIP_PLANES ) 
+		{// this shouldn't really happen
 			VectorClear( pm->ps->velocity );
 			return qtrue;
 		}
 
+		VectorCopy( trace.plane.normal, normal );
+		if ( !PM_GroundSlideOkay( normal[2] ) )
+		{//wall-running
+			//never push up off a sloped wall
+			normal[2] = 0;
+			VectorNormalize( normal );
+		}
 		//
 		// if this is the same plane we hit before, nudge velocity
 		// out along it, which fixes some epsilon issues with
 		// non-axial planes
 		//
 		for ( i = 0 ; i < numplanes ; i++ ) {
-			if ( DotProduct( trace.plane.normal, planes[i] ) > 0.99 ) {
-				VectorAdd( trace.plane.normal, pm->ps->velocity, pm->ps->velocity );
+			if ( DotProduct( normal, planes[i] ) > 0.99 ) {
+				VectorAdd( normal, pm->ps->velocity, pm->ps->velocity );
 				break;
 			}
 		}
 		if ( i < numplanes ) {
 			continue;
 		}
-		VectorCopy (trace.plane.normal, planes[numplanes]);
+		VectorCopy( normal, planes[numplanes] );
 		numplanes++;
 
 		//
@@ -242,7 +263,7 @@ void PM_StepSlideMove( float gravMod )
 	vec3_t		slideMove, stepUpMove;
 	trace_t		trace;
 	vec3_t		up, down;
-	qboolean	cantStepUpFwd;
+	qboolean	cantStepUpFwd, isATST = qfalse;;
 	int			stepSize = STEPSIZE;
 
 	VectorCopy (pm->ps->origin, start_o);
@@ -254,6 +275,7 @@ void PM_StepSlideMove( float gravMod )
 
 	if ( pm->gent && pm->gent->client && pm->gent->client->NPC_class == CLASS_ATST)
 	{
+		isATST = qtrue;
 		stepSize = 66;//hack for AT-ST stepping, slightly taller than a standing stormtrooper
 	}
 	else if ( pm->maxs[2] <= 0 )
@@ -315,10 +337,21 @@ void PM_StepSlideMove( float gravMod )
 		VectorCopy (pm->ps->origin, down);
 		down[2] -= stepSize;
 		pm->trace (&trace, pm->ps->origin, pm->mins, pm->maxs, down, pm->ps->clientNum, pm->tracemask);
-		if ( !trace.allsolid ) {
-			VectorCopy (trace.endpos, pm->ps->origin);
+		if ( !trace.allsolid ) 
+		{
+			if ( pm->ps->clientNum 
+				&& isATST 
+				&& g_entities[trace.entityNum].client 
+				&& g_entities[trace.entityNum].client->playerTeam == pm->gent->client->playerTeam )
+			{//AT-ST's don't step up on allies
+			}
+			else
+			{
+				VectorCopy( trace.endpos, pm->ps->origin );
+			}
 		}
-		if ( trace.fraction < 1.0 ) {
+		if ( trace.fraction < 1.0 ) 
+		{
 			PM_ClipVelocity( pm->ps->velocity, trace.plane.normal, pm->ps->velocity, OVERCLIP );
 		}
 	}

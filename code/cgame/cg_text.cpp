@@ -294,6 +294,12 @@ const char *CG_DisplayBoxedText(int iBoxX, int iBoxY, int iBoxWidth, int iBoxHei
 
 			// concat onto string so far...
 			//
+			if (uiLetter == 32 && sLineForDisplay[0] == '\0')
+			{
+				psReadPosAtLineStart++;
+				continue;	// unless it's a space at the start of a line, in which case ignore it.
+			}
+
 			if (uiLetter > 255)
 			{
 				Q_strcat(sLineForDisplay, sizeof(sLineForDisplay),va("%c%c",uiLetter >> 8, uiLetter & 0xFF));
@@ -355,7 +361,7 @@ const char *CG_DisplayBoxedText(int iBoxX, int iBoxY, int iBoxWidth, int iBoxHei
 		//
 		if ( cg_developer.integer )
 		{
-			Com_Printf( "%psCurrentTextReadPos\n", sLineForDisplay );
+//			Com_Printf( "%psCurrentTextReadPos\n", sLineForDisplay );
 		}
 	}
 	return psReadPosAtLineStart;
@@ -431,7 +437,15 @@ void CG_CaptionText( const char *str, int sound, int y )
 	if (!i) 
 	{	
 #ifndef FINAL_BUILD
-		Com_Printf("WARNING: CG_CaptionText given invalid text key :'%s'\n",str);
+		// we only care about some sound dirs...
+		if (!strnicmp(str,"sound/chars/",12))	// whichever language it is, it'll be pathed as english at this point
+		{
+			Com_Printf("WARNING: CG_CaptionText given invalid text key :'%s'\n",str);
+		}
+		else
+		{
+			// anything else is probably stuff we don't care about. It certainly shouldn't be speech, anyway
+		}
 #endif
 		return; 
 	}
@@ -442,7 +456,7 @@ void CG_CaptionText( const char *str, int sound, int y )
 	if (in_camera) {
 		cg.captionTextY = SCREEN_HEIGHT - (client_camera.bar_height_dest/2);	// ths is now a centre'd Y, not a start Y
 	} else {	//get above the hud
-		cg.captionTextY = (int) (0.75f * ((float)SCREEN_HEIGHT - (float)fontHeight * 1.5f));
+		cg.captionTextY = (int) (0.88f * ((float)SCREEN_HEIGHT - (float)fontHeight * 1.5f));	// do NOT move this, it has to fit in between the weapon HUD and the datapad update.
 	}
 	cg.captionTextCurrentLine = 0;
 
@@ -483,6 +497,12 @@ void CG_CaptionText( const char *str, int sound, int y )
 
 		// concat onto string so far...
 		//
+		if (uiLetter == 32 && cg.captionText[i][0] == '\0')
+		{
+			holds++;
+			continue;	// unless it's a space at the start of a line, in which case ignore it.
+		}
+
 		if (uiLetter > 255)
 		{
 			Q_strcat(cg.captionText[i],sizeof(cg.captionText[i]),va("%c%c",uiLetter >> 8, uiLetter & 0xFF));
@@ -565,7 +585,7 @@ void CG_DrawCaptionText(void)
 
 	const float fFontScale = cgi_Language_IsAsian() ? 0.8f : 1.0f;
 
-	if (cg_skippingcin.value != 0.0f)
+	if (cg_skippingcin.integer != 0)
 	{
 		cg.captionTextTime = 0;
 		return;
@@ -696,6 +716,12 @@ void CG_ScrollText( const char *str, int iPixelWidth )
 
 		// concat onto string so far...
 		//
+		if (uiLetter == 32 && cg.printText[i][0] == '\0')
+		{
+			holds++;
+			continue;	// unless it's a space at the start of a line, in which case ignore it.
+		}
+
 		if (uiLetter > 255)
 		{
 			Q_strcat(cg.printText[i],sizeof(cg.printText[i]),va("%c%c",uiLetter >> 8, uiLetter & 0xFF));
@@ -718,6 +744,11 @@ void CG_ScrollText( const char *str, int iPixelWidth )
 			//
 			cg.printText[i][ strlen(cg.printText[i])-1 ] = '\0';	// kill the CR
 			i++;
+			assert (i < (sizeof(cg.printText)/sizeof(cg.printText[0])) );
+			if (i >= (sizeof(cg.printText)/sizeof(cg.printText[0])) )
+			{
+				break;
+			}
 			holds = s;
 			cg.scrollTextLines++;
 		}
@@ -741,6 +772,7 @@ void CG_ScrollText( const char *str, int iPixelWidth )
 			cg.printText[i][ psBestLineBreakSrcPos - holds ] = '\0';
 			holds = s = psBestLineBreakSrcPos;
 			i++;
+			assert (i < (sizeof(cg.printText)/sizeof(cg.printText[0])) );
 			cg.scrollTextLines++;
 		}
 	}
@@ -900,7 +932,7 @@ void CG_DrawCenterString( void )
 		//		
 		const char *psString = start;
 		int iOutIndex = 0;
-		for ( l = 0; l < 40; l++ ) {
+		for ( l = 0; l < sizeof(linebuffer)-1; l++ ) {
 			unsigned int uiLetter = cgi_AnyLanguage_ReadCharFromString(&psString);
 			if (!uiLetter || uiLetter == '\n'){
 				break;

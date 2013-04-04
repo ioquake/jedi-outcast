@@ -385,7 +385,7 @@ CFontInfo::CFontInfo(const char *fontName)
 
 
 	extern cvar_t *com_buildScript;
-	if (com_buildScript->integer)
+	if (com_buildScript->integer == 2)
 	{
 		static qboolean bDone = qfalse;	// Do this once only (for speed)...
 		if (!bDone)
@@ -407,7 +407,7 @@ CFontInfo::CFontInfo(const char *fontName)
 
 				for (int i=0; i<iGlyphTPs; i++)
 				{
-					Com_sprintf(sTemp,sizeof(sTemp), "fonts/%s_%d_1024_%d", psLang, 1024/m_iAsianGlyphsAcross, i);
+					Com_sprintf(sTemp,sizeof(sTemp), "fonts/%s_%d_1024_%d.tga", psLang, 1024/m_iAsianGlyphsAcross, i);
 
 					// RE_RegisterShaderNoMip( sTemp );	// don't actually need to load it, so...
 					fileHandle_t f;
@@ -698,7 +698,8 @@ CFontInfo *GetFont(int index)
 
 int RE_Font_StrLenPixels(const char *psText, const int iFontHandle, const float fScale)
 {			
-	int			x = 0;
+	int			iMaxWidth = 0;
+	int			iThisWidth= 0;
 	CFontInfo	*curfont;
 
 	curfont = GetFont(iFontHandle);
@@ -708,10 +709,24 @@ int RE_Font_StrLenPixels(const char *psText, const int iFontHandle, const float 
 	}
 	while(*psText)
 	{
-		x += curfont->GetLetterHorizAdvance( AnyLanguage_ReadCharFromString( &psText ));
+		unsigned int uiLetter = AnyLanguage_ReadCharFromString( &psText );
+		if (uiLetter == 0x0A)
+		{
+			iThisWidth = 0;
+		}
+		else
+		{
+			int iPixelAdvance = curfont->GetLetterHorizAdvance( uiLetter );
+	
+			iThisWidth += Round(iPixelAdvance * fScale);
+			if (iThisWidth > iMaxWidth)
+			{
+				iMaxWidth = iThisWidth;
+			}
+		}
 	}
-	x = Round(x * fScale);
-	return(x);
+
+	return iMaxWidth;
 }
 
 // not really a font function, but keeps naming consistant...
@@ -750,7 +765,7 @@ int RE_Font_HeightPixels(const int iFontHandle, const float fScale)
 	return(0);
 }
 
-// iMaxPixelWidth is -1 for "all of string", else MBCS char count...
+// iMaxPixelWidth is -1 for "all of string", else pixel display count...
 //
 void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, const int iFontHandle, int iMaxPixelWidth, const float fScale)
 {

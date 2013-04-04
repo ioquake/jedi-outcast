@@ -10,8 +10,8 @@ float ProjectRadius( float r, vec3_t location )
 	vec3_t	p;
 	float	projected[4];
 
-	c = DotProduct( tr.viewParms.or.axis[0], tr.viewParms.or.origin );
-	dist = DotProduct( tr.viewParms.or.axis[0], location ) - c;
+	c = DotProduct( tr.viewParms.ori.axis[0], tr.viewParms.ori.origin );
+	dist = DotProduct( tr.viewParms.ori.axis[0], location ) - c;
 
 	if ( dist <= 0 )
 		return 0;
@@ -49,6 +49,7 @@ float ProjectRadius( float r, vec3_t location )
 	return pr;
 }
 
+#ifndef DEDICATED
 /*
 =============
 R_CullModel
@@ -167,8 +168,15 @@ int R_ComputeLOD( trRefEntity_t *ent ) {
 
 		if ( ( projectedRadius = ProjectRadius( radius, ent->e.origin ) ) != 0 )
 		{
-			lodscale = r_lodscale->value;
-			if (lodscale > 20) lodscale = 20;
+			lodscale = (r_lodscale->value+r_autolodscalevalue->value);
+			if ( lodscale > 20 )
+			{
+				lodscale = 20;
+			}
+			else if ( lodscale < 0 )
+			{
+				lodscale = 0;
+			}
 			flod = 1.0f - projectedRadius * lodscale;
 		}
 		else
@@ -373,4 +381,6 @@ void R_AddMD3Surfaces( trRefEntity_t *ent ) {
 	}
 
 }
+
+#endif // !DEDICATED
 

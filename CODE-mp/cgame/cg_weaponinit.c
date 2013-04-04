@@ -80,6 +80,12 @@ void CG_RegisterWeapon( int weaponNum) {
 		strcat( path, "_barrel.md3" );
 		weaponInfo->barrelModel = trap_R_RegisterModel( path );
 	}
+	else if (weaponNum == WP_STUN_BATON)
+	{ //only weapon with more than 1 barrel..
+		trap_R_RegisterModel("models/weapons2/stun_baton/baton_barrel.md3");
+		trap_R_RegisterModel("models/weapons2/stun_baton/baton_barrel2.md3");
+		trap_R_RegisterModel("models/weapons2/stun_baton/baton_barrel3.md3");
+	}
 	else
 	{
 		weaponInfo->barrelModel = 0;
@@ -114,19 +120,22 @@ void CG_RegisterWeapon( int weaponNum) {
 		weaponInfo->firingSound = trap_S_RegisterSound( "sound/weapons/saber/saberhum.wav" );
 //		weaponInfo->flashSound[0] = trap_S_RegisterSound( "sound/weapons/melee/fstatck.wav" );
 */
-		trap_R_RegisterShader( "gfx/effects/stunPass" );
-
-		trap_R_RegisterShader( "gfx/effects/stunTest" );
+		//trap_R_RegisterShader( "gfx/effects/stunPass" );
 		trap_FX_RegisterEffect( "stunBaton/flesh_impact" );
 		//TEMP
 		trap_S_RegisterSound( "sound/weapons/melee/punch1.mp3" );
 		trap_S_RegisterSound( "sound/weapons/melee/punch2.mp3" );
 		trap_S_RegisterSound( "sound/weapons/melee/punch3.mp3" );
 		trap_S_RegisterSound( "sound/weapons/melee/punch4.mp3" );
+
+		trap_S_RegisterSound( "sound/weapons/baton/idle.wav" );
+		weaponInfo->flashSound[0] = trap_S_RegisterSound( "sound/weapons/baton/fire.mp3" );
+		weaponInfo->altFlashSound[0] = trap_S_RegisterSound( "sound/weapons/baton/fire.mp3" );
+
 		break;
 	case WP_SABER:
 		MAKERGB( weaponInfo->flashDlightColor, 0.6f, 0.6f, 1.0f );
-		weaponInfo->firingSound = trap_S_RegisterSound( "sound/weapons/saber/saberhum.wav1" );
+		weaponInfo->firingSound = trap_S_RegisterSound( "sound/weapons/saber/saberhum1.wav" );
 		weaponInfo->missileModel		= trap_R_RegisterModel( "models/weapons2/saber/saber_w.glm" );
 		break;
 
@@ -349,7 +358,7 @@ void CG_RegisterWeapon( int weaponNum) {
 		weaponInfo->firingSound			= NULL_SOUND;
 		weaponInfo->chargeSound			= NULL_SOUND;
 		weaponInfo->muzzleEffect		= trap_FX_RegisterEffect( "flechette/muzzle_flash" );
-		weaponInfo->missileModel		= NULL_HANDLE;
+		weaponInfo->missileModel		= trap_R_RegisterModel("models/weapons2/golan_arms/projectileMain.md3");
 		weaponInfo->missileSound		= NULL_SOUND;
 		weaponInfo->missileDlight		= 0;
 //		weaponInfo->missileDlightColor	= {0,0,0};

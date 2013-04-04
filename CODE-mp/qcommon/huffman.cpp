@@ -6,7 +6,13 @@
 #include "../game/q_shared.h"
 #include "qcommon.h"
 
+//#define _TESTCR_
 static int			bloc = 0;
+
+#ifdef _TESTCR_
+static int byteCount=0;
+static int bitCount=0;
+#endif
 
 void	Huff_putBit( int bit, byte *fout, int *offset) {
 	bloc = *offset;
@@ -234,6 +240,9 @@ void Huff_addRef(huff_t* huff, byte ch) {
 /* Get a symbol */
 int Huff_Receive (node_t *node, int *ch, byte *fin) {
 	while (node && node->symbol == INTERNAL_NODE) {
+#ifdef _TESTCR_
+		bitCount++;
+#endif
 		if (get_bit(fin)) {
 			node = node->right;
 		} else {
@@ -243,6 +252,9 @@ int Huff_Receive (node_t *node, int *ch, byte *fin) {
 	if (!node) {
 		Com_Error(ERR_DROP, "Illegal tree!\n");
 	}
+#ifdef _TESTCR_	
+	byteCount++;
+#endif
 	return (*ch = node->symbol);
 }
 
@@ -250,6 +262,9 @@ int Huff_Receive (node_t *node, int *ch, byte *fin) {
 void Huff_offsetReceive (node_t *node, int *ch, byte *fin, int *offset) {
 	bloc = *offset;
 	while (node && node->symbol == INTERNAL_NODE) {
+#ifdef _TESTCR_
+		bitCount++;
+#endif
 		if (get_bit(fin)) {
 			node = node->right;
 		} else {
@@ -259,6 +274,9 @@ void Huff_offsetReceive (node_t *node, int *ch, byte *fin, int *offset) {
 	if (!node) {
 		Com_Error(ERR_DROP, "Illegal tree!\n");
 	}
+#ifdef _TESTCR_	
+	byteCount++;
+#endif
 	*ch = node->symbol;
 	*offset = bloc;
 }
@@ -382,6 +400,11 @@ void Huff_Compress(msg_t *mbuf, int offset) {
 
 void Huff_Init(huffman_t *huff) {
 
+#ifdef _TESTCR_
+	byteCount=0;
+	bitCount=0;
+#endif
+
 	Com_Memset(&huff->compressor, 0, sizeof(huff_t));
 	Com_Memset(&huff->decompressor, 0, sizeof(huff_t));
 
@@ -401,3 +424,16 @@ void Huff_Init(huffman_t *huff) {
 	huff->compressor.loc[NYT] = huff->compressor.tree;
 }
 
+float Huff_GetCR(void)
+{
+#ifdef _TESTCR_
+	if(!bitCount)
+	{
+		// No valid data.
+		return(-1.0f);
+	}
+	return(((float)byteCount*8.0f)/bitCount);
+#else
+	return(-1.0f);
+#endif
+}

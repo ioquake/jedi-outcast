@@ -71,8 +71,8 @@ qboolean FX_FreeSystem( void )
 	return (qboolean)FX_Free();
 }
 
-void FX_AdjustTime( int time )
+void FX_AdjustTime_Pos( int time, vec3_t refdef_vieworg, vec3_t refdef_viewaxis[3] )
 {
-	theFxHelper.AdjustTime(time);
+	theFxHelper.AdjustTime_Pos( time, refdef_vieworg, refdef_viewaxis );
 }
 

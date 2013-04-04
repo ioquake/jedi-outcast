@@ -274,6 +274,7 @@ void CG_CheckChangedPredictableEvents( playerState_t *ps ) {
 pushReward
 ==================
 */
+#ifdef JK2AWARDS
 static void pushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount) {
 	if (cg.rewardStack < (MAX_REWARDSTACK-1)) {
 		cg.rewardStack++;
@@ -282,6 +283,7 @@ static void pushReward(sfxHandle_t sfx, qhandle_t shader, int rewardCount) {
 		cg.rewardCount[cg.rewardStack] = rewardCount;
 	}
 }
+#endif
 
 int cgAnnouncerTime = 0; //to prevent announce sounds from playing on top of each other
 
@@ -406,8 +408,13 @@ void CG_CheckLocalSounds( playerState_t *ps, playerState_t *ops ) {
 					} else if ( ps->persistant[PERS_RANK] == RANK_TIED_FLAG ) {
 						//CG_AddBufferedSound(cgs.media.tiedLeadSound);
 					} else if ( ( ops->persistant[PERS_RANK] & ~RANK_TIED_FLAG ) == 0 ) {
-						CG_AddBufferedSound(cgs.media.lostLeadSound);
-						cgAnnouncerTime = cg.time + 3000;
+						//rww - only bother saying this if you have more than 1 kill already.
+						//joining the server and hearing "the force is not with you" is silly.
+						if (ps->persistant[PERS_SCORE] > 0)
+						{
+							CG_AddBufferedSound(cgs.media.lostLeadSound);
+							cgAnnouncerTime = cg.time + 3000;
+						}
 					}
 				}
 			}

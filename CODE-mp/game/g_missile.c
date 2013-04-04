@@ -375,6 +375,8 @@ void G_MissileImpact( gentity_t *ent, trace_t *trace ) {
 		ent->s.weapon != WP_TRIP_MINE &&
 		ent->s.weapon != WP_DET_PACK &&
 		ent->s.weapon != WP_DEMP2 &&
+		ent->methodOfDeath != MOD_REPEATER_ALT &&
+		ent->methodOfDeath != MOD_FLECHETTE_ALT_SPLASH &&
 		other->client->ps.saberBlockTime < level.time &&
 		WP_SaberCanBlock(other, ent->r.currentOrigin, 0, 0, qtrue, 0))
 	{ //only block one projectile per 200ms (to prevent giant swarms of projectiles being blocked)
@@ -387,9 +389,12 @@ void G_MissileImpact( gentity_t *ent, trace_t *trace ) {
 		VectorCopy(trace->plane.normal, te->s.angles);
 		te->s.eventParm = 0;
 
-		if (other->client->ps.velocity[2] > 0 ||
+		/*if (other->client->ps.velocity[2] > 0 ||
 			other->client->pers.cmd.forwardmove ||
 			other->client->pers.cmd.rightmove)
+			*/
+		if (other->client->ps.velocity[2] > 0 ||
+			other->client->pers.cmd.forwardmove < 0) //now we only do it if jumping or running backward. Should be able to full-on charge.
 		{
 			otherDefLevel -= 1;
 			if (otherDefLevel < 0)
@@ -450,9 +455,11 @@ void G_MissileImpact( gentity_t *ent, trace_t *trace ) {
 			VectorCopy(trace->plane.normal, te->s.angles);
 			te->s.eventParm = 0;
 
-			if (otherOwner->client->ps.velocity[2] > 0 ||
+			/*if (otherOwner->client->ps.velocity[2] > 0 ||
 				otherOwner->client->pers.cmd.forwardmove ||
-				otherOwner->client->pers.cmd.rightmove)
+				otherOwner->client->pers.cmd.rightmove)*/
+			if (otherOwner->client->ps.velocity[2] > 0 ||
+				otherOwner->client->pers.cmd.forwardmove < 0) //now we only do it if jumping or running backward. Should be able to full-on charge.
 			{
 				otherDefLevel -= 1;
 				if (otherDefLevel < 0)
@@ -646,7 +653,12 @@ void G_RunMissile( gentity_t *ent ) {
 				ent->parent->client->hook = NULL;
 			}
 
-			if (ent->s.weapon != G2_MODEL_PART)
+			if (ent->s.weapon == WP_SABER && ent->isSaberEntity)
+			{
+				G_RunThink( ent );
+				return;
+			}
+			else if (ent->s.weapon != G2_MODEL_PART)
 			{
 				G_FreeEntity( ent );
 				return;

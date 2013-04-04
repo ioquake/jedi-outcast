@@ -7,6 +7,7 @@
 
 gentity_t *CreateMissile( vec3_t org, vec3_t dir, float vel, int life, gentity_t *owner, qboolean altFire = qfalse );
 extern gitem_t	*FindItemForAmmo( ammo_t ammo );
+extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
 
 #define MIN_DISTANCE		256
 #define MIN_DISTANCE_SQR	( MIN_DISTANCE * MIN_DISTANCE )
@@ -38,18 +39,16 @@ NPC_Sentry_Precache
 */
 void NPC_Sentry_Precache(void)
 {
-	G_SoundIndex( "sound/chars/sentry/misc/death.wav" );
-	G_SoundIndex( "sound/chars/sentry/misc/sentry_pain.mp3" );
-	G_SoundIndex( "sound/chars/sentry/misc/sentry_shield_open.mp3" );
-	G_SoundIndex( "sound/chars/sentry/misc/sentry_shield_close.mp3" );
-	G_SoundIndex( "sound/chars/sentry/misc/sentry_hover_1_lp.wav" );
-	G_SoundIndex( "sound/chars/sentry/misc/sentry_hover_2_lp.wav" );
-
-//	G_SoundIndex( "sound/chars/sentry/misc/shoot.wav");
+	G_SoundIndex( "sound/chars/sentry/misc/sentry_explo" );
+	G_SoundIndex( "sound/chars/sentry/misc/sentry_pain" );
+	G_SoundIndex( "sound/chars/sentry/misc/sentry_shield_open" );
+	G_SoundIndex( "sound/chars/sentry/misc/sentry_shield_close" );
+	G_SoundIndex( "sound/chars/sentry/misc/sentry_hover_1_lp" );
+	G_SoundIndex( "sound/chars/sentry/misc/sentry_hover_2_lp" );
 
 	for ( int i = 1; i < 4; i++)
 	{
-		G_SoundIndex( va( "sound/chars/sentry/misc/talk%d.wav", i ) );
+		G_SoundIndex( va( "sound/chars/sentry/misc/talk%d", i ) );
 	}
 
 	G_EffectIndex( "bryar/muzzle_flash");
@@ -88,7 +87,7 @@ void NPC_Sentry_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, v
 		TIMER_Set( self, "attackDelay", Q_irand( 9000, 12000) );
 		self->flags |= FL_SHIELDED;
 		NPC_SetAnim( self, SETANIM_BOTH, BOTH_FLY_SHIELDED, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
-		G_Sound( NPC, G_SoundIndex( "sound/chars/misc/sentry/sentry_pain.mp3" ));		
+		G_SoundOnEnt( self, CHAN_AUTO, "sound/chars/sentry/misc/sentry_pain" );		
 
 		self->NPC->localState = LSTATE_ACTIVE;
 	}
@@ -136,7 +135,7 @@ void Sentry_Fire (void)
 	{
 		NPCInfo->localState = LSTATE_POWERING_UP;
 
-		G_Sound( NPC, G_SoundIndex( "sound/chars/sentry/misc/sentry_shield_open.mp3" ));		
+		G_SoundOnEnt( NPC, CHAN_AUTO, "sound/chars/sentry/misc/sentry_shield_open" );		
 		NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_POWERUP1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 		TIMER_Set( NPC, "powerup", 250 );
 		return;
@@ -210,7 +209,7 @@ void Sentry_MaintainHeight( void )
 {	
 	float	dif;
 
-	NPC->s.loopSound = G_SoundIndex( "sound/chars/sentry/misc/sentry_hover_1_lp.wav" );
+	NPC->s.loopSound = G_SoundIndex( "sound/chars/sentry/misc/sentry_hover_1_lp" );
 
 	// Update our angles regardless
 	NPC_UpdateAngles( qtrue, qtrue );
@@ -420,12 +419,19 @@ void Sentry_RangedAttack( qboolean visible, qboolean advance )
 	{
 		if ( NPCInfo->burstCount > 6 )
 		{
-			NPCInfo->localState = LSTATE_ACTIVE;
-			NPCInfo->burstCount = 0;
-			TIMER_Set( NPC, "attackDelay", Q_irand( 2000, 3500) );
-			NPC->flags |= FL_SHIELDED;
-			NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_FLY_SHIELDED, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
-			G_Sound( NPC, G_SoundIndex( "sound/chars/sentry/misc/sentry_shield_close.mp3" ));
+			if ( !NPC->fly_sound_debounce_time )
+			{//delay closing down to give the player an opening
+				NPC->fly_sound_debounce_time = level.time + Q_irand( 500, 2000 );
+			}
+			else if ( NPC->fly_sound_debounce_time < level.time )
+			{
+				NPCInfo->localState = LSTATE_ACTIVE;
+				NPC->fly_sound_debounce_time = NPCInfo->burstCount = 0;
+				TIMER_Set( NPC, "attackDelay", Q_irand( 2000, 3500) );
+				NPC->flags |= FL_SHIELDED;
+				NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_FLY_SHIELDED, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+				G_SoundOnEnt( NPC, CHAN_AUTO, "sound/chars/sentry/misc/sentry_shield_close" );
+			}
 		}
 		else
 		{
@@ -449,14 +455,14 @@ void Sentry_AttackDecision( void )
 	// Always keep a good height off the ground
 	Sentry_MaintainHeight();
 
-	NPC->s.loopSound = G_SoundIndex( "sound/chars/sentry/misc/sentry_hover_2_lp.wav" );
+	NPC->s.loopSound = G_SoundIndex( "sound/chars/sentry/misc/sentry_hover_2_lp" );
 
 	//randomly talk
 	if ( TIMER_Done(NPC,"patrolNoise") )
 	{
 		if (TIMER_Done(NPC,"angerNoise"))
 		{
-			G_Sound( NPC, G_SoundIndex(va("sound/chars/sentry/misc/talk%d.wav",	Q_irand(1, 3))));
+			G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/sentry/misc/talk%d", Q_irand(1, 3)) );
 
 			TIMER_Set( NPC, "patrolNoise", Q_irand( 4000, 10000 ) );
 		}
@@ -528,7 +534,7 @@ void NPC_Sentry_Patrol( void )
 		//randomly talk
 		if (TIMER_Done(NPC,"patrolNoise"))
 		{
-			G_Sound( NPC, G_SoundIndex(va("sound/chars/sentry/misc/talk%d.wav",	Q_irand(1, 3))));
+			G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/sentry/misc/talk%d", Q_irand(1, 3)) );
 
 			TIMER_Set( NPC, "patrolNoise", Q_irand( 2000, 4000 ) );
 		}

@@ -309,7 +309,7 @@ void CL_SystemInfoChanged( void ) {
 	systemInfo = cl.gameState.stringData + cl.gameState.stringOffsets[ CS_SYSTEMINFO ];
 	cl.serverId = atoi( Info_ValueForKey( systemInfo, "sv_serverid" ) );
 
-	s = Info_ValueForKey( systemInfo, "sv_cheats" );
+	s = Info_ValueForKey( systemInfo, "helpUsObi" );
 	if ( atoi(s) == 0 ) {
 		Cvar_SetCheatState();
 	}
@@ -323,6 +323,13 @@ void CL_SystemInfoChanged( void ) {
 		}
 
 		Cvar_Set( key, value );
+	}
+	extern cvar_t *s_language;
+	if ( ( Q_stricmp( "DEUTSCH", s_language->string ) == 0 )//voice language is German
+			|| (sp_language->integer == SP_LANGUAGE_GERMAN )//text language is German
+			|| Cvar_VariableIntegerValue("ui_iscensored") == 1 )
+	{
+		Cvar_Set( "g_dismemberment", "0");
 	}
 }
 

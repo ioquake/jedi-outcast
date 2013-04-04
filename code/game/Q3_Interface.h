@@ -167,12 +167,14 @@ typedef enum //# setType_e
 	SET_VIDEO_FADE_OUT,//## %t="BOOL_TYPES" # Makes video playback fade out
 	SET_PLAYER_LOCKED,//## %t="BOOL_TYPES" # Makes it so player cannot move
 	SET_LOCK_PLAYER_WEAPONS,//## %t="BOOL_TYPES" # Makes it so player cannot switch weapons
+	SET_NO_IMPACT_DAMAGE,//## %t="BOOL_TYPES" # Stops this ent from taking impact damage
 	SET_NO_KNOCKBACK,//## %t="BOOL_TYPES" # Stops this ent from taking knockback from weapons
 	SET_ALT_FIRE,//## %t="BOOL_TYPES" # Force NPC to use altfire when shooting
 	SET_NO_RESPONSE,//## %t="BOOL_TYPES" # NPCs will do generic responses when this is on (usescripts override generic responses as well)
 	SET_INVINCIBLE,//## %t="BOOL_TYPES" # Completely unkillable
 	SET_MISSIONSTATUSACTIVE,	//# Turns on Mission Status Screen
 	SET_NO_COMBAT_TALK,//## %t="BOOL_TYPES" # NPCs will not do their combat talking noises when this is on
+	SET_NO_ALERT_TALK,//## %t="BOOL_TYPES" # NPCs will not do their combat talking noises when this is on
 	SET_TREASONED,//## %t="BOOL_TYPES" # Player has turned on his own- scripts will stop, NPCs will turn on him and level changes load the brig
 	SET_DISABLE_SHADER_ANIM,//## %t="BOOL_TYPES" # Allows turning off an animating shader in a script
 	SET_SHADER_ANIM,//## %t="BOOL_TYPES" # Sets a shader with an image map to be under frame control
@@ -194,6 +196,9 @@ typedef enum //# setType_e
 	SET_NO_FALLTODEATH,//## %t="BOOL_TYPES" # NPC will not scream and tumble and fall to hit death over large drops
 	SET_DISMEMBERABLE,//## %t="BOOL_TYPES" # NPC will not be dismemberable if you set this to false (default is true)
 	SET_NO_ACROBATICS,//## %t="BOOL_TYPES" # Jedi won't jump, roll or cartwheel
+	SET_USE_SUBTITLES,//## %t="BOOL_TYPES" # When true NPC will always display subtitle regardless of subtitle setting
+	SET_CLEAN_DAMAGING_ENTS,//## %t="BOOL_TYPES" # Removes entities that could muck up cinematics, explosives, turrets, seekers.
+	SET_HUD,//## %t="BOOL_TYPES" # Turns on/off HUD
 
 	//# #sep calls
 	SET_SKILL,//## %r%d="0" # Cannot set this, only get it - valid values are 0 through 3
@@ -210,6 +215,7 @@ typedef enum //# setType_e
 	SET_EVENT,//## %t="EVENT_NAMES" # Events you can initiate
 	SET_WEAPON,//## %t="WEAPON_NAMES" # Change/Stow/Drop weapon
 	SET_ITEM,//## %t="ITEM_NAMES" # Give items
+	SET_MUSIC_STATE,//## %t="MUSIC_STATES" # Set the state of the dynamic music
 
 	SET_FORCE_HEAL_LEVEL,//## %t="FORCE_LEVELS" # Change force power level
 	SET_FORCE_JUMP_LEVEL,//## %t="FORCE_LEVELS" # Change force power level

@@ -49,6 +49,11 @@ void SFxHelper::AdjustTime( int frameTime )
 	{
 		if ( !cg_paused.integer )
 		{
+			if ( frameTime > 1500 ) // hack
+			{
+				frameTime = 200;
+			}
+
 			mFrameTime = frameTime;
 			mFloatFrameTime = mFrameTime * 0.001f;
 			mTime += mFrameTime;

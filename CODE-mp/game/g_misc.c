@@ -515,7 +515,10 @@ void HolocronThink(gentity_t *ent)
 justthink:
 	ent->nextthink = level.time + 50;
 
-	G_RunObject(ent);
+	if (ent->s.pos.trDelta[0] || ent->s.pos.trDelta[1] || ent->s.pos.trDelta[2])
+	{
+		G_RunObject(ent);
+	}
 }
 
 void SP_misc_holocron(gentity_t *ent)
@@ -574,13 +577,16 @@ void SP_misc_holocron(gentity_t *ent)
 	{
 		ent->count = NUM_FORCE_POWERS-1;
 	}
-
+/*
 	if (g_forcePowerDisable.integer &&
 		(g_forcePowerDisable.integer & (1 << ent->count)))
 	{
 		G_FreeEntity(ent);
 		return;
 	}
+*/
+	//No longer doing this, causing too many complaints about accidentally setting no force powers at all
+	//and starting a holocron game (making it basically just FFA)
 
 	ent->enemy = NULL;
 
@@ -803,18 +809,19 @@ void shield_power_converter_use( gentity_t *self, gentity_t *other, gentity_t *a
 	}
 }
 
-/*QUAKED misc_shield_floor_unit (1 0 0) (-16 -16 0) (16 16 32)
-#MODELNAME="/models/items/a_shield_converter.md3"
-Gives shield energy when used.
-
-"count" - max charge value (default 50)
-"chargerate" - rechage 1 point every this many milliseconds (default 3000)
-*/
+//QED comment is in bg_misc
 //------------------------------------------------------------
 void SP_misc_shield_floor_unit( gentity_t *ent )
 {
 	vec3_t dest;
 	trace_t tr;
+
+	if (g_gametype.integer != GT_CTF &&
+		g_gametype.integer != GT_CTY)
+	{
+		G_FreeEntity( ent );
+		return;
+	}
 
 	VectorSet( ent->r.mins, -16, -16, 0 );
 	VectorSet( ent->r.maxs, 16, 16, 40 );
@@ -842,6 +849,11 @@ void SP_misc_shield_floor_unit( gentity_t *ent )
 	if (!ent->health)
 	{
 		ent->health = 60;
+	}
+
+	if (!ent->model || !ent->model[0])
+	{
+		ent->model = "/models/items/a_shield_converter.md3";
 	}
 
 	ent->s.modelindex = G_ModelIndex( ent->model );
@@ -948,7 +960,7 @@ void ammo_power_converter_use( gentity_t *self, gentity_t *other, gentity_t *act
 
 		if (!self->s.loopSound)
 		{
-			self->s.loopSound = G_SoundIndex("sound/player/suitenergy.wav");
+			self->s.loopSound = G_SoundIndex("sound/player/pickupshield.wav");
 		}
 
 		self->setTime = level.time + 100;
@@ -1075,7 +1087,7 @@ void health_power_converter_use( gentity_t *self, gentity_t *other, gentity_t *a
 	{
 		if (!self->s.loopSound)
 		{
-			self->s.loopSound = G_SoundIndex("sound/player/suitenergy.wav");
+			self->s.loopSound = G_SoundIndex("sound/player/pickuphealth.wav");
 		}
 		self->setTime = level.time + 100;
 

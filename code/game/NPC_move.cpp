@@ -292,7 +292,7 @@ qboolean NPC_GetMoveDirectionAltRoute( vec3_t out, float *distance, qboolean try
 			memcpy( &tempInfo, &frameNavInfo, sizeof( tempInfo ) );
 			if ( NAVNEW_AvoidCollision( NPC, NPCInfo->goalEntity, tempInfo, qtrue, 5 ) == qfalse )
 			{//revert to macro nav
-				//Can't get straight to goal, deump tempInfo and use macro nav
+				//Can't get straight to goal, dump tempInfo and use macro nav
 				if ( NAVNEW_MoveToGoal( NPC, frameNavInfo ) == WAYPOINT_NONE )
 				{
 					//Can't reach goal, just face
@@ -324,6 +324,53 @@ qboolean NPC_GetMoveDirectionAltRoute( vec3_t out, float *distance, qboolean try
 	*distance = frameNavInfo.distance;
 
 	return qtrue;
+}
+
+void G_UcmdMoveForDir( gentity_t *self, usercmd_t *cmd, vec3_t dir )
+{
+	vec3_t	forward, right;
+
+	AngleVectors( self->currentAngles, forward, right, NULL );
+
+	dir[2] = 0;
+	VectorNormalize( dir );
+	//NPCs cheat and store this directly because converting movement into a ucmd loses precision
+	VectorCopy( dir, self->client->ps.moveDir );
+
+	float fDot = DotProduct( forward, dir ) * 127.0f;
+	float rDot = DotProduct( right, dir ) * 127.0f;
+	//Must clamp this because DotProduct is not guaranteed to return a number within -1 to 1, and that would be bad when we're shoving this into a signed byte
+	if ( fDot > 127.0f )
+	{
+		fDot = 127.0f;
+	}
+	if ( fDot < -127.0f )
+	{
+		fDot = -127.0f;
+	}
+	if ( rDot > 127.0f )
+	{
+		rDot = 127.0f;
+	}
+	if ( rDot < -127.0f )
+	{
+		rDot = -127.0f;
+	}
+	cmd->forwardmove = floor(fDot);
+	cmd->rightmove = floor(rDot);
+
+	/*
+	vec3_t	wishvel;
+	for ( int i = 0 ; i < 3 ; i++ ) 
+	{
+		wishvel[i] = forward[i]*cmd->forwardmove + right[i]*cmd->rightmove;
+	}
+	VectorNormalize( wishvel );
+	if ( !VectorCompare( wishvel, dir ) )
+	{
+		Com_Printf( "PRECISION LOSS: %s != %s\n", vtos(wishvel), vtos(dir) );
+	}
+	*/
 }
 
 /*
@@ -373,49 +420,7 @@ qboolean NPC_MoveToGoal( qboolean tryStraight )
 	//If in combat move, then move directly towards our goal
 	if ( NPC_CheckCombatMove() )
 	{//keep current facing
-		vec3_t	forward, right;
-
-		AngleVectors( NPC->currentAngles, forward, right, NULL );
-
-		dir[2] = 0;
-		VectorNormalize( dir );
-		//NPCs cheat and store this directly because converting movement into a ucmd loses precision
-		VectorCopy( dir, NPC->client->ps.moveDir );
-
-		float fDot = DotProduct( forward, dir ) * 127.0f;
-		float rDot = DotProduct( right, dir ) * 127.0f;
-		//Must clamp this because DotProduct is not guaranteed to return a number within -1 to 1, and that would be bad when we're shoving this into a signed byte
-		if ( fDot > 127.0f )
-		{
-			fDot = 127.0f;
-		}
-		if ( fDot < -127.0f )
-		{
-			fDot = -127.0f;
-		}
-		if ( rDot > 127.0f )
-		{
-			rDot = 127.0f;
-		}
-		if ( rDot < -127.0f )
-		{
-			rDot = -127.0f;
-		}
-		ucmd.forwardmove = floor(fDot);
-		ucmd.rightmove = floor(rDot);
-
-		/*
-		vec3_t	wishvel;
-		for ( int i = 0 ; i < 3 ; i++ ) 
-		{
-			wishvel[i] = forward[i]*ucmd.forwardmove + right[i]*ucmd.rightmove;
-		}
-		VectorNormalize( wishvel );
-		if ( !VectorCompare( wishvel, dir ) )
-		{
-			Com_Printf( "PRECISION LOSS: %s != %s\n", vtos(wishvel), vtos(dir) );
-		}
-		*/
+		G_UcmdMoveForDir( NPC, &ucmd, dir );
 	}
 	else
 	{//face our goal
@@ -430,8 +435,17 @@ qboolean NPC_MoveToGoal( qboolean tryStraight )
 			
 			if ( dir[2] )
 			{
-//				ucmd.upmove = (dir[2] > 0) ? 64 : -64;
-				NPC->client->ps.velocity[2] = (dir[2] > 0) ? 64 : -64;
+				float scale = (dir[2] * distance);
+				if ( scale > 64 )
+				{
+					scale = 64;
+				}
+				else if ( scale < -64 )
+				{
+					scale = -64;
+				}
+				NPC->client->ps.velocity[2] = scale;
+				//NPC->client->ps.velocity[2] = (dir[2] > 0) ? 64 : -64;
 			}
 		}
 

@@ -320,6 +320,10 @@ qboolean FS_PakIsPure( pack_t *pack ) {
 	int i;
 
 	if ( fs_numServerPaks ) {
+    // NOTE TTimo we are matching checksums without checking the pak names
+    //   this means you can have the same pk3 as the server under a different name, you will still get through sv_pure validation
+    //   (what happens when two pk3's have the same checkums? is it a likely situation?)
+    //   also, if there's a wrong checksumed pk3 and autodownload is enabled, the checksum will be appended to the downloaded pk3 name
 		for ( i = 0 ; i < fs_numServerPaks ; i++ ) {
 			// FIXME: also use hashed file names
 			if ( pack->checksum == fs_serverPaks[i] ) {
@@ -1052,6 +1056,7 @@ int FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean uniqueF
 						if ( Q_stricmp(filename + l - 7, ".shader") != 0 &&
 							Q_stricmp(filename + l - 4, ".txt") != 0 &&
 							Q_stricmp(filename + l - 4, ".cfg") != 0 &&
+							Q_stricmp(filename + l - 4, ".fcf") != 0 &&
 							Q_stricmp(filename + l - 7, ".config") != 0 &&
 							strstr(filename, "levelshots") == NULL &&
 							Q_stricmp(filename + l - 4, ".bot") != 0 &&
@@ -1105,13 +1110,15 @@ int FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean uniqueF
 						Com_Printf( "FS_FOpenFileRead: %s (found in '%s')\n", 
 							filename, pak->pakFilename );
 					}
-#ifdef _DEBUG
+#ifndef DEDICATED
+#ifndef FINAL_BUILD
 					// Check for unprecached files when in game but not in the menus
 					if((cls.state == CA_ACTIVE) && !(cls.keyCatchers & KEYCATCH_UI))
 					{
 						Com_Printf(S_COLOR_YELLOW "WARNING: File %s not precached\n", filename);
 					}
 #endif
+#endif // DEDICATED
 					return zfi->cur_file_info.uncompressed_size;
 				}
 				pakFile = pakFile->next;
@@ -1130,6 +1137,7 @@ int FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean uniqueF
 			if ( fs_restrict->integer || fs_numServerPaks ) {
 
 				if ( Q_stricmp( filename + l - 4, ".cfg" )		// for config files
+					&& Q_stricmp( filename + l - 4, ".fcf" )	// force configuration files
 					&& Q_stricmp( filename + l - 5, ".menu" )	// menu files
 					&& Q_stricmp( filename + l - 5, ".game" )	// menu files
 					&& Q_stricmp( filename + l - strlen(demoExt), demoExt )	// menu files
@@ -1147,6 +1155,7 @@ int FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean uniqueF
 			}
 
 			if ( Q_stricmp( filename + l - 4, ".cfg" )		// for config files
+				&& Q_stricmp( filename + l - 4, ".fcf" )	// force configuration files
 				&& Q_stricmp( filename + l - 5, ".menu" )	// menu files
 				&& Q_stricmp( filename + l - 5, ".game" )	// menu files
 				&& Q_stricmp( filename + l - strlen(demoExt), demoExt )	// menu files
@@ -1169,13 +1178,15 @@ int FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean uniqueF
 				copypath = FS_BuildOSPath( fs_basepath->string, dir->gamedir, filename );
 				FS_CopyFile( netpath, copypath );
 			}
-#ifdef _DEBUG
+#ifndef DEDICATED
+#ifndef FINAL_BUILD
 			// Check for unprecached files when in game but not in the menus
 			if((cls.state == CA_ACTIVE) && !(cls.keyCatchers & KEYCATCH_UI))
 			{
 				Com_Printf(S_COLOR_YELLOW "WARNING: File %s not precached\n", filename);
 			}
 #endif
+#endif // dedicated
 			return FS_filelength (*file);
 		}		
 	}
@@ -1918,9 +1929,14 @@ char **FS_ListFilteredFiles( const char *path, const char *extension, char *filt
 			char	*name;
 
 			// don't scan directories for files if we are pure or restricted
-			if ( fs_restrict->integer || fs_numServerPaks ) {
-		        continue;
-		    } else {
+			if ( (fs_restrict->integer || fs_numServerPaks) &&
+				 (!extension || Q_stricmp(extension, "fcf") || fs_restrict->integer) )
+			{
+				//rww - allow scanning for fcf files outside of pak even if pure
+			    continue;
+		    }
+			else
+			{
 				netpath = FS_BuildOSPath( search->dir->path, search->dir->gamedir, path );
 				sysFiles = Sys_ListFiles( netpath, extension, filter, &numSysFiles, qfalse );
 				for ( i = 0 ; i < numSysFiles ; i++ ) {
@@ -2529,6 +2545,8 @@ qboolean FS_idPak( char *pak, char *base ) {
 ================
 FS_ComparePaks
 
+if dlstring == qtrue
+
 Returns a list of pak files that we should download from the server. They all get stored
 in the current gamedir and an FS_Restart will be fired up after we download them all.
 
@@ -2540,9 +2558,14 @@ static int		fs_numServerReferencedPaks;
 static int		fs_serverReferencedPaks[MAX_SEARCH_PATHS];
 static char		*fs_serverReferencedPakNames[MAX_SEARCH_PATHS];
 
+----------------
+dlstring == qfalse
+
+we are not interested in a download string format, we want something human-readable
+(this is used for diagnostics while connecting to a pure server)
 ================
 */
-qboolean FS_ComparePaks( char *neededpaks, int len ) {
+qboolean FS_ComparePaks( char *neededpaks, int len, qboolean dlstring ) {
 	searchpath_t	*sp;
 	qboolean havepak, badchecksum;
 	int i;
@@ -2572,30 +2595,42 @@ qboolean FS_ComparePaks( char *neededpaks, int len ) {
 
 		if ( !havepak && fs_serverReferencedPakNames[i] && *fs_serverReferencedPakNames[i] ) { 
 			// Don't got it
-
-			// Remote name
-			Q_strcat( neededpaks, len, "@");
-			Q_strcat( neededpaks, len, fs_serverReferencedPakNames[i] );
-			Q_strcat( neededpaks, len, ".pk3" );
-
-			// Local name
-			Q_strcat( neededpaks, len, "@");
-			// Do we have one with the same name?
-			if ( FS_SV_FileExists( va( "%s.pk3", fs_serverReferencedPakNames[i] ) ) ) {
-				char st[MAX_ZPATH];
-				// We already have one called this, we need to download it to another name
-				// Make something up with the checksum in it
-				Com_sprintf( st, sizeof( st ), "%s.%08x.pk3", fs_serverReferencedPakNames[i], fs_serverReferencedPaks[i] );
-				Q_strcat( neededpaks, len, st );
-			} else {
+			
+			if (dlstring)
+			{
+				// Remote name
+				Q_strcat( neededpaks, len, "@");
 				Q_strcat( neededpaks, len, fs_serverReferencedPakNames[i] );
 				Q_strcat( neededpaks, len, ".pk3" );
+				
+				// Local name
+				Q_strcat( neededpaks, len, "@");
+				// Do we have one with the same name?
+				if ( FS_SV_FileExists( va( "%s.pk3", fs_serverReferencedPakNames[i] ) ) ) {
+					char st[MAX_ZPATH];
+					// We already have one called this, we need to download it to another name
+					// Make something up with the checksum in it
+					Com_sprintf( st, sizeof( st ), "%s.%08x.pk3", fs_serverReferencedPakNames[i], fs_serverReferencedPaks[i] );
+					Q_strcat( neededpaks, len, st );
+				} else {
+					Q_strcat( neededpaks, len, fs_serverReferencedPakNames[i] );
+					Q_strcat( neededpaks, len, ".pk3" );
+				}
+			}
+			else
+			{
+				Q_strcat( neededpaks, len, fs_serverReferencedPakNames[i] );
+				Q_strcat( neededpaks, len, ".pk3" );
+				// Do we have one with the same name?
+				if ( FS_SV_FileExists( va( "%s.pk3", fs_serverReferencedPakNames[i] ) ) )
+				{
+					Q_strcat( neededpaks, len, " (local file exists with wrong checksum)");
+				}
+				Q_strcat( neededpaks, len, "\n");
 			}
 		}
 	}
-
 	if ( *neededpaks ) {
-		Com_Printf("Need paks: %s\n", neededpaks);
 		return qtrue;
 	}
 
@@ -3173,8 +3208,8 @@ void FS_InitFilesystem( void ) {
 	// if we can't find default.cfg, assume that the paths are
 	// busted and error out now, rather than getting an unreadable
 	// graphics screen when the font fails to load
-	if ( FS_ReadFile( "default.cfg", NULL ) <= 0 ) {
-		Com_Error( ERR_FATAL, "Couldn't load default.cfg" );
+	if ( FS_ReadFile( "mpdefault.cfg", NULL ) <= 0 ) {
+		Com_Error( ERR_FATAL, "Couldn't load mpdefault.cfg" );
 		// bk001208 - SafeMode see below, FIXME?
 	}
 
@@ -3210,7 +3245,7 @@ void FS_Restart( int checksumFeed ) {
 	// if we can't find default.cfg, assume that the paths are
 	// busted and error out now, rather than getting an unreadable
 	// graphics screen when the font fails to load
-	if ( FS_ReadFile( "default.cfg", NULL ) <= 0 ) {
+	if ( FS_ReadFile( "mpdefault.cfg", NULL ) <= 0 ) {
 		// this might happen when connecting to a pure server not using BASEGAME/pak0.pk3
 		// (for instance a TA demo server)
 		if (lastValidBase[0]) {
@@ -3224,7 +3259,7 @@ void FS_Restart( int checksumFeed ) {
 			Com_Error( ERR_DROP, "Invalid game folder\n" );
 			return;
 		}
-		Com_Error( ERR_FATAL, "Couldn't load default.cfg" );
+		Com_Error( ERR_FATAL, "Couldn't load mpdefault.cfg" );
 	}
 
 	// bk010116 - new check before safeMode
@@ -3291,6 +3326,10 @@ int		FS_FOpenFileByMode( const char *qpath, fileHandle_t *f, fsMode_t mode ) {
 	default:
 		Com_Error( ERR_FATAL, "FSH_FOpenFile: bad mode" );
 		return -1;
+	}
+
+	if (!f) {
+		return r;
 	}
 
 	if ( *f ) {

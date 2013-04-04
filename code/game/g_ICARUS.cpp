@@ -470,6 +470,8 @@ void ICARUS_InterrogateScript( const char *filename )
 				case SET_BLOCKEDSCRIPT:
 				case SET_FFIRESCRIPT:
 				case SET_FFDEATHSCRIPT:
+				case SET_MINDTRICKSCRIPT:
+				case SET_CINEMATIC_SKIPSCRIPT:
 					//Recursively obtain all embedded scripts
 					ICARUS_InterrogateScript( sVal2 );
 					break;
@@ -496,6 +498,12 @@ extern	cvar_t	*com_buildScript;
 						{
 							gi.FS_FCloseFile( file );
 						}
+					}
+					break;
+				case SET_ADDRHANDBOLT_MODEL:
+				case SET_ADDLHANDBOLT_MODEL:
+					{
+						gi.G2API_PrecacheGhoul2Model( sVal2 );
 					}
 					break;
 				default:

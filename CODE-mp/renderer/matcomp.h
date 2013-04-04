@@ -30,3 +30,4 @@ void MC_UnCompressQuat(float mat[3][4],const unsigned char * comp);
 #endif
 
 #endif
+

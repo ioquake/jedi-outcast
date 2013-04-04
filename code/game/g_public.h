@@ -255,7 +255,6 @@ qboolean	(*G2API_SetBoneAnglesMatrix)(CGhoul2Info *ghlInfo, const char *boneName
 									  qhandle_t *modelList, int blendTime = 0, int currentTime = 0);
 qboolean	(*G2API_StopBoneAngles)(CGhoul2Info *ghlInfo, const char *boneName);
 qboolean	(*G2API_RemoveBone)(CGhoul2Info *ghlInfo, const char *boneName);
-void		(*G2API_AnimateG2Models)(CGhoul2Info_v &ghoul2, float speedVar);
 qboolean	(*G2API_RemoveBolt)(CGhoul2Info *ghlInfo, const int index);
 int			(*G2API_AddBolt)(CGhoul2Info *ghlInfo, const char *boneName);
 int			(*G2API_AddBoltSurfNum)(CGhoul2Info *ghlInfo, const int surfIndex);
@@ -348,6 +347,7 @@ typedef struct {
 	qboolean	(*ConsoleCommand)( void );
 
 	void		(*PrintEntClassname)( int clientNum );
+	int			(*ValidateAnimRange)( int startFrame, int endFrame, float animSpeed );
 	//
 	// global variables shared between game and server
 	//

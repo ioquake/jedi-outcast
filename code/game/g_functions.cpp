@@ -76,7 +76,6 @@ void GEntity_ThinkFunc(gentity_t *self)
 	THINKCASE( MoveOwner )
 	THINKCASE( SolidifyOwner )
 	THINKCASE( cycleCamera )
-	THINKCASE( WaitNPCRespond )
 	THINKCASE( spawn_ammo_crystal_trigger )
 	THINKCASE( NPC_ShySpawn )
 	THINKCASE( func_wait_return_solid )
@@ -221,7 +220,7 @@ void GEntity_TouchFunc(gentity_t *self, gentity_t *other, trace_t *trace)
 
 void GEntity_UseFunc(gentity_t *self, gentity_t *other, gentity_t *activator)
 {
-	if ( (self->svFlags&SVF_INACTIVE) )
+	if ( !self || (self->svFlags&SVF_INACTIVE) )
 	{
 		return;
 	}
@@ -303,6 +302,7 @@ void GEntity_UseFunc(gentity_t *self, gentity_t *other, gentity_t *activator)
 	USECASE( jabba_cam_use )
 	USECASE( misc_use )
 	USECASE( pas_use )
+	USECASE( item_spawn_use )
 
 	default:
 		Com_Error(ERR_DROP, "GEntity_UseFunc: case %d not handled!\n",self->e_UseFunc);

@@ -55,6 +55,9 @@ void					SP_Unload(unsigned char Registration);
 
 // Direct string functions
 int						SP_GetStringID(const char *Reference);
+#ifdef _DEBUG
+const char *SP_GetReferenceText(unsigned short ID, const char *&psPackageName, const char *&psPackageReference, const char *&psText);
+#endif
 const char				*SP_GetStringText(unsigned short ID);
 const char				*SP_GetStringTextString(const char *Reference);
 

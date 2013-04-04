@@ -274,6 +274,7 @@ static void UI_CalcPostGameStats() {
 	// put back all the ui overrides
 	trap_Cvar_Set("capturelimit", UI_Cvar_VariableString("ui_saveCaptureLimit"));
 	trap_Cvar_Set("fraglimit", UI_Cvar_VariableString("ui_saveFragLimit"));
+	trap_Cvar_Set("duel_fraglimit", UI_Cvar_VariableString("ui_saveDuelLimit"));
 	trap_Cvar_Set("cg_drawTimer", UI_Cvar_VariableString("ui_drawTimer"));
 	trap_Cvar_Set("g_doWarmup", UI_Cvar_VariableString("ui_doWarmup"));
 	trap_Cvar_Set("g_Warmup", UI_Cvar_VariableString("ui_Warmup"));
@@ -315,6 +316,15 @@ qboolean UI_ConsoleCommand( int realTime ) {
 	if ( Q_stricmp (cmd, "ui_load") == 0 ) {
 		UI_Load();
 		return qtrue;
+	}
+
+	if ( Q_stricmp (cmd, "ui_openmenu" ) == 0 ) 
+	{
+		if ( trap_Cvar_VariableValue ( "developer" ) )
+		{
+			Menus_OpenByName ( UI_Argv(1) );
+			return qtrue;
+		}
 	}
 
 	if ( Q_stricmp (cmd, "remapShader") == 0 ) {

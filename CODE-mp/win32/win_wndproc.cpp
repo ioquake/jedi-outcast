@@ -145,7 +145,7 @@ static byte s_scantokey_french[128] =
 	0  ,    27,     '1',    '2',    '3',    '4',    '5',    '6', 
 	'7',    '8',    '9',    '0',    ')',    '=',    K_BACKSPACE, 9, // 0 
 	'a',    'z',    'e',    'r',    't',    'y',    'u',    'i', 
-	'o',    'p',    '^',    '$',    13 ,    K_CTRL, 'q',  's',      // 1 
+	'o',    'p',    '^',	'$',    13 ,    K_CTRL, 'q',  's',      // 1
 	'd',    'f',    'g',    'h',    'j',    'k',    'l',    'm', 
 	'%' ,    '`',    K_SHIFT,'*',  'w',    'x',    'c',    'v',      // 2 
 	'b',    'n',    ',',    ';',    ':',    '!',    K_SHIFT,'*', 
@@ -300,6 +300,12 @@ MainWndProc
 main window procedure
 ====================
 */
+
+#define WM_BUTTON4DOWN	(WM_MOUSELAST+2)
+#define WM_BUTTON4UP	(WM_MOUSELAST+3)
+#define MK_BUTTON4L		0x0020
+#define MK_BUTTON4R		0x0040
+
 LONG WINAPI MainWndProc (
     HWND    hWnd,
     UINT    uMsg,
@@ -440,6 +446,8 @@ LONG WINAPI MainWndProc (
 	case WM_MBUTTONDOWN:
 	case WM_MBUTTONUP:
 	case WM_MOUSEMOVE:
+	case WM_BUTTON4DOWN:
+	case WM_BUTTON4UP:
 		{
 			int	temp;
 
@@ -454,13 +462,21 @@ LONG WINAPI MainWndProc (
 			if (wParam & MK_MBUTTON)
 				temp |= 4;
 
+		 	if (wParam & MK_BUTTON4L)
+				temp |= 8;
+
+			if (wParam & MK_BUTTON4R)
+				temp |= 16;
+
 			IN_MouseEvent (temp);
 		}
 		break;
 
 	case WM_SYSCOMMAND:
-		if ( wParam == SC_SCREENSAVE )
+		if ( (wParam&0xFFF0) == SC_SCREENSAVE || (wParam&0xFFF0) == SC_MONITORPOWER)
+		{
 			return 0;
+		}
 		break;
 
 	case WM_SYSKEYDOWN:
@@ -485,6 +501,13 @@ LONG WINAPI MainWndProc (
 
 	case WM_CHAR:
 		Sys_QueEvent( g_wv.sysMsgTime, SE_CHAR, wParam, 0, 0, NULL );
+		break;
+	case WM_POWERBROADCAST:
+		if (wParam == PBT_APMQUERYSUSPEND)
+		{
+			Com_Printf("Cannot go into hibernate / standby mode while game is running!\n");
+			return BROADCAST_QUERY_DENY;
+		}
 		break;
    }
 

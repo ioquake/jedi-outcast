@@ -458,6 +458,8 @@ static clientSnapshot_t *SV_BuildClientSnapshot( client_t *client ) {
 		}
 //============
 	}
+	VectorCopy( org, frame->ps.serverViewOrg );
+	VectorCopy( org, clent->client->serverViewOrg );
 
 	// add all the entities directly visible to the eye, which
 	// may include portal entities that merge other viewpoints

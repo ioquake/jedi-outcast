@@ -18,13 +18,15 @@
 	#include "../ghoul2/G2.h"
 #endif
 #include "../ghoul2/G2_local.h"
-#include "matcomp.h"
+#include "MatComp.h"
 
 #pragma warning (disable: 4512)	//default assignment operator could not be gened
 #include "../qcommon/disablewarnings.h"
 
 #define	LL(x) x=LittleLong(x)
 
+extern cvar_t	*r_Ghoul2AnimSmooth;
+extern cvar_t	*r_Ghoul2UnSqashAfterSmooth;
 
 // I hate doing this, but this is the simplest way to get this into the routines it needs to be
 mdxaBone_t		worldMatrix;
@@ -265,7 +267,7 @@ static int G2_ComputeLOD( trRefEntity_t *ent, const model_t *currentModel, int l
 		return(0);
 	}
 
-	if (r_lodbias->integer > lodBias) 
+	if ( r_lodbias->integer > lodBias ) 
 	{
 		lodBias = r_lodbias->integer;
 	}
@@ -288,8 +290,15 @@ static int G2_ComputeLOD( trRefEntity_t *ent, const model_t *currentModel, int l
 
 	if ( ( projectedRadius = ProjectRadius( 0.75*largestScale*ent->e.radius, ent->e.origin ) ) != 0 )	//we reduce the radius to make the LOD match other model types which use the actual bound box size
  	{
- 		lodscale = r_lodscale->value;
- 		if (lodscale > 20) lodscale = 20;	 
+ 		lodscale = (r_lodscale->value+r_autolodscalevalue->value);
+ 		if ( lodscale > 20 ) 
+		{
+			lodscale = 20;	 
+		}
+		else if ( lodscale < 0 )
+		{
+			lodscale = 0;
+		}
  		flod = 1.0f - projectedRadius * lodscale;
  	}
  	else
@@ -297,7 +306,9 @@ static int G2_ComputeLOD( trRefEntity_t *ent, const model_t *currentModel, int l
  		// object intersects near view plane, e.g. view weapon
  		flod = 0;
  	}
-
+#ifdef DEDICATED
+#define myftol(x) ((int)(x))
+#endif
  	flod *= currentModel->numLods;
  	lod = myftol( flod );
 
@@ -442,7 +453,7 @@ static int G2_GetBonePoolIndex(	const mdxaHeader_t *pMDXAHeader, int iFrame, int
 	MC_UnCompressQuat(mat, pCompBonePool[ G2_GetBonePoolIndex( pMDXAHeader, iFrame, iBoneIndex ) ].Comp);
 }
 
-
+#define DEBUG_G2_TIMING (0)
 
 // transform each individual bone's information - making sure to use any override information provided, both for angles and for animations, as
 // well as multiplying each bone's matrix by it's parents matrix 
@@ -454,6 +465,10 @@ void G2_TransformBone (CTransformBone &TB)
 	boneInfo_v		&boneList = TB.rootBoneList;
 	int				i, j, boneListIndex;
 	int				angleOverride = 0;
+
+#if DEBUG_G2_TIMING
+	bool printTiming=false;
+#endif
 
 	// decide here if we should go down this path? - is this bone used? -If not, return from this function. Due the hierarchial nature of the bones
 	// any bone below this one in the tree shouldn't be used either.
@@ -474,12 +489,11 @@ void G2_TransformBone (CTransformBone &TB)
 			angleOverride = (boneList[boneListIndex].flags) & (BONE_ANGLES_TOTAL);
 		}
 
-		// set blending stuff if we need to
-		if (boneList[boneListIndex].flags & (BONE_ANIM_BLEND | BONE_ANIM_BLEND_TO_PARENT))
+		if (boneList[boneListIndex].flags & BONE_ANIM_BLEND)
 		{
 			float blendTime = TB.incomingTime - boneList[boneListIndex].blendStart;
 			// only set up the blend anim if we actually have some blend time left on this bone anim - otherwise we might corrupt some blend higher up the hiearchy
-			if (blendTime < boneList[boneListIndex].blendTime)
+			if (blendTime>=0.0f&&blendTime < boneList[boneListIndex].blendTime)
 			{
 				TB.blendFrame = boneList[boneListIndex].blendFrame;
 				TB.blendOldFrame = boneList[boneListIndex].blendLerpFrame;
@@ -491,34 +505,13 @@ void G2_TransformBone (CTransformBone &TB)
 				TB.blendMode = false;
 			}
 		}
-		else
-		// are blending *from* the parent? If so, grab what the parent is set to, and stick it in the blendFrame info
-		if (boneList[boneListIndex].flags & BONE_ANIM_BLEND_FROM_PARENT)
-		{
-			float blendTime = TB.incomingTime - boneList[boneListIndex].blendStart;
-			// only set up the blend anim if we actually have some blend time left on this bone anim - otherwise we might corrupt some blend higher up the hiearchy
-			if (blendTime < boneList[boneListIndex].blendTime)
-			{
-				TB.blendFrame = TB.newFrame;
-				TB.blendOldFrame = TB.currentFrame;
-				TB.blendLerp = (blendTime / boneList[boneListIndex].blendTime);
-				TB.blendMode = true;
-			}
-			else
-			{ 
-				TB.blendMode = false;
-			}
-		}
-		else
-		if ((boneList[boneListIndex].flags) & (BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_OVERRIDE))
+		else if ((boneList[boneListIndex].flags) & (BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_OVERRIDE))
 		{
 			TB.blendMode = false;
 		}
 
-		// should this animation be overridden by an animation in the bone list?
 		if ((boneList[boneListIndex].flags) & (BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_OVERRIDE))
 		{
-			// yes - add in animation speed to current frame
 			float	animSpeed = boneList[boneListIndex].animSpeed;
 			float	time;
 			if (boneList[boneListIndex].pauseTime)
@@ -528,6 +521,10 @@ void G2_TransformBone (CTransformBone &TB)
 			else
 			{			
 				time = (TB.incomingTime - boneList[boneListIndex].startTime) / 50.0f;
+			}
+			if (time<0)
+			{
+				time=0;
 			}
 			float	newFrame_g = boneList[boneListIndex].startFrame + (time * animSpeed);
 
@@ -547,27 +544,26 @@ void G2_TransformBone (CTransformBone &TB)
 						// get our new animation frame back within the bounds of the animation set
 						if (animSpeed < 0.0f)
 						{
-							// should we be creating a virtual frame?
-							if ((newFrame_g < endFrame + 1) && (newFrame_g > endFrame))
+							if ((newFrame_g < endFrame+1) && (newFrame_g >= endFrame))
 							{
 								// now figure out what we are lerping between
 								// delta is the fraction between this frame and the next, since the new anim is always at a .0f;
-								TB.backlerp = (newFrame_g - (int)newFrame_g);
+								TB.backlerp = (float(endFrame+1)-newFrame_g);
 								// frames are easy to calculate
-								TB.currentFrame = (int)newFrame_g;
+								TB.currentFrame = endFrame;
 								TB.newFrame = boneList[boneListIndex].startFrame;
 							}
 							else
 							{
-								while (newFrame_g <= endFrame)
+								if (newFrame_g <= endFrame+1)
 								{
-									newFrame_g -= animSize;
+									newFrame_g=endFrame+fmod(newFrame_g-endFrame,animSize)-animSize;
 								}
 								// now figure out what we are lerping between
 								// delta is the fraction between this frame and the next, since the new anim is always at a .0f;
-								TB.backlerp = (newFrame_g - (int)newFrame_g);
+								TB.backlerp = (ceil(newFrame_g)-newFrame_g);
 								// frames are easy to calculate
-								TB.currentFrame = (int)newFrame_g;
+								TB.currentFrame = ceil(newFrame_g);
 								// should we be creating a virtual frame?
 								if (newFrame_g <= endFrame + 1)
 								{
@@ -594,9 +590,9 @@ void G2_TransformBone (CTransformBone &TB)
 							}
 							else
 							{
-								while (newFrame_g >= endFrame)
+								if (newFrame_g >= endFrame)
 								{
-									newFrame_g -= animSize;
+									newFrame_g=endFrame+fmod(newFrame_g-endFrame,animSize)-animSize;
 								}
 								// now figure out what we are lerping between
 								// delta is the fraction between this frame and the next, since the new anim is always at a .0f;
@@ -619,8 +615,7 @@ void G2_TransformBone (CTransformBone &TB)
 					}
 					else
 					{
-						if (((boneList[boneListIndex].flags & (BONE_ANIM_OVERRIDE_DEFAULT)) == (BONE_ANIM_OVERRIDE_DEFAULT))||
-							((boneList[boneListIndex].flags & (BONE_ANIM_OVERRIDE_FREEZE)) == (BONE_ANIM_OVERRIDE_FREEZE)))
+						if ((boneList[boneListIndex].flags & BONE_ANIM_OVERRIDE_FREEZE) == BONE_ANIM_OVERRIDE_FREEZE)
 						{
 							// if we are supposed to reset the default anim, then do so
 							if (animSpeed > 0.0f)
@@ -639,21 +634,19 @@ void G2_TransformBone (CTransformBone &TB)
 						// nope, just stop processing this bone. And do nothing	- let the bone take the parents anim info
 			   		}
 				}
-				else
+				else //
 				{
-					// figure out the difference between the two frames	- we have to decide what frame and what percentage of that
-					// frame we want to display
-					TB.backlerp = (newFrame_g - (int)newFrame_g);
-
-					// frames are easy to calculate
-					TB.currentFrame = (int)newFrame_g;
-
 					if (animSpeed> 0.0)
 					{
+
+						TB.currentFrame = (int)newFrame_g;
+
+						// figure out the difference between the two frames	- we have to decide what frame and what percentage of that
+						// frame we want to display
+						TB.backlerp = (newFrame_g - TB.currentFrame);
+
 						TB.newFrame = TB.currentFrame + 1;
-		
-						// are we now on the end frame?
-						if (TB.newFrame > endFrame)
+						if (TB.newFrame >= (int)endFrame)
 						{
 							// we only want to lerp with the first frame of the anim if we are looping 
 							if (boneList[boneListIndex].flags & BONE_ANIM_OVERRIDE_LOOP)
@@ -669,39 +662,55 @@ void G2_TransformBone (CTransformBone &TB)
 					}
 					else
 					{
-						TB.currentFrame++;
-						TB.newFrame = TB.currentFrame - 1;
-		
-						TB.backlerp = 1-TB.backlerp;
-						// are we now on the end frame?
-						if (TB.newFrame < endFrame)
+						TB.backlerp = (ceil(newFrame_g)-newFrame_g);
+						TB.currentFrame = ceil(newFrame_g);
+						if (TB.currentFrame>boneList[boneListIndex].startFrame)
 						{
-							// we only want to lerp with the first frame of the anim if we are looping 
-							if (boneList[boneListIndex].flags & BONE_ANIM_OVERRIDE_LOOP)
+							TB.currentFrame=boneList[boneListIndex].startFrame;
+							TB.newFrame = TB.currentFrame;
+							TB.backlerp=0.0f;
+						}
+						else
+						{
+							TB.newFrame=TB.currentFrame-1;
+							// are we now on the end frame?
+							if (TB.newFrame < endFrame+1)
 							{
-					  			TB.newFrame = boneList[boneListIndex].startFrame;
-							}
-							// if we intend to end this anim or freeze after this, then just keep on the last frame
-							else
-							{
-								TB.newFrame = boneList[boneListIndex].endFrame;
+								if (boneList[boneListIndex].flags & BONE_ANIM_OVERRIDE_LOOP)
+								{
+						  			TB.newFrame = boneList[boneListIndex].startFrame;
+								}
+								else
+								{
+									TB.newFrame = boneList[boneListIndex].endFrame+1;
+								}
 							}
 						}
 					}
-
-					// sanity check
-					//assert ((newFrame_g < endFrame) && (newFrame_g >= boneList[boneListIndex].startFrame)); 
 				}
 			}
 			else
 			{
-		 		TB.currentFrame = boneList[boneListIndex].endFrame;
+				if (animSpeed<0.0)
+				{
+					TB.currentFrame = boneList[boneListIndex].endFrame+1;
+				}
+				else
+				{
+					TB.currentFrame = boneList[boneListIndex].endFrame-1;
+				}
+				if (TB.currentFrame<0)
+				{
+					TB.currentFrame=0;
+				}
 				TB.newFrame = TB.currentFrame;
 				TB.backlerp = 0;
 
 			}
-		}
-	
+#if DEBUG_G2_TIMING
+			printTiming=true;
+#endif
+		}	
 	}
 
 	//If either of these things happen the code below will choke to death miserably. Or so I gather.
@@ -715,6 +724,51 @@ void G2_TransformBone (CTransformBone &TB)
 	{
 		return;
 	}
+#if DEBUG_G2_TIMING
+	if (printTiming&&boneListIndex==2)
+	{
+		char mess[1000];
+		if (TB.blendMode)
+		{
+			sprintf(mess,"frb[%2d] %5d   %5d %5d %5d %5d  %f %f\n",boneListIndex,TB.incomingTime,(int)TB.newFrame,(int)TB.currentFrame,(int)TB.blendFrame,(int)TB.blendOldFrame,TB.backlerp,TB.blendLerp);
+		}
+		else
+		{
+			sprintf(mess,"fra[%2d] %5d   %5d %5d              %f\n",boneListIndex,TB.incomingTime,TB.newFrame,TB.currentFrame,TB.backlerp);
+		}
+		OutputDebugString(mess);
+		const boneInfo_t &bone=boneList[boneListIndex];
+		if (bone.flags&BONE_ANIM_BLEND)
+		{
+			sprintf(mess,"                                                                    bfb[%2d] %5d  %5d  (%5d-%5d) %4.2f %4x   bt(%5d-%5d) %7.2f %5d\n",
+				boneListIndex,
+				TB.incomingTime,
+				bone.startTime,
+				bone.startFrame,
+				bone.endFrame,
+				bone.animSpeed,
+				bone.flags,
+				bone.blendStart,
+				bone.blendStart+bone.blendTime,
+				bone.blendFrame,
+				bone.blendLerpFrame
+				);
+		}
+		else
+		{
+			sprintf(mess,"                                                                    bfa[%2d] %5d  %5d  (%5d-%5d) %4.2f %4x\n",
+				boneListIndex,
+				TB.incomingTime,
+				bone.startTime,
+				bone.startFrame,
+				bone.endFrame,
+				bone.animSpeed,
+				bone.flags
+				);
+		}
+		OutputDebugString(mess);
+	}
+#endif
 
 //	const mdxaCompBone_t	*compBonePointer = (mdxaCompBone_t *)((byte *)TB.header + TB.header->ofsCompBonePool);
 
@@ -758,7 +812,7 @@ void G2_TransformBone (CTransformBone &TB)
 		// blend in the other frame if we need to
 		if (TB.blendMode)
 		{
-			float blendFrontlerp = 1.0 - TB.blendLerp;
+		float blendFrontlerp = 1.0 - TB.blendLerp;
 	  		for ( j = 0 ; j < 12 ; j++ ) 
 			{
   				((float *)&tbone[2])[j] = (TB.blendLerp * ((float *)&tbone[2])[j])
@@ -769,7 +823,7 @@ void G2_TransformBone (CTransformBone &TB)
   		if (TB.rootBone)
 		{
 			// now multiply by the root matrix, so we can offset this model should we need to
-			Multiply_3x4Matrix(&TB.bonePtr[TB.child], &TB.rootMatrix, &tbone[2]);
+			Multiply_3x4Matrix(&TB.bonePtr[TB.child].second, &TB.rootMatrix, &tbone[2]);
  		}
   	}
 	else
@@ -793,83 +847,38 @@ void G2_TransformBone (CTransformBone &TB)
 		// blend in the other frame if we need to
 		if (TB.blendMode)
 		{
-#if 0
-			vec4_t	quat;
-			mdxaBone_t inverseStart;
-			mdxaBone_t rotation, scaledRotation;
-			mdxaBone_t startMatrix, endMatrix;
-
-			// tbone[5] contains the start from where we are blending from - put this in model space
-			Multiply_3x4Matrix(&startMatrix, &tbone[5], &skel->BasePoseMat);
-			
-			// tbone[2] contains the current animation, where are blending to - put this in model space
-			Multiply_3x4Matrix(&endMatrix, &tbone[2], &skel->BasePoseMat);
-
-			// create inverse of start matrix
-			Inverse_Matrix(&startMatrix, &inverseStart);
-
-			// generate rotation matrix from start to finish
-			Multiply_3x4Matrix(&rotation, &endMatrix, &inverseStart);
-
-			// create a quaterion out of this matrix
-			G2_CreateQuaterion(&rotation, quat);
-
-			// scale it appropriately by lerp
-			quat[3] *= TB.blendLerp;
-
-			// go back and create a new rotation matrix from this scaled quaterion
-			G2_CreateMatrixFromQuaterion(&scaledRotation, quat);
-
-			scaledRotation.matrix[0][3] = rotation.matrix[0][3];
-			scaledRotation.matrix[1][3] = rotation.matrix[1][3];
-			scaledRotation.matrix[2][3] = rotation.matrix[2][3];
-
-			// we should have a rotation matrix now in model space, put it back into bone space
-			Multiply_3x4Matrix(&endMatrix,  &scaledRotation, &skel->BasePoseMatInv );
-
-			// multiply that by the original start to get result.
-			Multiply_3x4Matrix(&tbone[2], &endMatrix, &tbone[5]); 
-
-#else
 			const float blendFrontlerp = 1.0 - TB.blendLerp;
 	  		for ( j = 0 ; j < 12 ; j++ ) 
 			{
 				((float *)&tbone[2])[j] = (TB.blendLerp * ((float *)&tbone[2])[j])
 					+ (blendFrontlerp * ((float *)&tbone[5])[j]);
 			}
-#endif
 		}
 
   		if (TB.rootBone)
   		{
 			// now multiply by the root matrix, so we can offset this model should we need to
-			Multiply_3x4Matrix(&TB.bonePtr[TB.child], &TB.rootMatrix, &tbone[2]);
+			Multiply_3x4Matrix(&TB.bonePtr[TB.child].second, &TB.rootMatrix, &tbone[2]);
   		}
 	}
 
 
-	if (angleOverride & (BONE_ANGLES_REPLACE | BONE_ANGLES_REPLACE_TO_ANIM))
+	if (angleOverride & BONE_ANGLES_REPLACE)
 	{
 		mdxaBone_t temp, firstPass;
-		mdxaBone_t &bone = TB.bonePtr[TB.child];
+		mdxaBone_t &bone = TB.bonePtr[TB.child].second;
 		boneInfo_t &boneOverride = boneList[boneListIndex];
 		// give us the matrix the animation thinks we should have, so we can get the correct X&Y coors
-		Multiply_3x4Matrix(&firstPass, &TB.bonePtr[TB.parent], &tbone[2]);
+		Multiply_3x4Matrix(&firstPass, &TB.bonePtr[TB.parent].second, &tbone[2]);
 
 		// are we attempting to blend with the base animation? and still within blend time?
-		if (boneOverride.boneBlendTime && (((boneOverride.boneBlendTime + boneOverride.boneBlendStart) < TB.incomingTime) || (angleOverride & BONE_ANGLES_REPLACE_TO_ANIM)))
+		if (boneOverride.boneBlendTime && (((boneOverride.boneBlendTime + boneOverride.boneBlendStart) < TB.incomingTime)))
 		{
 			// ok, we are supposed to be blending. Work out lerp
 			const float blendTime = TB.incomingTime - boneList[boneListIndex].boneBlendStart;
 			float blendLerp = (blendTime / boneList[boneListIndex].boneBlendTime);
 			if (blendLerp <= 1)
 			{
-				// if we are going *to* the anim then reverse the lerp
-				if (angleOverride & BONE_ANGLES_REPLACE_TO_ANIM)
-				{
-					blendLerp = 1.0 - blendLerp;
-				}
-
 				if (blendLerp < 0)
 				{
 					assert(0);
@@ -935,27 +944,27 @@ void G2_TransformBone (CTransformBone &TB)
 		if (TB.rootBone)
 		{
 			// use the in coming root matrix as our basis
-			Multiply_3x4Matrix(&TB.bonePtr[TB.child], &TB.rootMatrix, &boneList[boneListIndex].newMatrix);
+			Multiply_3x4Matrix(&TB.bonePtr[TB.child].second, &TB.rootMatrix, &boneList[boneListIndex].newMatrix);
  		}
 		else
 		{
 			// convert from 3x4 matrix to a 4x4 matrix
-			Multiply_3x4Matrix(&TB.bonePtr[TB.child], &TB.bonePtr[TB.parent], &boneList[boneListIndex].newMatrix);
+			Multiply_3x4Matrix(&TB.bonePtr[TB.child].second, &TB.bonePtr[TB.parent].second, &boneList[boneListIndex].newMatrix);
 		}
 	}
 	else
 	// now transform the matrix by it's TB.parent, asumming we have a TB.parent, and we aren't overriding the angles absolutely
 	if (!TB.rootBone)
 	{
-		Multiply_3x4Matrix(&TB.bonePtr[TB.child], &TB.bonePtr[TB.parent], &tbone[2]);
+		Multiply_3x4Matrix(&TB.bonePtr[TB.child].second, &TB.bonePtr[TB.parent].second, &tbone[2]);
 	}
 
 	// now multiply our resulting bone by an override matrix should we need to
 	if (angleOverride & BONE_ANGLES_POSTMULT)
 	{
 		mdxaBone_t	tempMatrix;
-		memcpy (&tempMatrix, &TB.bonePtr[TB.child], sizeof(mdxaBone_t));
-	  	Multiply_3x4Matrix(&TB.bonePtr[TB.child], &tempMatrix, &boneList[boneListIndex].newMatrix);
+		memcpy (&tempMatrix, &TB.bonePtr[TB.child].second, sizeof(mdxaBone_t));
+	  	Multiply_3x4Matrix(&TB.bonePtr[TB.child].second, &tempMatrix, &boneList[boneListIndex].newMatrix);
 	}
 
 	// are the bone that we are resetting to the origin?
@@ -963,7 +972,7 @@ void G2_TransformBone (CTransformBone &TB)
 	{
 		//create a world matrix for the new origin
 		mdxaBone_t tempMatrix;
-		Multiply_3x4Matrix(&tempMatrix, &TB.bonePtr[TB.child], &skel->BasePoseMat);
+		Multiply_3x4Matrix(&tempMatrix, &TB.bonePtr[TB.child].second, &skel->BasePoseMat);
 		TB.newModelOrigin[0] = tempMatrix.matrix[0][3];
 		TB.newModelOrigin[1] = tempMatrix.matrix[1][3];
 		TB.newModelOrigin[2] = tempMatrix.matrix[2][3];
@@ -1006,7 +1015,7 @@ void G2_SetUpBolts( mdxaHeader_t *header, CGhoul2Info &ghoul2, mdxaBone_v &boneP
 		{
 			// figure out where the bone hirearchy info is
 			skel = (mdxaSkel_t *)((byte *)header + sizeof(mdxaHeader_t) + offsets->offsets[boltList[i].boneNumber]);
-			Multiply_3x4Matrix(&boltList[i].position, &bonePtr[boltList[i].boneNumber], &skel->BasePoseMat);
+			Multiply_3x4Matrix(&boltList[i].position, &bonePtr[boltList[i].boneNumber].second, &skel->BasePoseMat);
 		}
 	}
 }
@@ -1094,37 +1103,40 @@ void G2_ProcessSurfaceBolt(mdxaBone_v &bonePtr, mdxmSurface_t *surface, int bolt
 
 		// now go and transform just the points we need from the surface that was hit originally
 //		w = vert0->weights;
+		float fTotalWeight = 0.0f;
 		int iNumWeights = G2_GetVertWeights( vert0 );
  		for ( k = 0 ; k < iNumWeights ; k++ ) 
  		{
 			int		iBoneIndex	= G2_GetVertBoneIndex( vert0, k );
-			float	fBoneWeight	= G2_GetVertBoneWeight( vert0, k );
+			float	fBoneWeight	= G2_GetVertBoneWeight( vert0, k, fTotalWeight, iNumWeights );
 
- 			pTri[0][0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], vert0->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[0][3] );
- 			pTri[0][1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], vert0->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[1][3] );
- 			pTri[0][2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], vert0->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[2][3] );
+ 			pTri[0][0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0], vert0->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0][3] );
+ 			pTri[0][1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1], vert0->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1][3] );
+ 			pTri[0][2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2], vert0->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2][3] );
 		}
 //		w = vert1->weights;
+		fTotalWeight = 0.0f;
 		iNumWeights = G2_GetVertWeights( vert1 );
  		for ( k = 0 ; k < iNumWeights ; k++ ) 
  		{
 			int		iBoneIndex	= G2_GetVertBoneIndex( vert1, k );
-			float	fBoneWeight	= G2_GetVertBoneWeight( vert1, k );
+			float	fBoneWeight	= G2_GetVertBoneWeight( vert1, k, fTotalWeight, iNumWeights );
 
- 			pTri[1][0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], vert1->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[0][3] );
- 			pTri[1][1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], vert1->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[1][3] );
- 			pTri[1][2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], vert1->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[2][3] );
+ 			pTri[1][0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0], vert1->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0][3] );
+ 			pTri[1][1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1], vert1->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1][3] );
+ 			pTri[1][2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2], vert1->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2][3] );
 		}
 //		w = vert2->weights;
+		fTotalWeight = 0.0f;
 		iNumWeights = G2_GetVertWeights( vert2 );
  		for ( k = 0 ; k < iNumWeights ; k++ ) 
  		{
 			int		iBoneIndex	= G2_GetVertBoneIndex( vert2, k );
-			float	fBoneWeight	= G2_GetVertBoneWeight( vert2, k );
+			float	fBoneWeight	= G2_GetVertBoneWeight( vert2, k, fTotalWeight, iNumWeights );
 
- 			pTri[2][0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], vert2->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[0][3] );
- 			pTri[2][1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], vert2->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[1][3] );
- 			pTri[2][2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], vert2->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[2][3] );
+ 			pTri[2][0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0], vert2->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0][3] );
+ 			pTri[2][1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1], vert2->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1][3] );
+ 			pTri[2][2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2], vert2->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2][3] );
 		}
  			
    		vec3_t normal;
@@ -1190,17 +1202,17 @@ void G2_ProcessSurfaceBolt(mdxaBone_v &bonePtr, mdxmSurface_t *surface, int bolt
  //			w = v->weights;
 
 			const int iNumWeights = G2_GetVertWeights( v );
-
+			float fTotalWeight = 0.0f;
  			for ( k = 0 ; k < iNumWeights ; k++ ) 
  			{
 				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
-				float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k, fTotalWeight, iNumWeights );
 
  				//bone = bonePtr + piBoneRefs[w->boneIndex];
 
- 				pTri[j][0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[0][3] );
- 				pTri[j][1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[1][3] );
- 				pTri[j][2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[2][3] );
+ 				pTri[j][0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0][3] );
+ 				pTri[j][1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1][3] );
+ 				pTri[j][2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2][3] );
  			}
  			
  			v++;// = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
@@ -1272,6 +1284,7 @@ void G2_ProcessGeneratedSurfaceBolts(CGhoul2Info &ghoul2, mdxaBone_v &bonePtr, m
 	}
 }
 
+#ifndef DEDICATED
 // set up each surface ready for rendering in the back end
 void RenderSurfaces(CRenderSurface &RS)
 {
@@ -1385,6 +1398,7 @@ void RenderSurfaces(CRenderSurface &RS)
 		RenderSurfaces(RS);
 	}
 }
+#endif //!DEDICATED
 
 // Go through the model and deal with just the surfaces that are tagged as bolt on points - this is for the server side skeleton construction
 void ProcessModelBoltSurfaces(int surfaceNum, surfaceInfo_v &rootSList,
@@ -1517,20 +1531,6 @@ void G2_ConstructUsedBoneList(CConstructBoneList &CBL)
 	}
 }
 
-// count to the last bone used in the used bone list so we can resize the bone repository array struct for this ent
-static int	G2_CountBonesUsed(const int * const boneUsedList, int boneCount)
-{
-	int found = -1;
-	for (int i=0; i<boneCount; i++)
-	{
-		if (boneUsedList[i])
-		{
-			found = i;
-		}
-	}
-	// i contains the last bone that was actually used in this usedBoneList
-	return found;
-}
 
 // sort all the ghoul models in this list so if they go in reference order. This will ensure the bolt on's are attached to the right place
 // on the previous model, since it ensures the model being attached to is built and rendered first.
@@ -1608,6 +1608,7 @@ const static mdxaBone_t		identityMatrix =
 R_AddGHOULSurfaces
 ==============
 */
+
 void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 	mdxaHeader_t	*aHeader;
 	shader_t		*cust_shader = 0;
@@ -1624,8 +1625,8 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 	bool			setNewOrigin = false;
 	CGhoul2Info_v	&ghoul2 = *((CGhoul2Info_v *)ent->e.ghoul2);
 
-	// if we don't want server ghoul2 models and this is one, or we just don't want ghoul2 models at all, then return
-	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) || (r_noGhoul2->integer))
+	// if we don't want server ghoul2 models and this is one, then return
+	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) )
 	{
 		return;
 	}
@@ -1679,7 +1680,7 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 	personalModel = (qboolean)((ent->e.renderfx & RF_THIRD_PERSON) && !tr.viewParms.isPortal);
 
 	modelList = (int*)Z_Malloc(ghoul2.size() * 4, TAG_GHOUL2, qtrue);
-
+#ifndef DEDICATED
 	// set up lighting now that we know we aren't culled
 	if ( !personalModel || r_shadows->integer > 1 ) 
 	{
@@ -1689,6 +1690,7 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 
 	// see if we are in a fog volume
 	fogNum = R_GComputeFogNum( ent );
+#endif // !DEDICATED
 
 	// order sort the ghoul 2 models so bolt ons get bolted to the right model
 	G2_Sort_Models(ghoul2, modelList, &modelCount);
@@ -1708,7 +1710,7 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 			currentModel = R_GetModelByHandle(ghoul2[i].mModel);
 			animModel =  R_GetModelByHandle(currentModel->mdxm->animIndex);
 			aHeader = animModel->mdxa;
-  		
+ #ifndef DEDICATED 		
 			//
 			// figure out whether we should be using a custom shader for this model
 			//
@@ -1734,7 +1736,7 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 					skin = R_GetSkinByHandle( ghoul2[i].mSkin );
 				}
 			}
-
+#endif //!DEDICATED
 
 			if (ghoul2[i].mSkelFrameNum != tr.refdef.time)
 			{
@@ -1761,8 +1763,16 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 					// make sure the root bone is marked as being referenced
 					boneUsedList[0] =1;
 				}
-				 
-				ghoul2[i].mTempBoneList.resize(G2_CountBonesUsed(boneUsedList, animModel->mdxa->numBones)+1);
+
+				if (ghoul2[i].mTempBoneList.size()!=animModel->mdxa->numBones+1)
+				{
+					ghoul2[i].mTempBoneList.resize(animModel->mdxa->numBones+1);
+					int k;
+					for (k=0;k<animModel->mdxa->numBones;k++)
+					{
+						ghoul2[i].mTempBoneList[k].first=-10000; //reset it to an invalid time
+					}	
+				}
 				
 				// if this is the root model, and we have a new root matrix because the model has a new origin, use that
 				if (!setNewOrigin || j)
@@ -1782,8 +1792,61 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 					}
 				}
 
+				mdxaBone_v oldBones;
+				if (r_Ghoul2AnimSmooth&&r_Ghoul2AnimSmooth->value>0.005f&&r_Ghoul2AnimSmooth->value<0.995f)
+				{
+					oldBones=ghoul2[i].mTempBoneList;
+				}
 				// pre-transform all the bones of this model
 				G2_TransformGhoulBones( aHeader, boneUsedList, ghoul2[i].mBlist, ghoul2[i].mTempBoneList, ghoul2[i].mBltlist, rootMatrix, ghoul2[i], tr.refdef.time, animModel->mdxa->numBones);
+				if (oldBones.size())
+				{
+					int b;
+					for (b=0;b<animModel->mdxa->numBones;b++)
+					{
+						if (r_Ghoul2AnimSmooth&&r_Ghoul2AnimSmooth->value>0.005f&&r_Ghoul2AnimSmooth->value<0.995f)
+						{
+							if (tr.refdef.time-ghoul2[i].mTempBoneList[b].first<200&&tr.refdef.time-ghoul2[i].mTempBoneList[b].first>-200)
+							{
+								int k;
+								float *oldM=&oldBones[b].second.matrix[0][0];
+								float *newM=&ghoul2[i].mTempBoneList[b].second.matrix[0][0];
+								for (k=0;k<12;k++,oldM++,newM++)
+								{
+									*newM=r_Ghoul2AnimSmooth->value*(*oldM-*newM)+*newM;
+								}
+							}
+							ghoul2[i].mTempBoneList[b].first=tr.refdef.time;
+						}
+					}
+				}
+
+				if (r_Ghoul2UnSqashAfterSmooth&&r_Ghoul2UnSqashAfterSmooth->value>0.5f)
+				{
+					mdxaSkelOffsets_t *offsets = (mdxaSkelOffsets_t *)((byte *)aHeader + sizeof(mdxaHeader_t));
+					int b;
+					for (b=0;b<animModel->mdxa->numBones;b++)
+					{
+						if (!boneUsedList)
+						{
+							continue;
+						}
+						mdxaSkel_t		*skel= (mdxaSkel_t *)((byte *)aHeader + sizeof(mdxaHeader_t) + offsets->offsets[b]);
+						mdxaBone_t tempMatrix;
+						Multiply_3x4Matrix(&tempMatrix,&ghoul2[i].mTempBoneList[b].second, &skel->BasePoseMat);
+						float maxl;
+						maxl=VectorLength(&skel->BasePoseMat.matrix[0][0]);
+						VectorNormalize(&tempMatrix.matrix[0][0]);
+						VectorNormalize(&tempMatrix.matrix[1][0]);
+						VectorNormalize(&tempMatrix.matrix[2][0]);
+
+						VectorScale(&tempMatrix.matrix[0][0],maxl,&tempMatrix.matrix[0][0]);
+						VectorScale(&tempMatrix.matrix[1][0],maxl,&tempMatrix.matrix[1][0]);
+						VectorScale(&tempMatrix.matrix[2][0],maxl,&tempMatrix.matrix[2][0]);
+						Multiply_3x4Matrix(&ghoul2[i].mTempBoneList[b].second,&tempMatrix,&skel->BasePoseMatInv);
+					}
+					
+				}
 
 				Z_Free(boneUsedList);
 			}
@@ -1810,7 +1873,9 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 			else
 			{ // start the walk of the surface hierarchy	
 				CRenderSurface RS(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist, cust_shader, fogNum, personalModel, ghoul2[i].mTempBoneList, ent->e.renderfx, skin, currentModel, whichLod, ghoul2[i].mBltlist);
+#ifndef DEDICATED
 				RenderSurfaces(RS);
+#endif
 			}
 
 			// go through all the generated surfaces and create their bolt info if we need it.
@@ -1837,8 +1902,8 @@ void G2_ConstructGhoulSkeleton( CGhoul2Info_v &ghoul2, const int frameNum, qhand
 	bool			setNewOrigin = false;
 	mdxaBone_t		rootMatrix;
 
-	// if we don't want server ghoul2 models and this is one, or we just don't want ghoul2 models at all, then return
-	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) || (r_noGhoul2->integer))
+	// if we don't want server ghoul2 models and this is one, then return
+	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) )
 	{
 		return;
 	}
@@ -1942,7 +2007,15 @@ void G2_ConstructGhoulSkeleton( CGhoul2Info_v &ghoul2, const int frameNum, qhand
 				boneUsedList[0] =1;
 			}
 
-			ghoul2[i].mTempBoneList.resize(G2_CountBonesUsed(boneUsedList, animModel->mdxa->numBones)+1);
+			if (ghoul2[i].mTempBoneList.size()!=animModel->mdxa->numBones+1)
+			{
+				ghoul2[i].mTempBoneList.resize(animModel->mdxa->numBones+1);
+				int k;
+				for (k=0;k<animModel->mdxa->numBones;k++)
+				{
+					ghoul2[i].mTempBoneList[k].first=-10000; //reset it to an invalid time
+				}	
+			}
 
 			// decide what to do about the root matrix
 
@@ -1963,8 +2036,62 @@ void G2_ConstructGhoulSkeleton( CGhoul2Info_v &ghoul2, const int frameNum, qhand
 				}
 			}
 
+			mdxaBone_v oldBones;
+			if (r_Ghoul2AnimSmooth&&r_Ghoul2AnimSmooth->value>0.005f&&r_Ghoul2AnimSmooth->value<0.995f)
+			{
+				oldBones=ghoul2[i].mTempBoneList;
+			}
 			// pre-transform all the bones of this model
 			G2_TransformGhoulBones( aHeader, boneUsedList, ghoul2[i].mBlist, ghoul2[i].mTempBoneList, ghoul2[i].mBltlist, rootMatrix, ghoul2[i], frameNum, animModel->mdxa->numBones);
+
+			if (oldBones.size())
+			{
+				int b;
+				for (b=0;b<animModel->mdxa->numBones;b++)
+				{
+					if (r_Ghoul2AnimSmooth&&r_Ghoul2AnimSmooth->value>0.005f&&r_Ghoul2AnimSmooth->value<0.995f)
+					{
+						if (tr.refdef.time-ghoul2[i].mTempBoneList[b].first<200&&tr.refdef.time-ghoul2[i].mTempBoneList[b].first>-200)
+						{
+							int k;
+							float *oldM=&oldBones[b].second.matrix[0][0];
+							float *newM=&ghoul2[i].mTempBoneList[b].second.matrix[0][0];
+							for (k=0;k<12;k++,oldM++,newM++)
+							{
+								*newM=r_Ghoul2AnimSmooth->value*(*oldM-*newM)+*newM;
+							}
+						}
+						ghoul2[i].mTempBoneList[b].first=tr.refdef.time;
+					}
+				}
+			}
+
+			if (r_Ghoul2UnSqashAfterSmooth&&r_Ghoul2UnSqashAfterSmooth->value>0.5f)
+			{
+				mdxaSkelOffsets_t *offsets = (mdxaSkelOffsets_t *)((byte *)aHeader + sizeof(mdxaHeader_t));
+				int b;
+				for (b=0;b<animModel->mdxa->numBones;b++)
+				{
+					if (!boneUsedList)
+					{
+						continue;
+					}
+					mdxaSkel_t		*skel= (mdxaSkel_t *)((byte *)aHeader + sizeof(mdxaHeader_t) + offsets->offsets[b]);
+					mdxaBone_t tempMatrix;
+					Multiply_3x4Matrix(&tempMatrix,&ghoul2[i].mTempBoneList[b].second, &skel->BasePoseMat);
+					float maxl;
+					maxl=VectorLength(&skel->BasePoseMat.matrix[0][0]);
+					VectorNormalize(&tempMatrix.matrix[0][0]);
+					VectorNormalize(&tempMatrix.matrix[1][0]);
+					VectorNormalize(&tempMatrix.matrix[2][0]);
+
+					VectorScale(&tempMatrix.matrix[0][0],maxl,&tempMatrix.matrix[0][0]);
+					VectorScale(&tempMatrix.matrix[1][0],maxl,&tempMatrix.matrix[1][0]);
+					VectorScale(&tempMatrix.matrix[2][0],maxl,&tempMatrix.matrix[2][0]);
+					Multiply_3x4Matrix(&ghoul2[i].mTempBoneList[b].second,&tempMatrix,&skel->BasePoseMatInv);
+				}
+				
+			}
 
 			Z_Free(boneUsedList);
 
@@ -1980,7 +2107,7 @@ void G2_ConstructGhoulSkeleton( CGhoul2Info_v &ghoul2, const int frameNum, qhand
 	return;
 }	
 
-
+#ifndef DEDICATED
 /*
 ==============
 RB_SurfaceGhoul
@@ -2040,12 +2167,13 @@ void RB_SurfaceGhoul( CRenderableSurface *surf ) {
 		VectorClear( tess.xyz[baseVert]);
 		VectorClear( tess.normal[baseVert]);
 
+		float fTotalWeight = 0.0f;
 		for ( k = 0 ; k < iNumWeights ; k++ ) 
 		{
 			int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
-			float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
+			float	fBoneWeight	= G2_GetVertBoneWeight( v, k, fTotalWeight, iNumWeights );
 
-			mdxaBone_t &bone = bonePtr[piBoneRefs[iBoneIndex]];
+			mdxaBone_t &bone = bonePtr[piBoneRefs[iBoneIndex]].second;
 
 			tess.xyz[baseVert][0] += fBoneWeight * ( DotProduct( bone.matrix[0], v->vertCoords ) + bone.matrix[0][3] );
 			tess.xyz[baseVert][1] += fBoneWeight * ( DotProduct( bone.matrix[1], v->vertCoords ) + bone.matrix[1][3] );
@@ -2064,7 +2192,7 @@ void RB_SurfaceGhoul( CRenderableSurface *surf ) {
 
 	tess.numVertexes += surface->numVerts;
 }
-
+#endif // !DEDICATED
  
 /*
 =================
@@ -2158,11 +2286,11 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 		{
 			LL(surfInfo->childIndexes[j]);
 		}
-
+#ifndef DEDICATED
 		// get the shader name
 		sh = R_FindShader( surfInfo->shader, lightmapsNone, stylesDefault, qtrue );
 		// insert it in the surface list
-		
+#endif		
 		if ( sh->defaultShader ) 
 		{
 			surfInfo->shaderIndex = 0;

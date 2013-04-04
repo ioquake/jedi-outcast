@@ -65,6 +65,19 @@ void P_DamageFeedback( gentity_t *player ) {
 		player->pain_debounce_time = level.time + 700;
 		G_AddEvent( player, EV_PAIN, player->health );
 		client->ps.damageEvent++;
+
+		if (client->damage_armor && !client->damage_blood)
+		{
+			client->ps.damageType = 1; //pure shields
+		}
+		else if (client->damage_armor)
+		{
+			client->ps.damageType = 2; //shields and health
+		}
+		else
+		{
+			client->ps.damageType = 0; //pure health
+		}
 	}
 
 
@@ -808,49 +821,6 @@ void ClientEvents( gentity_t *ent, int oldEventSequence ) {
 
 /*
 ==============
-StuckInOtherClient
-==============
-*/
-static int StuckInOtherClient(gentity_t *ent) {
-	int i;
-	gentity_t	*ent2;
-
-	ent2 = &g_entities[0];
-	for ( i = 0; i < MAX_CLIENTS; i++, ent2++ ) {
-		if ( ent2 == ent ) {
-			continue;
-		}
-		if ( !ent2->inuse ) {
-			continue;
-		}
-		if ( !ent2->client ) {
-			continue;
-		}
-		if ( ent2->health <= 0 ) {
-			continue;
-		}
-		//
-		if (ent2->r.absmin[0] > ent->r.absmax[0])
-			continue;
-		if (ent2->r.absmin[1] > ent->r.absmax[1])
-			continue;
-		if (ent2->r.absmin[2] > ent->r.absmax[2])
-			continue;
-		if (ent2->r.absmax[0] < ent->r.absmin[0])
-			continue;
-		if (ent2->r.absmax[1] < ent->r.absmin[1])
-			continue;
-		if (ent2->r.absmax[2] < ent->r.absmin[2])
-			continue;
-		return qtrue;
-	}
-	return qfalse;
-}
-
-void BotTestSolid(vec3_t origin);
-
-/*
-==============
 SendPendingPredictableEvents
 ==============
 */
@@ -1286,6 +1256,8 @@ void ClientThink_real( gentity_t *ent ) {
 		player_die(ent, ent, ent, 100000, MOD_FALLING);
 		respawn(ent);
 		ent->client->ps.fallingToDeath = 0;
+
+		G_MuteSound(ent->s.number, CHAN_VOICE); //stop screaming, because you are dead!
 	}
 
 	if (ent->client->ps.otherKillerTime > level.time &&
@@ -1293,6 +1265,7 @@ void ClientThink_real( gentity_t *ent ) {
 		ent->client->ps.otherKillerDebounceTime < level.time)
 	{
 		ent->client->ps.otherKillerTime = 0;
+		ent->client->ps.otherKiller = ENTITYNUM_NONE;
 	}
 	else if (ent->client->ps.otherKillerTime > level.time &&
 		ent->client->ps.groundEntityNum == ENTITYNUM_NONE)
@@ -1303,8 +1276,8 @@ void ClientThink_real( gentity_t *ent ) {
 		}
 	}
 
-	WP_ForcePowersUpdate( ent, ucmd ); //update any active force powers
-	WP_SaberPositionUpdate(ent, ucmd); //check the server-side saber point, do apprioriate server-side actions (effects are cs-only)
+//	WP_ForcePowersUpdate( ent, msec, ucmd); //update any active force powers
+//	WP_SaberPositionUpdate(ent, ucmd); //check the server-side saber point, do apprioriate server-side actions (effects are cs-only)
 
 	if ((ent->client->pers.cmd.buttons & BUTTON_USE) && ent->client->ps.useDelay < level.time)
 	{
@@ -1734,7 +1707,7 @@ void SpectatorClientEndFrame( gentity_t *ent ) {
 				// drop them to free spectators unless they are dedicated camera followers
 				if ( ent->client->sess.spectatorClient >= 0 ) {
 					ent->client->sess.spectatorState = SPECTATOR_FREE;
-					ClientBegin( ent->client - level.clients );
+					ClientBegin( ent->client - level.clients, qtrue );
 				}
 			}
 		}

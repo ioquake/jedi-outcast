@@ -641,7 +641,7 @@ Key_KeynumToStringBuf
 ====================
 */
 static void Key_KeynumToStringBuf( int keynum, char *buf, int buflen ) {
-	Q_strncpyz( buf, Key_KeynumToString( keynum ), buflen );
+	Q_strncpyz( buf, Key_KeynumToString( keynum, qtrue ), buflen );
 }
 
 /*
@@ -1131,8 +1131,7 @@ int CL_UISystemCalls( int *args ) {
 #endif // USE_CD_KEY
 
 	case UI_SP_REGISTER:
-		SP_Register((const char *)VMA(1),SP_REGISTER_MENU);
-		return 0;
+		return !!SP_Register((const char *)VMA(1),SP_REGISTER_MENU);
 
 	case UI_SP_GETSTRINGTEXTSTRING:
 		const char* text;

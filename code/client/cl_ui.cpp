@@ -291,6 +291,10 @@ void CL_InitUI( void ) {
 
 
 qboolean UI_GameCommand( void ) {
+	if (!cls.uiStarted)
+	{
+		return qfalse;
+	}
 	return UI_ConsoleCommand();
 }
 
@@ -299,7 +303,9 @@ void CL_GenericMenu_f(void)
 {		
 	char *arg = Cmd_Argv( 1 );
 
-	UI_SetActiveMenu("ingame",arg);
+	if (cls.uiStarted) {
+		UI_SetActiveMenu("ingame",arg);
+	}
 }
 
 
@@ -310,10 +316,9 @@ void CL_EndScreenDissolve_f(void)
 
 void CL_DataPad_f(void)
 {		
-	Cvar_Set( "cl_paused", "1" );
-	UI_SetActiveMenu("datapad",NULL);
-	Key_SetCatcher( KEYCATCH_UI );
-
+	if (cls.uiStarted && cls.cgameStarted && (cls.state == CA_ACTIVE) ) {
+		UI_SetActiveMenu("datapad",NULL);
+	}
 }
 
 /*

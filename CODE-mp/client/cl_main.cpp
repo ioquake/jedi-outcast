@@ -9,6 +9,10 @@
 	#include "..\ghoul2\G2_local.h"
 #endif
 
+#ifdef _DONETPROFILE_
+#include "../qcommon/INetProfile.h"
+#endif
+
 cvar_t	*cl_nodelta;
 cvar_t	*cl_debugMove;
 
@@ -54,6 +58,8 @@ cvar_t	*cl_inGameVideo;
 cvar_t	*cl_serverStatusResendTime;
 cvar_t	*cl_trn;
 cvar_t	*cl_framerate;
+
+cvar_t	*cl_autolodscale;
 
 vec3_t cl_windVec;
 
@@ -508,7 +514,13 @@ void CL_PlayDemo_f( void ) {
 	if (!clc.demofile) {
 		if (!Q_stricmp(arg, "(null)"))
 		{
-			Com_Error( ERR_DROP, "No demo selected.", name);
+			extern cvar_t *sp_language;
+			switch (sp_language->integer)
+			{
+				case SP_LANGUAGE_GERMAN:	Com_Error( ERR_DROP, "Kein demo ausgewählt." );	break;
+				case SP_LANGUAGE_FRENCH:	Com_Error( ERR_DROP, "Aucun demo choisi." );	break;
+				default:					Com_Error( ERR_DROP, "No demo selected." );		break;
+			}
 		}
 		else
 		{
@@ -579,10 +591,7 @@ void CL_NextDemo( void ) {
 CL_ShutdownAll
 =====================
 */
-extern void CM_ShutdownShaderProperties(void);
 void CL_ShutdownAll(void) {
-
-	CM_ShutdownShaderProperties();
 
 	// clear sounds
 	S_DisableSounds();
@@ -611,6 +620,8 @@ ways a client gets into a game
 Also called by Com_Error
 =================
 */
+extern void FixGhoul2InfoLeaks(bool,bool);
+
 void CL_FlushMemory( void ) {
 
 	// shutdown all the client stuff
@@ -618,10 +629,11 @@ void CL_FlushMemory( void ) {
 
 	// if not running a server clear the whole hunk
 	if ( !com_sv_running->integer ) {
+		// clear collision map data
+		FixGhoul2InfoLeaks(true,false);
+		CM_ClearMap();
 		// clear the whole hunk
 		Hunk_Clear();
-		// clear collision map data
-		CM_ClearMap();
 	}
 	else {
 		// clear all the client data on the hunk
@@ -644,6 +656,9 @@ void CL_MapLoading( void ) {
 	if ( !com_cl_running->integer ) {
 		return;
 	}
+
+	// Set this to localhost.
+	Cvar_Set( "cl_currentServerAddress", "Localhost");
 
 	Con_Close();
 	cls.keyCatchers = 0;
@@ -743,9 +758,6 @@ void CL_Disconnect( qboolean showMainMenu ) {
 
 	cls.state = CA_DISCONNECTED;
 
-	// allow cheats locally
-	Cvar_Set( "sv_cheats", "1" );
-
 	// not connected to a pure server anymore
 	cl_connectedToPureServer = qfalse;
 }
@@ -806,11 +818,24 @@ void CL_RequestMotd( void ) {
 		BigShort( cls.updateServer.port ) );
 	
 	info[0] = 0;
-	Com_sprintf( cls.updateChallenge, sizeof( cls.updateChallenge ), "%i", rand() );
+  // NOTE TTimo xoring against Com_Milliseconds, otherwise we may not have a true randomization
+  // only srand I could catch before here is tr_noise.c l:26 srand(1001)
+  // https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=382
+  // NOTE: the Com_Milliseconds xoring only affects the lower 16-bit word,
+  //   but I decided it was enough randomization
+	Com_sprintf( cls.updateChallenge, sizeof( cls.updateChallenge ), "%i", ((rand() << 16) ^ rand()) ^ Com_Milliseconds());
+
 
 	Info_SetValueForKey( info, "challenge", cls.updateChallenge );
 	Info_SetValueForKey( info, "renderer", cls.glconfig.renderer_string );
 	Info_SetValueForKey( info, "version", com_version->string );
+
+	Info_SetValueForKey( info, "cputype", Cvar_VariableString("sys_cpustring") );
+	Info_SetValueForKey( info, "mhz", Cvar_VariableString("sys_cpuspeed") );
+	Info_SetValueForKey( info, "memory", Cvar_VariableString("sys_memory") );
+	Info_SetValueForKey( info, "joystick", Cvar_VariableString("in_joystick") );
+	Info_SetValueForKey( info, "colorbits", va("%d",cls.glconfig.colorBits) );
+
 
 	NET_OutOfBandPrint( NS_CLIENT, cls.updateServer, "getmotd \"%s\"\n", info );
 }
@@ -1003,6 +1028,11 @@ CL_Connect_f
 void CL_Connect_f( void ) {
 	char	*server;
 
+	if ( !Cvar_VariableValue("fs_restrict") && !Sys_CheckCD() )
+	{
+		Com_Error( ERR_NEED_CD, SP_GetStringTextString("CON_TEXT_NEED_CD") ); //"Game CD not in drive" );		
+	}
+
 	if ( Cmd_Argc() != 2 ) {
 		Com_Printf( "usage: connect [server]\n");
 		return;	
@@ -1166,7 +1196,6 @@ void CL_Vid_Restart_f( void ) {
 
 	// don't let them loop during the restart
 	S_StopAllSounds();
-	S_BeginRegistration();	// CHC did this
 	// shutdown the UI
 	CL_ShutdownUI();
 	// shutdown the CGame
@@ -1190,6 +1219,7 @@ void CL_Vid_Restart_f( void ) {
 
 	// if not running a server clear the whole hunk
 	if ( !com_sv_running->integer ) {
+		CM_ClearMap();
 		// clear the whole hunk
 		Hunk_Clear();
 	}
@@ -1440,19 +1470,34 @@ and determine if we need to download them
 =================
 */
 void CL_InitDownloads(void) {
-
-	if ( cl_allowDownload->integer &&
-		FS_ComparePaks( clc.downloadList, sizeof( clc.downloadList ) ) ) {
-
+  char missingfiles[1024];
+	
+	if ( !cl_allowDownload->integer )
+	{
+		// autodownload is disabled on the client
+		// but it's possible that some referenced files on the server are missing
+		if (FS_ComparePaks( missingfiles, sizeof( missingfiles ), qfalse ) )
+		{      
+			// NOTE TTimo I would rather have that printed as a modal message box
+			//   but at this point while joining the game we don't know wether we will successfully join or not
+			Com_Printf( "\nWARNING: You are missing some files referenced by the server:\n%s"
+				"You might not be able to join the game\n"
+				"Go to the setting menu to turn on autodownload, or get the file elsewhere\n\n", missingfiles );
+		}
+	}
+	else if ( FS_ComparePaks( clc.downloadList, sizeof( clc.downloadList ) , qtrue ) ) {
+		
+		Com_Printf("Need paks: %s\n", clc.downloadList );
+		
 		if ( *clc.downloadList ) {
 			// if autodownloading is not enabled on the server
 			cls.state = CA_CONNECTED;
 			CL_NextDownload();
 			return;
 		}
-
-	}
 		
+	}
+	
 	CL_DownloadsComplete();
 }
 
@@ -1464,7 +1509,7 @@ Resend a connect message if the last one has timed out
 =================
 */
 void CL_CheckForResend( void ) {
-	int		port, i;
+	int		port;
 	char	info[MAX_INFO_STRING];
 	char	data[MAX_INFO_STRING];
 
@@ -1505,15 +1550,9 @@ void CL_CheckForResend( void ) {
 		Info_SetValueForKey( info, "protocol", va("%i", PROTOCOL_VERSION ) );
 		Info_SetValueForKey( info, "qport", va("%i", port ) );
 		Info_SetValueForKey( info, "challenge", va("%i", clc.challenge ) );
-		
-		strcpy(data, "connect ");
+		sprintf(data, "connect \"%s\"", info );
+		NET_OutOfBandData( NS_CLIENT, clc.serverAddress, (unsigned char *)data, strlen(data) );
 
-		for(i=0;i<(int)strlen(info);i++) {
-			data[8+i] = info[i];	// + (clc.challenge)&0x3;
-		}
-		data[8+i] = 0;
-
-		NET_OutOfBandData( NS_CLIENT, clc.serverAddress, (unsigned char *)data, i+8 );
 		// the most current userinfo has been sent, so watch for any
 		// newer changes to userinfo variables
 		cvar_modifiedFlags &= ~CVAR_USERINFO;
@@ -1732,6 +1771,79 @@ void CL_ServersResponsePacket( netadr_t from, msg_t *msg ) {
 	Com_Printf("%d servers parsed (total %d)\n", numservers, total);
 }
 
+#ifndef MAX_STRIPED_SV_STRING
+#define MAX_STRIPED_SV_STRING 1024
+#endif
+static void CL_CheckSVStripEdRef(char *buf, const char *str)
+{ //I don't really like doing this. But it utilizes the system that was already in place.
+	int i = 0;
+	int b = 0;
+	int strLen = 0;
+	qboolean gotStrip = qfalse;
+
+	if (!str || !str[0])
+	{
+		if (str)
+		{
+			strcpy(buf, str);
+		}
+		return;
+	}
+
+	strcpy(buf, str);
+
+	strLen = strlen(str);
+
+	if (strLen >= MAX_STRIPED_SV_STRING)
+	{
+		return;
+	}
+
+	while (i < strLen && str[i])
+	{
+		gotStrip = qfalse;
+
+		if (str[i] == '@' && (i+1) < strLen)
+		{
+			if (str[i+1] == '@' && (i+2) < strLen)
+			{
+				if (str[i+2] == '@' && (i+3) < strLen)
+				{ //@@@ should mean to insert a striped reference here, so insert it into buf at the current place
+					char stripRef[MAX_STRIPED_SV_STRING];
+					int r = 0;
+
+					while (i < strLen && str[i] == '@')
+					{
+						i++;
+					}
+
+					while (i < strLen && str[i] && str[i] != ' ' && str[i] != ':' && str[i] != '.' && str[i] != '\n')
+					{
+						stripRef[r] = str[i];
+						r++;
+						i++;
+					}
+					stripRef[r] = 0;
+
+					buf[b] = 0;
+					Q_strcat(buf, MAX_STRIPED_SV_STRING, SP_GetStringTextString(va("SVINGAME_%s", stripRef)));
+					b = strlen(buf);
+				}
+			}
+		}
+
+		if (!gotStrip)
+		{
+			buf[b] = str[i];
+			b++;
+		}
+		i++;
+	}
+
+	buf[b] = 0;
+}
+
+
 /*
 =================
 CL_ConnectionlessPacket
@@ -1768,7 +1880,7 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 			// take this address as the new server address.  This allows
 			// a server proxy to hand off connections to multiple servers
 			clc.serverAddress = from;
-			Com_DPrintf ("challenge: %d\n", clc.challenge);
+			Com_DPrintf ("challengeResponse: %d\n", clc.challenge);
 		}
 		return;
 	}
@@ -1833,15 +1945,20 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 	}
 
 	// echo request from server
-	if ( !Q_stricmp(c, "print") ) {
+	if ( !Q_stricmp(c, "print") ) 
+	{
+		char sTemp[MAX_STRIPED_SV_STRING];
+
 		s = MSG_ReadString( msg );
-		Q_strncpyz( clc.serverMessage, s, sizeof( clc.serverMessage ) );
-		Com_Printf( "%s", s );
+		CL_CheckSVStripEdRef(sTemp, s);
+		Q_strncpyz( clc.serverMessage, sTemp, sizeof( clc.serverMessage ) );
+		Com_Printf( "%s", sTemp );
 		return;
 	}
 
 	// echo request from server
-	if ( !Q_stricmp(c, "getserversResponse\\") ) {
+//	if ( !Q_stricmp(c, "getserversResponse\\") ) {
+	if ( !Q_strncmp(c, "getserversResponse", 18) ) {
 		CL_ServersResponsePacket( from, msg );
 		return;
 	}
@@ -1924,8 +2041,9 @@ void CL_CheckTimeout( void ) {
 		&& cls.state >= CA_CONNECTED && cls.state != CA_CINEMATIC
 	    && cls.realtime - clc.lastPacketTime > cl_timeout->value*1000) {
 		if (++cl.timeoutcount > 5) {	// timeoutcount saves debugger
-			Com_Printf ("\nServer connection timed out.\n");
-			Com_Error(ERR_DROP, "Server connection timed out.");
+			const char *psTimedOut = SP_GetStringTextString("SVINGAME_SERVER_CONNECTION_TIMED_OUT");
+			Com_Printf ("\n%s\n",psTimedOut);
+			Com_Error(ERR_DROP, psTimedOut);
 			//CL_Disconnect( qtrue );
 			return;
 		}
@@ -1968,11 +2086,15 @@ CL_Frame
 */
 static unsigned int frameCount;
 static float avgFrametime=0.0;
+extern void SP_CheckForLanguageUpdates(void);
 void CL_Frame ( int msec ) {
 
 	if ( !com_cl_running->integer ) {
 		return;
 	}
+
+	SP_CheckForLanguageUpdates();	// will take zero time to execute unless language changes, then will reload strings.
+									//	of course this still doesn't work for menus...
 
 	if ( cls.state == CA_DISCONNECTED && !( cls.keyCatchers & KEYCATCH_UI )
 		&& !com_sv_running->integer ) {
@@ -2016,6 +2138,13 @@ void CL_Frame ( int msec ) {
 	}
 
 	cls.realtime += cls.frametime;
+
+#ifdef _DONETPROFILE_
+	if(cls.state==CA_ACTIVE)
+	{
+		ClReadProf().IncTime(cls.frametime);
+	}
+#endif
 
 	if ( cl_timegraph->integer ) {
 		SCR_DebugGraph ( cls.realFrametime * 0.25, 0 );
@@ -2244,7 +2373,6 @@ void CL_SetModel_f( void ) {
 	arg = Cmd_Argv( 1 );
 	if (arg[0]) {
 		Cvar_Set( "model", arg );
-		Cvar_Set( "headmodel", arg );
 	} else {
 		Cvar_VariableStringBuffer( "model", name, sizeof(name) );
 		Com_Printf("model is set to %s\n", name);
@@ -2262,8 +2390,10 @@ Register_StringPackets
 */
 void Register_StringPackets (void)
 {
-	SP_Register("con_text", SP_REGISTER_REQUIRED);
-	SP_Register("mp_ingame",SP_REGISTER_REQUIRED);
+	SP_Register("con_text", SP_REGISTER_REQUIRED);	//reference is CON_TEXT
+	SP_Register("mp_ingame",SP_REGISTER_REQUIRED);	//reference is INGAMETEXT
+	SP_Register("mp_svgame",SP_REGISTER_REQUIRED);	//reference is SVINGAME
+	SP_Register("sp_ingame",SP_REGISTER_REQUIRED);	//reference is INGAME	, needed for item pickups
 }
 
 
@@ -2311,7 +2441,7 @@ void CL_Init( void ) {
 
 	cl_yawspeed = Cvar_Get ("cl_yawspeed", "140", CVAR_ARCHIVE);
 	cl_pitchspeed = Cvar_Get ("cl_pitchspeed", "140", CVAR_ARCHIVE);
-	cl_anglespeedkey = Cvar_Get ("cl_anglespeedkey", "1.5", 0);
+	cl_anglespeedkey = Cvar_Get ("cl_anglespeedkey", "1.5", CVAR_ARCHIVE);
 
 	cl_maxpackets = Cvar_Get ("cl_maxpackets", "30", CVAR_ARCHIVE );
 	cl_packetdup = Cvar_Get ("cl_packetdup", "1", CVAR_ARCHIVE );
@@ -2324,6 +2454,8 @@ void CL_Init( void ) {
 	cl_showMouseRate = Cvar_Get ("cl_showmouserate", "0", 0);
 	cl_framerate	= Cvar_Get ("cl_framerate", "0", CVAR_TEMP);
 	cl_allowDownload = Cvar_Get ("cl_allowDownload", "0", CVAR_ARCHIVE);
+
+	cl_autolodscale = Cvar_Get( "cl_autolodscale", "1", CVAR_ARCHIVE );
 
 	cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
 #ifdef MACOS_X
@@ -2356,14 +2488,14 @@ void CL_Init( void ) {
 
 
 	// userinfo
-	Cvar_Get ("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE );
-	Cvar_Get ("rate", "3000", CVAR_USERINFO | CVAR_ARCHIVE );
+	Cvar_Get ("name", "Padawan", CVAR_USERINFO | CVAR_ARCHIVE );
+	Cvar_Get ("rate", "4000", CVAR_USERINFO | CVAR_ARCHIVE );
 	Cvar_Get ("snaps", "20", CVAR_USERINFO | CVAR_ARCHIVE );
-	Cvar_Get ("model", "kyle", CVAR_USERINFO | CVAR_ARCHIVE );
-	Cvar_Get ("headmodel", "kyle", CVAR_USERINFO | CVAR_ARCHIVE );
-	Cvar_Get ("team_model", "kyle", CVAR_USERINFO | CVAR_ARCHIVE );
-	Cvar_Get ("team_headmodel", "kyle", CVAR_USERINFO | CVAR_ARCHIVE );
-	Cvar_Get ("forcepowers", "5-1-000000000000000000", CVAR_USERINFO | CVAR_ARCHIVE );
+	Cvar_Get ("model", "kyle/default", CVAR_USERINFO | CVAR_ARCHIVE );
+//	Cvar_Get ("headmodel", "kyle/default", CVAR_USERINFO | CVAR_ARCHIVE );
+	Cvar_Get ("team_model", "kyle/default", CVAR_USERINFO | CVAR_ARCHIVE );
+//	Cvar_Get ("team_headmodel", "kyle/default", CVAR_USERINFO | CVAR_ARCHIVE );
+	Cvar_Get ("forcepowers", "7-1-032330000000001333", CVAR_USERINFO | CVAR_ARCHIVE );
 	Cvar_Get ("g_redTeam", "Empire", CVAR_SERVERINFO | CVAR_ARCHIVE);
 	Cvar_Get ("g_blueTeam", "Rebellion", CVAR_SERVERINFO | CVAR_ARCHIVE);
 	Cvar_Get ("color1",  "4", CVAR_USERINFO | CVAR_ARCHIVE );
@@ -2438,13 +2570,13 @@ void CL_Shutdown( void ) {
 
 	CL_Disconnect( qtrue );
 
+	CL_ShutdownRef();	//must be before shutdown all so the images get dumped in RE_Shutdown
+
 	// RJ: added the shutdown all to close down the cgame (to free up some memory, such as in the fx system)
 	CL_ShutdownAll();
 
 	S_Shutdown();
-	CL_ShutdownRef();
-	
-	CL_ShutdownUI();
+	//CL_ShutdownUI();
 
 	Cmd_RemoveCommand ("cmd");
 	Cmd_RemoveCommand ("configstrings");

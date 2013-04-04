@@ -136,7 +136,7 @@ void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *vert
 	r_numpolyverts += numVerts;
 
 	// see if it is in a fog volume
-	if ( tr.world->numfogs == 1 ) {
+	if ( !tr.world || tr.world->numfogs == 1) {
 		fogIndex = 0;
 	} else {
 		// find which fog volume the poly is in

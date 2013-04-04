@@ -40,6 +40,8 @@
 #define CROUCH_VIEWHEIGHT	(CROUCH_MAXS_2+STANDARD_VIEWHEIGHT_OFFSET)//12
 #define	DEAD_VIEWHEIGHT		-16
 
+#define MAX_CLIENT_SCORE_SEND 20
+
 //
 // config strings are a general means of communicating variable length strings
 // from the server to all connected clients.
@@ -72,6 +74,8 @@
 #define	CS_ITEMS				27		// string of 0's and 1's that tell which items are present
 
 #define CS_CLIENT_JEDIMASTER	28		// current jedi master
+#define CS_CLIENT_DUELWINNER	29		// current duel round winner - needed for printing at top of scoreboard
+#define CS_CLIENT_DUELISTS		30		// client numbers for both current duelists. Needed for a number of client-side things.
 
 // these are also in be_aas_def.h - argh (rjr)
 #define	CS_MODELS				32
@@ -199,15 +203,17 @@ typedef enum {
 	FORCE_MASTERY_UNINITIATED,
 	FORCE_MASTERY_INITIATE,
 	FORCE_MASTERY_PADAWAN,
-	FORCE_MASTERY_DISCIPLE,
 	FORCE_MASTERY_JEDI,
+	FORCE_MASTERY_JEDI_GUARDIAN,
 	FORCE_MASTERY_JEDI_ADEPT,
+	FORCE_MASTERY_JEDI_KNIGHT,
 	FORCE_MASTERY_JEDI_MASTER,
-	FORCE_MASTERY_JEDI_LORD,
 	NUM_FORCE_MASTERY_LEVELS
 };
 extern char *forceMasteryLevels[NUM_FORCE_MASTERY_LEVELS];
 extern int forceMasteryPoints[NUM_FORCE_MASTERY_LEVELS];
+
+extern int bgForcePowerCost[NUM_FORCE_POWERS][NUM_FORCE_POWER_LEVELS];
 
 // pmove->pm_flags
 #define	PMF_DUCKED			1
@@ -404,7 +410,7 @@ typedef enum {
 	PW_FORCE_ENLIGHTENED_LIGHT,
 	PW_FORCE_ENLIGHTENED_DARK,
 	PW_FORCE_BOON,
-	PW_YSALIMARI,
+	PW_YSALAMIRI,
 
 	PW_NUM_POWERUPS
 
@@ -450,6 +456,17 @@ typedef enum {
 #define	EV_EVENT_BITS		(EV_EVENT_BIT1|EV_EVENT_BIT2)
 
 #define	EVENT_VALID_MSEC	300
+
+typedef enum
+{
+	PDSOUND_NONE,
+	PDSOUND_PROTECTHIT,
+	PDSOUND_PROTECT,
+	PDSOUND_ABSORBHIT,
+	PDSOUND_ABSORB,
+	PDSOUND_FORCEJUMP,
+	PDSOUND_FORCEGRIP
+} pdSounds_t;
 
 typedef enum {
 	EV_NONE,
@@ -497,6 +514,10 @@ typedef enum {
 	EV_DISRUPTOR_SNIPER_MISS,
 	EV_DISRUPTOR_HIT,
 	EV_DISRUPTOR_ZOOMSOUND,
+
+	EV_PREDEFSOUND,
+
+	EV_TEAM_POWER,
 
 	EV_SCREENSHAKE,
 
@@ -574,6 +595,7 @@ typedef enum {
 
 	EV_GIVE_NEW_RANK,
 	EV_SET_FREE_SABER,
+	EV_SET_FORCE_DISABLE,
 
 	EV_WEAPON_CHARGE,
 	EV_WEAPON_CHARGE_ALT,
@@ -710,7 +732,7 @@ typedef struct gitem_s {
 	char		*view_model;
 
 	char		*icon;
-	char		*pickup_name;	// for printing on pickup
+//	char		*pickup_name;	// for printing on pickup
 
 	int			quantity;		// for ammo how much, or duration of powerup
 	itemType_t  giType;			// IT_* flags
@@ -725,7 +747,9 @@ typedef struct gitem_s {
 extern	gitem_t	bg_itemlist[];
 extern	int		bg_numItems;
 
-gitem_t	*BG_FindItem( const char *pickupName );
+float vectoyaw( const vec3_t vec );
+
+gitem_t	*BG_FindItem( const char *classname );
 gitem_t	*BG_FindItemForWeapon( weapon_t weapon );
 gitem_t	*BG_FindItemForPowerup( powerup_t pw );
 gitem_t	*BG_FindItemForHoldable( holdable_t pw );
@@ -964,6 +988,8 @@ typedef struct
 
 extern saberMoveData_t	saberMoveData[LS_MOVE_MAX];
 
+qboolean BG_LegalizedForcePowers(char *powerOut, int maxRank, qboolean freeSaber, int teamForce, int gametype, int fpDisabled);
+
 //BG anim utility functions:
 qboolean BG_InSpecialJump( int anim );
 qboolean BG_InSaberStandAnim( int anim );
@@ -1000,7 +1026,7 @@ qboolean	BG_ParseAnimationFile(const char *filename);
 
 int BG_GetItemIndexByTag(int tag, int type);
 
-qboolean BG_HasYsalimari(int gametype, playerState_t *ps);
+qboolean BG_HasYsalamiri(int gametype, playerState_t *ps);
 qboolean BG_CanUseFPNow(int gametype, playerState_t *ps, int time, forcePowers_t power);
 
 void *BG_Alloc ( int size );

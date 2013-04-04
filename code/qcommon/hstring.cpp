@@ -1,3 +1,4 @@
+#include <windows.h>
 #include "cm_local.h"
 #include "hstring.h"
 
@@ -63,24 +64,31 @@ CMapPoolLow::CMapPoolLow()
 CMapPoolLow::~CMapPoolLow()
 {
 #if _DEBUG
+	char mess[1000];
 #if _GAME
 	if(mFreeList.size()<mMapBlocks.size()*MAPBLOCK_SIZE_NODES)
 	{
-		Com_Printf("[MEM][GAME]  !!!! Map Pool Leaked %d nodes\n",(MAPBLOCK_SIZE_NODES*mMapBlocks.size())-mFreeList.size());
+		sprintf(mess,"[MEM][GAME]  !!!! Map Pool Leaked %d nodes\n",(MAPBLOCK_SIZE_NODES*mMapBlocks.size())-mFreeList.size());
+		OutputDebugString(mess);
 	}
-	Com_Printf("[MEM][GAME]  Map Pool max. mem used = %d\n",mMapBlocks.size()*MAPBLOCK_SIZE_NODES*MAP_NODE_SIZE);
+	sprintf(mess, "[MEM][GAME]  Map Pool max. mem used = %d\n",mMapBlocks.size()*MAPBLOCK_SIZE_NODES*MAP_NODE_SIZE);
+	OutputDebugString(mess);
 #elif _CGAME
 	if (mFreeList.size()<mMapBlocks.size()*MAPBLOCK_SIZE_NODES)
 	{
-		Com_Printf("[MEM][CGAME]  !!!! Map Pool Leaked %d nodes\n",(MAPBLOCK_SIZE_NODES*mMapBlocks.size())-mFreeList.size());
+		sprintf(mess, "[MEM][CGAME]  !!!! Map Pool Leaked %d nodes\n",(MAPBLOCK_SIZE_NODES*mMapBlocks.size())-mFreeList.size());
+		OutputDebugString(mess);
 	}
-	Com_Printf("[MEM][CGAME] Map Pool max. mem used = %d\n",mMapBlocks.size()*MAPBLOCK_SIZE_NODES*MAP_NODE_SIZE);
+	sprintf(mess, "[MEM][CGAME] Map Pool max. mem used = %d\n",mMapBlocks.size()*MAPBLOCK_SIZE_NODES*MAP_NODE_SIZE);
+	OutputDebugString(mess);
 #else
 	if (mFreeList.size()<mMapBlocks.size()*MAPBLOCK_SIZE_NODES)
 	{
-		Com_Printf("[MEM][EXE]  !!!! Map Pool Leaked %d nodes\n",(MAPBLOCK_SIZE_NODES*mMapBlocks.size())-mFreeList.size());
+		sprintf(mess, "[MEM][EXE]  !!!! Map Pool Leaked %d nodes\n",(MAPBLOCK_SIZE_NODES*mMapBlocks.size())-mFreeList.size());
+		OutputDebugString(mess);
 	}
-	Com_Printf("[MEM][EXE] Map Pool max. mem used = %d\n",mMapBlocks.size()*MAPBLOCK_SIZE_NODES*MAP_NODE_SIZE);
+	sprintf(mess, "[MEM][EXE] Map Pool max. mem used = %d\n",mMapBlocks.size()*MAPBLOCK_SIZE_NODES*MAP_NODE_SIZE);
+	OutputDebugString(mess);
 #endif
 #endif
 
@@ -390,6 +398,11 @@ CPool &ThePool(void);
 class CPoolChecker
 {
 public:
+	CPoolChecker()
+	{
+		TheDebugPool();
+		ThePool();
+	}
 	~CPoolChecker()
 	{
 #if 0
@@ -401,13 +414,15 @@ public:
 		}
 #endif
 #if _DEBUG
+		char mess[1000];
 #if _GAME
-		Com_Printf("[MEM][GAME]  String Pool %d unique strings, %dK\n",ThePool().mNextStringId,(ThePool().mLastBlockNum+1)*BLOCK_SIZE/1024);
+		sprintf(mess,"[MEM][GAME]  String Pool %d unique strings, %dK\n",ThePool().mNextStringId,(ThePool().mLastBlockNum+1)*BLOCK_SIZE/1024);
 #elif _CGAME
-		Com_Printf("[MEM][CGAME]  String Pool %d unique strings, %dK\n",ThePool().mNextStringId,(ThePool().mLastBlockNum+1)*BLOCK_SIZE/1024);
+		sprintf(mess,"[MEM][CGAME]  String Pool %d unique strings, %dK\n",ThePool().mNextStringId,(ThePool().mLastBlockNum+1)*BLOCK_SIZE/1024);
 #else
-		Com_Printf("[MEM][EXE]  String Pool %d unique strings, %dK\n",ThePool().mNextStringId,(ThePool().mLastBlockNum+1)*BLOCK_SIZE/1024);
+		sprintf(mess,"[MEM][EXE]  String Pool %d unique strings, %dK\n",ThePool().mNextStringId,(ThePool().mLastBlockNum+1)*BLOCK_SIZE/1024);
 #endif
+		OutputDebugString(mess);
 #endif
 		// if this fails it means the string storage is CORRUPTED, let someone know
 		assert(TheDebugPool()==ThePool());

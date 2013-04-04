@@ -3,6 +3,9 @@
 #include "client.h"
 #include "..\qcommon\strip.h"
 #include "../ghoul2/g2_local.h"
+#ifdef _DONETPROFILE_
+#include "../qcommon/INetProfile.h"
+#endif
 
 char *svc_strings[256] = {
 	"svc_bad",
@@ -233,7 +236,7 @@ void CL_ParseSnapshot( msg_t *msg ) {
 			// is too old, so we can't reconstruct it properly.
 			Com_Printf ("Delta frame too old.\n");
 		} else if ( cl.parseEntitiesNum - old->parseEntitiesNum > MAX_PARSE_ENTITIES-128 ) {
-			Com_Printf ("Delta parseEntitiesNum too old.\n");
+			Com_DPrintf ("Delta parseEntitiesNum too old.\n");
 		} else {
 			newSnap.valid = qtrue;	// valid delta parse
 		}
@@ -326,7 +329,8 @@ void CL_SystemInfoChanged( void ) {
 	}
 
 	s = Info_ValueForKey( systemInfo, "sv_cheats" );
-	if ( atoi(s) == 0 ) {
+	if ( atoi(s) == 0 )
+	{
 		Cvar_SetCheatState();
 	}
 
@@ -381,6 +385,11 @@ void CL_ParseGamestate( msg_t *msg ) {
 	// wipe local client state
 	CL_ClearState();
 
+#ifdef _DONETPROFILE_
+	int startBytes,endBytes;
+	startBytes=msg->readcount;
+#endif
+
 	// a gamestate always marks a server command sequence
 	clc.serverCommandSequence = MSG_ReadLong( msg );
 
@@ -427,6 +436,11 @@ void CL_ParseGamestate( msg_t *msg ) {
 	clc.clientNum = MSG_ReadLong(msg);
 	// read the checksum feed
 	clc.checksumFeed = MSG_ReadLong( msg );
+
+#ifdef _DONETPROFILE_
+	endBytes=msg->readcount;
+//	ClReadProf().AddField("svc_gamestate",endBytes-startBytes);
+#endif
 
 	// parse serverId and other cvars
 	CL_SystemInfoChanged();
@@ -555,9 +569,16 @@ void CL_ParseCommandString( msg_t *msg ) {
 	int		seq;
 	int		index;
 
+#ifdef _DONETPROFILE_
+	int startBytes,endBytes;
+	startBytes=msg->readcount;
+#endif
 	seq = MSG_ReadLong( msg );
 	s = MSG_ReadString( msg );
-
+#ifdef _DONETPROFILE_
+	endBytes=msg->readcount;
+	ClReadProf().AddField("svc_serverCommand",endBytes-startBytes);
+#endif
 	// see if we have already executed stored it off
 	if ( clc.serverCommandSequence >= seq ) {
 		return;

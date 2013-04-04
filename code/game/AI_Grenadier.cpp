@@ -204,7 +204,7 @@ void NPC_BSGrenadier_Patrol( void )
 		if ( !(NPCInfo->scriptFlags&SCF_IGNORE_ALERTS) )
 		{
 			//Is there danger nearby
-			int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, qfalse, AEL_SUSPICIOUS );
+			int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, -1, qfalse, AEL_SUSPICIOUS );
 			if ( NPC_CheckForDanger( alertEvent ) )
 			{
 				NPC_UpdateAngles( qtrue, qtrue );
@@ -285,7 +285,7 @@ void NPC_BSGrenadier_Idle( void )
 	//FIXME: check for other alert events?
 
 	//Is there danger nearby?
-	if ( NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, qfalse, AEL_DANGER ) ) )
+	if ( NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, -1, qfalse, AEL_DANGER ) ) )
 	{
 		NPC_UpdateAngles( qtrue, qtrue );
 		return;
@@ -474,7 +474,7 @@ void NPC_BSGrenadier_Attack( void )
 		return;
 	}
 
-	if ( TIMER_Done( NPC, "flee" ) && NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, qfalse, AEL_DANGER ) ) )
+	if ( TIMER_Done( NPC, "flee" ) && NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, -1, qfalse, AEL_DANGER ) ) )
 	{//going to run
 		NPC_UpdateAngles( qtrue, qtrue );
 		return;
@@ -493,8 +493,8 @@ void NPC_BSGrenadier_Attack( void )
 	enemyDist = DistanceSquared( NPC->enemy->currentOrigin, NPC->currentOrigin );
 
 	//See if we should switch to melee attack
-	if ( enemyDist < 16384 )//128
-	{
+	if ( enemyDist < 16384 && (!NPC->enemy->client||NPC->enemy->client->ps.weapon != WP_SABER||!NPC->enemy->client->ps.saberActive) )//128
+	{//enemy is close and not using saber
 		if ( NPC->client->ps.weapon == WP_THERMAL )
 		{//grenadier
 			trace_t	trace;
@@ -510,8 +510,8 @@ void NPC_BSGrenadier_Attack( void )
 			}
 		}
 	}
-	else if ( enemyDist > 65536 )//256
-	{
+	else if ( enemyDist > 65536 || (NPC->enemy->client && NPC->enemy->client->ps.weapon == WP_SABER && NPC->enemy->client->ps.saberActive) )//256
+	{//enemy is far or using saber
 		if ( NPC->client->ps.weapon == WP_MELEE && (NPC->client->ps.stats[STAT_WEAPONS]&(1<<WP_THERMAL)) )
 		{//fisticuffs, make switch to thermal if have it
 			//reset fire-timing variables

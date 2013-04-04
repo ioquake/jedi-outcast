@@ -343,21 +343,21 @@ void R_TransformEachSurface( mdxmSurface_t	*surface, vec3_t scale, CMiniHeap *G2
 //			w = v->weights;
 
 			const int iNumWeights = G2_GetVertWeights( v );
-
+			float fTotalWeight = 0.0f;
 			for ( k = 0 ; k < iNumWeights ; k++ ) 
 			{
 				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
-				float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k, fTotalWeight, iNumWeights );
 
 				//bone = bonePtr + piBoneRefs[w->boneIndex];
 
-				tempVert[0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[0][3] );
-				tempVert[1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[1][3] );
-				tempVert[2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[2][3] );
+				tempVert[0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0][3] );
+				tempVert[1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1][3] );
+				tempVert[2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2][3] );
 
-				tempNormal[0] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], v->normal );
-				tempNormal[1] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], v->normal );
-				tempNormal[2] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], v->normal );
+				tempNormal[0] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0], v->normal );
+				tempNormal[1] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1], v->normal );
+				tempNormal[2] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2], v->normal );
 			}
 			int pos = j * 5;
 
@@ -384,21 +384,22 @@ void R_TransformEachSurface( mdxmSurface_t	*surface, vec3_t scale, CMiniHeap *G2
 //			w = v->weights;
 
 			const int iNumWeights = G2_GetVertWeights( v );
+			float fTotalWeight = 0.0f;
 
 			for ( k = 0 ; k < iNumWeights ; k++ ) 
 			{
 				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
-				float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k, fTotalWeight, iNumWeights );
 
 				//bone = bonePtr + piBoneRefs[w->boneIndex];
 
-				tempVert[0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[0][3] );
-				tempVert[1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[1][3] );
-				tempVert[2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[2][3] );
+				tempVert[0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0][3] );
+				tempVert[1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1][3] );
+				tempVert[2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2][3] );
 
-				tempNormal[0] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], v->normal );
-				tempNormal[1] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], v->normal );
-				tempNormal[2] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], v->normal );
+				tempNormal[0] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[0], v->normal );
+				tempNormal[1] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[1], v->normal );
+				tempNormal[2] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].second.matrix[2], v->normal );
 			}
 			int pos = j * 5;
 
@@ -970,6 +971,7 @@ bool G2_TracePolys( const mdxmSurface_t *surface, const vec3_t rayStart, const v
 	return false;
 }
 
+
 // look at a surface and then do the trace on each poly
 void G2_TraceSurfaces(CTraceSurface &TS)
 {
@@ -1216,7 +1218,8 @@ qboolean G2_SaveGhoul2Models(CGhoul2Info_v &ghoul2, char **buffer, int *size)
 	// add in count for number of ghoul2 models
 	*size += 4;	
 	// start out working out the total size of the buffer we need to allocate
-	for (int i=0; i<ghoul2.size();i++)
+	int i; // Linux GCC is forcing new scoping rules
+	for (i=0; i<ghoul2.size();i++)
 	{
 		*size += ghoul2BlockSize;
 		// add in count for number of surfaces
@@ -1252,7 +1255,8 @@ qboolean G2_SaveGhoul2Models(CGhoul2Info_v &ghoul2, char **buffer, int *size)
 		tempBuffer +=4;
 
 		// now save the all the surface list info
-		for (int x=0; x<ghoul2[i].mSlist.size(); x++)
+		int x;
+		for (x=0; x<ghoul2[i].mSlist.size(); x++)
 		{
 			memcpy(tempBuffer, &ghoul2[i].mSlist[x], SURFACE_SAVE_BLOCK_SIZE);
 			tempBuffer += SURFACE_SAVE_BLOCK_SIZE;
@@ -1293,8 +1297,8 @@ void G2_FreeSaveBuffer(char *buffer)
 int G2_FindConfigStringSpace(char *name, int start, int max)
 {
 	char	s[MAX_STRING_CHARS];
-
-	for (int  i=1 ; i<max ; i++ ) 
+	int i;
+	for ( i=1 ; i<max ; i++ ) 
 	{
 		SV_GetConfigstring( start + i, s, sizeof( s ) );
 		if ( !s[0] ) 
@@ -1348,7 +1352,8 @@ void G2_LoadGhoul2Model(CGhoul2Info_v &ghoul2, char *buffer)
 		buffer +=4;
 
 		// now load all the surfaces
-		for (int x=0; x<ghoul2[i].mSlist.size(); x++)
+		int x;
+		for (x=0; x<ghoul2[i].mSlist.size(); x++)
 		{
 			memcpy(&ghoul2[i].mSlist[x], buffer, SURFACE_SAVE_BLOCK_SIZE);
 			buffer += SURFACE_SAVE_BLOCK_SIZE;

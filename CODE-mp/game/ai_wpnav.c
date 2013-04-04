@@ -210,7 +210,7 @@ void G_TestLine(vec3_t start, vec3_t end, int color, int time)
 	te = G_TempEntity( start, EV_TESTLINE );
 	VectorCopy(start, te->s.origin);
 	VectorCopy(end, te->s.origin2);
-	te->s.trickedentindex = time;
+	te->s.time2 = time;
 	te->s.weapon = color;
 	te->r.svFlags |= SVF_BROADCAST;
 }

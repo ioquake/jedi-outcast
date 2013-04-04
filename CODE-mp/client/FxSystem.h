@@ -69,7 +69,7 @@ public:
 	inline	int	GetFrameTime(void) { return mFrameTime; }
 
 	void	ReInit(void);
-	void	AdjustTime( int time );
+	void	AdjustTime_Pos( int time, vec3_t refdef_vieworg, vec3_t refdef_viewaxis[3] );
 
 	// These functions are wrapped and used by the fx system in case it makes things a bit more portable
 	void	Print( const char *msg, ... );

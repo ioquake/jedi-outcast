@@ -1049,12 +1049,15 @@ NO_PROTECTION	*nothing* stops the damage
 LOCKCAM			Falling death results in camera locking in place
 FALLING			Forces a falling scream and anim
 ELECTRICAL		does electrical damage
+INACTIVE		Cannot be triggered until used by a target_activate
 MULTIPLE        multiple entities can touch this trigger in a single frame *and* if needed, the trigger can have a wait of > 0
 
 "dmg"			default 5 (whole numbers only)
 "delay"			How many seconds it takes to get from 0 to "dmg" (default is 0)
 "wait"			Use in instead of "SLOW" - determines how often the player gets hurt, 0.1 is every frame, 1.0 is once per second.  -1 will stop after one use
 "count"			If set, FALLING death causes a fade to black in this many milliseconds (default is 10000 = 10 seconds)
+"NPC_targetname" - If set, only an NPC with a matching NPC_targetname will trip this trigger
+"noise"         sound to play when it hurts something ( default: "sound/world/electro" )
 */
 void hurt_use( gentity_t *self, gentity_t *other, gentity_t *activator ) {
 
@@ -1088,7 +1091,7 @@ void hurt_touch( gentity_t *self, gentity_t *other, trace_t *trace )
 	{
 		return;
 	}
-
+	
 	if( level.time < self->painDebounceTime + self->wait  ) // normal 'wait' check
 	{
 		if( self->spawnflags & 2048 ) // MULTIPLE - allow multiple entities to touch this trigger in one frame
@@ -1115,6 +1118,21 @@ void hurt_touch( gentity_t *self, gentity_t *other, trace_t *trace )
 	{//player only
 		if ( other->s.number )
 		{
+			return;
+		}
+	}
+
+	if ( self->NPC_targetname && self->NPC_targetname[0] )
+	{//I am for you, Kirk
+		if ( other->script_targetname && other->script_targetname[0] )
+		{//must have a name
+			if ( Q_stricmp( self->NPC_targetname, other->script_targetname ) != 0 )
+			{//not the right guy to fire me off
+				return;
+			}
+		}
+		else
+		{//no name?  No trigger.
 			return;
 		}
 	}
@@ -1158,6 +1176,7 @@ void hurt_touch( gentity_t *self, gentity_t *other, trace_t *trace )
 		if ( self->spawnflags & 32 )
 		{//falling death
 			G_Damage (other, self, self, NULL, NULL, actualDmg, dflags|DAMAGE_NO_ARMOR, MOD_FALLING);
+			// G_Damage will free this ent, which makes it s.number 0, so we must check inuse...
 			if ( !other->s.number && other->health <= 0 )
 			{
 				if ( self->count )
@@ -1186,6 +1205,10 @@ void hurt_touch( gentity_t *self, gentity_t *other, trace_t *trace )
 		{
 			self->aimDebounceTime = level.time;
 		}
+		if (( self->spawnflags & 64 ) && other->client && other->health <= 0 )//electrical damage
+		{//just killed them, make the effect last longer since dead clients don't touch triggers
+			other->client->ps.powerups[PW_SHOCKED] = level.time + 10000;
+		}
 		self->painDebounceTime = level.time;
 	}
 
@@ -1197,9 +1220,19 @@ void hurt_touch( gentity_t *self, gentity_t *other, trace_t *trace )
 
 void SP_trigger_hurt( gentity_t *self ) 
 {
+	char	buffer[MAX_QPATH];
+	char	*s;
+
 	InitTrigger (self);
 
-	self->noise_index = G_SoundIndex( "sound/world/electro.wav" );
+	if ( !( self->spawnflags & 4 )) 
+	{
+		G_SpawnString( "noise", "sound/world/electro", &s );
+
+		Q_strncpyz( buffer, s, sizeof(buffer) );
+		self->noise_index = G_SoundIndex(buffer);
+	}
+
 	self->e_TouchFunc = touchF_hurt_touch;
 
 	if ( !self->damage ) {

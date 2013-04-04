@@ -48,6 +48,8 @@
 #define	SCF_NO_FORCE		0x00200000	//Not succeptible to force powers
 #define	SCF_NO_FALLTODEATH	0x00400000	//NPC will not scream and tumble and fall to hit death over large drops
 #define	SCF_NO_ACROBATICS	0x00800000	//Jedi won't jump, roll or cartwheel
+#define	SCF_USE_SUBTITLES	0x01000000	//Regardless of subtitle setting, this NPC will display subtitles when it speaks lines
+#define	SCF_NO_ALERT_TALK	0x02000000	//Will not say alert sounds, but still can be woken up by alerts
 
 //#ifdef __DEBUG
 
@@ -258,6 +260,7 @@ typedef struct
 
 	int			confusionTime;	//Doesn't respond to alerts or pick up enemies (unless shot) until this time is up
 	int			charmedTime;	//charmed to enemy team
+	int			controlledTime;	//controlled by player
 	int			surrenderTime;	//Hands up
 
 	//Lagging enemy position - FIXME: seems awful wasteful...

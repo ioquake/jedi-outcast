@@ -421,11 +421,11 @@ static void IT_Tag(const char **holdBuf)
 	}
 	else if (!Q_stricmp(tokenStr,"INV_GOODIE_KEY"))	
 	{
-		tag = INV_GOODIE_KEY1;
+		tag = INV_GOODIE_KEY;
 	}
 	else if (!Q_stricmp(tokenStr,"INV_SECURITY_KEY"))	
 	{
-		tag = INV_SECURITY_KEY1;
+		tag = INV_SECURITY_KEY;
 	}
 	else if (!Q_stricmp(tokenStr,"ITM_MEDPAK_PICKUP"))	
 	{

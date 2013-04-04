@@ -135,6 +135,7 @@ cvar_t		*s_show;
 cvar_t		*s_mixahead;
 cvar_t		*s_mixPreStep;
 cvar_t		*s_musicVolume;
+cvar_t		*s_musicMult;
 cvar_t		*s_separation;
 cvar_t		*s_doppler;
 cvar_t		*s_CPUType;
@@ -211,7 +212,11 @@ void S_Init( void ) {
 	Com_Printf("\n------- sound initialization -------\n");
 
 	s_volume = Cvar_Get ("s_volume", "0.8", CVAR_ARCHIVE);
-	s_musicVolume = Cvar_Get ("s_musicvolume", "0.25", CVAR_ARCHIVE);
+	s_musicVolume = Cvar_Get ("s_musicvolume", "0.5", CVAR_ARCHIVE);
+
+	//rww - multiply s_musicVolume by this value. Set in cgame when necessary.
+	s_musicMult = Cvar_Get ("s_musicMult", "1", 0);
+
 	s_separation = Cvar_Get ("s_separation", "0.5", CVAR_ARCHIVE);
 	s_doppler = Cvar_Get ("s_doppler", "1", CVAR_ARCHIVE);
 	s_khz = Cvar_Get ("s_khz", "22", CVAR_ARCHIVE);
@@ -543,9 +548,7 @@ sfxHandle_t	S_RegisterSound( const char *name)
 	if ( sfx->bDefaultSound )	{
 		// Suppress error for inline sounds
 		if(Q_stricmp(sfx->sSoundName, DEFAULT_SOUND_NAME)){
-#ifdef _DEBUG
-			Com_Printf( S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->sSoundName );
-#endif
+			Com_DPrintf( S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->sSoundName );
 		}
 		return 0;
 	}
@@ -2050,7 +2053,7 @@ static qboolean S_UpdateBackgroundTrack_Actual( MusicInfo_t *pMusicInfo )
 	int		fileBytes;
 	int		r;
 
-	float fMasterVol = s_musicVolume->value;
+	float fMasterVol = (s_musicVolume->value*s_musicMult->value);
 
 	static	float	musicVolume = 0.25f;
 
@@ -2213,6 +2216,10 @@ cvar_t *s_soundpoolmegs = NULL;
 void SND_setup() 
 {		 
 	s_soundpoolmegs = Cvar_Get("s_soundpoolmegs", "25", CVAR_ARCHIVE);
+	if (Sys_LowPhysicalMemory() )
+	{
+		Cvar_Set("s_soundpoolmegs", "0");
+	}
 
 	Com_Printf("Sound memory manager started\n");
 }
@@ -2373,7 +2380,7 @@ qboolean SND_RegisterAudio_LevelLoadEnd(qboolean bDeleteEverythingNotUsedThisLev
 	else
 	{
 		int iLoadedAudioBytes	 = Z_MemSize ( TAG_SND_RAWDATA ) + Z_MemSize( TAG_SND_MP3STREAMHDR );
-		const int iMaxAudioBytes = (!Sys_LowPhysicalMemory() && s_soundpoolmegs) ? (s_soundpoolmegs->integer * 1024 * 1024) : 0;
+		const int iMaxAudioBytes = s_soundpoolmegs->integer * 1024 * 1024;
 
 		for (int i=1; i<s_numSfx && ( iLoadedAudioBytes > iMaxAudioBytes || bDeleteEverythingNotUsedThisLevel) ; i++) // i=1 so we never page out default sound
 		{

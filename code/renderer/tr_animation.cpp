@@ -304,6 +304,7 @@ void R_AddAnimSurfaces( trRefEntity_t *ent ) {
 		if ( !personalModel
 			&& r_shadows->integer == 2 
 			&& fogNum == 0
+			&& (ent->e.renderfx & RF_SHADOW_PLANE )
 			&& !(ent->e.renderfx & ( RF_NOSHADOW | RF_DEPTHHACK ) ) 
 			&& shader->sort == SS_OPAQUE ) {
 #ifdef _NPATCH

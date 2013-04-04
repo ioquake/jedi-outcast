@@ -427,6 +427,8 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	entityNumbers.numSnapshotEntities = 0;
 	Com_Memset( frame->areabits, 0, sizeof( frame->areabits ) );
 
+	frame->num_entities = 0;
+
 	clent = client->gentity;
 	if ( !clent || client->state == CS_ZOMBIE ) {
 		return;
@@ -526,6 +528,16 @@ Called by SV_SendClientSnapshot and SV_SendClientGameState
 */
 void SV_SendMessageToClient( msg_t *msg, client_t *client ) {
 	int			rateMsec;
+
+	// MW - my attempt to fix illegible server message errors caused by 
+	// packet fragmentation of initial snapshot.
+	while(client->state&&client->netchan.unsentFragments)
+	{
+		// send additional message fragments if the last message
+		// was too large to send at once
+		Com_Printf ("[ISM]SV_SendClientGameState() [1] for %s, writing out old fragments\n", client->name);
+		SV_Netchan_TransmitNextFragment(&client->netchan);
+	}
 
 	// record information about the message
 	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;

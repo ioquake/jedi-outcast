@@ -7,6 +7,7 @@
 
 void Interrogator_Idle( void );
 void DeathFX( gentity_t *ent );
+extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
 
 enum
 {
@@ -22,11 +23,11 @@ NPC_Interrogator_Precache
 */
 void NPC_Interrogator_Precache(gentity_t *self)
 {
-	G_SoundIndex( "sound/chars/probe/misc/talk.wav");
-	G_SoundIndex( "sound/chars/interrogator/misc/torture_droid_inject.mp3" );
-//	G_SoundIndex( "sound/chars/probe/misc/probedroidloop.wav" );
-//	G_SoundIndex("sound/chars/probe/misc/anger1.wav");
-	G_EffectIndex( "probeexplosion1");
+	G_SoundIndex( "sound/chars/interrogator/misc/torture_droid_lp" );
+	G_SoundIndex("sound/chars/mark1/misc/anger.wav");
+	G_SoundIndex( "sound/chars/probe/misc/talk");
+	G_SoundIndex( "sound/chars/interrogator/misc/torture_droid_inject" );
+	G_SoundIndex( "sound/chars/interrogator/misc/int_droid_explo" );
 	G_EffectIndex( "droidexplosion1" );
 }
 /*
@@ -37,6 +38,7 @@ Interrogator_die
 void Interrogator_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int dFlags,int hitLoc )
 {
 	self->client->ps.velocity[2] = -100;
+	/*
 	self->locationDamage[HL_NONE] += damage;
 	if (self->locationDamage[HL_NONE] > 40)
 	{
@@ -45,12 +47,16 @@ void Interrogator_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacke
 		self->contents = CONTENTS_CORPSE;
 	}
 	else
+	*/
 	{
 		self->NPC->stats.moveType = MT_WALK;
 		self->client->ps.velocity[0] = Q_irand( -10, -20 );
 		self->client->ps.velocity[1] = Q_irand( -10, -20 );
 		self->client->ps.velocity[2] = -100;
 	}
+	//self->takedamage = qfalse;
+	//self->client->ps.eFlags |= EF_NODRAW;
+	//self->contents = 0;
 	return;
 }
 
@@ -132,6 +138,7 @@ void Interrogator_MaintainHeight( void )
 //	vec3_t	endPos;
 //	trace_t	trace;
 
+	NPC->s.loopSound = G_SoundIndex( "sound/chars/interrogator/misc/torture_droid_lp" );
 	// Update our angles regardless
 	NPC_UpdateAngles( qtrue, qtrue );
 
@@ -375,7 +382,7 @@ void Interrogator_Attack( void )
 	{
 		if (TIMER_Done(NPC,"angerNoise"))
 		{
-			G_Sound( NPC, G_SoundIndex(va("sound/chars/probe/misc/talk.wav",	Q_irand(1, 3))));
+			G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/probe/misc/talk.wav",	Q_irand(1, 3)) );
 
 			TIMER_Set( NPC, "patrolNoise", Q_irand( 4000, 10000 ) );
 		}
@@ -419,7 +426,7 @@ void Interrogator_Idle( void )
 {
 	if ( NPC_CheckPlayerTeamStealth() )
 	{
-		G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/anger.wav"));
+		G_SoundOnEnt( NPC, CHAN_AUTO, "sound/chars/mark1/misc/anger.wav" );
 		NPC_UpdateAngles( qtrue, qtrue );
 		return;
 	}
@@ -436,7 +443,7 @@ NPC_BSInterrogator_Default
 */
 void NPC_BSInterrogator_Default( void )
 {
-	NPC->e_DieFunc = dieF_Interrogator_die;
+	//NPC->e_DieFunc = dieF_Interrogator_die;
 
 	if ( NPC->enemy )
 	{

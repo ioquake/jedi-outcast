@@ -11,6 +11,7 @@ extern	cvar_t	*g_spskill;
 void G_SetEnemy( gentity_t *self, gentity_t *enemy );
 void finish_spawning_turret( gentity_t *base );
 void ObjectDie (gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath );
+extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
 
 #define	ARM_ANGLE_RANGE		60
 #define	HEAD_ANGLE_RANGE	90
@@ -56,7 +57,7 @@ void turret_die ( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, in
 		VectorSet( forward, 0, 0, 1 );
 	}
 
-	VectorCopy( self->currentOrigin, self->s.pos.trBase );
+//	VectorCopy( self->currentOrigin, self->s.pos.trBase );
 
 	if ( self->fxID > 0 )
 	{
@@ -95,11 +96,22 @@ void turret_die ( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, in
 	}
 }
 
+#define START_DIS 15
+
 //----------------------------------------------------------------
 static void turret_fire ( gentity_t *ent, vec3_t start, vec3_t dir )
 //----------------------------------------------------------------
 {
+	vec3_t		org;
 	gentity_t	*bolt;
+
+	if ( gi.pointcontents( start, MASK_SHOT ))
+	{
+		return;
+	}
+
+	VectorMA( start, -START_DIS, dir, org ); // dumb....
+	G_PlayEffect( "blaster/muzzle_flash", org, dir );
 
 	bolt = G_Spawn();
 	
@@ -120,7 +132,7 @@ static void turret_fire ( gentity_t *ent, vec3_t start, vec3_t dir )
 	VectorSet( bolt->maxs, 1.5, 1.5, 1.5 );
 	VectorScale( bolt->maxs, -1, bolt->mins );
 	bolt->s.pos.trType = TR_LINEAR;
-	bolt->s.pos.trTime = level.time - 10;		// move a bit on the very first frame
+	bolt->s.pos.trTime = level.time;
 	VectorCopy( start, bolt->s.pos.trBase );
 	VectorScale( dir, 1100, bolt->s.pos.trDelta );
 	SnapVector( bolt->s.pos.trDelta );		// save net bandwidth
@@ -149,10 +161,10 @@ void turret_head_think( gentity_t *self )
 		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, org );
 		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, POSITIVE_Y, fwd );
 
-		G_PlayEffect( "blaster/muzzle_flash", org, fwd );
-		VectorMA( org, 35, fwd, org ); // this might be bad??
+		VectorMA( org, START_DIS, fwd, org );
 
 		turret_fire( self, org, fwd );
+		self->fly_sound_debounce_time = level.time;//used as lastShotTime
 	}
 }
 
@@ -650,7 +662,7 @@ void finish_spawning_turret( gentity_t *base )
 	G_SoundIndex( "sound/chars/turret/ping.wav" );
 	G_SoundIndex( "sound/chars/turret/move.wav" );
 
-	base->contents = MASK_SHOT;//CONTENTS_BODY;
+	base->contents = CONTENTS_BODY|CONTENTS_PLAYERCLIP|CONTENTS_MONSTERCLIP|CONTENTS_SHOTCLIP;
 
 	base->max_health = base->health;
 	base->takedamage = qtrue;
@@ -731,7 +743,8 @@ void laser_arm_fire (gentity_t *ent)
 	VectorMA( start, 4096, fwd, end );
 	
 	gi.trace( &trace, start, NULL, NULL, end, ENTITYNUM_NONE, MASK_SHOT );//ignore
-	
+	ent->fly_sound_debounce_time = level.time;//used as lastShotTime
+
 	// Only deal damage when in alt-fire mode
 	if ( trace.fraction < 1.0 && ent->alt_fire )
 	{
@@ -1327,6 +1340,7 @@ void pas_think( gentity_t *ent )
 		if ( ent->count )
 		{
 			pas_fire( ent );
+			ent->fly_sound_debounce_time = level.time;//used as lastShotTime
 		}
 		else
 		{
@@ -1409,7 +1423,7 @@ void SP_PAS( gentity_t *base )
 	}
 
 	// Set up our explosion effect for the ExplodeDeath code....
-	base->fxID = G_EffectIndex( "tripMine/explosion" );
+	base->fxID = G_EffectIndex( "turret/explode" );
 	G_EffectIndex( "spark_exp_nosnd" );
 
 	if ( !base->health )
@@ -1490,6 +1504,8 @@ qboolean place_portable_assault_sentry( gentity_t *self, vec3_t origin, vec3_t a
 			{
 				pas->noDamageTeam = self->client->playerTeam;
 			}
+
+			G_Sound( self, G_SoundIndex( "sound/player/use_sentry" ));
 			pas->activator = self;
 			return qtrue;
 		}
@@ -1559,7 +1575,10 @@ void ion_cannon_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker,
 	vec3_t org;
 
 	// dead, so nuke the ghoul model and put in the damage md3 version
-	gi.G2API_RemoveGhoul2Model( self->ghoul2, self->playerModel );
+	if ( self->playerModel >= 0 )
+	{
+		gi.G2API_RemoveGhoul2Model( self->ghoul2, self->playerModel );
+	}
 	self->s.modelindex = self->s.modelindex2;
 	self->s.modelindex2 = 0;
 
@@ -1766,7 +1785,7 @@ void spotlight_think( gentity_t *ent )
 			// hit player--use target2
 			G_UseTargets2( ent, &g_entities[0], ent->target2 );
 
-#ifndef FINAL
+#ifndef FINAL_BUILD
 			if ( g_developer->integer == PRINT_DEVELOPER )
 			{
 				Com_Printf( S_COLOR_MAGENTA "Spotlight hit player at time: %d!!!\n", level.time );
@@ -1891,6 +1910,8 @@ void panel_turret_shoot( gentity_t *self, vec3_t org, vec3_t dir)
 	missile->methodOfDeath = MOD_ENERGY;
 	missile->clipmask = MASK_SHOT | CONTENTS_LIGHTSABER;
 
+	G_SoundOnEnt( self, CHAN_AUTO, "sound/movers/objects/ladygun_fire" );
+
 	VectorMA( org, 32, dir, org );
 	org[2] -= 5;
 	G_PlayEffect( "emplaced/muzzle_flash", org, dir );
@@ -1923,7 +1944,7 @@ void panel_turret_think( gentity_t *self )
 		for ( int i = 0; i < 3; i++ )
 		{
 			// convert our base angle to a short, add with the usercmd.angle ( a short ), then switch use back to a real angle
-			self->s.apos.trBase[i] = AngleNormalize180( SHORT2ANGLE( ucmd->angles[i] + ANGLE2SHORT( self->s.angles[i] ) + self->pos1[i] ));
+			self->s.apos.trBase[i] = AngleNormalize180( SHORT2ANGLE( ucmd->angles[i] + ANGLE2SHORT( self->s.angles[i] ) + self->pos3[i] ));
 		}
 
 		// Only clamp if we have a PITCH clamp
@@ -1932,12 +1953,12 @@ void panel_turret_think( gentity_t *self )
 		{
 			if ( self->s.apos.trBase[PITCH] > self->random ) // random is PITCH
 			{
-				self->pos1[PITCH] += ANGLE2SHORT( AngleNormalize180( self->random - self->s.apos.trBase[PITCH]));
+				self->pos3[PITCH] += ANGLE2SHORT( AngleNormalize180( self->random - self->s.apos.trBase[PITCH]));
 				self->s.apos.trBase[PITCH] = self->random;
 			}
 			else if ( self->s.apos.trBase[PITCH] < -self->random )
 			{
-				self->pos1[PITCH] -= ANGLE2SHORT( AngleNormalize180( self->random + self->s.apos.trBase[PITCH]));
+				self->pos3[PITCH] -= ANGLE2SHORT( AngleNormalize180( self->random + self->s.apos.trBase[PITCH]));
 				self->s.apos.trBase[PITCH] = -self->random;
 			}
 		}
@@ -1950,12 +1971,12 @@ void panel_turret_think( gentity_t *self )
 			// Angle clamping -- YAW
 			if (  yawDif > self->radius ) // radius is YAW
 			{
-				self->pos1[YAW] += ANGLE2SHORT( self->radius - yawDif );
+				self->pos3[YAW] += ANGLE2SHORT( self->radius - yawDif );
 				self->s.apos.trBase[YAW] = AngleNormalize180( self->s.angles[YAW] + self->radius );
 			}
 			else if ( yawDif < -self->radius ) // radius is YAW
 			{
-				self->pos1[YAW] -= ANGLE2SHORT( self->radius + yawDif );
+				self->pos3[YAW] -= ANGLE2SHORT( self->radius + yawDif );
 				self->s.apos.trBase[YAW] = AngleNormalize180( self->s.angles[YAW] - self->radius );
 			}
 		}
@@ -1975,6 +1996,10 @@ void panel_turret_think( gentity_t *self )
 
 			cg.overrides.active &= ~CG_OVERRIDE_FOV;
 			cg.overrides.fov = 0; 
+			if ( ucmd->upmove > 0 )
+			{//stop player from doing anything for a half second after
+				player->aimDebounceTime = level.time + 500;
+			}
 
 			// can be drawn
 //			self->s.eFlags &= ~EF_NODRAW;
@@ -2025,11 +2050,17 @@ void panel_turret_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 		return;
 	}
 
+	if ( self->spawnflags & 1 ) // health...presumably the lady luck gun
+	{
+		G_Sound( self, G_SoundIndex( "sound/movers/objects/ladygun_on" ));
+	}
+
 	self->useDebounceTime = level.time + 200;
 
 	// Compensating for the difference between the players view at the time of use and the start angles that the gun object has
-	self->pos1[PITCH] = -activator->client->usercmd.angles[PITCH];
-	self->pos1[YAW] = -activator->client->usercmd.angles[YAW];
+	self->pos3[PITCH]	= -activator->client->usercmd.angles[PITCH];
+	self->pos3[YAW]		= -activator->client->usercmd.angles[YAW];
+	self->pos3[ROLL]	= 0;
 
 	// set me as view entity
 	G_UseTargets2( self, activator, self->target );
@@ -2051,7 +2082,7 @@ void SP_misc_panel_turret( gentity_t *self )
 	G_SpawnInt( "delay", "200", &self->delay );
 	G_SpawnInt( "damage", "50", &self->damage );
 
-	VectorSet( self->pos1, 0.0f, 0.0f, 0.0f );
+	VectorSet( self->pos3, 0.0f, 0.0f, 0.0f );
 
 	if ( self->spawnflags & 1 ) // heatlh
 	{
@@ -2061,6 +2092,7 @@ void SP_misc_panel_turret( gentity_t *self )
 
 		self->max_health = self->health;
 		self->dflags |= DAMAGE_CUSTOM_HUD; // dumb, but we draw a custom hud
+		G_SoundIndex( "sound/movers/objects/ladygun_on" );
 	}
 
 	self->s.modelindex = G_ModelIndex( "models/map_objects/imp_mine/ladyluck_gun.md3" );
@@ -2068,12 +2100,16 @@ void SP_misc_panel_turret( gentity_t *self )
 	self->soundPos1 = G_SoundIndex( "sound/movers/camera_on.mp3" );
 	self->soundPos2 = G_SoundIndex( "sound/movers/camera_off.mp3" );
 
+	G_SoundIndex( "sound/movers/objects/ladygun_fire" );
+
 	G_SetOrigin( self, self->s.origin );
 	G_SetAngles( self, self->s.angles );
 
 	VectorSet( self->mins, -8, -8, -12 );
 	VectorSet( self->maxs, 8, 8, 0 );
 	self->contents = CONTENTS_SOLID;
+
+	self->s.weapon = WP_TURRET;
 
 	RegisterItem( FindItemForWeapon( WP_EMPLACED_GUN ));
 	gi.linkentity( self );

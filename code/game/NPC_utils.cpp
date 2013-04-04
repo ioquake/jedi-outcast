@@ -27,6 +27,7 @@ Added: Uses shootAngles if a NPC has them
 */
 extern void ViewHeightFix(const gentity_t *const ent);
 extern void AddLeanOfs(const gentity_t *const ent, vec3_t point);
+extern void SubtractLeanOfs(const gentity_t *const ent, vec3_t point);
 void CalcEntitySpot ( const gentity_t *ent, const spot_t spot, vec3_t point ) 
 {
 	vec3_t	forward, up, right;
@@ -67,6 +68,10 @@ void CalcEntitySpot ( const gentity_t *ent, const spot_t spot, vec3_t point )
 				point[0] = ent->currentOrigin[0];
 				point[1] = ent->currentOrigin[1];
 			}
+			else if ( !ent->s.number )
+			{
+				SubtractLeanOfs( ent, point );
+			}
 		}
 		else
 		{
@@ -99,6 +104,10 @@ void CalcEntitySpot ( const gentity_t *ent, const spot_t spot, vec3_t point )
 				point[0] = ent->currentOrigin[0];
 				point[1] = ent->currentOrigin[1];
 			}
+			else if ( !ent->s.number )
+			{
+				SubtractLeanOfs( ent, point );
+			}
 			//NOTE: automatically takes leaning into account!
 		}
 		else
@@ -108,7 +117,7 @@ void CalcEntitySpot ( const gentity_t *ent, const spot_t spot, vec3_t point )
 			{
 				point[2] += ent->client->ps.viewheight;
 			}
-			AddLeanOfs ( ent, point );
+			//AddLeanOfs ( ent, point );
 		}
 		break;
 
@@ -178,6 +187,7 @@ Does not include "aim" in it's calculations
 
 FIXME: stop compressing angles into shorts!!!!
 */
+extern cvar_t		*g_timescale;
 qboolean NPC_UpdateAngles ( qboolean doPitch, qboolean doYaw ) 
 {
 #if 1
@@ -225,6 +235,12 @@ qboolean NPC_UpdateAngles ( qboolean doPitch, qboolean doYaw )
 	else
 	{
 		yawSpeed = NPCInfo->stats.yawSpeed;
+	}
+
+	if ( (NPC->client->NPC_class == CLASS_TAVION||NPC->client->NPC_class == CLASS_DESANN) 
+		&& NPC->client->ps.forcePowersActive&(1<<FP_SPEED) )
+	{
+		yawSpeed *= 1.0f/g_timescale->value;
 	}
 	
 	if( doYaw )
@@ -901,6 +917,10 @@ qboolean NPC_ValidEnemy( gentity_t *ent )
 	if ( ent == NULL )
 		return qfalse;
 
+	//Must not be me
+	if ( ent == NPC )
+		return qfalse;
+
 	//Must not be deleted
 	if ( ent->inuse == qfalse )
 		return qfalse;
@@ -1075,7 +1095,7 @@ gentity_t *NPC_PickEnemyExt( qboolean checkAlerts = qfalse )
 
 	if ( checkAlerts )
 	{
-		int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, qtrue, AEL_DISCOVERED );
+		int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, -1, qtrue, AEL_DISCOVERED );
 
 		//There is an event to look at
 		if ( alertEvent >= 0 )
@@ -1232,7 +1252,14 @@ qboolean NPC_FacePosition( vec3_t position, qboolean doPitch )
 	qboolean	facing = qtrue;
 
 	//Get the positions
-	CalcEntitySpot( NPC, SPOT_HEAD_LEAN, muzzle );//SPOT_HEAD
+	if ( NPC->client && NPC->client->NPC_class == CLASS_GALAKMECH )
+	{
+		CalcEntitySpot( NPC, SPOT_WEAPON, muzzle );
+	}
+	else
+	{
+		CalcEntitySpot( NPC, SPOT_HEAD_LEAN, muzzle );//SPOT_HEAD
+	}
 
 	//Find the desired angles
 	vec3_t	angles;
@@ -1392,5 +1419,32 @@ qboolean NPC_CheckLookTarget( gentity_t *self )
 	}
 
 	return qfalse;
+}
+
+/*
+-------------------------
+NPC_CheckCharmed
+-------------------------
+*/
+extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
+void NPC_CheckCharmed( void )
+{
+	if ( NPC->client->playerTeam == TEAM_PLAYER && NPCInfo->charmedTime && NPCInfo->charmedTime < level.time && NPC->client )
+	{//we were charmed, set us back!
+		//NOTE: presumptions here...
+		team_t	savTeam = NPC->client->enemyTeam;
+		NPC->client->enemyTeam = NPC->client->playerTeam;
+		NPC->client->playerTeam = savTeam;
+		NPC->client->leader = NULL;
+		if ( NPCInfo->tempBehavior == BS_FOLLOW_LEADER )
+		{
+			NPCInfo->tempBehavior = BS_DEFAULT;
+		}
+		G_ClearEnemy( NPC );
+		NPCInfo->charmedTime = 0;
+		//say something to let player know you've snapped out of it
+		G_AddVoiceEvent( NPC, Q_irand(EV_CONFUSE1, EV_CONFUSE3), 2000 );
+	}
+
 }
 

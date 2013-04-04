@@ -347,6 +347,11 @@ int BotDoChat(bot_state_t *bs, char *section, int always)
 		return 0;
 	}
 
+	if (trap_Cvar_VariableIntegerValue("sp_language"))
+	{ //no chatting unless English.
+		return 0;
+	}
+
 	if (Q_irand(1, 10) > bs->chatFrequency && !always)
 	{
 		return 0;

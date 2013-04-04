@@ -1,7 +1,9 @@
 #include "tr_local.h"
 
+#ifndef DEDICATED
 #if !defined __TR_WORLDEFFECTS_H
 	#include "tr_WorldEffects.h"
+#endif
 #endif
 
 backEndData_t	*backEndData[SMP_FRAMES];
@@ -16,6 +18,8 @@ static float	s_flipMatrix[16] = {
 	0, 1, 0, 0,
 	0, 0, 0, 1
 };
+
+#ifndef DEDICATED
 
 /*
 ** GL_Bind
@@ -430,6 +434,11 @@ void RB_BeginDrawingView (void) {
 		glState.finishCalled = qtrue;
 	}
 
+	if (!com_developer->integer && r_shadows->integer == 2)
+	{
+		Cvar_Set("cg_shadows", "1");
+	}
+
 	// we will need to change the projection matrix before drawing
 	// 2D images again
 	backEnd.projection2D = qfalse;
@@ -484,10 +493,10 @@ void RB_BeginDrawingView (void) {
 		plane[2] = backEnd.viewParms.portalPlane.normal[2];
 		plane[3] = backEnd.viewParms.portalPlane.dist;
 
-		plane2[0] = DotProduct (backEnd.viewParms.or.axis[0], plane);
-		plane2[1] = DotProduct (backEnd.viewParms.or.axis[1], plane);
-		plane2[2] = DotProduct (backEnd.viewParms.or.axis[2], plane);
-		plane2[3] = DotProduct (plane, backEnd.viewParms.or.origin) - plane[3];
+		plane2[0] = DotProduct (backEnd.viewParms.ori.axis[0], plane);
+		plane2[1] = DotProduct (backEnd.viewParms.ori.axis[1], plane);
+		plane2[2] = DotProduct (backEnd.viewParms.ori.axis[2], plane);
+		plane2[3] = DotProduct (plane, backEnd.viewParms.ori.origin) - plane[3];
 
 		qglLoadMatrixf( s_flipMatrix );
 		qglClipPlane (GL_CLIP_PLANE0, plane2);
@@ -591,11 +600,11 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 				tess.shaderTime = backEnd.refdef.floatTime - tess.shader->timeOffset;
 
 				// set up the transformation matrix
-				R_RotateForEntity( backEnd.currentEntity, &backEnd.viewParms, &backEnd.or );
+				R_RotateForEntity( backEnd.currentEntity, &backEnd.viewParms, &backEnd.ori );
 
 				// set up the dynamic lighting if needed
 				if ( backEnd.currentEntity->needDlights ) {
-					R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.or );
+					R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.ori );
 				}
 
 				if ( backEnd.currentEntity->e.renderfx & RF_NODEPTH ) {
@@ -609,14 +618,14 @@ void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 			} else {
 				backEnd.currentEntity = &tr.worldEntity;
 				backEnd.refdef.floatTime = originalTime;
-				backEnd.or = backEnd.viewParms.world;
+				backEnd.ori = backEnd.viewParms.world;
 				// we have to reset the shaderTime as well otherwise image animations on
 				// the world (like water) continue with the wrong frame
 				tess.shaderTime = backEnd.refdef.floatTime - tess.shader->timeOffset;
-				R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.or );
+				R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.ori );
 			}
 
-			qglLoadMatrixf( backEnd.or.modelMatrix );
+			qglLoadMatrixf( backEnd.ori.modelMatrix );
 
 			//
 			// change depthrange if needed
@@ -1265,3 +1274,4 @@ void RB_RenderThread( void ) {
 	}
 }
 
+#endif //!DEDICATED

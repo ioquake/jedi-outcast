@@ -194,10 +194,3 @@ struct patchCollide_s	*CM_GeneratePatchCollide( int width, int height, vec3_t *p
 void CM_TraceThroughPatchCollide( traceWork_t *tw, const struct patchCollide_s *pc );
 qboolean CM_PositionTestInPatchCollide( traceWork_t *tw, const struct patchCollide_s *pc );
 void CM_ClearLevelPatches( void );
-
-// cm_shader.cpp
-void CM_SetupShaderProperties( void );
-void CM_ShutdownShaderProperties(void);
-CCMShader *CM_GetShaderInfo( const char *name );
-CCMShader *CM_GetShaderInfo( int shaderNum );
-int CM_HandleDamageShader(int sideNum, int damage);

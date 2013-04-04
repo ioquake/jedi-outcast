@@ -1,9 +1,16 @@
 #include "../game/q_shared.h"
 #include "qcommon.h"
+#ifdef _DONETPROFILE_
+#include "INetProfile.h"
+#endif
+
+//#define _NEWHUFFTABLE_		// Build "c:\\netchan.bin"
+//#define _USINGNEWHUFFTABLE_		// Build a new frequency table to cut and paste.
 
 static huffman_t		msgHuff;
 
 static qboolean			msgInit = qfalse;
+static FILE				*fp=0;
 
 int pcount[256];
 
@@ -80,7 +87,6 @@ int	overflows;
 // negative bit values include signs
 void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 	int	i;
-//	FILE*	fp;
 
 	oldsize += bits;
 
@@ -138,7 +144,6 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 			Com_Error(ERR_DROP, "can't read %d bits\n", bits);
 		}
 	} else {
-//		fp = fopen("c:\\netchan.bin", "a");
 		value &= (0xffffffff>>(32-bits));
 		if (bits&7) {
 			int nbits;
@@ -151,13 +156,14 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 		}
 		if (bits) {
 			for(i=0;i<bits;i+=8) {
-//				fwrite(bp, 1, 1, fp);
+#ifdef _NEWHUFFTABLE_
+				fwrite(&value, 1, 1, fp);
+#endif // _NEWHUFFTABLE_
 				Huff_offsetTransmit (&msgHuff.compressor, (value&0xff), msg->data, &msg->bit);
 				value = (value>>8);
 			}
 		}
 		msg->cursize = (msg->bit>>3)+1;
-//		fclose(fp);
 	}
 }
 
@@ -166,8 +172,6 @@ int MSG_ReadBits( msg_t *msg, int bits ) {
 	int			get;
 	qboolean	sgn;
 	int			i, nbits;
-//	FILE*	fp;
-
 	value = 0;
 
 	if ( bits < 0 ) {
@@ -205,13 +209,13 @@ int MSG_ReadBits( msg_t *msg, int bits ) {
 			bits = bits - nbits;
 		}
 		if (bits) {
-//			fp = fopen("c:\\netchan.bin", "a");
 			for(i=0;i<bits;i+=8) {
 				Huff_offsetReceive (msgHuff.decompressor.tree, &get, msg->data, &msg->bit);
-//				fwrite(&get, 1, 1, fp);
+#ifdef _NEWHUFFTABLE_
+				fwrite(&get, 1, 1, fp);
+#endif // _NEWHUFFTABLE_
 				value |= (get<<(i+nbits));
 			}
-//			fclose(fp);
 		}
 		msg->readcount = (msg->bit>>3)+1;
 	}
@@ -427,9 +431,17 @@ char *MSG_ReadString( msg_t *msg ) {
 
 		string[l] = c;
 		l++;
-	} while (l < sizeof(string)-1);
+	} while (l <= sizeof(string)-1);
 	
-	string[l] = 0;
+	// some bonus protection, shouldn't occur cause server doesn't write such things
+	if (l <= sizeof(string)-1)
+	{
+		string[l] = 0;
+	}
+	else
+	{
+		string[sizeof(string)-1] = 0;
+	}
 	
 	return string;
 }
@@ -811,7 +823,7 @@ netField_t	entityStateFields[] =
 { NETF(angles2[1]), 0 },
 { NETF(eType), 8 },
 { NETF(torsoAnim), 16 },		// Maximum number of animation sequences is 2048.  Top bit is reserved for the togglebit
-{ NETF(forceFrame), 32 },
+{ NETF(forceFrame), 16 }, //if you have over 65536 frames, then this will explode. Of course if you have that many things then lots of things will probably explode.
 { NETF(eventParm), 8 },
 { NETF(legsAnim), 16 },			// Maximum number of animation sequences is 2048.  Top bit is reserved for the togglebit
 { NETF(groundEntityNum), GENTITYNUM_BITS },
@@ -819,14 +831,14 @@ netField_t	entityStateFields[] =
 { NETF(eFlags), 32 },
 { NETF(bolt1), 8 },
 { NETF(bolt2), GENTITYNUM_BITS },
-{ NETF(trickedentindex), 32 }, //See note in PSF
-{ NETF(trickedentindex2), 32 },
-{ NETF(trickedentindex3), 32 },
-{ NETF(trickedentindex4), 32 },
+{ NETF(trickedentindex), 16 }, //See note in PSF
+{ NETF(trickedentindex2), 16 },
+{ NETF(trickedentindex3), 16 },
+{ NETF(trickedentindex4), 16 },
 { NETF(speed), 0 },
 { NETF(fireflag), 2 },
 { NETF(genericenemyindex), 32 }, //Do not change to GENTITYNUM_BITS, used as a time offset for seeker
-{ NETF(activeForcePass), 16 },
+{ NETF(activeForcePass), 6 },
 { NETF(emplacedOwner), 32 }, //As above, also used as a time value (for electricity render time)
 { NETF(otherEntityNum), GENTITYNUM_BITS },
 { NETF(weapon), 8 },
@@ -842,7 +854,7 @@ netField_t	entityStateFields[] =
 { NETF(teamowner), 8 },
 { NETF(shouldtarget), 1 },
 { NETF(powerups), 16 },
-{ NETF(modelGhoul2), 8 },
+{ NETF(modelGhoul2), 4 },
 { NETF(g2radius), 8 },
 { NETF(modelindex), -8 },
 { NETF(otherEntityNum2), GENTITYNUM_BITS },
@@ -1059,10 +1071,17 @@ void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to,
 
 	to->number = number;
 
+#ifdef _DONETPROFILE_
+	int startBytes,endBytes;
+#endif
+
 	for ( i = 0, field = entityStateFields ; i < lc ; i++, field++ ) {
 		fromF = (int *)( (byte *)from + field->offset );
 		toF = (int *)( (byte *)to + field->offset );
 
+#ifdef _DONETPROFILE_
+		startBytes=msg->readcount;
+#endif
 		if ( ! MSG_ReadBits( msg, 1 ) ) {
 			// no change
 			*toF = *fromF;
@@ -1102,6 +1121,10 @@ void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to,
 			}
 //			pcount[i]++;
 		}
+#ifdef _DONETPROFILE_
+		endBytes=msg->readcount;
+		ClReadProf().AddField(field->name,endBytes-startBytes);
+#endif
 	}
 	for ( i = lc, field = &entityStateFields[lc] ; i < numFields ; i++, field++ ) {
 		fromF = (int *)( (byte *)from + field->offset );
@@ -1119,7 +1142,6 @@ void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to,
 		Com_Printf( " (%i bits)\n", endBit - startBit  );
 	}
 }
-
 
 /*
 ============================================================================
@@ -1171,6 +1193,7 @@ netField_t	playerStateFields[] =
 { PSF(damageYaw), 8 },
 { PSF(damagePitch), 8 },
 { PSF(damageCount), 8 },
+{ PSF(damageType), 2 },
 { PSF(generic1), 8 },
 { PSF(pm_type), 8 },					
 { PSF(delta_angles[0]), 16 },
@@ -1190,10 +1213,10 @@ netField_t	playerStateFields[] =
 { PSF(zoomFov), 8 },
 
 { PSF(fd.forcePowersActive), 32 },
-{ PSF(fd.forceMindtrickTargetIndex), 32 }, //NOTE: Not just an index, used as a (1 << val) bitflag for up to 16 clients
-{ PSF(fd.forceMindtrickTargetIndex2), 32 }, //NOTE: Not just an index, used as a (1 << val) bitflag for up to 16 clients
-{ PSF(fd.forceMindtrickTargetIndex3), 32 }, //NOTE: Not just an index, used as a (1 << val) bitflag for up to 16 clients
-{ PSF(fd.forceMindtrickTargetIndex4), 32 }, //NOTE: Not just an index, used as a (1 << val) bitflag for up to 16 clients
+{ PSF(fd.forceMindtrickTargetIndex), 16 }, //NOTE: Not just an index, used as a (1 << val) bitflag for up to 16 clients
+{ PSF(fd.forceMindtrickTargetIndex2), 16 }, //NOTE: Not just an index, used as a (1 << val) bitflag for up to 16 clients
+{ PSF(fd.forceMindtrickTargetIndex3), 16 }, //NOTE: Not just an index, used as a (1 << val) bitflag for up to 16 clients
+{ PSF(fd.forceMindtrickTargetIndex4), 16 }, //NOTE: Not just an index, used as a (1 << val) bitflag for up to 16 clients
 { PSF(fd.forceJumpZStart), 0 },
 { PSF(fd.forcePowerSelected), 8 },
 { PSF(fd.forcePowersKnown), 32 },
@@ -1203,7 +1226,7 @@ netField_t	playerStateFields[] =
 { PSF(fd.forcePowerLevel[FP_LEVITATION]), 2 }, //unfortunately we need this for fall damage calculation (client needs to know the distance for the fall noise)
 { PSF(fd.forcePowerLevel[FP_SEE]), 2 }, //needed for knowing when to display players through walls
 { PSF(genericEnemyIndex), 32 }, //NOTE: This isn't just an index all the time, it's often used as a time value, and thus needs 32 bits
-{ PSF(activeForcePass), 16 },
+{ PSF(activeForcePass), 6 },
 { PSF(hasDetPackPlanted), 1 },
 { PSF(emplacedIndex), GENTITYNUM_BITS },
 { PSF(fd.forceRageRecoveryTime), 32 },
@@ -1225,9 +1248,9 @@ netField_t	playerStateFields[] =
 { PSF(saberCanThrow), 1 },
 { PSF(forceHandExtend), 8 },
 { PSF(forceDodgeAnim), 16 },
-{ PSF(fd.saberAnimLevel), 4 },
-{ PSF(fd.saberDrawAnimLevel), 4 },
-{ PSF(saberAttackChainCount), 32 },
+{ PSF(fd.saberAnimLevel), 2 },
+{ PSF(fd.saberDrawAnimLevel), 2 },
+{ PSF(saberAttackChainCount), 4 },
 { PSF(saberHolstered), 1 },
 { PSF(usingATST), 1 },
 { PSF(atstAltFire), 1 },
@@ -1238,7 +1261,7 @@ netField_t	playerStateFields[] =
 
 { PSF(saberLockTime), 32 },
 { PSF(saberLockEnemy), GENTITYNUM_BITS },
-{ PSF(saberLockFrame), 32 },
+{ PSF(saberLockFrame), 16 },
 { PSF(saberLockAdvance), 1 },
 
 { PSF(inAirAnim), 1 }, //just transmit it for the sake of knowing right when on the client to play a land anim, it's only 1 bit
@@ -1450,10 +1473,17 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 	numFields = sizeof( playerStateFields ) / sizeof( playerStateFields[0] );
 	lc = MSG_ReadByte(msg);
 
+#ifdef _DONETPROFILE_
+	int startBytes,endBytes;
+#endif
+
 	for ( i = 0, field = playerStateFields ; i < lc ; i++, field++ ) {
 		fromF = (int *)( (byte *)from + field->offset );
 		toF = (int *)( (byte *)to + field->offset );
 
+#ifdef _DONETPROFILE_
+		startBytes=msg->readcount;
+#endif
 		if ( ! MSG_ReadBits( msg, 1 ) ) {
 			// no change
 			*toF = *fromF;
@@ -1484,6 +1514,10 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 				}
 			}
 		}
+#ifdef _DONETPROFILE_
+		endBytes=msg->readcount;
+		ClReadProf().AddField(field->name,endBytes-startBytes);
+#endif
 	}
 	for ( i=lc,field = &playerStateFields[lc];i<numFields; i++, field++) {
 		fromF = (int *)( (byte *)from + field->offset );
@@ -1492,8 +1526,10 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 		*toF = *fromF;
 	}
 
-
 	// read the arrays
+#ifdef _DONETPROFILE_
+		startBytes=msg->readcount;
+#endif
 	if (MSG_ReadBits( msg, 1 ) ) {
 		// parse stats
 		if ( MSG_ReadBits( msg, 1 ) ) {
@@ -1505,8 +1541,15 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 				}
 			}
 		}
+#ifdef _DONETPROFILE_
+		endBytes=msg->readcount;
+		ClReadProf().AddField("PS_STATS",endBytes-startBytes);
+#endif
 
 		// parse persistant stats
+#ifdef _DONETPROFILE_
+		startBytes=msg->readcount;
+#endif
 		if ( MSG_ReadBits( msg, 1 ) ) {
 			LOG("PS_PERSISTANT");
 			bits = MSG_ReadShort (msg);
@@ -1516,8 +1559,15 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 				}
 			}
 		}
+#ifdef _DONETPROFILE_
+		endBytes=msg->readcount;
+		ClReadProf().AddField("PS_PERSISTANT",endBytes-startBytes);
+#endif
 
 		// parse ammo
+#ifdef _DONETPROFILE_
+		startBytes=msg->readcount;
+#endif
 		if ( MSG_ReadBits( msg, 1 ) ) {
 			LOG("PS_AMMO");
 			bits = MSG_ReadShort (msg);
@@ -1527,8 +1577,15 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 				}
 			}
 		}
+#ifdef _DONETPROFILE_
+		endBytes=msg->readcount;
+		ClReadProf().AddField("PS_AMMO",endBytes-startBytes);
+#endif
 
 		// parse powerups
+#ifdef _DONETPROFILE_
+		startBytes=msg->readcount;
+#endif
 		if ( MSG_ReadBits( msg, 1 ) ) {
 			LOG("PS_POWERUPS");
 			bits = MSG_ReadShort (msg);
@@ -1539,6 +1596,10 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 			}
 		}
 	}
+#ifdef _DONETPROFILE_
+		endBytes=msg->readcount;
+		ClReadProf().AddField("PS_POWERUPS",endBytes-startBytes);
+#endif
 
 	if ( print ) {
 		if ( msg->bit == 0 ) {
@@ -1550,6 +1611,270 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 	}
 }
 
+/*
+// New data gathered to tune Q3 to JK2MP. Takes longer to crunch and gain was minimal.
+int msg_hData[256] = 
+{
+	3163878,		// 0
+	473992,			// 1
+	564019,			// 2
+	136497,			// 3
+	129559,			// 4
+	283019,			// 5
+	75812,			// 6
+	179836,			// 7
+	85958,			// 8
+	168542,			// 9
+	78898,			// 10
+	82007,			// 11
+	48613,			// 12
+	138741,			// 13
+	35482,			// 14
+	47433,			// 15
+	65214,			// 16
+	51636,			// 17
+	63741,			// 18
+	52823,			// 19
+	42464,			// 20
+	44495,			// 21
+	45347,			// 22
+	40260,			// 23
+	59168,			// 24
+	44990,			// 25
+	52957,			// 26
+	42700,			// 27
+	42414,			// 28
+	36451,			// 29
+	45653,			// 30
+	44667,			// 31
+	125336,			// 32
+	38435,			// 33
+	53658,			// 34
+	42621,			// 35
+	40932,			// 36
+	33409,			// 37
+	35470,			// 38
+	40769,			// 39
+	33813,			// 40
+	32480,			// 41
+	33664,			// 42
+	32303,			// 43
+	32394,			// 44
+	34822,			// 45
+	37724,			// 46
+	48016,			// 47
+	94212,			// 48
+	53774,			// 49
+	54522,			// 50
+	44044,			// 51
+	42800,			// 52
+	47597,			// 53
+	29742,			// 54
+	30237,			// 55
+	34291,			// 56
+	106496,			// 57
+	20963,			// 58
+	19342,			// 59
+	20603,			// 60
+	19568,			// 61
+	23013,			// 62
+	23939,			// 63
+	44995,			// 64
+	37128,			// 65
+	44264,			// 66
+	46636,			// 67
+	56400,			// 68
+	32746,			// 69
+	23458,			// 70
+	29702,			// 71
+	25305,			// 72
+	20159,			// 73
+	19645,			// 74
+	20593,			// 75
+	21729,			// 76
+	19362,			// 77
+	24760,			// 78
+	22788,			// 79
+	25085,			// 80
+	21074,			// 81
+	97271,			// 82
+	22048,			// 83
+	24131,			// 84
+	19287,			// 85
+	20296,			// 86
+	20131,			// 87
+	86477,			// 88
+	25352,			// 89
+	20872,			// 90
+	21382,			// 91
+	38744,			// 92
+	137256,			// 93
+	26025,			// 94
+	22243,			// 95
+	23974,			// 96
+	43305,			// 97
+	28191,			// 98
+	34638,			// 99
+	37613,			// 100
+	46003,			// 101
+	31415,			// 102
+	25746,			// 103
+	28338,			// 104
+	34689,			// 105
+	24948,			// 106
+	27110,			// 107
+	39950,			// 108
+	32793,			// 109
+	42639,			// 110
+	47883,			// 111
+	37439,			// 112
+	23875,			// 113
+	36092,			// 114
+	46471,			// 115
+	37392,			// 116
+	33063,			// 117
+	29604,			// 118
+	42140,			// 119
+	61745,			// 120
+	45618,			// 121
+	51779,			// 122
+	49684,			// 123
+	57644,			// 124
+	65021,			// 125
+	67318,			// 126
+	88197,			// 127
+	258378,			// 128
+	76806,			// 129
+	72430,			// 130
+	64936,			// 131
+	62196,			// 132
+	56461,			// 133
+	166474,			// 134
+	70036,			// 135
+	40735,			// 136
+	29598,			// 137
+	26966,			// 138
+	26093,			// 139
+	25853,			// 140
+	26065,			// 141
+	26176,			// 142
+	26777,			// 143
+	26684,			// 144
+	23880,			// 145
+	22932,			// 146
+	24566,			// 147
+	24305,			// 148
+	26399,			// 149
+	23487,			// 150
+	24485,			// 151
+	25956,			// 152
+	26065,			// 153
+	26151,			// 154
+	23111,			// 155
+	23900,			// 156
+	22128,			// 157
+	24096,			// 158
+	20863,			// 159
+	24298,			// 160
+	22572,			// 161
+	22364,			// 162
+	20813,			// 163
+	21414,			// 164
+	21570,			// 165
+	20799,			// 166
+	20971,			// 167
+	22485,			// 168
+	20397,			// 169
+	88096,			// 170
+	17802,			// 171
+	20091,			// 172
+	84250,			// 173
+	21953,			// 174
+	21406,			// 175
+	23401,			// 176
+	19546,			// 177
+	19180,			// 178
+	18843,			// 179
+	20673,			// 180
+	19918,			// 181
+	20640,			// 182
+	20326,			// 183
+	21174,			// 184
+	21736,			// 185
+	22511,			// 186
+	20290,			// 187
+	23303,			// 188
+	19800,			// 189
+	25465,			// 190
+	22801,			// 191
+	28831,			// 192
+	26663,			// 193
+	36485,			// 194
+	45768,			// 195
+	49795,			// 196
+	36026,			// 197
+	24119,			// 198
+	18543,			// 199
+	19261,			// 200
+	17137,			// 201
+	19435,			// 202
+	23672,			// 203
+	22988,			// 204
+	18107,			// 205
+	18734,			// 206
+	19847,			// 207
+	101897,			// 208
+	18405,			// 209
+	21260,			// 210
+	17818,			// 211
+	18971,			// 212
+	19317,			// 213
+	19112,			// 214
+	19395,			// 215
+	20688,			// 216
+	18438,			// 217
+	18945,			// 218
+	29309,			// 219
+	19666,			// 220
+	18735,			// 221
+	87691,			// 222
+	18478,			// 223
+	22634,			// 224
+	20984,			// 225
+	20079,			// 226
+	18624,			// 227
+	20045,			// 228
+	18369,			// 229
+	19014,			// 230
+	83179,			// 231
+	20899,			// 232
+	17854,			// 233
+	19332,			// 234
+	17875,			// 235
+	28647,			// 236
+	17465,			// 237
+	20277,			// 238
+	18994,			// 239
+	22192,			// 240
+	17443,			// 241
+	20243,			// 242
+	28174,			// 243
+	134871,			// 244
+	17753,			// 245
+	18924,			// 246
+	18281,			// 247
+	18937,			// 248
+	17419,			// 249
+	20679,			// 250
+	17865,			// 251
+	17984,			// 252
+	58615,			// 253
+	35506,			// 254
+	123499,			// 255
+};
+*/
+
+// Q3 TA freq. table.
 int msg_hData[256] = {
 250315,			// 0
 41193,			// 1
@@ -1809,9 +2134,15 @@ int msg_hData[256] = {
 13504,			// 255
 };
 
+#ifndef _USINGNEWHUFFTABLE_
+
 void MSG_initHuffman() {
 	int i,j;
 
+#ifdef _NEWHUFFTABLE_
+	fp=fopen("c:\\netchan.bin", "a");
+#endif // _NEWHUFFTABLE_
+	
 	msgInit = qtrue;
 	Huff_Init(&msgHuff);
 	for(i=0;i<256;i++) {
@@ -1822,8 +2153,10 @@ void MSG_initHuffman() {
 	}
 }
 
-/*
-void MSG_NUinitHuffman() {
+#else
+
+void MSG_initHuffman() {
+
 	byte	*data;
 	int		size, i, ch;
 	int		array[256];
@@ -1832,7 +2165,7 @@ void MSG_NUinitHuffman() {
 
 	Huff_Init(&msgHuff);
 	// load it in
-	size = FS_ReadFile( "netchan/netchan.bin", (void **)&data );
+	size = FS_ReadFile( "netchan\\netchan.bin", (void **)&data );
 
 	for(i=0;i<256;i++) {
 		array[i] = 0;
@@ -1855,6 +2188,17 @@ void MSG_NUinitHuffman() {
 	FS_FreeFile( data );
 	Cbuf_AddText( "condump dump.txt\n" );
 }
-*/
+
+#endif _USINGNEWHUFFTABLE_
+
+void MSG_shutdownHuffman()
+{
+#ifdef _NEWHUFFTABLE_
+	if(fp)
+	{
+		fclose(fp);
+	}
+#endif // _NEWHUFFTABLE_
+}
 
 //===========================================================================

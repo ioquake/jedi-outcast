@@ -2,7 +2,7 @@
 
 #include "tr_local.h"
 
-#include "tr_quicksprite.h"
+#include "tr_QuickSprite.h"
 
 /*
 
@@ -787,7 +787,7 @@ static void ComputeColors( shaderStage_t *pStage, int forceRGBGen )
 				float len;
 				vec3_t v;
 
-				VectorSubtract( tess.xyz[i], backEnd.viewParms.or.origin, v );
+				VectorSubtract( tess.xyz[i], backEnd.viewParms.ori.origin, v );
 				len = VectorLength( v );
 
 				len /= tess.shader->portalRange;
@@ -1005,7 +1005,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input )
 			if ( backEnd.currentEntity->e.renderfx & RF_DISINTEGRATE1 )
 			{
 				// we want to be able to rip a hole in the thing being disintegrated, and by doing the depth-testing it avoids some kinds of artefacts, but will probably introduce others?
-				stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHMASK_TRUE | GLS_DEPTHTEST_DISABLE;
+				stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHMASK_TRUE | GLS_ATEST_GE_C0;
 			}
 
 			if ( backEnd.currentEntity->e.renderfx & RF_RGB_TINT )

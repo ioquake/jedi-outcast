@@ -32,8 +32,20 @@ extern gentity_t *droppedBlueFlag;
 #define MAX_SENTRY_DISTANCE			256
 
 // For more than four players, adjust the respawn times, up to 1/4.
-int adjustRespawnTime(float respawnTime)
+int adjustRespawnTime(float preRespawnTime, int itemType, int itemTag)
 {
+	float respawnTime = preRespawnTime;
+
+	if (itemType == IT_WEAPON)
+	{
+		if (itemTag == WP_THERMAL ||
+			itemTag == WP_TRIP_MINE ||
+			itemTag == WP_DET_PACK)
+		{ //special case for these, use ammo respawn rate
+			respawnTime = RESPAWN_AMMO;
+		}
+	}
+
 	if (!g_adaptRespawn.integer)
 	{
 		return((int)respawnTime);
@@ -670,6 +682,57 @@ void pas_think( gentity_t *ent )
 	vec3_t		enemyDir, org;
 	vec3_t		frontAngles, backAngles;
 	vec3_t		desiredAngles;
+	int			iEntityList[MAX_GENTITIES];
+	int			numListedEntities;
+	int			i = 0;
+	qboolean	clTrapped = qfalse;
+	vec3_t		testMins, testMaxs;
+
+	testMins[0] = ent->r.currentOrigin[0] + ent->r.mins[0]+4;
+	testMins[1] = ent->r.currentOrigin[1] + ent->r.mins[1]+4;
+	testMins[2] = ent->r.currentOrigin[2] + ent->r.mins[2]+4;
+
+	testMaxs[0] = ent->r.currentOrigin[0] + ent->r.maxs[0]-4;
+	testMaxs[1] = ent->r.currentOrigin[1] + ent->r.maxs[1]-4;
+	testMaxs[2] = ent->r.currentOrigin[2] + ent->r.maxs[2]-4;
+
+	numListedEntities = trap_EntitiesInBox( testMins, testMaxs, iEntityList, MAX_GENTITIES );
+
+	while (i < numListedEntities)
+	{
+		if (iEntityList[i] < MAX_CLIENTS)
+		{ //client stuck inside me. go nonsolid.
+			int clNum = iEntityList[i];
+
+			numListedEntities = trap_EntitiesInBox( g_entities[clNum].r.absmin, g_entities[clNum].r.absmax, iEntityList, MAX_GENTITIES );
+
+			i = 0;
+			while (i < numListedEntities)
+			{
+				if (iEntityList[i] == ent->s.number)
+				{
+					clTrapped = qtrue;
+					break;
+				}
+				i++;
+			}
+			break;
+		}
+
+		i++;
+	}
+
+	if (clTrapped)
+	{
+		ent->r.contents = 0;
+		ent->s.fireflag = 0;
+		ent->nextthink = level.time + FRAMETIME;
+		return;
+	}
+	else
+	{
+		ent->r.contents = CONTENTS_SOLID;
+	}
 
 	if (!g_entities[ent->boltpoint3].inuse || !g_entities[ent->boltpoint3].client ||
 		g_entities[ent->boltpoint3].client->sess.sessionTeam != ent->boltpoint2)
@@ -679,7 +742,7 @@ void pas_think( gentity_t *ent )
 		return;
 	}
 
-	G_RunObject(ent);
+//	G_RunObject(ent);
 
 	if ( !ent->damage )
 	{
@@ -822,7 +885,7 @@ void pas_think( gentity_t *ent )
 		{
 			pas_fire( ent );
 			ent->s.fireflag = 1;
-			ent->attackDebounceTime = level.time + 100;
+			ent->attackDebounceTime = level.time + 200;
 		}
 		else
 		{
@@ -1055,6 +1118,13 @@ int Pickup_Powerup( gentity_t *ent, gentity_t *other ) {
 
 	other->client->ps.powerups[ent->item->giTag] += quantity * 1000;
 
+	if (ent->item->giTag == PW_YSALAMIRI)
+	{
+		other->client->ps.powerups[PW_FORCE_ENLIGHTENED_LIGHT] = 0;
+		other->client->ps.powerups[PW_FORCE_ENLIGHTENED_DARK] = 0;
+		other->client->ps.powerups[PW_FORCE_BOON] = 0;
+	}
+
 	// give any nearby players a "denied" anti-reward
 	for ( i = 0 ; i < level.maxclients ; i++ ) {
 		vec3_t		delta;
@@ -1114,7 +1184,7 @@ int Pickup_Holdable( gentity_t *ent, gentity_t *other ) {
 
 	G_LogWeaponItem(other->s.number, ent->item->giTag);
 
-	return adjustRespawnTime(RESPAWN_HOLDABLE);
+	return adjustRespawnTime(RESPAWN_HOLDABLE, ent->item->giType, ent->item->giTag);
 }
 
 
@@ -1140,7 +1210,7 @@ int Pickup_Ammo (gentity_t *ent, gentity_t *other)
 
 	Add_Ammo (other, ent->item->giTag, quantity);
 
-	return adjustRespawnTime(RESPAWN_AMMO);
+	return adjustRespawnTime(RESPAWN_AMMO, ent->item->giType, ent->item->giTag);
 }
 
 //======================================================================
@@ -1194,10 +1264,10 @@ int Pickup_Weapon (gentity_t *ent, gentity_t *other) {
 	// team deathmatch has slow weapon respawns
 	if ( g_gametype.integer == GT_TEAM ) 
 	{
-		return adjustRespawnTime(RESPAWN_TEAM_WEAPON);
+		return adjustRespawnTime(RESPAWN_TEAM_WEAPON, ent->item->giType, ent->item->giTag);
 	}
 
-	return adjustRespawnTime(g_weaponRespawn.integer);
+	return adjustRespawnTime(g_weaponRespawn.integer, ent->item->giType, ent->item->giTag);
 }
 
 
@@ -1231,7 +1301,7 @@ int Pickup_Health (gentity_t *ent, gentity_t *other) {
 		return RESPAWN_MEGAHEALTH;
 	}
 
-	return adjustRespawnTime(RESPAWN_HEALTH);
+	return adjustRespawnTime(RESPAWN_HEALTH, ent->item->giType, ent->item->giTag);
 }
 
 //======================================================================
@@ -1244,7 +1314,7 @@ int Pickup_Armor( gentity_t *ent, gentity_t *other )
 		other->client->ps.stats[STAT_ARMOR] = other->client->ps.stats[STAT_MAX_HEALTH] * ent->item->giTag;
 	}
 
-	return adjustRespawnTime(RESPAWN_ARMOR);
+	return adjustRespawnTime(RESPAWN_ARMOR, ent->item->giType, ent->item->giTag);
 }
 
 //======================================================================
@@ -1372,6 +1442,28 @@ void Touch_Item (gentity_t *ent, gentity_t *other, trace_t *trace) {
 		break;
 	case IT_AMMO:
 		respawn = Pickup_Ammo(ent, other);
+		if (ent->item->giTag == AMMO_THERMAL || ent->item->giTag == AMMO_TRIPMINE || ent->item->giTag == AMMO_DETPACK)
+		{
+			int weapForAmmo = 0;
+
+			if (ent->item->giTag == AMMO_THERMAL)
+			{
+				weapForAmmo = WP_THERMAL;
+			}
+			else if (ent->item->giTag == AMMO_TRIPMINE)
+			{
+				weapForAmmo = WP_TRIP_MINE;
+			}
+			else
+			{
+				weapForAmmo = WP_DET_PACK;
+			}
+
+			if (other && other->client && other->client->ps.ammo[weaponData[weapForAmmo].ammoIndex] > 0 )
+			{
+				other->client->ps.stats[STAT_WEAPONS] |= (1 << weapForAmmo);
+			}
+		}
 //		predict = qfalse;
 		predict = qtrue;
 		break;
@@ -1419,7 +1511,7 @@ void Touch_Item (gentity_t *ent, gentity_t *other, trace_t *trace) {
 	}
 
 	// powerup pickups are global broadcasts
-	if ( ent->item->giType == IT_POWERUP || ent->item->giType == IT_TEAM) {
+	if ( /*ent->item->giType == IT_POWERUP ||*/ ent->item->giType == IT_TEAM) {
 		// if we want the global sound to play
 		if (!ent->speed) {
 			gentity_t	*te;
@@ -1631,14 +1723,24 @@ free fall from their spawn points
 void FinishSpawningItem( gentity_t *ent ) {
 	trace_t		tr;
 	vec3_t		dest;
+	int			wDisable = 0;
 //	gitem_t		*item;
 
 //	VectorSet( ent->r.mins, -ITEM_RADIUS, -ITEM_RADIUS, -ITEM_RADIUS );
 //	VectorSet( ent->r.maxs, ITEM_RADIUS, ITEM_RADIUS, ITEM_RADIUS );
 
+	if (g_gametype.integer == GT_TOURNAMENT)
+	{
+		wDisable = g_duelWeaponDisable.integer;
+	}
+	else
+	{
+		wDisable = g_weaponDisable.integer;
+	}
+
 	if (ent->item->giType == IT_WEAPON &&
-		g_weaponDisable.integer &&
-		(g_weaponDisable.integer & (1 << ent->item->giTag)))
+		wDisable &&
+		(wDisable & (1 << ent->item->giTag)))
 	{
 		if (g_gametype.integer != GT_JEDIMASTER)
 		{
@@ -1675,6 +1777,33 @@ void FinishSpawningItem( gentity_t *ent ) {
 		{
 			G_FreeEntity(ent);
 			return;
+		}
+	}
+
+	if (g_gametype.integer == GT_HOLOCRON)
+	{
+		if (ent->item->giType == IT_POWERUP)
+		{
+			if (ent->item->giTag == PW_FORCE_ENLIGHTENED_LIGHT ||
+				ent->item->giTag == PW_FORCE_ENLIGHTENED_DARK)
+			{
+				G_FreeEntity(ent);
+				return;
+			}
+		}
+	}
+
+	if (g_forcePowerDisable.integer)
+	{ //if force powers disabled, don't add force powerups
+		if (ent->item->giType == IT_POWERUP)
+		{
+			if (ent->item->giTag == PW_FORCE_ENLIGHTENED_LIGHT ||
+				ent->item->giTag == PW_FORCE_ENLIGHTENED_DARK ||
+				ent->item->giTag == PW_FORCE_BOON)
+			{
+				G_FreeEntity(ent);
+				return;
+			}
 		}
 	}
 
@@ -1806,11 +1935,11 @@ void G_CheckTeamItems( void ) {
 		gitem_t	*item;
 
 		// check for the two flags
-		item = BG_FindItem( "Red Flag" );
+		item = BG_FindItem( "team_CTF_redflag" );
 		if ( !item || !itemRegistered[ item - bg_itemlist ] ) {
 			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_redflag in map" );
 		}
-		item = BG_FindItem( "Blue Flag" );
+		item = BG_FindItem( "team_CTF_blueflag" );
 		if ( !item || !itemRegistered[ item - bg_itemlist ] ) {
 			G_Printf( S_COLOR_YELLOW "WARNING: No team_CTF_blueflag in map" );
 		}
@@ -1940,6 +2069,15 @@ void G_BounceItem( gentity_t *ent, trace_t *trace ) {
 	// cut the velocity to keep from bouncing forever
 	VectorScale( ent->s.pos.trDelta, ent->physicsBounce, ent->s.pos.trDelta );
 
+	if ((ent->s.weapon == WP_DET_PACK && ent->s.eType == ET_GENERAL && ent->physicsObject))
+	{ //detpacks only
+		if (ent->touch)
+		{
+			ent->touch(ent, &g_entities[trace->entityNum], trace);
+			return;
+		}
+	}
+
 	// check for stop
 	if ( trace->plane.normal[2] > 0 && ent->s.pos.trDelta[2] < 40 ) {
 		trace->endpos[2] += 1.0;	// make sure it is off ground
@@ -1952,6 +2090,15 @@ void G_BounceItem( gentity_t *ent, trace_t *trace ) {
 	VectorAdd( ent->r.currentOrigin, trace->plane.normal, ent->r.currentOrigin);
 	VectorCopy( ent->r.currentOrigin, ent->s.pos.trBase );
 	ent->s.pos.trTime = level.time;
+
+	if (ent->s.eType == ET_HOLOCRON ||
+		(ent->s.shouldtarget && ent->s.eType == ET_GENERAL && ent->physicsObject))
+	{ //holocrons and sentry guns
+		if (ent->touch)
+		{
+			ent->touch(ent, &g_entities[trace->entityNum], trace);
+		}
+	}
 }
 
 

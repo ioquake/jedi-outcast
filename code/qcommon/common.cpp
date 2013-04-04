@@ -5,6 +5,11 @@
 #include "../qcommon/sstring.h"	// to get Gil's string class, because MS's doesn't compile properly in here
 #include "stv_version.h"
 
+#ifdef _WIN32
+#include <windows.h>	// for Sleep for Z_Malloc recovery attempy
+#endif
+
+
 #define	MAXPRINTMSG	4096
 
 #define MAX_NUM_ARGVS	50
@@ -51,7 +56,7 @@ cvar_t	*com_logfile;		// 1 = buffer log, 2 = flush after each print
 cvar_t	*com_showtrace;
 cvar_t	*com_version;
 cvar_t	*com_buildScript;	// for automated data building scripts
-cvar_t	*com_FirstTime;
+//cvar_t	*com_FirstTime;
 cvar_t	*cl_paused;
 cvar_t	*sv_paused;
 cvar_t	*com_skippingcin;
@@ -233,9 +238,11 @@ void QDECL Com_Error( int code, const char *fmt, ... ) {
 	va_end (argptr);	
 
 	if ( code != ERR_DISCONNECT ) {
+		Cvar_Get("com_errorMessage", "", CVAR_ROM);	//give com_errorMessage a default so it won't come back to life after a resetDefaults
 		Cvar_Set("com_errorMessage", com_errorMessage);
 	}
 
+	SG_Shutdown();				// close any file pointers
 	if ( code == ERR_DISCONNECT ) {
 		CL_Disconnect();
 		CL_FlushMemory();
@@ -244,7 +251,6 @@ void QDECL Com_Error( int code, const char *fmt, ... ) {
 		throw ("DISCONNECTED\n");
 	} else if ( code == ERR_DROP ) {
 		// If loading/saving caused the crash/error - delete the temp file
-		SG_Shutdown();				// close any file pointers
 		SG_WipeSavegame("current");	// delete file
 
 		SV_Shutdown (va("Server crashed: %s\n",  com_errorMessage));
@@ -738,6 +744,13 @@ void *Z_Malloc(int iSize, memtag_t eTag, qboolean bZeroit)
 	zoneHeader_t *pMemory = NULL;
 	while (pMemory == NULL)
 	{
+		#ifdef _WIN32
+		if (gbMemFreeupOccured)
+		{
+			Sleep(100);	// sleep for 1/10 of a second, so Windows has a chance to shuffle mem to de-swiss-cheese it
+		}
+		#endif
+
 		pMemory = (zoneHeader_t *) malloc ( iRealSize );
 		if (!pMemory)
 		{
@@ -1863,7 +1876,7 @@ void Com_Init( char *commandLine ) {
 		com_skippingcin = Cvar_Get ("skippingCinematic", "0", CVAR_ROM);
 		com_buildScript = Cvar_Get( "com_buildScript", "0", 0 );
 		
-		com_FirstTime = Cvar_Get( "com_FirstTime", "0", CVAR_ARCHIVE);
+//		com_FirstTime = Cvar_Get( "com_FirstTime", "0", CVAR_ARCHIVE);
 		if ( com_developer && com_developer->integer ) {
 			Cmd_AddCommand ("error", Com_Error_f);
 			Cmd_AddCommand ("crash", Com_Crash_f );
@@ -1877,7 +1890,7 @@ void Com_Init( char *commandLine ) {
 	
 		Sys_Init();	// this also detects CPU type, so I can now do this CPU check below...
 
-		if( !com_FirstTime->integer )	// special request to detect and use top-settings for Intel Williamette chip...	
+/*		if( !com_FirstTime->integer )	// special request to detect and use top-settings for Intel Williamette chip...	
 		{
 			Cvar_Set( "com_FirstTime", "1" );	// only do this once			
 			//
@@ -1890,7 +1903,7 @@ void Com_Init( char *commandLine ) {
 //				Cbuf_Execute ();
 			}
 		}
-
+*/
 		Netchan_Init( Com_Milliseconds() & 0xffff );	// pick a port value that should be nice and random
 //	VM_Init();
 		SV_Init();
@@ -1919,6 +1932,16 @@ void Com_Init( char *commandLine ) {
 		}
 		com_fullyInitialized = qtrue;
 		Com_Printf ("--- Common Initialization Complete ---\n");
+
+//HACKERY FOR THE DEUTSCH		
+		if ( (Cvar_VariableIntegerValue("ui_iscensored") == 1) 	//if this was on before, set it again so it gets its flags
+			|| sp_language->integer == SP_LANGUAGE_GERMAN )
+		{
+			Cvar_Get( "ui_iscensored",   "1", CVAR_ARCHIVE|CVAR_ROM|CVAR_INIT|CVAR_CHEAT|CVAR_NORESTART);
+			Cvar_Set( "ui_iscensored",   "1");	//just in case it was archived
+			Cvar_Get( "g_dismemberment", "0", CVAR_ARCHIVE|CVAR_ROM|CVAR_INIT|CVAR_CHEAT);
+			Cvar_Set( "g_dismemberment", "0");	//just in case it was archived
+		}
 	}
 
 	catch (const char* reason) {

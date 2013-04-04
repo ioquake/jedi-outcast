@@ -25,39 +25,55 @@ Also called by scoreboard drawing
 const char	*CG_PlaceString( int rank ) {
 	static char	str[64];
 	char	*s, *t;
+	// number extenstions, eg 1st, 2nd, 3rd, 4th etc.
+	// note that the rules are different for french, but by changing the required strip strings they seem to work
+	char sST[10];
+	char sND[10];
+	char sRD[10];
+	char sTH[10];
+	char sTiedFor[64];	// german is much longer, super safe...
+
+	trap_SP_GetStringTextString("INGAMETEXT_NUMBER_ST",sST, sizeof(sST) );
+	trap_SP_GetStringTextString("INGAMETEXT_NUMBER_ND",sND, sizeof(sND) );
+	trap_SP_GetStringTextString("INGAMETEXT_NUMBER_RD",sRD, sizeof(sRD) );
+	trap_SP_GetStringTextString("INGAMETEXT_NUMBER_TH",sTH, sizeof(sTH) );
+	trap_SP_GetStringTextString("INGAMETEXT_TIED_FOR" ,sTiedFor,sizeof(sTiedFor) );
+	strcat(sTiedFor," ");	// save worrying about translators adding spaces or not
 
 	if ( rank & RANK_TIED_FLAG ) {
 		rank &= ~RANK_TIED_FLAG;
-		t = "Tied for ";
+		t = sTiedFor;//"Tied for ";
 	} else {
 		t = "";
 	}
 
 	if ( rank == 1 ) {
-		s = "1st";//S_COLOR_BLUE "1st" S_COLOR_WHITE;		// draw in blue
+		s = va("1%s",sST);//S_COLOR_BLUE "1st" S_COLOR_WHITE;		// draw in blue
 	} else if ( rank == 2 ) {
-		s = "2nd";//S_COLOR_RED "2nd" S_COLOR_WHITE;		// draw in red
+		s = va("2%s",sND);//S_COLOR_RED "2nd" S_COLOR_WHITE;		// draw in red
 	} else if ( rank == 3 ) {
-		s = "3rd";//S_COLOR_YELLOW "3rd" S_COLOR_WHITE;		// draw in yellow
+		s = va("3%s",sRD);//S_COLOR_YELLOW "3rd" S_COLOR_WHITE;		// draw in yellow
 	} else if ( rank == 11 ) {
-		s = "11th";
+		s = va("11%s",sTH);
 	} else if ( rank == 12 ) {
-		s = "12th";
+		s = va("12%s",sTH);
 	} else if ( rank == 13 ) {
-		s = "13th";
+		s = va("13%s",sTH);
 	} else if ( rank % 10 == 1 ) {
-		s = va("%ist", rank);
+		s = va("%i%s", rank,sST);
 	} else if ( rank % 10 == 2 ) {
-		s = va("%ind", rank);
+		s = va("%i%s", rank,sND);
 	} else if ( rank % 10 == 3 ) {
-		s = va("%ird", rank);
+		s = va("%i%s", rank,sRD);
 	} else {
-		s = va("%ith", rank);
+		s = va("%i%s", rank,sTH);
 	}
 
 	Com_sprintf( str, sizeof( str ), "%s%s", t, s );
 	return str;
 }
+
+qboolean CG_ThereIsAMaster(void);
 
 /*
 =============
@@ -163,6 +179,14 @@ static void CG_Obituary( entityState_t *ent ) {
 			else
 				message = "SUICIDE_ELECTROCUTED_MALE";
 			break;
+		case MOD_FALLING:
+			if ( gender == GENDER_FEMALE )
+				message = "SUICIDE_FALLDEATH_FEMALE";
+			else if ( gender == GENDER_NEUTER )
+				message = "SUICIDE_FALLDEATH_GENDERLESS";
+			else
+				message = "SUICIDE_FALLDEATH_MALE";
+			break;
 		default:
 			if ( gender == GENDER_FEMALE )
 				message = "SUICIDE_GENERICDEATH_FEMALE";
@@ -203,29 +227,50 @@ clientkilled:
 	if ( attacker == cg.snap->ps.clientNum ) {
 		char	*s;
 
-		if ( cgs.gametype < GT_TEAM ) {
+		if ( cgs.gametype < GT_TEAM && cgs.gametype != GT_TOURNAMENT ) {
 			if (cgs.gametype == GT_JEDIMASTER &&
 				attacker < MAX_CLIENTS &&
 				!ent->isJediMaster &&
-				!cg.snap->ps.isJediMaster)
+				!cg.snap->ps.isJediMaster &&
+				CG_ThereIsAMaster())
 			{
 				char part1[512];
 				char part2[512];
-				const char *kmsg1 = CG_GetStripEdString("INGAMETEXT", "KILLED_MESSAGE");
-				strcpy(part1, kmsg1);				
-				kmsg1 = CG_GetStripEdString("INGAMETEXT", "JMKILLED_NOTJM");
+				trap_SP_GetStringTextString("INGAMETEXT_KILLED_MESSAGE", part1, sizeof(part1));
+				trap_SP_GetStringTextString("INGAMETEXT_JMKILLED_NOTJM", part2, sizeof(part2));
+				s = va("%s %s\n%s\n", part1, targetName, part2);
+			}
+			else if (cgs.gametype == GT_JEDIMASTER &&
+				attacker < MAX_CLIENTS &&
+				!ent->isJediMaster &&
+				!cg.snap->ps.isJediMaster)
+			{ //no JM, saber must be out
+				char part1[512];
+				trap_SP_GetStringTextString("INGAMETEXT_KILLED_MESSAGE", part1, sizeof(part1));
+				/*
+				kmsg1 = "for 0 points.\nGo for the saber!";
 				strcpy(part2, kmsg1);
 
 				s = va("%s %s %s\n", part1, targetName, part2);
+				*/
+				s = va("%s %s\n", part1, targetName);
 			}
 			else
 			{
-				s = va("%s %s.\n%s place with %i.", (char *)CG_GetStripEdString("INGAMETEXT", "KILLED_MESSAGE"), targetName, 
-					CG_PlaceString( cg.snap->ps.persistant[PERS_RANK] + 1 ),
+				char sPlaceWith[256];
+				char sKilledStr[256];
+				trap_SP_GetStringTextString("INGAMETEXT_PLACE_WITH",     sPlaceWith, sizeof(sPlaceWith));
+				trap_SP_GetStringTextString("INGAMETEXT_KILLED_MESSAGE", sKilledStr, sizeof(sKilledStr));
+
+				s = va("%s %s.\n%s %s %i.", sKilledStr, targetName, 
+					CG_PlaceString( cg.snap->ps.persistant[PERS_RANK] + 1 ), 
+					sPlaceWith,
 					cg.snap->ps.persistant[PERS_SCORE] );
 			}
 		} else {
-			s = va("%s %s", (char *)CG_GetStripEdString("INGAMETEXT", "KILLED_MESSAGE"), targetName );
+			char sKilledStr[256];
+			trap_SP_GetStringTextString("INGAMETEXT_KILLED_MESSAGE", sKilledStr, sizeof(sKilledStr));
+			s = va("%s %s", sKilledStr, targetName );
 		}
 		if (!(cg_singlePlayerActive.integer && cg_cameraOrbit.integer)) {
 			CG_CenterPrint( s, SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
@@ -427,6 +472,9 @@ static void CG_UseItem( centity_t *cent ) {
 		break;
 
 	case HI_SEEKER:
+		trap_S_StartSound (NULL, es->number, CHAN_AUTO, cgs.media.deploySeeker );
+		break;
+
 	case HI_SHIELD:
 	case HI_DATAPAD:
 	case HI_SENTRY_GUN:
@@ -480,7 +528,8 @@ static void CG_ItemPickup( int itemNum ) {
 				bg_itemlist[itemNum].giTag != WP_DET_PACK &&
 				bg_itemlist[itemNum].giTag != WP_THERMAL &&
 				bg_itemlist[itemNum].giTag != WP_ROCKET_LAUNCHER &&
-				bg_itemlist[itemNum].giTag > cg.snap->ps.weapon)
+				bg_itemlist[itemNum].giTag > cg.snap->ps.weapon &&
+				cg.snap->ps.weapon != WP_SABER)
 			{
 				if (!cg.snap->ps.emplacedIndex)
 				{
@@ -491,7 +540,8 @@ static void CG_ItemPickup( int itemNum ) {
 		}
 		else if ( cg_autoswitch.integer == 2)
 		{ //autoselect if better
-			if (bg_itemlist[itemNum].giTag > cg.snap->ps.weapon)
+			if (bg_itemlist[itemNum].giTag > cg.snap->ps.weapon &&
+				cg.snap->ps.weapon != WP_SABER)
 			{
 				if (!cg.snap->ps.emplacedIndex)
 				{
@@ -500,6 +550,7 @@ static void CG_ItemPickup( int itemNum ) {
 				cg.weaponSelect = bg_itemlist[itemNum].giTag;
 			}
 		}
+		/*
 		else if ( cg_autoswitch.integer == 3)
 		{ //autoselect if better and not using the saber as a weapon
 			if (bg_itemlist[itemNum].giTag > cg.snap->ps.weapon &&
@@ -512,15 +563,24 @@ static void CG_ItemPickup( int itemNum ) {
 				cg.weaponSelect = bg_itemlist[itemNum].giTag;
 			}
 		}
+		*/
+		//No longer required - just not switching ever if using saber
 	}
 
 	//rww - print pickup messages
-	if (bg_itemlist[itemNum].pickup_name && bg_itemlist[itemNum].pickup_name[0] &&
+	if (bg_itemlist[itemNum].classname && bg_itemlist[itemNum].classname[0] &&
 		(bg_itemlist[itemNum].giType != IT_TEAM || (bg_itemlist[itemNum].giTag != PW_REDFLAG && bg_itemlist[itemNum].giTag != PW_BLUEFLAG)) )
 	{ //don't print messages for flags, they have their own pickup event broadcasts
-		const char *strText = CG_GetStripEdString("INGAMETEXT", "PICKUPLINE");
+		char	text[1024];
 
-		Com_Printf("%s %s\n", strText, bg_itemlist[itemNum].pickup_name);
+		if ( trap_SP_GetStringTextString( va("INGAME_%s",bg_itemlist[itemNum].classname), text, sizeof( text )))
+		{
+			Com_Printf("%s %s\n", CG_GetStripEdString("INGAMETEXT", "PICKUPLINE"), text);
+		}
+		else
+		{
+			Com_Printf("%s %s\n", CG_GetStripEdString("INGAMETEXT", "PICKUPLINE"), bg_itemlist[itemNum].classname);
+		}
 	}
 }
 
@@ -867,6 +927,40 @@ void DoFall(centity_t *cent, entityState_t *es, int clientNum)
 		cg.landTime = cg.time;
 	}
 }
+
+int CG_InClientBitflags(entityState_t *ent, int client)
+{
+	int checkIn;
+	int sub = 0;
+
+	if (client > 47)
+	{
+		checkIn = ent->trickedentindex4;
+		sub = 48;
+	}
+	else if (client > 31)
+	{
+		checkIn = ent->trickedentindex3;
+		sub = 32;
+	}
+	else if (client > 15)
+	{
+		checkIn = ent->trickedentindex2;
+		sub = 16;
+	}
+	else
+	{
+		checkIn = ent->trickedentindex;
+	}
+
+	if (checkIn & (1 << (client-sub)))
+	{
+		return 1;
+	}
+	
+	return 0;
+}
+
 /*
 ==============
 CG_EntityEvent
@@ -936,6 +1030,8 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			cl_ent->trickAlphaTime = 0;
 			cl_ent->ghoul2weapon = NULL;
 			cl_ent->weapon = WP_NONE;
+			cl_ent->teamPowerEffectTime = 0;
+			cl_ent->teamPowerType = 0;
 		}
 		break;
 
@@ -1036,7 +1132,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		{ //starting the duel
 			if (es->eventParm == 2)
 			{
-				CG_CenterPrint( "BEGIN", 120, GIANTCHAR_WIDTH*2 );
+				CG_CenterPrint( CG_GetStripEdString("SVINGAME", "BEGIN_DUEL"), 120, GIANTCHAR_WIDTH*2 );				
 				trap_S_StartLocalSound( cgs.media.countFightSound, CHAN_ANNOUNCER );
 			}
 			else
@@ -1135,7 +1231,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 					const char *strText = CG_GetStripEdString("INGAMETEXT", "PICKUPLINE");
 
 					//Com_Printf("%s %s\n", strText, showPowersName[index]);
-					CG_CenterPrint( va("%s %s\n", strText, showPowersName[index]), SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
+					CG_CenterPrint( va("%s %s\n", strText, CG_GetStripEdString("INGAME",showPowersName[index])), SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
 				}
 
 				//Show the player their force selection bar in case picking the holocron up changed the current selection
@@ -1178,7 +1274,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			}
 			item = &bg_itemlist[ index ];
 
-			if ( item->giType != IT_POWERUP && item->giType != IT_TEAM) {
+			if ( /*item->giType != IT_POWERUP && */item->giType != IT_TEAM) {
 				if (item->pickup_sound && item->pickup_sound[0])
 				{
 					trap_S_StartSound (NULL, es->number, CHAN_AUTO,	trap_S_RegisterSound( item->pickup_sound ) );
@@ -1421,6 +1517,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			if (cg.snap->ps.clientNum == es->number)
 			{
 				trap_S_StartLocalSound(cgs.media.happyMusic, CHAN_LOCAL);
+				CGCam_SetMusicMult(0.3, 5000);
 			}
 		}
 		break;
@@ -1499,6 +1596,69 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			}
 		}
 		break;
+	case EV_PREDEFSOUND:
+		DEBUGNAME("EV_PREDEFSOUND");
+		{
+			int sID = -1;
+
+			switch (es->eventParm)
+			{
+			case PDSOUND_PROTECTHIT:
+				sID = trap_S_RegisterSound("sound/weapons/force/protecthit.mp3");
+				break;
+			case PDSOUND_PROTECT:
+				sID = trap_S_RegisterSound("sound/weapons/force/protect.mp3");
+				break;
+			case PDSOUND_ABSORBHIT:
+				sID = trap_S_RegisterSound("sound/weapons/force/absorbhit.mp3");
+				break;
+			case PDSOUND_ABSORB:
+				sID = trap_S_RegisterSound("sound/weapons/force/absorb.mp3");
+				break;
+			case PDSOUND_FORCEJUMP:
+				sID = trap_S_RegisterSound("sound/weapons/force/jump.mp3");
+				break;
+			case PDSOUND_FORCEGRIP:
+				sID = trap_S_RegisterSound("sound/weapons/force/grip.mp3");
+				break;
+			default:
+				break;
+			}
+
+			if (sID != 1)
+			{
+				trap_S_StartSound(es->origin, es->number, CHAN_AUTO, sID);
+			}
+		}
+		break;
+
+	case EV_TEAM_POWER:
+		DEBUGNAME("EV_TEAM_POWER");
+		{
+			int clnum = 0;
+
+			while (clnum < MAX_CLIENTS)
+			{
+				if (CG_InClientBitflags(es, clnum))
+				{
+					if (es->eventParm == 1)
+					{ //eventParm 1 is heal
+						trap_S_StartSound (NULL, clnum, CHAN_AUTO, cgs.media.teamHealSound );
+						cg_entities[clnum].teamPowerEffectTime = cg.time + 1000;
+						cg_entities[clnum].teamPowerType = 1;
+					}
+					else
+					{ //eventParm 2 is force regen
+						trap_S_StartSound (NULL, clnum, CHAN_AUTO, cgs.media.teamRegenSound );
+						cg_entities[clnum].teamPowerEffectTime = cg.time + 1000;
+						cg_entities[clnum].teamPowerType = 0;
+					}
+				}
+				clnum++;
+			}
+		}
+		break;
+
 	case EV_SCREENSHAKE:
 		DEBUGNAME("EV_SCREENSHAKE");
 		if (!es->modelindex || cg.predictedPlayerState.clientNum == es->modelindex-1)
@@ -1700,6 +1860,13 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		DEBUGNAME("EV_DESTROY_GHOUL2_INSTANCE");
 		if (cg_entities[es->eventParm].ghoul2 && trap_G2_HaveWeGhoul2Models(cg_entities[es->eventParm].ghoul2))
 		{
+			if (es->eventParm < MAX_CLIENTS)
+			{ //You try to do very bad thing!
+#ifdef _DEBUG
+				Com_Printf("WARNING: Tried to kill a client ghoul2 instance with a server event!\n");
+#endif
+				break;
+			}
 			trap_G2API_CleanGhoul2Models(&(cg_entities[es->eventParm].ghoul2));
 		}
 		break;
@@ -1719,7 +1886,12 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		{
 			trap_Cvar_Set("ui_rankChange", va("%i", es->eventParm));
 
-			trap_OpenUIMenu(3);
+			trap_Cvar_Set("ui_myteam", va("%i", es->bolt2));
+
+			if (!( trap_Key_GetCatcher() & KEYCATCH_UI ) && !es->bolt1)
+			{
+				trap_OpenUIMenu(3);
+			}
 		}
 		break;
 
@@ -1727,6 +1899,12 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		DEBUGNAME("EV_SET_FREE_SABER");
 
 		trap_Cvar_Set("ui_freeSaber", va("%i", es->eventParm));
+		break;
+
+	case EV_SET_FORCE_DISABLE:
+		DEBUGNAME("EV_SET_FORCE_DISABLE");
+
+		trap_Cvar_Set("ui_forcePowerDisable", va("%i", es->eventParm));
 		break;
 
 	//
@@ -2045,6 +2223,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		if (es->eventParm && es->number == cg.snap->ps.clientNum)
 		{
 			trap_S_StartLocalSound(cgs.media.dramaticFailure, CHAN_LOCAL);
+			CGCam_SetMusicMult(0.3, 5000);
 		}
 		break;
 
@@ -2077,7 +2256,10 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 	case EV_FORCE_DRAINED:
 		DEBUGNAME("EV_FORCE_DRAINED");
 		ByteToDir( es->eventParm, dir );
-		FX_ForceDrained(position, dir);
+		//FX_ForceDrained(position, dir);
+		trap_S_StartSound (NULL, es->owner, CHAN_AUTO, cgs.media.drainSound );
+		cg_entities[es->owner].teamPowerEffectTime = cg.time + 1000;
+		cg_entities[es->owner].teamPowerType = 2;
 		break;
 
 	case EV_GIB_PLAYER:
@@ -2139,7 +2321,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 	case EV_TESTLINE:
 		DEBUGNAME("EV_TESTLINE");
-		CG_TestLine(es->origin, es->origin2, es->trickedentindex, es->weapon, 1);
+		CG_TestLine(es->origin, es->origin2, es->time2, es->weapon, 1);
 		break;
 
 	case EV_BODY_QUEUE_COPY:

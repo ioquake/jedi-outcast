@@ -3,7 +3,7 @@
 #define _QCOMMON_H_
 
 #include "../qcommon/cm_public.h"
-
+#include "../game/q_shared.h"
 
 //#define	PRE_RELEASE_DEMO
 
@@ -99,7 +99,7 @@ NET
 
 #define	PORT_ANY			-1
 
-#define	MAX_RELIABLE_COMMANDS	64			// max string commands buffered for restransmit
+#define	MAX_RELIABLE_COMMANDS	128			// max string commands buffered for restransmit
 
 typedef enum {
 	NA_BOT,
@@ -228,6 +228,7 @@ enum svc_ops_e {
 	svc_download,				// [short] size [size bytes]
 	svc_snapshot,
 	svc_mapchange,
+
 	svc_EOF
 };
 
@@ -594,8 +595,7 @@ void FS_PureServerSetLoadedPaks( const char *pakSums, const char *pakNames );
 // sole exception of .cfg files.
 
 qboolean FS_idPak( char *pak, char *base );
-qboolean FS_ComparePaks( char *neededpaks, int len );
-
+qboolean FS_ComparePaks( char *neededpaks, int len, qboolean dlstring );
 void FS_Rename( const char *from, const char *to );
 
 /*
@@ -744,7 +744,7 @@ void Z_LogHeap( void );
 void *Z_Malloc  ( int iSize, memtag_t eTag, qboolean bZeroit = qfalse);	// return memory NOT zero-filled by default
 void *S_Malloc	( int iSize );					// NOT 0 filled memory only for small allocations
 #else
-void *Z_Malloc  ( int iSize, memtag_t eTag, qboolean bZeroit = qfalse);	// return memory NOT zero-filled by default
+void *Z_Malloc  ( int iSize, memtag_t eTag, qboolean bZeroit = qfalse );	// return memory NOT zero-filled by default
 void *S_Malloc	( int iSize );					// NOT 0 filled memory only for small allocations
 #endif
 void  Z_Validate( void );
@@ -923,12 +923,19 @@ void	Sys_Print( const char *msg );
 // any game related timing information should come from event timestamps
 int		Sys_Milliseconds (void);
 
+#if __linux__
+extern "C" void	Sys_SnapVector( float *v );
+
+#else
 void	Sys_SnapVector( float *v );
+#endif
 
 // the system console is shown when a dedicated server is running
 void	Sys_DisplaySystemConsole( qboolean show );
 
 int		Sys_GetProcessorId( void );
+int		Sys_GetCPUSpeed( void );
+int		Sys_GetPhysicalMemory(void);
 
 void	Sys_BeginStreamedFile( fileHandle_t f, int readahead );
 void	Sys_EndStreamedFile( fileHandle_t f );

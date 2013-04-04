@@ -22,7 +22,9 @@
 static char		sys_cmdline[MAX_STRING_CHARS];
 
 // enable this for executable checksumming
-// rjr - enable for final release #define SPANK_MONKEYS
+#ifdef FINAL_BUILD
+#define SPANK_MONKEYS
+#endif
 static int	sys_monkeySpank;
 static int	sys_checksum;
 
@@ -81,7 +83,7 @@ void CheckProcessTime(void)
 //	OutputDebugString(temp);
 
 	otherTaskTime = userTime.dwLowDateTime;
-	if (userTime.dwLowDateTime < 9000000)
+	if (userTime.dwLowDateTime < 7500000)
 	{
 		otherTasksRunning = true;
 //		OutputDebugString("WARNING: possibly running on a system with another task\n");
@@ -1444,6 +1446,8 @@ void Sys_Init( void ) {
 	Com_Printf( "%s\n", Cvar_VariableString( "sys_cpustring" ) );
 
 	Cvar_Set( "username", Sys_GetCurrentUser() );
+	Cvar_SetValue( "sys_cpuspeed", Sys_GetCPUSpeed() );
+	Cvar_SetValue( "sys_memory", Sys_GetPhysicalMemory() );
 
 	IN_Init();		// FIXME: not in dedicated?
 }
@@ -1534,11 +1538,17 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	Sys_InitStreamThread();
 
+#if 0
 	CheckProcessTime();
+#endif 
 
 	Com_Init( sys_cmdline );
+#if 0
 	Cvar_Set( "com_othertasks", ( otherTasksRunning ? "1" : "0" ) );
 	Cvar_Set( "com_othertaskstime", va("%u", otherTaskTime) );
+#else
+	Cvar_Set( "com_othertasks", "0" );
+#endif 
 
 	NET_Init();
 

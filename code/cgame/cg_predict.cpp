@@ -200,17 +200,20 @@ int		CG_PointContents( const vec3_t point, int passEntityNum ) {
 }
 
 
-void CG_SetClientViewAngles( vec3_t angles )
+void CG_SetClientViewAngles( vec3_t angles, qboolean overrideViewEnt )
 {
-	for( int i = 0; i < 3; i++ ) 
-	{
-		cg.predicted_player_state.viewangles[PITCH] = angles[i];
-		cg.predicted_player_state.delta_angles[i] = 0;
-		cg.snap->ps.viewangles[PITCH] = angles[i];
-		cg.snap->ps.delta_angles[i] = 0;
-		g_entities[0].client->pers.cmd_angles[i] = ANGLE2SHORT(angles[i]);
+	if ( cg.snap->ps.viewEntity <= 0 || cg.snap->ps.viewEntity >= ENTITYNUM_WORLD || overrideViewEnt )
+	{//don't clamp angles when looking through a viewEntity
+		for( int i = 0; i < 3; i++ ) 
+		{
+			cg.predicted_player_state.viewangles[PITCH] = angles[i];
+			cg.predicted_player_state.delta_angles[i] = 0;
+			cg.snap->ps.viewangles[PITCH] = angles[i];
+			cg.snap->ps.delta_angles[i] = 0;
+			g_entities[0].client->pers.cmd_angles[i] = ANGLE2SHORT(angles[i]);
+		}
+		cgi_SetUserCmdAngles( angles[PITCH], angles[YAW], angles[ROLL] );
 	}
-	cgi_SetUserCmdAngles( angles[PITCH], angles[YAW], angles[ROLL] );
 }
 
 extern qboolean PM_AdjustAnglesToGripper( gentity_t *gent, usercmd_t *cmd );
@@ -226,10 +229,15 @@ qboolean CG_CheckModifyUCmd( usercmd_t *cmd, vec3_t viewangles )
 	if ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )
 	{//controlling something else
 		memset( cmd, 0, sizeof( usercmd_t ) );
+		/*
 		//to keep pointing in same dir, need to set cmd.angles
-		cmd->angles[PITCH] = cmd->angles[ROLL] = 0;
+		cmd->angles[PITCH] = ANGLE2SHORT( cg.snap->ps.viewangles[PITCH] ) - cg.snap->ps.delta_angles[PITCH];
 		cmd->angles[YAW] = ANGLE2SHORT( cg.snap->ps.viewangles[YAW] ) - cg.snap->ps.delta_angles[YAW];
-		//CG_SetClientViewAngles( cg.snap->ps.viewangles );
+		cmd->angles[ROLL] = 0;
+		*/
+		VectorCopy( g_entities[0].pos4, viewangles );
+		overridAngles = qtrue;
+		//CG_SetClientViewAngles( g_entities[cg.snap->ps.viewEntity].client->ps.viewangles, qtrue );
 	}
 	else if ( cg.snap->ps.vehicleModel != 0 )
 	{//in vehicle flight mode
@@ -239,7 +247,7 @@ qboolean CG_CheckModifyUCmd( usercmd_t *cmd, vec3_t viewangles )
 			cmd->rightmove = 0;
 			cmd->angles[PITCH] = 0;
 			cmd->angles[YAW] = ANGLE2SHORT( cg.snap->ps.viewangles[YAW] ) - cg.snap->ps.delta_angles[YAW];
-			CG_SetClientViewAngles( cg.snap->ps.viewangles );
+			CG_SetClientViewAngles( cg.snap->ps.viewangles, qfalse );
 		}
 	}
 
@@ -249,7 +257,7 @@ qboolean CG_CheckModifyUCmd( usercmd_t *cmd, vec3_t viewangles )
 		{
 			if ( PM_AdjustAnglesForSpinningFlip( &g_entities[0], cmd, qtrue ) )
 			{
-				CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
+				CG_SetClientViewAngles( g_entities[0].client->ps.viewangles, qfalse );
 				if ( viewangles )
 				{
 					VectorCopy( g_entities[0].client->ps.viewangles, viewangles );
@@ -259,7 +267,7 @@ qboolean CG_CheckModifyUCmd( usercmd_t *cmd, vec3_t viewangles )
 		}
 		else
 		{
-			CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
+			CG_SetClientViewAngles( g_entities[0].client->ps.viewangles, qfalse );
 			if ( viewangles )
 			{
 				VectorCopy( g_entities[0].client->ps.viewangles, viewangles );
@@ -268,7 +276,7 @@ qboolean CG_CheckModifyUCmd( usercmd_t *cmd, vec3_t viewangles )
 		}
 		if ( G_CheckClampUcmd( &g_entities[0], cmd ) )
 		{
-			CG_SetClientViewAngles( g_entities[0].client->ps.viewangles );
+			CG_SetClientViewAngles( g_entities[0].client->ps.viewangles, qfalse );
 			if ( viewangles )
 			{
 				VectorCopy( g_entities[0].client->ps.viewangles, viewangles );
@@ -277,6 +285,35 @@ qboolean CG_CheckModifyUCmd( usercmd_t *cmd, vec3_t viewangles )
 		}
 	}
 	return overridAngles;
+}
+
+qboolean CG_OnMovingPlat( playerState_t *ps )
+{
+	if ( ps->groundEntityNum != ENTITYNUM_NONE )
+	{
+		entityState_t *es = &cg_entities[ps->groundEntityNum].currentState;
+		if ( es->eType == ET_MOVER )
+		{//on a mover
+			if ( es->pos.trType != TR_STATIONARY )
+			{
+				if ( es->pos.trType != TR_LINEAR_STOP && es->pos.trType != TR_NONLINEAR_STOP )
+				{//a constant mover
+					if ( !VectorCompare( vec3_origin, es->pos.trDelta ) )
+					{//is moving
+						return qtrue;
+					}
+				}
+				else
+				{//a linear-stop mover
+					if ( es->pos.trTime+es->pos.trDuration > cg.time )
+					{//still moving
+						return qtrue;
+					}
+				}
+			}
+		}
+	}
+	return qfalse;
 }
 /*
 ========================
@@ -348,13 +385,79 @@ void CG_InterpolatePlayerState( qboolean grabAngles ) {
 				f * (next->ps.velocity[i] - prev->ps.velocity[i] );
 		}
 	}
-	if (cg.validPPS && cg_smoothPlayerPos.value>0.0f && cg_smoothPlayerPos.value<1.0f)
+
+	bool onPlat=false;
+	centity_t	*pent=0;
+	if (out->groundEntityNum>0)
+	{
+		pent=&cg_entities[out->groundEntityNum];
+		if (pent->currentState.eType == ET_MOVER ) 
+
+		{
+			onPlat=true;
+		}
+	}
+
+	if (
+		cg.validPPS && 
+		cg_smoothPlayerPos.value>0.0f && 
+		cg_smoothPlayerPos.value<1.0f &&
+		!onPlat
+		)
 	{
 		// 0 = no smoothing, 1 = no movement
 		for (i=0;i<3;i++)
 		{
 			out->origin[i]=cg_smoothPlayerPos.value*(oldOrg[i]-out->origin[i])+out->origin[i];
 		}
+	}
+	else if (onPlat&&cg_smoothPlayerPlat.value>0.0f&&cg_smoothPlayerPlat.value<1.0f)
+	{
+//		if (cg.frametime<150)
+//		{
+		assert(pent);
+		vec3_t	p1,p2,vel;
+		float lerpTime;
+
+
+		EvaluateTrajectory( &pent->currentState.pos,cg.snap->serverTime, p1 );
+		if ( cg.nextSnap &&cg.nextSnap->serverTime > cg.snap->serverTime) 
+		{
+			EvaluateTrajectory( &pent->nextState.pos,cg.nextSnap->serverTime, p2 );
+			lerpTime=float(cg.nextSnap->serverTime - cg.snap->serverTime);
+		}
+		else
+		{
+			EvaluateTrajectory( &pent->currentState.pos,cg.snap->serverTime+50, p2 );
+			lerpTime=50.0f;
+		}
+
+		float accel=cg_smoothPlayerPlatAccel.value*cg.frametime/lerpTime;
+
+		if (accel>20.0f)
+		{
+			accel=20.0f;
+		}
+
+		for (i=0;i<3;i++)
+		{
+			vel[i]=accel*(p2[i]-p1[i]);
+		}
+
+		VectorAdd(out->origin,vel,out->origin);
+
+		if (cg.validPPS && 
+			cg_smoothPlayerPlat.value>0.0f && 
+			cg_smoothPlayerPlat.value<1.0f
+			)
+		{
+			// 0 = no smoothing, 1 = no movement
+			for (i=0;i<3;i++)
+			{
+				out->origin[i]=cg_smoothPlayerPlat.value*(oldOrg[i]-out->origin[i])+out->origin[i];
+			}
+		}
+//		}
 	}
 }
 

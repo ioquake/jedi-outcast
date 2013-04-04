@@ -87,6 +87,6 @@ FX_RepeaterAltHitPlayer
 
 void FX_RepeaterAltHitPlayer( vec3_t origin, vec3_t normal, qboolean humanoid )
 {
-	theFxScheduler.PlayEffect( "repeater/concussion", origin, normal );
+	theFxScheduler.PlayEffect( "repeater/concussion", origin );
 //	theFxScheduler.PlayEffect( "repeater/alt_wall_impact2", origin, normal );
 }

@@ -15,6 +15,7 @@
 #include <list>
 #include <vector>
 #include <map>
+#include <algorithm>
 #pragma warning (pop)
 #pragma warning (disable:4503)	// decorated name length xceeded, name was truncated
 using namespace std;
@@ -95,11 +96,12 @@ public:
 	int Save( void );
 	int Load( void );
 
+// moved to public on 2/12/2 to allow calling during shutdown
+	int Recall( void );
 protected:
 
 	int EvaluateConditional( CBlock *block );
 
-	int Recall( void );
 	int Route( CSequence *sequence, bstream_t *bstream );
 	int Flush( CSequence *owner );
 	void Interrupt( void );
@@ -115,7 +117,8 @@ protected:
 	CSequence *GetSequence( int id );
 
 	//NOTENOTE: This only removes references to the sequence, IT DOES NOT FREE THE ALLOCATED MEMORY!
-	int RemoveSequence( CSequence *sequence, bool eraseSequence, bool removeChildren = true );
+	int RemoveSequence( CSequence *sequence);
+	int DestroySequence( CSequence *sequence);
 
 	int PushCommand( CBlock *command, int flag );
 	CBlock *PopCommand( int flag );
@@ -169,6 +172,7 @@ protected:
 
 	int					m_elseValid;
 	CBlock				*m_elseOwner;
+	vector<bstream_t*>  m_streamsCreated;
 };
 
 #endif	//__SEQUENCER__

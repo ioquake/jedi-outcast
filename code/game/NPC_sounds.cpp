@@ -55,6 +55,10 @@ void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime )
 		return;
 	}
 	
+	if ( (self->NPC->scriptFlags&SCF_NO_ALERT_TALK) && (event >= EV_GIVEUP1 && event <= EV_SUSPICIOUS5) )
+	{
+		return;
+	}
 	//FIXME: Also needs to check for teammates. Don't want
 	//		everyone babbling at once
 
@@ -64,4 +68,33 @@ void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime )
 
 	//won't speak again for 5 seconds (unless otherwise specified)
 	self->NPC->blockedSpeechDebounceTime = level.time + ((speakDebounceTime==0) ? 5000 : speakDebounceTime);
+}
+
+void NPC_PlayConfusionSound( gentity_t *self )
+{
+	if ( self->health > 0 )
+	{
+		if ( self->enemy ||//was mad
+				!TIMER_Done( self, "enemyLastVisible" ) ||//saw something suspicious
+				self->client->renderInfo.lookTarget	== 0//was looking at player
+			)
+		{
+			self->NPC->blockedSpeechDebounceTime = 0;//make sure we say this
+			G_AddVoiceEvent( self, Q_irand( EV_CONFUSE2, EV_CONFUSE3 ), 2000 );
+		}
+		else if ( self->NPC && self->NPC->investigateDebounceTime+self->NPC->pauseTime > level.time )//was checking something out
+		{
+			self->NPC->blockedSpeechDebounceTime = 0;//make sure we say this
+			G_AddVoiceEvent( self, EV_CONFUSE1, 2000 );
+		}
+		//G_AddVoiceEvent( self, Q_irand(EV_CONFUSE1, EV_CONFUSE3), 2000 );
+	}
+	//reset him to be totally unaware again
+	TIMER_Set( self, "enemyLastVisible", 0 );
+	self->NPC->tempBehavior = BS_DEFAULT;
+	
+	//self->NPC->behaviorState = BS_PATROL;
+	G_ClearEnemy( self );//FIXME: or just self->enemy = NULL;?
+
+	self->NPC->investigateCount = 0;
 }

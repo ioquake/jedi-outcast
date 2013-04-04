@@ -8,8 +8,9 @@ typedef enum //# animNumber_e
 	//=================================================
 	//ANIMS IN WHICH UPPER AND LOWER OBJECTS ARE IN MD3
 	//=================================================
+	BOTH_1CRUFTFORGIL = 0,		//# G2 cannot have a reverse anim at beginning of file
 	//# #sep BOTH_ DEATHS
-	BOTH_DEATH1 = 0,		//# First Death anim
+	BOTH_DEATH1,		//# First Death anim
 	BOTH_DEATH2,			//# Second Death anim
 	BOTH_DEATH3,			//# Third Death anim
 	BOTH_DEATH4,			//# Fourth Death anim
@@ -28,6 +29,12 @@ typedef enum //# animNumber_e
 	BOTH_DEATH17,			//# 
 	BOTH_DEATH18,			//# 
 	BOTH_DEATH19,			//# 
+	BOTH_DEATH20,			//# 
+	BOTH_DEATH21,			//# 
+	BOTH_DEATH22,			//# 
+	BOTH_DEATH23,			//# 
+	BOTH_DEATH24,			//# 
+	BOTH_DEATH25,			//# 
 
 	BOTH_DEATHFORWARD1,		//# First Death in which they get thrown forward
 	BOTH_DEATHFORWARD2,		//# Second Death in which they get thrown forward
@@ -71,6 +78,12 @@ typedef enum //# animNumber_e
 	BOTH_DEAD17,			//# 
 	BOTH_DEAD18,			//# 
 	BOTH_DEAD19,			//# 
+	BOTH_DEAD20,			//# 
+	BOTH_DEAD21,			//# 
+	BOTH_DEAD22,			//# 
+	BOTH_DEAD23,			//# 
+	BOTH_DEAD24,			//# 
+	BOTH_DEAD25,			//# 
 	BOTH_DEADFORWARD1,		//# First thrown forward death finished pose
 	BOTH_DEADFORWARD2,		//# Second thrown forward death finished pose
 	BOTH_DEADBACKWARD1,		//# First thrown backward death finished pose
@@ -607,6 +620,15 @@ typedef enum //# animNumber_e
 	BOTH_CWCIRCLELOCK,	//#
 	BOTH_CCWCIRCLELOCK,	//#
 
+	BOTH_SABERFAST_STANCE,
+	BOTH_SABERSLOW_STANCE,
+	BOTH_A2_STABBACK1,		//# Stab saber backward
+	BOTH_ATTACK_BACK,		//# Swing around backwards and attack
+	BOTH_JUMPFLIPSLASHDOWN1,//#
+	BOTH_JUMPFLIPSTABDOWN,//#
+	BOTH_FORCELEAP2_T__B_,//#
+	BOTH_LUNGE2_B__T_,//#
+	BOTH_CROUCHATTACKBACK1,//#
 
 	//# #sep BOTH_ STANDING
 	BOTH_STAND1,			//# Standing idle, no weapon, hands down
@@ -644,6 +666,15 @@ typedef enum //# animNumber_e
 	BOTH_STAND5TOSTAND8,	//# Transition from stand5 to stand8
 	BOTH_STAND7TOSTAND8,	//# Tavion putting hands on back of chair (cin #11)
 	BOTH_STAND8TOSTAND5,	//# Transition from stand8 to stand5
+	BOTH_STAND5SHIFTWEIGHT,	//# Weightshift from stand5 to side and back to stand5
+	BOTH_STAND5SHIFTWEIGHTSTART,	//# From stand5 to side
+	BOTH_STAND5SHIFTWEIGHTSTOP,		//# From side to stand5
+	BOTH_STAND5TURNLEFTSTART,		//# Start turning left from stand5
+	BOTH_STAND5TURNLEFTSTOP,		//# Stop turning left from stand5
+	BOTH_STAND5TURNRIGHTSTART,		//# Start turning right from stand5
+	BOTH_STAND5TURNRIGHTSTOP,		//# Stop turning right from stand5
+	BOTH_STAND5LOOK180LEFTSTART,	//# Start looking over left shoulder (cin #17)
+	BOTH_STAND5LOOK180LEFTSTOP,	//# Stop looking over left shoulder (cin #17)
 
 	BOTH_CONSOLE1START,		//# typing at a console
 	BOTH_CONSOLE1,			//# typing at a console
@@ -662,6 +693,7 @@ typedef enum //# animNumber_e
 	BOTH_GESTURE3,			//# Generic gesture, non-specific
 	BOTH_WALK1TALKCOMM1,	//# Talking into coom link while walking
 	BOTH_TALK1,				//# Generic talk anim
+	BOTH_TALK2,				//# Generic talk anim
 	BOTH_TALKCOMM1START,	//# Start talking into a comm link
 	BOTH_TALKCOMM1,			//# Talking into a comm link
 	BOTH_TALKCOMM1STOP,		//# Stop talking into a comm link
@@ -720,6 +752,8 @@ typedef enum //# animNumber_e
 	BOTH_SITHEADTILTRSTOP,		//# Head tilt to right from seated position
 	BOTH_SITHEADNOD,			//# Head shake YES from seated position
 	BOTH_SITHEADSHAKE,			//# Head shake NO from seated position
+	BOTH_SIT2HEADTILTLSTART,	//# Head tilt to left from seated position 2
+	BOTH_SIT2HEADTILTLSTOP,		//# Head tilt to left from seated position 2
  
 	BOTH_REACH1START,		//# Monmothma reaching for crystal
 	BOTH_REACH1STOP,		//# Monmothma reaching for crystal
@@ -875,6 +909,9 @@ typedef enum //# animNumber_e
 	BOTH_WALK5,				//# Tavion taunting Kyle (cin 22)
 	BOTH_WALK6,				//# Slow walk for Luke (cin 12)
 	BOTH_WALK7,				//# Fast walk
+	BOTH_WALK8,				//# Normal walk with hands behind back (Luke in cin#12)
+	BOTH_WALK9,				//# Lando walk (cin #17)
+	BOTH_WALK10,			//# Lando walk (cin #17)
 	BOTH_WALKTORUN1,		//# transition from walk to run
 	BOTH_RUN1,				//# Full run
 	BOTH_RUN1START,			//# Start into full run1
@@ -963,16 +1000,7 @@ typedef enum //# animNumber_e
 
 	BOTH_DIVE1,				//# Dive!
 
-	BOTH_SABERFAST_STANCE,
-	BOTH_SABERSLOW_STANCE,
 	BOTH_ENGAGETAUNT,
-	BOTH_A2_STABBACK1,		//# Stab saber backward
-	BOTH_ATTACK_BACK,		//# Swing around backwards and attack
-	BOTH_JUMPFLIPSLASHDOWN1,//#
-	BOTH_JUMPFLIPSTABDOWN,//#
-	BOTH_FORCELEAP2_T__B_,//#
-	BOTH_LUNGE2_B__T_,//#
-	BOTH_CROUCHATTACKBACK1,//#
 	BOTH_ARIAL_LEFT,		//# 
 	BOTH_ARIAL_RIGHT,		//# 
 	BOTH_CARTWHEEL_LEFT,	//# 
@@ -1028,11 +1056,6 @@ typedef enum //# animNumber_e
 	BOTH_ARIAL_F1,//#
 	BOTH_BUTTERFLY_FR1,//#
 	BOTH_BUTTERFLY_FL1,//#
-	BOTH_POSE1,//#
-	BOTH_POSE2,//#
-	BOTH_POSE3,//#
-	BOTH_POSE4,//#
-	BOTH_POSE5,//#
 
 	//# #sep BOTH_ MISC MOVEMENT
 	BOTH_HIT1,				//# Kyle hit by crate in cin #9
@@ -1065,12 +1088,7 @@ typedef enum //# animNumber_e
 
 	//# #sep BOTH_ SWIMMING
 	BOTH_SWIM_IDLE1,		//# Swimming Idle 1
-	BOTH_SWIMFORWARDSTART,	//# Swim forward start
 	BOTH_SWIMFORWARD,		//# Swim forward loop
-	BOTH_SWIMFORWARDSTOP,	//# Swim forward end
-	BOTH_SWIMBACKWARDSTART,	//# Swim backward start
-	BOTH_SWIMBACKWARD,		//# Swim backward loop
-	BOTH_SWIMBACKWARDSTOP,	//# Swim backward end
 
 	//# #sep BOTH_ LYING
 	BOTH_LIE_DOWN1,			//# From a stand position, get down on ground, face down
@@ -1156,6 +1174,7 @@ typedef enum //# animNumber_e
 	BOTH_SABERPULL,			//# Use off-hand to do force power.
 	BOTH_FORCEGRIP1,		//# force-gripping (no anim?)
 	BOTH_FORCEGRIP3,		//# force-gripping (right hand)
+	BOTH_FORCEGRIP3THROW,	//# throwing while force-gripping (right hand)
 	BOTH_FORCEGRIP_HOLD,	//# Use off-hand to do grip - hold
 	BOTH_FORCEGRIP_RELEASE,//# Use off-hand to do grip - release
 	BOTH_TOSS1,				//# throwing to left after force gripping
@@ -1189,9 +1208,10 @@ typedef enum //# animNumber_e
 	BOTH_COCKPIT_HEADTILTRSTART,	//# start tilt head right while sitting
 	BOTH_COCKPIT_HEADTILTRSTOP,		//# stop tilt head right while sitting
 
-	BOTH_COCKPIT_TALKGESTURE7START,		//# 
-	BOTH_COCKPIT_TALKGESTURE7STOP,		//# 
-	BOTH_COCKPIT_TALKGESTURE8,			//# 
+	BOTH_COCKPIT_TALKGESTURE7START,		//# Lando's supporting hand to Kyle (cin #21)
+	BOTH_COCKPIT_TALKGESTURE7STOP,		//# Lando's supporting hand away from Kyle (cin #21)
+	BOTH_COCKPIT_TALKGESTURE8START,		//# Hand to Lando's chin (cin #21)
+	BOTH_COCKPIT_TALKGESTURE8STOP,		//# hand away from Lando's chin *cin #21)
 	BOTH_COCKPIT_TALKGESTURE11START,	//# 
 	BOTH_COCKPIT_TALKGESTURE11STOP,		//# 
 
@@ -1235,23 +1255,7 @@ typedef enum //# animNumber_e
 	TORSO_WEAPONIDLE11,		//# Holding laser trap
 	TORSO_WEAPONIDLE12,		//# Holding detpack
 
-	//# #sep TORSO_ USING NON-WEAPON OBJECTS
-
 	//# #sep TORSO_ MISC
-	TORSO_TALKR1START,		//# begin turning head for BOTH_TORSO_TALKR
-	TORSO_TALKR1STOP,		//# return head to straight forward from BOTH_TORSO_TALKL
-	TORSO_TALKR1,			//# talk to right side
-	TORSO_TALKL1START,		//# begin turning head for BOTH_TORSO_TALKL
-	TORSO_TALKL1STOP,		//# return head to straight forward from BOTH_TORSO_TALKL
-	TORSO_TALKL1,			//# talk to left side
-	TORSO_LOOKL1,			//# looking left
-	TORSO_LOOKR1,			//# looking right
-	TORSO_LOOKR2START,		//# turn not so far as TALKR1
-	TORSO_LOOKR2STOP,		//# turn not so far as TALKR1
-	TORSO_LOOKR2,			//# looking right - not so far as LOOKR1
-	TORSO_LOOKL2START,		//# turn not so far as TALKL1
-	TORSO_LOOKL2STOP,		//# turn not so far as TALKL1
-	TORSO_LOOKL2,			//# looking right - not so far as LOOKL1
 	TORSO_HANDGESTURE1,		//# gestures to left one hand
 	TORSO_HANDGESTURE2,		//# gestures to right one hand
 	TORSO_HANDGESTURE3,		//# gestures to the left both hands
@@ -1353,7 +1357,6 @@ typedef enum //# animNumber_e
 	FACE_SMILE,				//# 
 	FACE_FROWN,				//# 
 	FACE_DEAD,				//# 
-	FACE_GALAK,			//# This has to be last for Galak Mech to talk
 
 	//# #eol
 	MAX_ANIMATIONS,
@@ -1361,7 +1364,7 @@ typedef enum //# animNumber_e
 
 #define SABER_ANIM_GROUP_SIZE (BOTH_A2_T__B_ - BOTH_A1_T__B_)
 
-#define MAX_ANIM_SOUNDS 64
+#define MAX_ANIM_SOUNDS 69
 
 #ifndef CG_PLAYERS_CPP
 

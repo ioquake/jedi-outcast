@@ -1,6 +1,7 @@
 
 #include "server.h"
 
+#include "../game/q_shared.h"
 /*
 Ghoul2 Insert Start
 */
@@ -258,6 +259,9 @@ void SV_Startup( void ) {
 	svs.clients = (struct client_s *)Z_Malloc (sizeof(client_t) * sv_maxclients->integer, TAG_CLIENTS, qtrue );
 	if ( com_dedicated->integer ) {
 		svs.numSnapshotEntities = sv_maxclients->integer * PACKET_BACKUP * 64;
+		Cvar_Set( "r_ghoul2animsmooth", "0");
+		Cvar_Set( "r_ghoul2unsqashaftersmooth", "0");
+
 	} else {
 		// we don't need nearly as many when playing locally
 		svs.numSnapshotEntities = sv_maxclients->integer * 4 * 64;
@@ -265,6 +269,7 @@ void SV_Startup( void ) {
 	svs.initialized = qtrue;
 
 	Cvar_Set( "sv_running", "1" );
+
 }
 
 /*
@@ -359,6 +364,9 @@ void SV_ClearServer(void) {
 			Z_Free( sv.configstrings[i] );
 		}
 	}
+
+//	CM_ClearMap();
+
 	/*
 Ghoul2 Insert Start
 */
@@ -420,6 +428,8 @@ clients along with it.
 This is NOT called for map_restart
 ================
 */
+extern void FixGhoul2InfoLeaks(bool,bool);
+
 extern void RE_RegisterMedia_LevelLoadBegin(const char *psMapName, ForceReload_e eForceReload);
 void SV_SpawnServer( char *server, qboolean killBots, ForceReload_e eForceReload ) {
 	int			i;
@@ -434,6 +444,9 @@ void SV_SpawnServer( char *server, qboolean killBots, ForceReload_e eForceReload
 
 	// shut down the existing game if it is running
 	SV_ShutdownGameProgs();
+
+	FixGhoul2InfoLeaks(false,true);
+
 
 	Com_Printf ("------ Server Initialization ------\n");
 	Com_Printf ("Server: %s\n",server);
@@ -457,8 +470,12 @@ Ghoul2 Insert End
 	// also print some status stuff
 	CL_MapLoading();
 
+#ifndef DEDICATED
 	// make sure all the client stuff is unloaded
 	CL_ShutdownAll();
+#endif
+
+	CM_ClearMap();
 
 	// clear the whole hunk because we're (re)loading the server
 	Hunk_Clear();
@@ -470,11 +487,13 @@ Ghoul2 Insert Start
 	// isnt a dedicated server.
 	if ( !com_dedicated->integer )
 	{
+#ifndef DEDICATED
 		R_InitImages();
 
 		R_InitShaders();
 
 		R_ModelInit();
+#endif
 	}
 	else
 	{
@@ -482,9 +501,6 @@ Ghoul2 Insert Start
 	}
 
 	SV_SendMapChange();
-
-	// clear collision map data
-	CM_ClearMap();
 
 	// init client structures and svs.numSnapshotEntities 
 	if ( !Cvar_VariableValue("sv_running") ) {
@@ -705,6 +721,17 @@ void SV_Init (void) {
 	Cvar_Get ("dmflags", "0", CVAR_SERVERINFO);
 	Cvar_Get ("fraglimit", "20", CVAR_SERVERINFO);
 	Cvar_Get ("timelimit", "0", CVAR_SERVERINFO);
+	
+	// Get these to establish them and to make sure they have a default before the menus decide to stomp them.
+	Cvar_Get ("g_maxHolocronCarry", "3", CVAR_SERVERINFO);
+	Cvar_Get ("g_privateDuel", "1", CVAR_SERVERINFO );
+	Cvar_Get ("g_saberLocking", "1", CVAR_SERVERINFO );
+	Cvar_Get ("g_maxForceRank", "6", CVAR_SERVERINFO );
+	Cvar_Get ("duel_fraglimit", "10", CVAR_SERVERINFO);
+	Cvar_Get ("g_forceBasedTeams", "0", CVAR_SERVERINFO);
+	Cvar_Get ("g_duelWeaponDisable", "1", CVAR_SERVERINFO);
+	Cvar_Get ("g_needpass", "0", CVAR_SERVERINFO);
+
 	sv_gametype = Cvar_Get ("g_gametype", "0", CVAR_SERVERINFO | CVAR_LATCH );
 	Cvar_Get ("sv_keywords", "", CVAR_SERVERINFO);
 	Cvar_Get ("protocol", va("%i", PROTOCOL_VERSION), CVAR_SERVERINFO | CVAR_ROM);
@@ -719,11 +746,10 @@ void SV_Init (void) {
 	sv_allowAnonymous = Cvar_Get ("sv_allowAnonymous", "0", CVAR_SERVERINFO);
 
 	// systeminfo
-	Cvar_Get ("sv_cheats", "1", CVAR_SYSTEMINFO | CVAR_ROM );
+	Cvar_Get ("sv_cheats", "0", CVAR_SYSTEMINFO | CVAR_ROM );
 	sv_serverid = Cvar_Get ("sv_serverid", "0", CVAR_SYSTEMINFO | CVAR_ROM );
 #ifndef DLL_ONLY // bk010216 - for DLL-only servers
-//	sv_pure = Cvar_Get ("sv_pure", "1", CVAR_SYSTEMINFO );
-	sv_pure = Cvar_Get ("sv_pure", "0", CVAR_SYSTEMINFO );//FIXME: put back for release
+	sv_pure = Cvar_Get ("sv_pure", "1", CVAR_SYSTEMINFO );
 #else
 	sv_pure = Cvar_Get ("sv_pure", "0", CVAR_SYSTEMINFO | CVAR_INIT | CVAR_ROM );
 #endif
@@ -751,6 +777,8 @@ void SV_Init (void) {
 	sv_padPackets = Cvar_Get ("sv_padPackets", "0", 0);
 	sv_killserver = Cvar_Get ("sv_killserver", "0", 0);
 	sv_mapChecksum = Cvar_Get ("sv_mapChecksum", "", CVAR_ROM);
+
+	sv_debugserver = Cvar_Get ("sv_debugserver", "0", 0);
 
 	SP_Register("str_server",SP_REGISTER_REQUIRED);
 

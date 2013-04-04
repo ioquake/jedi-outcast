@@ -67,6 +67,7 @@ char *inv_names[] =
 
 int	force_icons[NUM_FORCE_POWERS];
 
+
 int cgi_UI_GetMenuInfo(char *menuFile,int *x,int *y);
 void CG_DrawDataPadHUD( centity_t *cent );
 void MissionInformation_Draw( centity_t *cent );
@@ -141,16 +142,25 @@ Ghoul2 Insert End
 		return 0;
 
 	case CG_DRAW_DATAPAD_WEAPONS:
-		CG_DrawDataPadIconBackground(ICON_WEAPONS);
-		CG_DrawDataPadWeaponSelect();
+		if (cg.snap)
+		{
+			CG_DrawDataPadIconBackground(ICON_WEAPONS);
+			CG_DrawDataPadWeaponSelect();
+		}
 		return 0;
 	case CG_DRAW_DATAPAD_INVENTORY:
-		CG_DrawDataPadIconBackground(ICON_INVENTORY);
-		CG_DrawDataPadInventorySelect();
+		if (cg.snap)
+		{
+			CG_DrawDataPadIconBackground(ICON_INVENTORY);
+			CG_DrawDataPadInventorySelect();
+		}
 		return 0;
 	case CG_DRAW_DATAPAD_FORCEPOWERS:
-		CG_DrawDataPadIconBackground(ICON_FORCE);
-		CG_DrawDataPadForceSelect();
+		if (cg.snap)
+		{
+			CG_DrawDataPadIconBackground(ICON_FORCE);
+			CG_DrawDataPadForceSelect();
+		}
 		return 0;
 	}
 	return -1;
@@ -226,6 +236,7 @@ vmCvar_t	cg_crosshairY;
 vmCvar_t	cg_crosshairSize;
 vmCvar_t	cg_draw2D;
 vmCvar_t	cg_drawStatus;
+vmCvar_t	cg_drawHUD;
 vmCvar_t	cg_animSpeed;
 vmCvar_t	cg_debugAnim;
 vmCvar_t	cg_debugSaber;
@@ -245,11 +256,14 @@ vmCvar_t	cg_simpleItems;
 vmCvar_t	cg_fov;
 vmCvar_t	cg_missionstatusscreen;
 vmCvar_t	cg_endcredits;
-vmCvar_t	cg_updatedDataPadForcePower;
+vmCvar_t	cg_updatedDataPadForcePower1;
+vmCvar_t	cg_updatedDataPadForcePower2;
+vmCvar_t	cg_updatedDataPadForcePower3;
 vmCvar_t	cg_updatedDataPadObjective;
 
 vmCvar_t	cg_thirdPerson;
 vmCvar_t	cg_thirdPersonRange;
+vmCvar_t	cg_thirdPersonMaxRange;
 vmCvar_t	cg_thirdPersonAngle;
 vmCvar_t	cg_thirdPersonPitchOffset;
 vmCvar_t	cg_thirdPersonVertOffset;
@@ -259,6 +273,7 @@ vmCvar_t	cg_saberAutoThird;
 vmCvar_t	cg_gunAutoFirst;
 
 vmCvar_t	cg_thirdPersonAlpha;
+vmCvar_t	cg_thirdPersonAutoAlpha;
 vmCvar_t	cg_thirdPersonHorzOffset;
 
 vmCvar_t	cg_stereoSeparation;
@@ -285,8 +300,12 @@ Ghoul2 Insert End
 
 vmCvar_t	cg_VariantSoundCap;	// 0 = no capping, else cap to (n) max (typically just 1, but allows more)
 vmCvar_t	cg_turnAnims;
+vmCvar_t	cg_motionBoneComp;
+vmCvar_t	cg_reliableAnimSounds;
 
 vmCvar_t	cg_smoothPlayerPos;
+vmCvar_t	cg_smoothPlayerPlat;
+vmCvar_t	cg_smoothPlayerPlatAccel;
 
 typedef struct {
 	vmCvar_t	*vmCvar;
@@ -304,6 +323,7 @@ cvarTable_t		cvarTable[] = {
 
 	{ &cg_draw2D, "cg_draw2D", "1", CVAR_ARCHIVE  },
 	{ &cg_drawStatus, "cg_drawStatus", "1", CVAR_ARCHIVE  },
+	{ &cg_drawHUD, "cg_drawHUD", "1", 0  },
 	{ &cg_drawTimer, "cg_drawTimer", "0", CVAR_ARCHIVE  },
 	{ &cg_drawFPS, "cg_drawFPS", "0", CVAR_ARCHIVE  },
 	{ &cg_drawSnapshot, "cg_drawSnapshot", "0", CVAR_ARCHIVE  },
@@ -314,7 +334,9 @@ cvarTable_t		cvarTable[] = {
 	{ &cg_crosshairForceHint, "cg_crosshairForceHint", "1", CVAR_ARCHIVE },
 	{ &cg_missionstatusscreen, "cg_missionstatusscreen", "0", CVAR_ROM},
 	{ &cg_endcredits, "cg_endcredits", "0", 0},
-	{ &cg_updatedDataPadForcePower, "cg_updatedDataPadForcePower", "0", 0},
+	{ &cg_updatedDataPadForcePower1, "cg_updatedDataPadForcePower1", "0", 0},
+	{ &cg_updatedDataPadForcePower2, "cg_updatedDataPadForcePower2", "0", 0},
+	{ &cg_updatedDataPadForcePower3, "cg_updatedDataPadForcePower3", "0", 0},
 	{ &cg_updatedDataPadObjective, "cg_updatedDataPadObjective", "0", 0},
 
 	{ &cg_crosshairSize, "cg_crosshairSize", "24", CVAR_ARCHIVE },
@@ -347,6 +369,7 @@ cvarTable_t		cvarTable[] = {
 
 	{ &cg_thirdPerson, "cg_thirdPerson", "0", CVAR_USERINFO },
 	{ &cg_thirdPersonRange, "cg_thirdPersonRange", "80", 0 },
+	{ &cg_thirdPersonMaxRange, "cg_thirdPersonMaxRange", "150", 0 },
 	{ &cg_thirdPersonAngle, "cg_thirdPersonAngle", "0", 0 },
 	{ &cg_thirdPersonPitchOffset, "cg_thirdPersonPitchOffset", "0", 0 },
 	{ &cg_thirdPersonVertOffset, "cg_thirdPersonVertOffset", "16", 0},
@@ -355,6 +378,7 @@ cvarTable_t		cvarTable[] = {
 	
 	{ &cg_thirdPersonHorzOffset, "cg_thirdPersonHorzOffset", "0", 0},
 	{ &cg_thirdPersonAlpha,	"cg_thirdPersonAlpha",	"1.0", CVAR_CHEAT },
+	{ &cg_thirdPersonAutoAlpha,	"cg_thirdPersonAutoAlpha",	"0", 0 },
 
 	{ &cg_saberAutoThird, "cg_saberAutoThird", "1", CVAR_ARCHIVE },
 	{ &cg_gunAutoFirst, "cg_gunAutoFirst", "1", CVAR_ARCHIVE },
@@ -371,7 +395,7 @@ cvarTable_t		cvarTable[] = {
 	{ &cg_developer, "developer", "", 0 }, 
 	{ &cg_timescale, "timescale", "1", 0 }, 	
 	{ &cg_skippingcin, "skippingCinematic", "0", CVAR_ROM},
-	{ &cg_missionInfoFlashTime, "cg_missionInfoFlashTime", "15000", CVAR_ARCHIVE  },
+	{ &cg_missionInfoFlashTime, "cg_missionInfoFlashTime", "10000", 0  },
 	{ &cg_hudFiles, "cg_hudFiles", "ui/jk2hud.txt", CVAR_ARCHIVE},
 /*
 Ghoul2 Insert Start
@@ -381,8 +405,12 @@ Ghoul2 Insert Start
 Ghoul2 Insert End
 */
 	{ &cg_VariantSoundCap, "cg_VariantSoundCap", "0", 0 },
-	{ &cg_turnAnims, "cg_turnAnims", "0", CVAR_ARCHIVE },
+	{ &cg_turnAnims, "cg_turnAnims", "0", 0 },
+	{ &cg_motionBoneComp, "cg_motionBoneComp", "2", 0 },
+	{ &cg_reliableAnimSounds, "cg_reliableAnimSounds", "1", CVAR_ARCHIVE },
 	{ &cg_smoothPlayerPos, "cg_smoothPlayerPos", "0.5", 0},
+	{ &cg_smoothPlayerPlat, "cg_smoothPlayerPlat", "0.75", 0},
+	{ &cg_smoothPlayerPlatAccel, "cg_smoothPlayerPlatAccel", "3.25", 0},
 };
 
 int		cvarTableSize = sizeof( cvarTable ) / sizeof( cvarTable[0] );
@@ -435,13 +463,35 @@ int CG_GetCameraPos( vec3_t camerapos ) {
 	else if ( cg_entities[0].gent && cg_entities[0].gent->client && cg_entities[0].gent->client->ps.viewEntity > 0 && cg_entities[0].gent->client->ps.viewEntity < ENTITYNUM_WORLD )
 	//else if ( cg.snap && cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )
 	{//in an entity camera view
-		//VectorCopy( cg_entities[cg.snap->ps.viewEntity].lerpOrigin, camerapos );
-		VectorCopy( cg_entities[cg_entities[0].gent->client->ps.viewEntity].lerpOrigin, camerapos );
+		if ( g_entities[cg_entities[0].gent->client->ps.viewEntity].client && cg.renderingThirdPerson )
+		{
+			VectorCopy( g_entities[cg_entities[0].gent->client->ps.viewEntity].client->renderInfo.eyePoint, camerapos );
+		}
+		else
+		{
+			VectorCopy( g_entities[cg_entities[0].gent->client->ps.viewEntity].currentOrigin, camerapos );
+		}
+		//VectorCopy( cg_entities[cg_entities[0].gent->client->ps.viewEntity].lerpOrigin, camerapos );
+		/*
+		if ( g_entities[cg.snap->ps.viewEntity].client && cg.renderingThirdPerson )
+		{
+			VectorCopy( g_entities[cg.snap->ps.viewEntity].client->renderInfo.eyePoint, camerapos );
+		}
+		else
+		{//use the g_ent because it may not have gotten over to the client yet...
+			VectorCopy( g_entities[cg.snap->ps.viewEntity].currentOrigin, camerapos );
+		}
+		*/
 		return 1;
 	}
 	else if ( cg.renderingThirdPerson )
 	{//in third person
 		//FIXME: what about hacks that render in third person regardless of this value?
+		VectorCopy( cg.refdef.vieworg, camerapos );
+		return 1;
+	}
+	else if (cg.snap && (cg.snap->ps.weapon == WP_SABER||cg.snap->ps.weapon == WP_MELEE) )//implied: !cg.renderingThirdPerson 
+	{//first person saber hack
 		VectorCopy( cg.refdef.vieworg, camerapos );
 		return 1;
 	}
@@ -563,6 +613,25 @@ void CG_LoadingString( const char *s ) {
 	cgi_UpdateScreen();
 }
 
+
+static void CG_AS_Register(void)
+{
+	CG_LoadingString( "ambient sound sets" );
+
+	//Load the ambient sets
+
+	cgi_AS_AddPrecacheEntry( "#clear" );	// ;-)
+	//FIXME: Don't ask... I had to get around a really nasty MS error in the templates with this...
+	namePrecache_m::iterator	pi;
+	STL_ITERATE( pi, as_preCacheMap )
+	{
+		cgi_AS_AddPrecacheEntry( ((*pi).first).c_str() );
+	}
+
+	cgi_AS_ParseSets();
+}
+
+
 /*
 =================
 CG_RegisterSounds
@@ -575,18 +644,7 @@ static void CG_RegisterSounds( void ) {
 	char	name[MAX_QPATH];
 	const char	*soundName;
 
-	CG_LoadingString( "ambient sound sets" );
-
-	//Load the ambient sets
-
-	//FIXME: Don't ask... I had to get around a really nasty MS error in the templates with this...
-	namePrecache_m::iterator	pi;
-	STL_ITERATE( pi, as_preCacheMap )
-	{
-		cgi_AS_AddPrecacheEntry( ((*pi).first).c_str() );
-	}
-
-	cgi_AS_ParseSets();
+	CG_AS_Register();
 
 	CG_LoadingString( "general sounds" );
 
@@ -594,6 +652,7 @@ static void CG_RegisterSounds( void ) {
 	cgi_S_RegisterSound( "sound/player/fallsplat.wav" );
 
 	cgs.media.selectSound = cgi_S_RegisterSound( "sound/weapons/change.wav" );
+	cgs.media.selectSound2 = cgi_S_RegisterSound( "sound/interface/button1.wav" );
 //	cgs.media.useNothingSound = cgi_S_RegisterSound( "sound/items/use_nothing.wav" );
 
 	cgs.media.noAmmoSound = cgi_S_RegisterSound( "sound/weapons/noammo.wav" );
@@ -625,25 +684,30 @@ static void CG_RegisterSounds( void ) {
 	cgs.media.zoomLoop = cgi_S_RegisterSound( "sound/interface/zoomloop.wav" );
 	cgs.media.zoomEnd = cgi_S_RegisterSound( "sound/interface/zoomend.wav" );
 
-	// TEMP:  FIXME:  TODO: would like to be able to do this conditionally, personal assault sentry guns.
-	//----------------
 	cgi_S_RegisterSound( "sound/chars/turret/startup.wav" );
 	cgi_S_RegisterSound( "sound/chars/turret/shutdown.wav" );
 	cgi_S_RegisterSound( "sound/chars/turret/ping.wav" );
 	cgi_S_RegisterSound( "sound/chars/turret/move.wav" );
+	cgi_S_RegisterSound( "sound/player/use_sentry" );
 	cgi_R_RegisterModel( "models/items/psgun.glm" );
-	theFxScheduler.RegisterEffect( "tripMine/explosion" );
-	//----------------
+	theFxScheduler.RegisterEffect( "turret/explode" );
+	theFxScheduler.RegisterEffect( "spark_exp_nosnd" );
 
 	for (i=0 ; i<4 ; i++) {
-		Com_sprintf (name, sizeof(name), "sound/player/footsteps/step%i.wav", i+1);
+		Com_sprintf (name, sizeof(name), "sound/player/footsteps/stone_step%i.wav", i+1);
 		cgs.media.footsteps[FOOTSTEP_NORMAL][i] = cgi_S_RegisterSound (name);
 
-		Com_sprintf (name, sizeof(name), "sound/player/footsteps/water_wade0%i.wav", i+1);
+		Com_sprintf (name, sizeof(name), "sound/player/footsteps/metal_step%i.wav", i+1);
+		cgs.media.footsteps[FOOTSTEP_METAL][i] = cgi_S_RegisterSound (name);
+
+		Com_sprintf (name, sizeof(name), "sound/player/footsteps/water_run%i.wav", i+1);
 		cgs.media.footsteps[FOOTSTEP_SPLASH][i] = cgi_S_RegisterSound (name);
 
-		Com_sprintf (name, sizeof(name), "sound/player/footsteps/clank%i.wav", i+1);
-		cgs.media.footsteps[FOOTSTEP_METAL][i] = cgi_S_RegisterSound (name);
+		Com_sprintf (name, sizeof(name), "sound/player/footsteps/water_walk%i.wav", i+1);
+		cgs.media.footsteps[FOOTSTEP_WADE][i] = cgi_S_RegisterSound (name);
+
+		Com_sprintf (name, sizeof(name), "sound/player/footsteps/water_wade_0%i.wav", i+1);
+		cgs.media.footsteps[FOOTSTEP_SWIM][i] = cgi_S_RegisterSound (name);
 
 		// should these always be registered??
 		Com_sprintf (name, sizeof(name), "sound/player/footsteps/boot%i.wav", i+1);
@@ -655,11 +719,11 @@ static void CG_RegisterSounds( void ) {
 	CG_LoadingString( "item sounds" );
 
 	// only register the items that the server says we need
-//	char	items[MAX_ITEMS+1];
-//	strcpy( items, CG_ConfigString( CS_ITEMS ) );
+	char	items[MAX_ITEMS+1];
+	strcpy( items, CG_ConfigString( CS_ITEMS ) );
 
 	for ( i = 1 ; i < bg_numItems ; i++ ) {
-//		if ( items[ i ] == '1' )	//sound pooling means we can just load them always
+		if ( items[ i ] == '1' )	//even with sound pooling, don't clutter it for low end machines
 		{
 			CG_RegisterItemSounds( i );
 		}
@@ -1202,16 +1266,19 @@ static void CG_RegisterGraphics( void ) {
 		cgs.media.chunkModels[CHUNK_ROCK3][i]	= cgi_R_RegisterModel( va( "models/chunks/rock/rock3_%i.md3", i+1 ) );
 		cgs.media.chunkModels[CHUNK_CRATE1][i]	= cgi_R_RegisterModel( va( "models/chunks/crate/crate1_%i.md3", i+1 ) );
 		cgs.media.chunkModels[CHUNK_CRATE2][i]	= cgi_R_RegisterModel( va( "models/chunks/crate/crate2_%i.md3", i+1 ) );
+		cgs.media.chunkModels[CHUNK_WHITE_METAL][i]	= cgi_R_RegisterModel( va( "models/chunks/metal/wmetal1_%i.md3", i+1 ) );
 	}
 
-	cgs.media.chunkSound		= cgi_S_RegisterSound("sound/weapons/explosions/glasslcar.wav");
-	cgs.media.grateSound		= cgi_S_RegisterSound( "sound/effects/grate_destroy.mp3" );
-	cgs.media.rockBreakSound	= cgi_S_RegisterSound("sound/effects/wall_smash.mp3");
-	cgs.media.rockBounceSound[0]= cgi_S_RegisterSound("sound/effects/stone_bounce.wav");
-	cgs.media.rockBounceSound[1]= cgi_S_RegisterSound("sound/effects/stone_bounce2.wav");
-	cgs.media.metalBounceSound[0]	= cgi_S_RegisterSound("sound/effects/metal_bounce.wav");
-	cgs.media.metalBounceSound[1]	= cgi_S_RegisterSound("sound/effects/metal_bounce2.wav");
-	cgs.media.glassChunkSound	= cgi_S_RegisterSound("sound/weapons/explosions/glassbreak1.wav");
+	cgs.media.chunkSound			= cgi_S_RegisterSound("sound/weapons/explosions/glasslcar");
+	cgs.media.grateSound			= cgi_S_RegisterSound( "sound/effects/grate_destroy" );
+	cgs.media.rockBreakSound		= cgi_S_RegisterSound("sound/effects/wall_smash");
+	cgs.media.rockBounceSound[0]	= cgi_S_RegisterSound("sound/effects/stone_bounce");
+	cgs.media.rockBounceSound[1]	= cgi_S_RegisterSound("sound/effects/stone_bounce2");
+	cgs.media.metalBounceSound[0]	= cgi_S_RegisterSound("sound/effects/metal_bounce");
+	cgs.media.metalBounceSound[1]	= cgi_S_RegisterSound("sound/effects/metal_bounce2");
+	cgs.media.glassChunkSound		= cgi_S_RegisterSound("sound/weapons/explosions/glassbreak1");
+	cgs.media.crateBreakSound[0]	= cgi_S_RegisterSound("sound/weapons/explosions/crateBust1" );
+	cgs.media.crateBreakSound[1]	= cgi_S_RegisterSound("sound/weapons/explosions/crateBust2" );
 
 	cgs.media.weaponbox	 = cgi_R_RegisterShaderNoMip( "gfx/interface/weapon_box");
 
@@ -1236,8 +1303,11 @@ static void CG_RegisterGraphics( void ) {
 	cgs.media.messageLitOff = cgi_R_RegisterShaderNoMip( "gfx/hud/message_off" );
 	cgs.media.messageObjCircle = cgi_R_RegisterShaderNoMip( "gfx/hud/objective_circle" );
 
+	cgs.media.DPForcePowerOverlay = cgi_R_RegisterShader( "gfx/hud/force_swirl" );
+
 	// battery charge shader when using a gonk
 	cgs.media.batteryChargeShader = cgi_R_RegisterShader( "gfx/2d/battery" );
+	cgi_R_RegisterShader( "gfx/2d/droid_view" );	
 
 	// Load force tics
 	for (i=0;i<MAX_TICS;i++)
@@ -1389,7 +1459,6 @@ Ghoul2 Insert End
 	extern	cvar_t	*com_buildScript;
 
 	if (com_buildScript->integer) {
-		cgi_R_RegisterShader( "gfx/2d/droid_view" );	
 		cgi_R_RegisterShader( "gfx/misc/nav_cpoint" );
 		cgi_R_RegisterShader( "gfx/misc/nav_line" );
 		cgi_R_RegisterShader( "gfx/misc/nav_arrow" );
@@ -1554,8 +1623,6 @@ Ghoul2 Insert End
 
 	CG_ClearLightStyles();
 
-	cg.dataPadLevelStartTime = cg.time+15000;
-
 }
 
 void CG_WriteTheEvilCGHackStuff(void)
@@ -1632,6 +1699,8 @@ Called after every level change or subsystem restart
 void CG_Init( int serverCommandSequence ) {
 	cgs.serverCommandSequence = serverCommandSequence;
 
+	cgi_Cvar_Set( "cg_drawHUD", "1" );
+
 	// fonts...
 	//
 	cgs.media.charsetShader = cgi_R_RegisterShaderNoMip("gfx/2d/charsgrid_med");
@@ -1640,7 +1709,8 @@ void CG_Init( int serverCommandSequence ) {
 	cgs.media.qhFontMedium= cgi_R_RegisterFont("ergoec");
 
 	cgs.media.whiteShader   = cgi_R_RegisterShader( "white" );
-	cgs.media.loadTick   = cgi_R_RegisterShaderNoMip( "gfx/hud/load_tick" );
+	cgs.media.loadTick		= cgi_R_RegisterShaderNoMip( "gfx/hud/load_tick" );
+	cgs.media.loadTickCap	= cgi_R_RegisterShaderNoMip( "gfx/hud/load_tick_cap" );
 
 	static char		*force_icon_files[NUM_FORCE_POWERS] = 
 	{
@@ -1705,6 +1775,7 @@ Called before every level change or subsystem restart
 */
 void CG_Shutdown( void ) 
 {
+	in_camera = false;
 	FX_Free();
 }
 
@@ -2521,6 +2592,7 @@ void CG_NextInventory_f( void )
 
 		if ( CG_InventorySelectable( cg.inventorySelect ) && (inv_icons[cg.inventorySelect])) 
 		{	
+			cgi_S_StartSound (NULL, 0, CHAN_AUTO, cgs.media.selectSound2 );
 			SetInventoryTime();
 			return;
 		}
@@ -2574,6 +2646,7 @@ void CG_PrevInventory_f( void )
 		
 		if ( CG_InventorySelectable( cg.inventorySelect ) && (inv_icons[cg.inventorySelect])) 
 		{	
+			cgi_S_StartSound (NULL, 0, CHAN_AUTO, cgs.media.selectSound2 );
 			SetInventoryTime();
 			return;
 		}
@@ -2653,6 +2726,7 @@ void CG_DrawInventorySelect( void )
 //	int				tag;
 	float			addX;
 	vec4_t			textColor = { .312f, .75f, .621f, 1.0f };
+	char			text[1024]={0};
 
 	// don't display if dead
 	if ( cg.predicted_player_state.stats[STAT_HEALTH] <= 0 || ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )) 
@@ -2690,7 +2764,10 @@ void CG_DrawInventorySelect( void )
 
 	if (!count)
 	{
-		CG_DrawProportionalString(320, y2 + 22, "EMPTY INVENTORY", CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);
+		cgi_SP_GetStringTextString("INGAME_EMPTY_INV",text, sizeof(text) );
+		int w = cgi_R_Font_StrLenPixels( text, cgs.media.qhFontSmall, 1.0f );	
+		x = ( SCREEN_WIDTH - w ) / 2;
+		CG_DrawProportionalString(x, y2 + 22, text, CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);
 		return;
 	}
 
@@ -2846,16 +2923,8 @@ char *inventoryDesc[15] =
 "INQUISITOR_DESC",
 "LA_GOGGLES_DESC",
 "PORTABLE_SENTRY_DESC",
-"SECURITY_KEY_DESC",
-"SECURITY_KEY_DESC",
-"SECURITY_KEY_DESC",
-"SECURITY_KEY_DESC",
-"SECURITY_KEY_DESC",
-"SECURITY_KEY_DESC",
-"SECURITY_KEY_DESC",
-"SECURITY_KEY_DESC",
-"SECURITY_KEY_DESC",
-"SECURITY_KEY_DESC",
+"GOODIE_KEY_DESC",
+"SECURITY_KEY_DP_DESC",
 };
 
 
@@ -2875,6 +2944,7 @@ void CG_DrawDataPadInventorySelect( void )
 	int				height;
 	float			addX;
 	char			text[1024]={0};
+	vec4_t			textColor = { .312f, .75f, .621f, 1.0f };
 
 
 	// count the number of items owned
@@ -2891,7 +2961,9 @@ void CG_DrawDataPadInventorySelect( void )
 	if (!count)
 	{
 		cgi_SP_GetStringTextString("INGAME_EMPTY_INV",text, sizeof(text) );
-		CG_DrawProportionalString(320, 300 + 22, text, CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);
+		int w = cgi_R_Font_StrLenPixels( text, cgs.media.qhFontSmall, 1.0f );	
+		x = ( SCREEN_WIDTH - w ) / 2;
+		CG_DrawProportionalString(x, 300 + 22, text, CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);
 		return;
 	}
 
@@ -2915,9 +2987,8 @@ void CG_DrawDataPadInventorySelect( void )
 		sideRightIconCnt = holdCount - sideLeftIconCnt;
 	}
 
-	char buffer[256];
-
-	cgi_UI_GetItemText("datapadInventoryMenu",va("invdesc%d",cg.DataPadInventorySelect+1),buffer);
+//	char buffer[256];
+//	cgi_UI_GetItemText("datapadInventoryMenu",va("invdesc%d",cg.DataPadInventorySelect+1),buffer);
 
 	i = cg.DataPadInventorySelect - 1;
 	if (i<0)
@@ -3040,7 +3111,7 @@ void CG_DrawDataPadInventorySelect( void )
 			CG_DisplayBoxedText(70,50,500,300,text,
 														cgs.media.qhFontSmall,
 														0.7f,
-														colorTable[CT_WHITE]	
+														textColor	
 														);
 		}
 	}
@@ -3066,7 +3137,7 @@ void SetForcePowerTime(void)
 	}
 }
 
-int showPowers[] = 
+int showPowers[MAX_SHOWPOWERS] = 
 {
 	FP_HEAL,
 	FP_SPEED,
@@ -3074,23 +3145,9 @@ int showPowers[] =
 	FP_PULL,
 	FP_TELEPATHY,
 	FP_GRIP,
-	FP_LIGHTNING,
-	NUM_FORCE_POWERS,
+	FP_LIGHTNING
 };
-/*
-char *showPowersName[] = 
-{
-	"Heal",
-	"Speed",
-	"Push",
-	"Pull",
-	"Mind Trick",
-	"Grip",
-	"Lightning",
-	NULL,
-};
-*/
-char *showPowersName[] = 
+char *showPowersName[MAX_SHOWPOWERS] = 
 {
 	"HEAL2",
 	"SPEED2",
@@ -3099,10 +3156,9 @@ char *showPowersName[] =
 	"MINDTRICK2",
 	"GRIP2",
 	"LIGHTNING2",
-	NULL,
 };
 
-int showDataPadPowers[] = 
+int showDataPadPowers[MAX_DPSHOWPOWERS] = 
 {
 	FP_HEAL,
 	FP_LEVITATION,
@@ -3115,10 +3171,9 @@ int showDataPadPowers[] =
 	FP_SABERTHROW,
 	FP_SABER_DEFENSE,
 	FP_SABER_OFFENSE,
-	NUM_FORCE_POWERS,
 };
 
-char *showDataPadPowersName[] = 
+/*char *showDataPadPowersName[MAX_DPSHOWPOWERS] = 
 {
 	"HEAL2",
 	"JUMP2",
@@ -3131,8 +3186,9 @@ char *showDataPadPowersName[] =
 	"SABER_THROW2",
 	"SABER_DEFENSE2",
 	"SABER_OFFENSE2",
-	NULL,
 };
+/*
+
 /*
 ===============
 ForcePower_Valid
@@ -3142,6 +3198,8 @@ qboolean ForcePower_Valid(int index)
 {
 	gentity_t	*player = &g_entities[0];
 
+	assert (MAX_SHOWPOWERS == ( sizeof(showPowers)/sizeof(showPowers[0]) ));
+	assert (index < MAX_SHOWPOWERS );	//is this a valid index?
 	if (player->client->ps.forcePowersKnown & (1 << showPowers[index]) && 
 		player->client->ps.forcePowerLevel[showPowers[index]])	// Does he have the force power?
 	{
@@ -3178,13 +3236,14 @@ void CG_NextForcePower_f( void )
 	{
 		cg.forcepowerSelect++;
 
-		if (showPowers[cg.forcepowerSelect] >= NUM_FORCE_POWERS)
+		if (cg.forcepowerSelect >= MAX_SHOWPOWERS)
 		{ 
 			cg.forcepowerSelect = 0; 
 		}
 
 		if (ForcePower_Valid(cg.forcepowerSelect))	// Does he have the force power?
 		{
+			cgi_S_StartSound (NULL, 0, CHAN_AUTO, cgs.media.selectSound2 );
 			return;
 		}
 	}
@@ -3221,11 +3280,12 @@ void CG_PrevForcePower_f( void )
 
 		if (cg.forcepowerSelect < 0)
 		{ 
-			cg.forcepowerSelect = MAX_SHOWPOWERS; 
+			cg.forcepowerSelect = MAX_SHOWPOWERS - 1; 
 		}
 
 		if (ForcePower_Valid(cg.forcepowerSelect))	// Does he have the force power?
 		{
+			cgi_S_StartSound (NULL, 0, CHAN_AUTO, cgs.media.selectSound2 );
 			return;
 		}
 	}
@@ -3264,7 +3324,7 @@ void CG_DrawForceSelect( void )
 	// count the number of powers owned
 	count = 0;
 
-	for (i=0;showPowers[i]!=NUM_FORCE_POWERS;++i)
+	for (i=0; i<MAX_SHOWPOWERS; ++i)
 	{
 		if (ForcePower_Valid(i))
 		{
@@ -3323,7 +3383,7 @@ void CG_DrawForceSelect( void )
 	i = cg.forcepowerSelect - 1;
 	if (i < 0)
 	{
-		i = MAX_SHOWPOWERS;
+		i = MAX_SHOWPOWERS-1;
 	}
 
 	cgi_R_SetColor(NULL);
@@ -3333,7 +3393,7 @@ void CG_DrawForceSelect( void )
 	{
 		if (i < 0)
 		{
-			i = MAX_SHOWPOWERS;
+			i = MAX_SHOWPOWERS-1;
 		}
 
 		if (!ForcePower_Valid(i))	// Does he have this power?
@@ -3358,7 +3418,7 @@ void CG_DrawForceSelect( void )
 
 
 	i = cg.forcepowerSelect + 1;
-	if (i>MAX_SHOWPOWERS)
+	if (i>=MAX_SHOWPOWERS)
 	{
 		i = 0;
 	}
@@ -3367,7 +3427,7 @@ void CG_DrawForceSelect( void )
 	holdX = x + (bigIconSize/2) + pad;
 	for (iconCnt=1;iconCnt<(sideRightIconCnt+1);i++)
 	{
-		if (i>MAX_SHOWPOWERS)
+		if (i>=MAX_SHOWPOWERS)
 		{
 			i = 0;
 		}
@@ -3397,6 +3457,25 @@ void CG_DrawForceSelect( void )
 
 /*
 ===============
+ForcePowerDataPad_Valid
+===============
+*/
+qboolean ForcePowerDataPad_Valid(int index)
+{
+	gentity_t	*player = &g_entities[0];
+
+	assert (index < MAX_DPSHOWPOWERS);
+	if (player->client->ps.forcePowersKnown & (1 << showDataPadPowers[index]) && 
+		player->client->ps.forcePowerLevel[showDataPadPowers[index]])	// Does he have the force power?
+	{
+		return qtrue;
+	}
+
+	return qfalse;
+}
+
+/*
+===============
 CG_DPNextForcePower_f
 ===============
 */
@@ -3412,16 +3491,16 @@ void CG_DPNextForcePower_f( void )
 
 	original = cg.DataPadforcepowerSelect;
 
-	for ( i = 0 ;showDataPadPowers[i]!=NUM_FORCE_POWERS ; i++ ) 
+	for ( i = 0; i<MAX_DPSHOWPOWERS; i++ ) 
 	{
 		cg.DataPadforcepowerSelect++;
 
-		if (showDataPadPowers[cg.DataPadforcepowerSelect] >= NUM_FORCE_POWERS)
+		if (cg.DataPadforcepowerSelect >= MAX_DPSHOWPOWERS)
 		{ 
 			cg.DataPadforcepowerSelect = 0; 
 		}
 
-		if (ForcePower_Valid(i))	// Does he have the force power?
+		if (ForcePowerDataPad_Valid(cg.DataPadforcepowerSelect))	// Does he have the force power?
 		{
 			return;
 		}
@@ -3447,16 +3526,16 @@ void CG_DPPrevForcePower_f( void )
 
 	original = cg.DataPadforcepowerSelect;
 
-	for ( i = 0 ;showDataPadPowers[i]!=NUM_FORCE_POWERS ; i++ ) 
+	for ( i = 0; i<MAX_DPSHOWPOWERS; i++ ) 
 	{
 		cg.DataPadforcepowerSelect--;
 
 		if (cg.DataPadforcepowerSelect < 0)
 		{ 
-			cg.DataPadforcepowerSelect = NUM_FORCE_POWERS-1; 
+			cg.DataPadforcepowerSelect = MAX_DPSHOWPOWERS-1; 
 		}
 
-		if (ForcePower_Valid(i))	// Does he have the force power?
+		if (ForcePowerDataPad_Valid(cg.DataPadforcepowerSelect))	// Does he have the force power?
 		{
 			return;
 		}
@@ -3476,9 +3555,9 @@ char *forcepowerDesc[NUM_FORCE_POWERS] =
 "FORCE_MIND_TRICK_DESC",
 "FORCE_GRIP_DESC",
 "FORCE_LIGHTNING_DESC",
+"FORCE_SABER_THROW_DESC",
 "FORCE_SABER_DEFENSE_DESC",
 "FORCE_SABER_OFFENSE_DESC",
-"FORCE_SABER_THROW_DESC",
 };
 
 char *forcepowerLvl1Desc[NUM_FORCE_POWERS] = 
@@ -3491,9 +3570,9 @@ char *forcepowerLvl1Desc[NUM_FORCE_POWERS] =
 "FORCE_MIND_TRICK_LVL1_DESC",
 "FORCE_GRIP_LVL1_DESC",
 "FORCE_LIGHTNING_LVL1_DESC",
+"FORCE_SABER_THROW_LVL1_DESC",
 "FORCE_SABER_DEFENSE_LVL1_DESC",
 "FORCE_SABER_OFFENSE_LVL1_DESC",
-"FORCE_SABER_THROW_LVL1_DESC",
 };
 
 char *forcepowerLvl2Desc[NUM_FORCE_POWERS] = 
@@ -3506,9 +3585,9 @@ char *forcepowerLvl2Desc[NUM_FORCE_POWERS] =
 "FORCE_MIND_TRICK_LVL2_DESC",
 "FORCE_GRIP_LVL2_DESC",
 "FORCE_LIGHTNING_LVL2_DESC",
+"FORCE_SABER_THROW_LVL2_DESC",
 "FORCE_SABER_DEFENSE_LVL2_DESC",
 "FORCE_SABER_OFFENSE_LVL2_DESC",
-"FORCE_SABER_THROW_LVL2_DESC",
 };
 
 char *forcepowerLvl3Desc[NUM_FORCE_POWERS] = 
@@ -3521,28 +3600,11 @@ char *forcepowerLvl3Desc[NUM_FORCE_POWERS] =
 "FORCE_MIND_TRICK_LVL3_DESC",
 "FORCE_GRIP_LVL3_DESC",
 "FORCE_LIGHTNING_LVL3_DESC",
+"FORCE_SABER_THROW_LVL3_DESC",
 "FORCE_SABER_DEFENSE_LVL3_DESC",
 "FORCE_SABER_OFFENSE_LVL3_DESC",
-"FORCE_SABER_THROW_LVL3_DESC",
 };
 
-/*
-===============
-ForcePowerDataPad_Valid
-===============
-*/
-qboolean ForcePowerDataPad_Valid(int index)
-{
-	gentity_t	*player = &g_entities[0];
-
-	if (player->client->ps.forcePowersKnown & (1 << showDataPadPowers[index]) && 
-		player->client->ps.forcePowerLevel[showDataPadPowers[index]])	// Does he have the force power?
-	{
-		return qtrue;
-	}
-
-	return qfalse;
-}
 /*
 ===================
 CG_DrawDataPadForceSelect
@@ -3562,7 +3624,7 @@ void CG_DrawDataPadForceSelect( void )
 	// count the number of powers owned
 	count = 0;
 
-	for (i=0;showDataPadPowers[i]!=NUM_FORCE_POWERS;++i)
+	for (i=0;i<MAX_DPSHOWPOWERS;++i)
 	{
 		if (ForcePowerDataPad_Valid(i))
 		{
@@ -3574,6 +3636,10 @@ void CG_DrawDataPadForceSelect( void )
 	{
 		return;
 	}
+
+
+	// Time to switch new icon colors
+	cgi_R_SetColor(colorTable[CT_WHITE]);
 
 	cg.iconSelectTime = cg.forcepowerSelectTime;
 
@@ -3597,6 +3663,7 @@ void CG_DrawDataPadForceSelect( void )
 		sideRightIconCnt = holdCount - sideLeftIconCnt;
 	}
 
+
 	smallIconSize = 30;
 	bigIconSize = 60;
 	pad = 8;
@@ -3611,7 +3678,7 @@ void CG_DrawDataPadForceSelect( void )
 	i = cg.DataPadforcepowerSelect - 1;
 	if (i < 0)
 	{
-		i = NUM_FORCE_POWERS-1;
+		i = MAX_DPSHOWPOWERS-1;
 	}
 
 	cgi_R_SetColor(NULL);
@@ -3621,7 +3688,7 @@ void CG_DrawDataPadForceSelect( void )
 	{
 		if (i < 0)
 		{
-			i = NUM_FORCE_POWERS-1;
+			i = MAX_DPSHOWPOWERS-1;
 		}
 
 		if (!ForcePowerDataPad_Valid(i))	// Does he have this power?
@@ -3634,6 +3701,18 @@ void CG_DrawDataPadForceSelect( void )
 		if (force_icons[showDataPadPowers[i]])
 		{
 			CG_DrawPic( holdX, y, smallIconSize, smallIconSize, force_icons[showDataPadPowers[i]] ); 
+		}
+
+		// A new force power
+		if (((cg_updatedDataPadForcePower1.integer - 1) == showDataPadPowers[i]) ||
+			((cg_updatedDataPadForcePower2.integer - 1) == showDataPadPowers[i]) ||
+			((cg_updatedDataPadForcePower3.integer - 1) == showDataPadPowers[i]))
+		{
+			CG_DrawPic( holdX, y, smallIconSize, smallIconSize, cgs.media.DPForcePowerOverlay ); 
+		}
+
+		if (force_icons[showDataPadPowers[i]])
+		{
 			holdX -= (smallIconSize+pad);
 		}
 	}
@@ -3641,12 +3720,21 @@ void CG_DrawDataPadForceSelect( void )
 	// Current Center Icon
 	if (force_icons[showDataPadPowers[cg.DataPadforcepowerSelect]])
 	{
+
 		CG_DrawPic( x-(bigIconSize/2), (y-((bigIconSize-smallIconSize)/2)), bigIconSize, bigIconSize, force_icons[showDataPadPowers[cg.DataPadforcepowerSelect]] ); //only cache the icon for display
+
+		// New force power
+		if (((cg_updatedDataPadForcePower1.integer - 1) == showDataPadPowers[cg.DataPadforcepowerSelect]) ||
+			((cg_updatedDataPadForcePower2.integer - 1) == showDataPadPowers[cg.DataPadforcepowerSelect]) ||
+			((cg_updatedDataPadForcePower3.integer - 1) == showDataPadPowers[cg.DataPadforcepowerSelect]))
+		{			
+			CG_DrawPic( x-(bigIconSize/2), (y-((bigIconSize-smallIconSize)/2)), bigIconSize, bigIconSize, cgs.media.DPForcePowerOverlay ); 
+		}
 	}
 
 
 	i = cg.DataPadforcepowerSelect + 1;
-	if (i>=NUM_FORCE_POWERS)
+	if (i>=MAX_DPSHOWPOWERS)
 	{
 		i = 0;
 	}
@@ -3655,7 +3743,7 @@ void CG_DrawDataPadForceSelect( void )
 	holdX = x + (bigIconSize/2) + pad;
 	for (iconCnt=1;iconCnt<(sideRightIconCnt+1);i++)
 	{
-		if (i>=NUM_FORCE_POWERS)
+		if (i>=MAX_DPSHOWPOWERS)
 		{
 			i = 0;
 		}
@@ -3670,6 +3758,18 @@ void CG_DrawDataPadForceSelect( void )
 		if (force_icons[showDataPadPowers[i]])
 		{
 			CG_DrawPic( holdX, y, smallIconSize, smallIconSize, force_icons[showDataPadPowers[i]] ); //only cache the icon for display
+		}
+
+		// A new force power
+		if (((cg_updatedDataPadForcePower1.integer - 1) == showDataPadPowers[i]) ||
+			((cg_updatedDataPadForcePower2.integer - 1) == showDataPadPowers[i]) ||
+			((cg_updatedDataPadForcePower3.integer - 1) == showDataPadPowers[i]))
+		{
+			CG_DrawPic( holdX, y, smallIconSize, smallIconSize, cgs.media.DPForcePowerOverlay ); //only cache the icon for display
+		}
+
+		if (force_icons[showDataPadPowers[i]])
+		{
 			holdX += (smallIconSize+pad);
 		}
 	}
@@ -3695,7 +3795,7 @@ void CG_DrawDataPadForceSelect( void )
 		CG_DisplayBoxedText(70,50,500,300,va("%s%s",text,text2),
 													cgs.media.qhFontSmall,
 													0.7f,
-													colorTable[CT_WHITE]	
+													colorTable[CT_ICON_BLUE]	
 													);
 	}
 }

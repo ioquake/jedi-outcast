@@ -45,7 +45,7 @@ RSC=rc.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
-# ADD CPP /nologo /G6 /MT /W4 /GX /Zi /O2 /D "_NPATCH" /D "NDEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /YX /FD /c
+# ADD CPP /nologo /G6 /MT /W4 /GX /Zi /O2 /D "NDEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /YX /FD /c
 # ADD BASE MTL /nologo /D "NDEBUG" /win32
 # ADD MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
@@ -72,7 +72,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /Gm /GX /Zi /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /YX /c
-# ADD CPP /nologo /G6 /MTd /W4 /Gm /Gi /GX /ZI /Od /D "_NPATCH" /D "_DEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /Fr /YX /FD /c
+# ADD CPP /nologo /G6 /MTd /W4 /Gm /Gi /GX /ZI /Od /D "_DEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /Fr /YX /FD /c
 # ADD BASE MTL /nologo /D "_DEBUG" /win32
 # ADD MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
@@ -100,7 +100,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /G6 /MT /W4 /GX /Zi /O2 /D "NDEBUG" /D "WIN32" /D "_WINDOWS" /D "__USEA3D" /D "__A3D_GEOM" /YX /FD /c
-# ADD CPP /nologo /G6 /MT /W4 /GX /Zi /O2 /D "NDEBUG" /D "FINAL_BUILD" /D "_NPATCH" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /YX /FD /c
+# ADD CPP /nologo /G6 /MT /W4 /GX /Zi /O2 /D "NDEBUG" /D "FINAL_BUILD" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /YX /FD /c
 # ADD BASE MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
@@ -129,7 +129,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /G6 /MTd /W4 /Gm /Gi /GX /ZI /Od /D "_NPATCH" /D "_DEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /Fr /YX /FD /c
-# ADD CPP /nologo /G6 /MTd /W4 /Gm /Gi /GX /ZI /Od /D "_NPATCH" /D "_DEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /D "MEM_DEBUG" /Fr /YX /FD /c
+# ADD CPP /nologo /G6 /MTd /W4 /Gm /Gi /GX /ZI /Od /D "_DEBUG" /D "MEM_DEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /Fr /YX /FD /c
 # ADD BASE MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /fo"win32\winquake.res" /d "_DEBUG"
@@ -1476,6 +1476,11 @@ SOURCE=.\ui\ui_atoms.cpp
 # Begin Source File
 
 SOURCE=.\ui\ui_connect.cpp
+# ADD CPP /Yu"..\server\exe_headers.h"
+# End Source File
+# Begin Source File
+
+SOURCE=.\ui\ui_debug.cpp
 # ADD CPP /Yu"..\server\exe_headers.h"
 # End Source File
 # Begin Source File

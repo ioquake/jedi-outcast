@@ -1268,6 +1268,17 @@ typedef enum
 #define MIN_WORLD_COORD		( -64*1024 )
 #define WORLD_SIZE			( MAX_WORLD_COORD - MIN_WORLD_COORD )
 
+typedef enum
+{
+	WHL_NONE,
+	WHL_ANKLES,
+	WHL_KNEES,
+	WHL_WAIST,
+	WHL_TORSO,
+	WHL_SHOULDERS,
+	WHL_HEAD,
+	WHL_UNDER
+} waterHeightLevel_t;
 
 // playerState_t is the information needed by both the client and server
 // to predict player motion and actions
@@ -1342,7 +1353,7 @@ typedef struct playerState_s {
 	int			inventory[MAX_INVENTORY];							// Count of each inventory item.
 	char  		security_key_message[MAX_SECURITY_KEYS][MAX_SECURITY_KEY_MESSSAGE];	// Security key types 
 
-	vec3_t		pushVec;
+	vec3_t		serverViewOrg;
 
 	qboolean	saberInFlight;
 	qboolean	saberActive;
@@ -1402,6 +1413,9 @@ typedef struct playerState_s {
 
 	float		jumpZStart;							//So when you land, you don't get hurt as much
 	vec3_t		moveDir;
+
+	float		waterheight;						//exactly what the z org of the water is (will be +4 above if under water, -4 below if not in water)
+	waterHeightLevel_t	waterHeightLevel;					//how high it really is
 } playerState_t;
 
 
@@ -1515,8 +1529,6 @@ typedef struct entityState_s {// !!!!!!!!!!! LOADSAVE-affecting struct !!!!!!!!!
 	int		torsoAnimTimer;	// don't change low priority animations on torso until this runs out
 
 	int		scale;			//Scale players
-
-	vec3_t		pushVec;
 
 	qboolean	saberInFlight;
 	qboolean	saberActive;

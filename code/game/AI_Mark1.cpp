@@ -49,32 +49,28 @@ NPC_Mark1_Precache
 */
 void NPC_Mark1_Precache(void)
 {
-	G_SoundIndex( "sound/chars/mark1/misc/wakeup.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/shutdown.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/walk.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/run.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/talk1.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/talk2.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/talk3.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/talk4.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/pain01.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/pain02.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/death1.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/death2.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/anger.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/shoot1.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/shoot2.wav");
-	G_SoundIndex( "sound/chars/mark1/misc/shoot3.wav");
+	G_SoundIndex( "sound/chars/mark1/misc/mark1_wakeup");
+	G_SoundIndex( "sound/chars/mark1/misc/shutdown");
+	G_SoundIndex( "sound/chars/mark1/misc/walk");
+	G_SoundIndex( "sound/chars/mark1/misc/run");
+	G_SoundIndex( "sound/chars/mark1/misc/death1");
+	G_SoundIndex( "sound/chars/mark1/misc/death2");
+	G_SoundIndex( "sound/chars/mark1/misc/anger");
+	G_SoundIndex( "sound/chars/mark1/misc/mark1_fire");
+	G_SoundIndex( "sound/chars/mark1/misc/mark1_pain");
+	G_SoundIndex( "sound/chars/mark1/misc/mark1_explo");
 
-	G_EffectIndex( "small_chunks");
-	G_EffectIndex( "mouseexplosion1");
+//	G_EffectIndex( "small_chunks");
+	G_EffectIndex( "env/med_explode2");
 	G_EffectIndex( "probeexplosion1");
 	G_EffectIndex( "blaster/smoke_bolton");
 	G_EffectIndex( "bryar/muzzle_flash");
 	G_EffectIndex( "droidexplosion1" );
 
 	RegisterItem( FindItemForAmmo( 	AMMO_METAL_BOLTS));
-	RegisterItem( FindItemForAmmo( AMMO_POWERCELL ));
+	RegisterItem( FindItemForAmmo( AMMO_BLASTER ));
+	RegisterItem( FindItemForWeapon( WP_BOWCASTER ));
+	RegisterItem( FindItemForWeapon( WP_BRYAR_PISTOL ));
 }
 
 /*
@@ -82,11 +78,25 @@ void NPC_Mark1_Precache(void)
 NPC_Mark1_Part_Explode
 -------------------------
 */
-void NPC_Mark1_Part_Explode(gentity_t *self,int bolt)
+void NPC_Mark1_Part_Explode( gentity_t *self, int bolt )
 {
-	G_PlayEffect( "small_chunks", self->playerModel, bolt, self->s.number);
-	G_PlayEffect( "mouseexplosion1", self->playerModel, bolt, self->s.number);
-	G_PlayEffect( "blaster/smoke_bolton", self->playerModel, bolt, self->s.number);
+	if ( bolt >=0 )
+	{
+		mdxaBone_t	boltMatrix;
+		vec3_t		org, dir;
+
+		gi.G2API_GetBoltMatrix( self->ghoul2, self->playerModel, 
+					bolt,
+					&boltMatrix, self->currentAngles, self->currentOrigin, (cg.time?cg.time:level.time),
+					NULL, self->s.modelScale );
+
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, org );
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, dir );
+
+		G_PlayEffect( "env/med_explode2", org, dir );
+	}
+
+	G_PlayEffect( "blaster/smoke_bolton", self->playerModel, bolt, self->s.number );
 }
 
 /*
@@ -123,9 +133,9 @@ void Mark1Dead_FireRocket (void)
 	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, muzzle1 );
 	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, muzzle_dir );
 
-//	G_PlayEffect( "blaster/muzzle_flash", muzzle1 );
+	G_PlayEffect( "bryar/muzzle_flash", muzzle1, muzzle_dir );
 
-	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/shoot2.wav"));
+	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/mark1_fire"));
 
 	gentity_t *missile = CreateMissile( muzzle1, muzzle_dir, BOWCASTER_VELOCITY, 10000, NPC );
 
@@ -174,7 +184,7 @@ void Mark1Dead_FireBlaster (void)
 
 	missile = CreateMissile( muzzle1, muzzle_dir, 1600, 10000, NPC );
 
-	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/shoot1.wav"));
+	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/mark1_fire"));
 
 	missile->classname = "bryar_proj";
 	missile->s.weapon = WP_BRYAR_PISTOL;
@@ -193,6 +203,7 @@ Mark1_die
 */
 void Mark1_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int dFlags,int hitLoc )
 {
+	/*
 	int	anim;
 
 	// Is he dead already?
@@ -205,10 +216,13 @@ void Mark1_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int 
 			DeathFX(self);
 			self->client->ps.eFlags |= EF_NODRAW;
 			self->contents = CONTENTS_CORPSE;
-			G_FreeEntity( self ); // Is this safe?  I can't see why we'd mark it nodraw and then just leave it around??
+			// G_FreeEntity( self ); // Is this safe?  I can't see why we'd mark it nodraw and then just leave it around??
+			self->e_ThinkFunc = thinkF_G_FreeEntity;
+			self->nextthink = level.time + FRAMETIME;
 		}
 		return;
 	}
+	*/
 
 	G_Sound( self, G_SoundIndex(va("sound/chars/mark1/misc/death%d.wav",Q_irand( 1, 2))));
 
@@ -304,6 +318,8 @@ void NPC_Mark1_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, ve
 	
 	NPC_Pain( self, inflictor, other, point, damage, mod );
 
+	G_Sound( self, G_SoundIndex("sound/chars/mark1/misc/mark1_pain"));
+
 	// Hit in the CHEST???
 	if (hitLoc==HL_CHEST)
 	{
@@ -336,9 +352,8 @@ void NPC_Mark1_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, ve
 			newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*flash4" );
 			if ( newBolt != -1 )
 			{
-				G_PlayEffect( "small_chunks", self->playerModel, self->genericBolt2, self->s.number);
-				G_PlayEffect( "mouseexplosion1", self->playerModel, self->genericBolt2, self->s.number);
-				G_PlayEffect( "blaster/smoke_bolton", self->playerModel, newBolt, self->s.number);
+//				G_PlayEffect( "small_chunks", self->playerModel, self->genericBolt2, self->s.number);
+				NPC_Mark1_Part_Explode( self, newBolt );
 			}
 
 			gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "r_arm", TURN_OFF );
@@ -453,7 +468,7 @@ void Mark1_FireBlaster(void)
 
 	G_PlayEffect( "bryar/muzzle_flash", muzzle1, forward );
 
-	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/shoot1.wav"));
+	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/mark1_fire"));
 
 	missile = CreateMissile( muzzle1, forward, 1600, 10000, NPC );
 
@@ -554,7 +569,7 @@ void Mark1_FireRocket(void)
 	vectoangles ( delta1, angleToEnemy1 );
 	AngleVectors (angleToEnemy1, forward, vright, up);
 
-	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/shoot2.wav"));
+	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/mark1_fire" ));
 
 	gentity_t *missile = CreateMissile( muzzle1, forward, BOWCASTER_VELOCITY, 10000, NPC );
 
@@ -609,7 +624,7 @@ void Mark1_AttackDecision( void )
 	{
 		if (TIMER_Done(NPC,"angerNoise"))
 		{
-			G_Sound( NPC, G_SoundIndex(va("sound/chars/mark1/misc/talk%d.wav",	Q_irand(1, 4))));
+//			G_Sound( NPC, G_SoundIndex(va("sound/chars/mark1/misc/talk%d.wav",	Q_irand(1, 4))));
 			TIMER_Set( NPC, "patrolNoise", Q_irand( 4000, 10000 ) );
 		}
 	}
@@ -680,7 +695,7 @@ void Mark1_Patrol( void )
 {
 	if ( NPC_CheckPlayerTeamStealth() )
 	{
-		G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/anger.wav"));
+		G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/mark1_wakeup"));
 		NPC_UpdateAngles( qtrue, qtrue );
 		return;
 	}
@@ -696,12 +711,12 @@ void Mark1_Patrol( void )
 		}
 
 		//randomly talk
-		if (TIMER_Done(NPC,"patrolNoise"))
-		{
-			G_Sound( NPC, G_SoundIndex(va("sound/chars/mark1/misc/talk%d.wav",	Q_irand(1, 4))));
-
-			TIMER_Set( NPC, "patrolNoise", Q_irand( 2000, 4000 ) );
-		}
+//		if (TIMER_Done(NPC,"patrolNoise"))
+//		{
+//			G_Sound( NPC, G_SoundIndex(va("sound/chars/mark1/misc/talk%d.wav",	Q_irand(1, 4))));
+//
+//			TIMER_Set( NPC, "patrolNoise", Q_irand( 2000, 4000 ) );
+//		}
 	}
 
 }
@@ -714,7 +729,7 @@ NPC_BSMark1_Default
 */
 void NPC_BSMark1_Default( void )
 {
-	NPC->e_DieFunc = dieF_Mark1_die;
+	//NPC->e_DieFunc = dieF_Mark1_die;
 
 	if ( NPC->enemy )
 	{

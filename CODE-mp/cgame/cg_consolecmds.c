@@ -411,11 +411,8 @@ static consoleCommand_t	commands[] = {
 	{ "nextskin", CG_TestModelNextSkin_f },
 	{ "prevskin", CG_TestModelPrevSkin_f },
 	{ "viewpos", CG_Viewpos_f },
-	{ "datapad", CG_ScoresDown_f },	//SP compatibility for default.cfg
 	{ "+scores", CG_ScoresDown_f },
 	{ "-scores", CG_ScoresUp_f },
-//	{ "+zoom", CG_ZoomDown_f },
-//	{ "-zoom", CG_ZoomUp_f },
 	{ "sizeup", CG_SizeUp_f },
 	{ "sizedown", CG_SizeDown_f },
 	{ "weapnext", CG_NextWeapon_f },

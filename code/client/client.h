@@ -275,9 +275,7 @@ extern	cvar_t	*cl_VidFadeUp;
 extern	cvar_t	*cl_VidFadeDown;
 
 extern	cvar_t	*m_pitch;
-extern	cvar_t	*m_pitchOverride;
 extern	cvar_t	*m_yaw;
-extern	cvar_t	*m_yawOverride;
 extern	cvar_t	*m_forward;
 extern	cvar_t	*m_side;
 extern	cvar_t	*m_filter;

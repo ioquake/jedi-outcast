@@ -859,6 +859,11 @@ Ghoul2 Insert Start
 /*
 Ghoul2 Insert End
 */
+	if ( cent->gent && !cent->gent->inuse )
+	{
+		// Yeah, I know....items were being freed on touch, but it could still get here and draw incorrectly...
+		return;
+	}
 
 	item = &bg_itemlist[ es->modelindex ];
 
@@ -987,7 +992,7 @@ Ghoul2 Insert End
 		{
 			VectorMA( ent.origin, -i, ent.axis[2], org );
 
-			FX_AddSprite( org, NULL, NULL, 10.0f, 10.0f, wv * 0.5f, wv * 0.5f, 0.0f, 0.0f, 1.0f, cgs.media.yellowSaberGlowShader, 0x08000000 );
+			FX_AddSprite( org, NULL, NULL, 10.0f, 10.0f, wv * 0.5f, wv * 0.5f, 0.0f, 0.0f, 1.0f, cgs.media.yellowDroppedSaberShader, 0x08000000 );
 		}
 
 		// THIS light looks crappy...maybe it should just be removed...
@@ -1190,12 +1195,12 @@ Ghoul2 Insert End
 */
 		ent.hModel = cgs.model_draw[s1->modelindex2];
 	}
-	else 
+
+	// I changed it to always do it because nodraw seemed like it should actually do what it says. Be aware that if you change this,
+	//	the movers for the shooting gallery on doom_detention will break.
+	if ( (s1->eFlags & EF_NODRAW) )
 	{
-		if ( (s1->eFlags & EF_NODRAW) )
-		{
-			return;
-		}
+		return;
 	}
 	//fall through and render the hModel or...
 
@@ -1461,7 +1466,7 @@ Also called by client movement prediction code
 void CG_AdjustPositionForMover( const vec3_t in, int moverNum, int atTime, vec3_t out ) {
 	centity_t	*cent;
 	vec3_t	oldOrigin, origin, deltaOrigin;
-	vec3_t	oldAngles, angles, deltaAngles;
+//	vec3_t	oldAngles, angles, deltaAngles;
 
 	if ( moverNum <= 0 ) {
 		VectorCopy( in, out );
@@ -1475,19 +1480,19 @@ void CG_AdjustPositionForMover( const vec3_t in, int moverNum, int atTime, vec3_
 	}
 
 	EvaluateTrajectory( &cent->currentState.pos, cg.snap->serverTime, oldOrigin );
-	EvaluateTrajectory( &cent->currentState.apos, cg.snap->serverTime, oldAngles );
+//	EvaluateTrajectory( &cent->currentState.apos, cg.snap->serverTime, oldAngles );
 
 	EvaluateTrajectory( &cent->currentState.pos, atTime, origin );
-	EvaluateTrajectory( &cent->currentState.apos, atTime, angles );
+//	EvaluateTrajectory( &cent->currentState.apos, atTime, angles );
 
 	VectorSubtract( origin, oldOrigin, deltaOrigin );
-	VectorSubtract( angles, oldAngles, deltaAngles );
+//	VectorSubtract( angles, oldAngles, deltaAngles );
+
 
 	VectorAdd( in, deltaOrigin, out );
 
 	// FIXME: origin change when on a rotating object
 }
-
 /*
 ===============
 CG_CalcEntityLerpPositions
@@ -1893,11 +1898,13 @@ void CG_Limb ( centity_t *cent )
 			}
 			//done!
 			owner->client->dismembered = qfalse;
+			//done!
+			cent->gent->e_clThinkFunc = clThinkF_NULL;
 		}
 		else
 		{
 extern cvar_t	*g_dismemberment;
-extern cvar_t	*g_realisticSaberDamage;
+extern cvar_t	*g_saberRealisticCombat;
 			//3) turn off w/descendants that surf in original model
 			if ( cent->gent->target )//stubTagName )
 			{//add smoke to cap surf, spawn effect
@@ -1915,7 +1922,7 @@ extern cvar_t	*g_realisticSaberDamage;
 			{//turn on caps
 				gi.G2API_SetSurfaceOnOff( &owner->ghoul2[owner->playerModel], cent->gent->target3, 0 );
 			}
-			if ( owner->weaponModel != -1 )
+			if ( owner->weaponModel >= 0 )
 			{//the corpse hasn't dropped their weapon
 				if ( cent->gent->count == BOTH_DISMEMBER_RARM || cent->gent->count == BOTH_DISMEMBER_TORSO1 )//&& ent->s.weapon == WP_SABER && ent->weaponModel != -1 )
 				{//FIXME: is this first check needed with this lower one?
@@ -1924,17 +1931,20 @@ extern cvar_t	*g_realisticSaberDamage;
 				}
 			}
 			if ( owner->client->NPC_class == CLASS_PROTOCOL 
-				|| g_dismemberment->integer > 3
-				|| g_realisticSaberDamage->integer )
+				|| g_dismemberment->integer >= 11381138
+				|| g_saberRealisticCombat->integer )
 			{
 				//wait 100ms before allowing owner to be dismembered again
 				cent->gent->aimDebounceTime = cg.time + 100;
 				return;
 			}
+			else
+			{
+				//done!
+				cent->gent->e_clThinkFunc = clThinkF_NULL;
+			}
 		}
 	}
-	//done!
-	cent->gent->e_clThinkFunc = clThinkF_NULL;
 }
 
 qboolean	MatrixMode = qfalse;

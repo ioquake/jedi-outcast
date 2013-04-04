@@ -100,43 +100,52 @@ void SV_Player_EndOfLevelSave(void)
 
 //		clientSnapshot_t*	pFrame = &cl->frames[cl->netchan.outgoingSequence & PACKET_MASK];
 		playerState_t*		pState = cl->gentity->client;
+		const char	*s2;
 
-		const char *s = va("%i %i %i %i %i %i %f %f %f",
+		const char *s = va("%i %i %i %i %i %i %i %f %f %f %i %i %i %i %i %i",
 							pState->stats[STAT_HEALTH],
 							pState->stats[STAT_ARMOR],
 							pState->stats[STAT_WEAPONS],
 							pState->stats[STAT_ITEMS],
 							pState->weapon,
 							pState->weaponstate,
+							pState->batteryCharge,
 							pState->viewangles[0],
 							pState->viewangles[1],
-							pState->viewangles[2]
+							pState->viewangles[2],
+							pState->forcePowersKnown,
+							pState->forcePower,
+							pState->saberActive,
+							pState->saberAnimLevel,
+							pState->saberLockEnemy,
+							pState->saberLockTime
 							);
 		Cvar_Set( sCVARNAME_PLAYERSAVE, s );
 
-		for ( i=0; i<AMMO_MAX; i++)
+		//ammo
+		s2 = "";
+		for (i=0;i< AMMO_MAX; i++)
 		{
-			Cvar_Set( va("playerammo%d",i), va("%i",pState->ammo[i]));
+			s2 = va("%s %i",s2, pState->ammo[i]);
 		}
+		Cvar_Set( "playerammo", s2 );
 
-		for ( i=0; i<INV_MAX; i++)
+		//inventory
+		s2 = "";
+		for (i=0;i< INV_MAX; i++)
 		{
-			Cvar_Set( va("playerinv%d",i), va("%i",pState->inventory[i]));
+			s2 = va("%s %i",s2, pState->inventory[i]);
 		}
+		Cvar_Set( "playerinv", s2 );
 
 		// the new JK2 stuff - force powers, etc...
 		//
-		for ( i=0; i<NUM_FORCE_POWERS;i++ )
+		s2 = "";
+		for (i=0;i< NUM_FORCE_POWERS; i++)
 		{
-			Cvar_Set( va("playerfplvl%d",i), va("%i",pState->forcePowerLevel[i]));
+			s2 = va("%s %i",s2, pState->forcePowerLevel[i]);
 		}
-
-		Cvar_Set( "playerfpknown",	va( "%i", pState->forcePowersKnown));
-		Cvar_Set( "playerfp",		va( "%i", pState->forcePower));
-		Cvar_Set( "plsa",			va( "%i", pState->saberActive));
-		Cvar_Set( "plcs",			va( "%i", pState->saberAnimLevel));
-		Cvar_Set( "plle",			va( "%i", pState->saberLockEnemy));
-		Cvar_Set( "pllt",			va( "%i", pState->saberLockTime));
+		Cvar_Set( "playerfplvl", s2 );
 	}
 }
 
@@ -199,9 +208,9 @@ static void SV_Map_f( void )
 	// cheats will not be allowed.  If started with "devmap <levelname>"
 	// then cheats will be allowed
 	if ( !Q_stricmpn( Cmd_Argv(0), "devmap", 6 ) ) {
-		Cvar_Set( "sv_cheats", "1" );
+		Cvar_Set( "helpUsObi", "1" );
 	} else {
-		Cvar_Set( "sv_cheats", "0" );
+		Cvar_Set( "helpUsObi", "0" );
 	}
 	Cvar_Set( "cg_missionstatusscreen", "0" );//reset
 }
@@ -397,6 +406,11 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("loadtransition", SV_LoadTransition_f);
 	Cmd_AddCommand ("save", SV_SaveGame_f);
 	Cmd_AddCommand ("wipe", SV_WipeGame_f);
+
+//#ifdef _DEBUG
+//	extern void UI_Dump_f(void);
+//	Cmd_AddCommand ("ui_dump", UI_Dump_f);
+//#endif
 }
 
 /*

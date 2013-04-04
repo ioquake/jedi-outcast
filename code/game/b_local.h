@@ -293,7 +293,7 @@ extern int NPC_CheckEnemyExt( qboolean checkAlerts = qfalse );
 extern qboolean NPC_FindPlayer( void );
 extern qboolean NPC_CheckCanAttackExt( void );
 
-extern int NPC_CheckAlertEvents( qboolean checkSight, qboolean checkSound, qboolean mustHaveOwner = qfalse, int minAlertLevel = AEL_MINOR );
+extern int NPC_CheckAlertEvents( qboolean checkSight, qboolean checkSound, int ignoreAlert = -1, qboolean mustHaveOwner = qfalse, int minAlertLevel = AEL_MINOR );
 extern qboolean NPC_CheckForDanger( int alertEvent );
 extern void G_AlertTeam( gentity_t *victim, gentity_t *attacker, float radius, float soundDist );
 

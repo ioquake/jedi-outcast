@@ -299,6 +299,8 @@ The module is making a system call
 
 #define	VMF(x)	((float *)args)[x]
 
+extern bool RicksCrazyOnServer;
+
 int SV_GameSystemCalls( int *args ) {
 	switch( args[0] ) {
 	case G_PRINT:
@@ -447,8 +449,7 @@ int SV_GameSystemCalls( int *args ) {
 		return 0;
 
 	case SP_REGISTER_SERVER_CMD:
-		SP_RegisterServer( (const char *)VMA(1) );
-		return 0;
+		return SP_RegisterServer( (const char *)VMA(1) );
 	case SP_GETSTRINGTEXTSTRING:
 		//return (int)SP_GetStringTextString((char *)VMA(1));
 		const char* text;
@@ -931,6 +932,7 @@ int SV_GameSystemCalls( int *args ) {
 		return G2API_GetBoltMatrix(*((CGhoul2Info_v *)args[1]), args[2], args[3], (mdxaBone_t *)VMA(4), (const float *)VMA(5),(const float *)VMA(6), args[7], (qhandle_t *)VMA(8), (float *)VMA(9));
 
 	case G_G2_INITGHOUL2MODEL:
+		RicksCrazyOnServer=true;
 		return	G2API_InitGhoul2Model((CGhoul2Info_v **)VMA(1), (const char *)VMA(2), args[3], (qhandle_t) args[4],
 									  (qhandle_t) args[5], args[6], args[7]);
 
@@ -1076,6 +1078,11 @@ void SV_InitGameProgs( void ) {
 	}
 	else {
 		bot_enable = 0;
+	}
+
+	if ( !Cvar_VariableValue("fs_restrict") && !Sys_CheckCD() ) 
+	{
+		Com_Error( ERR_NEED_CD, SP_GetStringTextString("CON_TEXT_NEED_CD") ); //"Game CD not in drive" );		
 	}
 
 	// load the dll or bytecode

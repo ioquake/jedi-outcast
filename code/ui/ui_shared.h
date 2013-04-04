@@ -131,7 +131,6 @@ typedef struct {
 	vec4_t		shadowColor;
 	float		shadowFadeClamp;
 	qboolean	fontRegistered;
-	char		stripedFile[MAX_STRING_CHARS];
 
   // player settings
 	qhandle_t	fxBasePic;

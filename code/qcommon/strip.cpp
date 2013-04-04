@@ -7,6 +7,7 @@
 #include "strip.h"
 cvar_t	*sp_language;
 static cvar_t	*sp_show_strip;
+static cvar_t	*sp_leet;
 
 
 enum
@@ -483,8 +484,9 @@ void cStringsSingle::SetText(const char *newText)
 	// Following is for TESTING for SOF.
 	if(sp_show_strip->value)
 	{
-		Dest = Text = new char[length + 6];
-		strcpy(Dest,"STRIP-");
+		const char sDebugString[]="SP:";
+		Dest = Text = new char[length + strlen(sDebugString)];
+		strcpy(Dest,sDebugString);
 		Dest += strlen(Dest);
 	}
 	else
@@ -551,6 +553,34 @@ static void FixIllegalChars(char *psText)
 	{
 		*p = 0x2D;
 	}
+
+	// bug fix for picky grammatical errors, replace "?." with "? "
+	//
+	while ((p=strstr(psText,"?."))!=NULL)
+	{
+		p[1] = ' ';
+	}
+
+	// StripEd and our print code don't support tabs...
+	//
+	while ((p=strchr(psText,0x09))!=NULL)
+	{
+		*p = ' ';
+	}
+
+
+	if (sp_leet->integer == 42)	// very specific test, so you won't hit it accidentally
+	{
+		char cReplace[]={	'o','0','l','1','e','3','a','4','s','5','t','7','i','!','h','#',
+							'O','0','L','1','E','3','A','4','S','5','T','7','I','!','H','#'	// laziness because of strchr()
+						};
+
+		for (int i=0; i<sizeof(cReplace); i+=2)
+		{
+			while ((p=strchr(psText,cReplace[i]))!=NULL)
+				*p = cReplace[i+1];
+		}
+	}
 }
 
 bool cStringsSingle::UnderstandToken(int token, char *data )
@@ -564,7 +594,10 @@ bool cStringsSingle::UnderstandToken(int token, char *data )
 			{
 				if (LanguagePair->Name == TK_TEXT_LANGUAGE1 && token == TK_TEXT_LANGUAGE1 && !Text)
 				{	// default to english in case there is no foreign
-					if (LanguagePair->Name == TK_TEXT_LANGUAGE1)
+					if (LanguagePair->Name == TK_TEXT_LANGUAGE1 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE2 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE3
+						)
 					{
 						FixIllegalChars(data);
 					}
@@ -573,7 +606,10 @@ bool cStringsSingle::UnderstandToken(int token, char *data )
 				}
 				else if (LanguagePair->Name == token && LanguagePair->Value == sp_language->integer)
 				{
-					if (LanguagePair->Name == TK_TEXT_LANGUAGE1)
+					if (LanguagePair->Name == TK_TEXT_LANGUAGE1 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE2 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE3
+						)
 					{
 						FixIllegalChars(data);
 					}
@@ -959,6 +995,41 @@ cStringsSingle *SP_GetString(const char *Reference)
 	return SP_GetString(index);
 }
 
+#ifdef _DEBUG
+// needed to add this to query which SP references the menus used	-Ste.
+//
+const char *SP_GetReferenceText(unsigned short ID, const char *&psPackageName, const char *&psPackageReference, const char *&psText)
+{
+	cStringPackageSingle *sp;
+	map<unsigned char,cStringPackageSingle *>::iterator	i;
+
+	i = SP_ListByID.find(SP_GET_PACKAGE(ID));
+	if (i == SP_ListByID.end())
+	{
+		assert(0);
+		return NULL;
+	}
+
+	cStringsSingle *string;
+
+	sp = (*i).second;
+	string = sp->FindString(ID & SP_STRING);
+
+	if (!string)
+	{
+		assert(0);
+		return NULL;
+	}
+
+	psPackageName = sp->GetName();
+	psPackageReference	= sp->GetReference();
+	psText = string->GetText();
+	if (!psText)
+		 psText = "";
+	return string->GetReference();
+}
+#endif
+
 const char *SP_GetStringText(unsigned short ID)
 {
 	cStringsSingle			*string;
@@ -1014,7 +1085,8 @@ static void SP_UpdateLanguage(void)
 void SP_Init(void)
 {
 	sp_language = Cvar_Get("sp_language", va("%d", SP_LANGUAGE_ENGLISH), CVAR_ARCHIVE | CVAR_NORESTART);
-	sp_show_strip = Cvar_Get ("sv_show_strip", "0", 0);		// don't switch this on!!!!!!, test only (apparently)
+	sp_show_strip = Cvar_Get ("sp_show_strip", "0", 0);		// don't switch this on!!!!!!, test only (apparently)
+	sp_leet = Cvar_Get ("sp_leet", "0", CVAR_ROM);		// do NOT leave this on in final product!!!!  (only works when == 42 anyway ;-)
 
 //	Cvar_Set("sp_language", va("%d", SP_LANGUAGE_JAPANESE));	// stetest, do NOT leave in
 

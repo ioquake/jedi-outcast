@@ -198,7 +198,7 @@ void SV_SpawnServer( char *server, ForceReload_e eForceReload, qboolean bAllowSc
 	Com_Printf ("Server: %s\n",server);	
 
 	// init client structures and svs.numSnapshotEntities 
-	if ( !Cvar_VariableValue("sv_running") ) {
+	if ( !Cvar_VariableIntegerValue("sv_running") ) {
 		SV_Startup();
 	}		
 
@@ -349,7 +349,7 @@ void SV_Init (void) {
 	sv_mapname = Cvar_Get ("mapname", "nomap", CVAR_SERVERINFO | CVAR_ROM);
 
 	// systeminfo
-	Cvar_Get ("sv_cheats", "1", CVAR_SYSTEMINFO );
+	Cvar_Get ("helpUsObi", "0", CVAR_SYSTEMINFO );
 	sv_serverid = Cvar_Get ("sv_serverid", "0", CVAR_SYSTEMINFO | CVAR_ROM );
 
 	// server vars

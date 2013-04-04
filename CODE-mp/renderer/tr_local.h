@@ -3,6 +3,10 @@
 #ifndef TR_LOCAL_H
 #define TR_LOCAL_H
 
+#ifdef __linux__
+typedef const char * LPCSTR;
+#endif
+
 #include "../game/q_shared.h"
 #include "../qcommon/qfiles.h"
 #include "../qcommon/qcommon.h"
@@ -32,11 +36,6 @@ long myftol( float f );
 #define MAX_STATE_NAME 32
 
 // can't be increased without changing bit packing for drawsurfs
-
-// Default texture format constants
-#define GL_SOLID_FORMAT						3
-#define GL_ALPHA_FORMAT						4
-
 
 typedef struct dlight_s {
 	vec3_t	origin;
@@ -557,7 +556,7 @@ typedef struct {
 } fog_t;
 
 typedef struct {
-	orientationr_t	or;
+	orientationr_t	ori;				// Can't use "or" as it is a reserved word with gcc DREWS 2/2/2002
 	orientationr_t	world;
 	vec3_t		pvsOrigin;			// may be different than or.origin for portals
 	qboolean	isPortal;			// true if this view is through a portal
@@ -958,7 +957,7 @@ typedef struct {
 	int			smpFrame;
 	trRefdef_t	refdef;
 	viewParms_t	viewParms;
-	orientationr_t	or;
+	orientationr_t	ori;		// Can't use or as it is a c++ reserved word DREWS 2/2/2002
 	backEndCounters_t	pc;
 	qboolean	isHyperspace;
 	trRefEntity_t	*currentEntity;
@@ -1106,6 +1105,7 @@ extern cvar_t	*r_measureOverdraw;		// enables stencil buffer overdraw measuremen
 
 extern cvar_t	*r_lodbias;				// push/pull LOD transitions
 extern cvar_t	*r_lodscale;
+extern cvar_t	*r_autolodscalevalue;
 
 extern cvar_t	*r_primitives;			// "0" = based on compiled vertex array existance
 										// "1" = glDrawElemet tristrips
@@ -1147,15 +1147,9 @@ extern cvar_t	*r_displayRefresh;		// optional display refresh option
 extern cvar_t	*r_ignorehwgamma;		// overrides hardware gamma capabilities
 
 extern cvar_t	*r_allowExtensions;				// global enable/disable of OpenGL extensions
-extern cvar_t	*r_tf_solid_compressed;
-extern cvar_t	*r_tf_alpha_compressed;
-extern cvar_t	*r_tf_solid_uncompressed;
-extern cvar_t	*r_tf_alpha_uncompressed;
-extern cvar_t	*r_tf_lightmap;
-extern cvar_t	*r_tf_cinematic;
-extern cvar_t	*r_force_compressed_textures;		// these control use of specific extensions
-
 extern cvar_t	*r_ext_compressed_textures;		// these control use of specific extensions
+extern cvar_t	*r_ext_compressed_lightmaps;	// turns on compression of lightmaps, off by default
+extern cvar_t	*r_ext_preferred_tc_method;
 extern cvar_t	*r_ext_gamma_control;
 extern cvar_t	*r_ext_texenv_op;
 extern cvar_t	*r_ext_multitexture;
@@ -1165,7 +1159,6 @@ extern cvar_t	*r_ext_texture_filter_anisotropic;
 
 extern	cvar_t	*r_nobind;						// turns off binding to appropriate textures
 extern	cvar_t	*r_singleShader;				// make most world faces use default shader
-extern	cvar_t	*r_roundImagesDown;
 extern	cvar_t	*r_colorMipLevels;				// development aid to see texture mip usage
 extern	cvar_t	*r_picmip;						// controls picmip values
 extern	cvar_t	*r_finish;
@@ -1204,7 +1197,6 @@ extern	cvar_t	*r_skipBackEnd;
 extern	cvar_t	*r_ignoreGLErrors;
 
 extern	cvar_t	*r_overBrightBits;
-extern	cvar_t	*r_mapOverBrightBits;
 
 extern	cvar_t	*r_debugSurface;
 extern	cvar_t	*r_simpleMipMaps;
@@ -1217,7 +1209,6 @@ extern	cvar_t	*r_printShaders;
 Ghoul2 Insert Start
 */
 extern	cvar_t	*r_noServerGhoul2;
-extern	cvar_t	*r_noGhoul2;
 /*
 Ghoul2 Insert End
 */
@@ -1254,7 +1245,7 @@ int R_CullLocalBox (vec3_t bounds[2]);
 int R_CullPointAndRadius( vec3_t origin, float radius );
 int R_CullLocalPointAndRadius( vec3_t origin, float radius );
 
-void R_RotateForEntity( const trRefEntity_t *ent, const viewParms_t *viewParms, orientationr_t *or );
+void R_RotateForEntity( const trRefEntity_t *ent, const viewParms_t *viewParms, orientationr_t *ori );
 
 /*
 ** GL wrapper/helper functions
@@ -1454,10 +1445,10 @@ struct shaderCommands_s
 	qboolean	SSInitializedWind;
 
 };
-
+#ifndef DEDICATED
 typedef __declspec(align(16)) shaderCommands_s	shaderCommands_t;
-
 extern	shaderCommands_t	tess;
+#endif
 extern	color4ub_t	styleColors[MAX_LIGHT_STYLES];
 
 void RB_BeginSurface(shader_t *shader, int fogNum );
@@ -1513,7 +1504,7 @@ LIGHTS
 
 void R_DlightBmodel( bmodel_t *bmodel );
 void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent );
-void R_TransformDlights( int count, dlight_t *dl, orientationr_t *or );
+void R_TransformDlights( int count, dlight_t *dl, orientationr_t *ori );
 int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
 
 
@@ -1536,13 +1527,13 @@ SKIES
 
 ============================================================
 */
-
+#ifndef DEDICATED
 void R_BuildCloudData( shaderCommands_t *shader );
 void R_InitSkyTexCoords( float cloudLayerHeight );
 void R_DrawSkyBox( shaderCommands_t *shader );
 void RB_DrawSun( void );
 void RB_ClipSkyPolygons( shaderCommands_t *shader );
-
+#endif
 /*
 ============================================================
 
@@ -1818,8 +1809,8 @@ void		RE_InsertModelIntoHash(const char *name, model_t *mod);
 /*
 Ghoul2 Insert End
 */
-
+#ifndef DEDICATED
 // tr_surfacesprites
 void RB_DrawSurfaceSprites( shaderStage_t *stage, shaderCommands_t *input);
-
+#endif
 #endif //TR_LOCAL_H

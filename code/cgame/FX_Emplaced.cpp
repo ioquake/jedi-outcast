@@ -65,24 +65,6 @@ void FX_EmplacedHitWall( vec3_t origin, vec3_t normal )
 
 /*
 ---------------------------
-FX_EmplacedHitPlayer
----------------------------
-*/
-
-void FX_EmplacedHitPlayer( vec3_t origin, vec3_t normal, qboolean humanoid )
-{
-	if ( humanoid )
-	{
-		theFxScheduler.PlayEffect( "emplaced/flesh_impact", origin, normal );
-	}
-	else
-	{
-		theFxScheduler.PlayEffect( "emplaced/droid_impact", origin, normal );
-	}
-}
-
-/*
----------------------------
 FX_TurretProjectileThink
 ---------------------------
 */

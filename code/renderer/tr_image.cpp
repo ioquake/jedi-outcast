@@ -258,7 +258,7 @@ void R_ImageList_f( void ) {
 			ri.Printf( PRINT_ALL, "RGBA8" );
 			break;
 		case GL_RGB8:
-			ri.Printf( PRINT_ALL, "RGB8" );
+			ri.Printf( PRINT_ALL, "RGB8 " );
 			break;
 		case GL_RGB4_S3TC:
 			ri.Printf( PRINT_ALL, "S3TC " );
@@ -588,6 +588,7 @@ static void Upload32( unsigned *data,
 		if ( scan[i*4 + 3] != 255 ) 
 		{
 			samples = 4;
+			break;
 		}
 	}
 
@@ -1817,7 +1818,7 @@ void R_CreateBuiltinImages( void ) {
 	// scratchimage is usually used for cinematic drawing
 	for(x=0;x<NUM_SCRATCH_IMAGES;x++) {
 		// scratchimage is usually used for cinematic drawing
-		tr.scratchImage[x] = R_CreateImage(va("*scratch%d",x), (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, qfalse, qfalse/* FIXME: TA was qtrue, but that's a lot of memory (param = bAllowPicMip)*/, qfalse, GL_REPEAT);
+		tr.scratchImage[x] = R_CreateImage(va("*scratch%d",x), (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, qfalse, qfalse, qfalse, GL_CLAMP);
 	}
 
 	R_CreateDlightImage();

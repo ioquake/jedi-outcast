@@ -14,6 +14,10 @@
 	#include "../qcommon/ROFFSystem.h"
 #endif
 
+#ifdef _DONETPROFILE_
+#include "../qcommon/INetProfile.h"
+#endif
+
 /*
 Ghoul2 Insert Start
 */
@@ -220,6 +224,24 @@ void CL_CgameError( const char *string ) {
 }
 
 
+int gCLTotalClientNum = 0;
+//keep track of the total number of clients
+extern cvar_t	*cl_autolodscale;
+//if we want to do autolodscaling
+
+void CL_DoAutoLODScale(void)
+{
+	float finalLODScaleFactor = 0;
+
+	if ( gCLTotalClientNum >= 8 )
+	{
+		finalLODScaleFactor = (gCLTotalClientNum/-8.0f);
+	}
+
+
+	Cvar_Set( "r_autolodscalevalue", va("%f", finalLODScaleFactor) );
+}
+
 /*
 =====================
 CL_ConfigstringModified
@@ -274,6 +296,36 @@ void CL_ConfigstringModified( void ) {
 		cl.gameState.dataCount += len + 1;
 	}
 
+	if (cl_autolodscale && cl_autolodscale->integer)
+	{
+		if (index >= CS_PLAYERS &&
+			index < CS_CHARSKINS)
+		{ //this means that a client was updated in some way. Go through and count the clients.
+			int clientCount = 0;
+			i = CS_PLAYERS;
+
+			while (i < CS_CHARSKINS)
+			{
+				s = cl.gameState.stringData + cl.gameState.stringOffsets[ i ];
+
+				if (s && s[0])
+				{
+					clientCount++;
+				}
+
+				i++;
+			}
+
+			gCLTotalClientNum = clientCount;
+
+#ifdef _DEBUG
+			Com_DPrintf("%i clients\n", gCLTotalClientNum);
+#endif
+
+			CL_DoAutoLODScale();
+		}
+	}
+
 	if ( index == CS_SYSTEMINFO ) {
 		// parse serverId and other cvars
 		CL_SystemInfoChanged();
@@ -319,7 +371,7 @@ rescan:
 	cmd = Cmd_Argv(0);
 
 	if ( !strcmp( cmd, "disconnect" ) ) {
-		Com_Error (ERR_SERVERDISCONNECT,"Server disconnected\n");
+		Com_Error (ERR_SERVERDISCONNECT, SP_GetStringTextString("SVINGAME_SERVER_DISCONNECTED"));//"Server disconnected\n");
 	}
 
 	if ( !strcmp( cmd, "bcs0" ) ) {
@@ -416,6 +468,9 @@ void CL_ShutdownCGame( void ) {
 	VM_Call( cgvm, CG_SHUTDOWN );
 	VM_Free( cgvm );
 	cgvm = NULL;
+#ifdef _DONETPROFILE_
+	ClReadProf().ShowTotals();
+#endif
 }
 
 static int	FloatAsInt( float f ) {
@@ -435,6 +490,7 @@ The cgame module is making a system call
 */
 #define	VMA(x) VM_ArgPtr(args[x])
 #define	VMF(x)	((float *)args)[x]
+extern bool RicksCrazyOnServer;
 int CL_CgameSystemCalls( int *args ) {
 	switch( args[0] ) {
 	case CG_PRINT:
@@ -814,7 +870,7 @@ int CL_CgameSystemCalls( int *args ) {
 		return FX_FreeSystem();
 
 	case CG_FX_ADJUST_TIME:
-		FX_AdjustTime(args[1]);
+		FX_AdjustTime_Pos(args[1],(float *)VMA(2),(vec3_t *)VMA(3));
 		return 0;
 
 	case CG_FX_ADDPOLY:
@@ -939,6 +995,7 @@ Ghoul2 Insert Start
 		return G2API_GetBoltMatrix(*((CGhoul2Info_v *)args[1]), args[2], args[3], (mdxaBone_t *)VMA(4), (const float *)VMA(5),(const float *)VMA(6), args[7], (qhandle_t *)VMA(8), (float *)VMA(9));
 
 	case CG_G2_INITGHOUL2MODEL:
+		RicksCrazyOnServer=false;
 		return	G2API_InitGhoul2Model((CGhoul2Info_v **)VMA(1), (const char *)VMA(2), args[3], (qhandle_t) args[4],
 									  (qhandle_t) args[5], args[6], args[7]);
 
@@ -1047,8 +1104,7 @@ Ghoul2 Insert End
 		break;
 
 	case CG_SP_REGISTER:
-		SP_Register((const char *)VMA(1),SP_REGISTER_CLIENT);
-		return 0;
+		return !!SP_Register((const char *)VMA(1),SP_REGISTER_CLIENT);
 
 	case CG_SET_SHARED_BUFFER:
 		cl.mSharedMemory = ((char *)VMA(1));
@@ -1117,12 +1173,16 @@ void CL_InitCGame( void ) {
 	re.EndRegistration();
 
 	// make sure everything is paged in
-	if (!Sys_LowPhysicalMemory()) {
+//	if (!Sys_LowPhysicalMemory()) 
+	{
 		Com_TouchMemory();
 	}
 
 	// clear anything that got printed
 	Con_ClearNotify ();
+#ifdef _DONETPROFILE_
+	ClReadProf().Reset();
+#endif
 }
 
 

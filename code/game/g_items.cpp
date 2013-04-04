@@ -8,11 +8,14 @@
 #include "g_items.h"
 #include "wp_saber.h"
 
+extern qboolean	missionInfo_Updated;
 
 extern void CrystalAmmoSettings(gentity_t *ent);
 extern void G_CreateG2AttachedWeaponModel( gentity_t *ent, const char *weaponModel );
 extern void ChangeWeapon( gentity_t *ent, int newWeapon );
 extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
+extern qboolean PM_InKnockDown( playerState_t *ps );
+extern qboolean PM_InGetUp( playerState_t *ps );
 
 extern	cvar_t	*g_spskill;
 
@@ -64,16 +67,16 @@ int Pickup_Holdable( gentity_t *ent, gentity_t *other )
 
 	other->client->ps.stats[STAT_ITEMS] |= (1<<ent->item->giTag);
 
-	if ( ent->item->giTag == INV_SECURITY_KEY1 )
+	if ( ent->item->giTag == INV_SECURITY_KEY )
 	{//give the key
 		//FIXME: temp message
-		gi.SendServerCommand( NULL, "cp \"You took the security key\"" );
+		gi.SendServerCommand( NULL, "cp @INGAME_YOU_TOOK_SECURITY_KEY" );
 		INV_SecurityKeyGive( other, ent->message );
 	}
-	else if ( ent->item->giTag == INV_GOODIE_KEY1 )
+	else if ( ent->item->giTag == INV_GOODIE_KEY )
 	{//give the key
 		//FIXME: temp message
-		gi.SendServerCommand( NULL, "cp \"You took the key\"" );
+		gi.SendServerCommand( NULL, "cp @INGAME_YOU_TOOK_SUPPLY_KEY" );
 		INV_GoodieKeyGive( other );
 	}
 	else
@@ -134,11 +137,22 @@ int Add_Ammo2 (gentity_t *ent, int ammoType, int count)
 	}
 	else
 	{
-		ent->client->ps.forcePower += count;
+		if ( ent->client->ps.forcePower >= ammoData[ammoType].max )
+		{//if have full force, just get 25 extra per crystal
+			ent->client->ps.forcePower += 25;
+		}
+		else
+		{//else if don't have full charge, give full amount, up to max + 25
+			ent->client->ps.forcePower += count;
+			if ( ent->client->ps.forcePower >= ammoData[ammoType].max + 25 )
+			{//cap at max + 25
+				ent->client->ps.forcePower = ammoData[ammoType].max + 25;
+			}
+		}
 
-		if (ent->client->ps.forcePower >= ammoData[ammoType].max)
-		{
-			ent->client->ps.forcePower = ammoData[ammoType].max;
+		if ( ent->client->ps.forcePower >= ammoData[ammoType].max*2 )
+		{//always cap at twice a full charge
+			ent->client->ps.forcePower = ammoData[ammoType].max*2;
 			return qfalse;		// can't hold any more
 		}
 	}
@@ -213,6 +227,7 @@ int Pickup_Battery( gentity_t *ent, gentity_t *other )
 
 
 extern void WP_SaberInitBladeData( gentity_t *ent );
+extern void CG_ChangeWeapon( int num );
 int Pickup_Weapon (gentity_t *ent, gentity_t *other) 
 {
 	int		quantity;
@@ -251,19 +266,23 @@ int Pickup_Weapon (gentity_t *ent, gentity_t *other)
 		WP_SaberInitBladeData( other );
 	}
 
-	if ( other->s.weapon == WP_NONE && other->s.number )
-	{//NPC with no weapon picked up a weapon, change to this weapon
-		//FIXME: clear/set the alt-fire flag based on the picked up weapon and my class?
-		other->client->ps.weapon = ent->item->giTag;
-		other->client->ps.weaponstate = WEAPON_RAISING;
-		ChangeWeapon( other, ent->item->giTag );
-		if ( ent->item->giTag == WP_SABER )
-		{
-			G_CreateG2AttachedWeaponModel( other, other->client->ps.saberModel );
-		}
-		else
-		{
-			G_CreateG2AttachedWeaponModel( other, weaponData[ent->item->giTag].weaponMdl );
+	if ( other->s.number )
+	{//NPC
+		if ( other->s.weapon == WP_NONE )
+		{//NPC with no weapon picked up a weapon, change to this weapon
+			//FIXME: clear/set the alt-fire flag based on the picked up weapon and my class?
+			other->client->ps.weapon = ent->item->giTag;
+			other->client->ps.weaponstate = WEAPON_RAISING;
+			ChangeWeapon( other, ent->item->giTag );
+			if ( ent->item->giTag == WP_SABER )
+			{
+				other->client->ps.saberActive = qtrue;
+				G_CreateG2AttachedWeaponModel( other, other->client->ps.saberModel );
+			}
+			else
+			{
+				G_CreateG2AttachedWeaponModel( other, weaponData[ent->item->giTag].weaponMdl );
+			}
 		}
 	}
 
@@ -272,7 +291,6 @@ int Pickup_Weapon (gentity_t *ent, gentity_t *other)
 		// Give ammo
 		Add_Ammo( other, ent->item->giTag, quantity );
 	}
-
 	return 5;
 }
 
@@ -378,6 +396,13 @@ int Pickup_Holocron( gentity_t *ent, gentity_t *other )
 	other->client->ps.forcePowerLevel[forcePower] = forceLevel;
 	other->client->ps.forcePowersKnown |= ( 1 << forcePower );
 	
+	missionInfo_Updated = qtrue;	// Activate flashing text
+	gi.cvar_set("cg_updatedDataPadForcePower1", va("%d",forcePower+1)); // The +1 is offset in the print routine. 
+	cg_updatedDataPadForcePower1.integer = forcePower+1;
+	gi.cvar_set("cg_updatedDataPadForcePower2", "0"); // The +1 is offset in the print routine. 
+	cg_updatedDataPadForcePower2.integer = 0;
+	gi.cvar_set("cg_updatedDataPadForcePower3", "0"); // The +1 is offset in the print routine. 
+	cg_updatedDataPadForcePower3.integer = 0;
 	
 	return 1;
 }
@@ -404,7 +429,7 @@ qboolean CheckItemCanBePickedUpByNPC( gentity_t *item, gentity_t *pickerupper )
 		&& pickerupper->painDebounceTime < level.time
 		&& pickerupper->NPC && pickerupper->NPC->surrenderTime < level.time //not surrendering
 		&& !(pickerupper->NPC->scriptFlags&SCF_FORCED_MARCH) //not being forced to march
-		&& item->item->giTag != INV_SECURITY_KEY1 )
+		&& item->item->giTag != INV_SECURITY_KEY )
 	{//non-player, in combat, picking up a dropped item that does NOT belong to the player and it *not* a security key
 		if ( level.time - item->s.time < 3000 )//was 5000
 		{
@@ -419,6 +444,7 @@ qboolean CheckItemCanBePickedUpByNPC( gentity_t *item, gentity_t *pickerupper )
 Touch_Item
 ===============
 */
+extern cvar_t		*g_timescale;
 void Touch_Item (gentity_t *ent, gentity_t *other, trace_t *trace) {
 	int			respawn = 0;
 
@@ -485,10 +511,22 @@ void Touch_Item (gentity_t *ent, gentity_t *other, trace_t *trace) {
 		return;
 	}
 
+	if ( other->client )
+	{
+		if ( other->client->ps.eFlags&EF_FORCE_GRIPPED )
+		{//can't pick up anything while being gripped
+			return;
+		}
+		if ( PM_InKnockDown( &other->client->ps ) && !PM_InGetUp( &other->client->ps ) )
+		{//can't pick up while in a knockdown
+			return;
+		}
+	}
 	if (!ent->item) {		//not an item!
 		gi.Printf( "Touch_Item: %s is not an item!\n", ent->classname);
 		return;
 	}
+	qboolean bHadWeapon = qfalse;
 	// call the item-specific pickup function
 	switch( ent->item->giType ) 
 	{
@@ -502,6 +540,10 @@ void Touch_Item (gentity_t *ent, gentity_t *other, trace_t *trace) {
 			TIMER_Set( other, "verifyCP", pickUpTime );
 			TIMER_Set( other, "attackDelay", 600 );
 			respawn = 0;
+		}
+		if ( other->client->ps.stats[STAT_WEAPONS] & ( 1 << ent->item->giTag ) )
+		{
+			bHadWeapon = qtrue;
 		}
 		respawn = Pickup_Weapon(ent, other);
 		break;
@@ -533,7 +575,25 @@ void Touch_Item (gentity_t *ent, gentity_t *other, trace_t *trace) {
 	}
 
 	// play the normal pickup sound
-	G_AddEvent( other, EV_ITEM_PICKUP, ent->s.modelindex );
+	if ( !other->s.number && g_timescale->value < 1.0f  )
+	{//SIGH... with timescale on, you lose events left and right
+extern void CG_ItemPickup( int itemNum, qboolean bHadItem );
+		// but we're SP so we'll cheat
+		cgi_S_StartSound( NULL, other->s.number, CHAN_AUTO,	cgi_S_RegisterSound( ent->item->pickup_sound ) );
+		// show icon and name on status bar
+		CG_ItemPickup( ent->s.modelindex, bHadWeapon );
+	}
+	else
+	{
+		if ( bHadWeapon )
+		{
+			G_AddEvent( other, EV_ITEM_PICKUP, -ent->s.modelindex );
+		} 
+		else
+		{
+			G_AddEvent( other, EV_ITEM_PICKUP, ent->s.modelindex );
+		}
+	}
 
 	// fire item targets
 	G_UseTargets (ent, other);
@@ -597,10 +657,16 @@ gentity_t *LaunchItem( gitem_t *item, vec3_t origin, vec3_t velocity, char *targ
 	{
 		// if not targeting something, auto-remove after 30 seconds
 		// only if it's NOT a security or goodie key
-		if( (dropped->item->giTag < INV_SECURITY_KEY1 && dropped->item->giTag > INV_SECURITY_KEY5) )
+		if (dropped->item->giTag != INV_SECURITY_KEY )
 		{
 			dropped->e_ThinkFunc = thinkF_G_FreeEntity;
 			dropped->nextthink = level.time + 30000;
+		}
+
+		if ( dropped->item->giType == IT_AMMO && dropped->item->giTag == AMMO_FORCE )
+		{
+			dropped->nextthink = -1;
+			dropped->e_ThinkFunc = thinkF_NULL;
 		}
 	}
 
@@ -833,7 +899,7 @@ void FinishSpawningItem( gentity_t *ent ) {
 }
 
 
-qboolean	itemRegistered[MAX_ITEMS];
+char itemRegistered[MAX_ITEMS+1];
 
 
 /*
@@ -842,7 +908,8 @@ ClearRegisteredItems
 ==============
 */
 void ClearRegisteredItems( void ) {
-	memset( itemRegistered, 0, sizeof( itemRegistered ) );
+	memset( itemRegistered, '0', bg_numItems );
+	itemRegistered[ bg_numItems ] = 0;
 
 	RegisterItem( FindItemForWeapon( WP_BRYAR_PISTOL ) );	//these are given in g_client, ClientSpawn(), but MUST be registered HERE, BEFORE cgame starts.
 	RegisterItem( FindItemForWeapon( WP_STUN_BATON ) );			//these are given in g_client, ClientSpawn(), but MUST be registered HERE, BEFORE cgame starts.
@@ -864,7 +931,8 @@ void RegisterItem( gitem_t *item ) {
 	if ( !item ) {
 		G_Error( "RegisterItem: NULL" );
 	}
-	itemRegistered[ item - bg_itemlist ] = qtrue;
+	itemRegistered[ item - bg_itemlist ] = '1';
+	gi.SetConfigstring(CS_ITEMS, itemRegistered);	//Write the needed items to a config string
 }
 
 
@@ -877,7 +945,7 @@ so the client will know which ones to precache
 ===============
 */
 void SaveRegisteredItems( void ) {
-	char	string[MAX_ITEMS+1];
+/*	char	string[MAX_ITEMS+1];
 	int		i;
 	int		count;
 
@@ -894,8 +962,25 @@ void SaveRegisteredItems( void ) {
 
 	gi.Printf( "%i items registered\n", count );
 	gi.SetConfigstring(CS_ITEMS, string);
+*/
+	gi.SetConfigstring(CS_ITEMS, itemRegistered);
 }
 
+/*
+============
+item_spawn_use
+
+ if an item is given a targetname, it will be spawned in when used
+============
+*/
+void item_spawn_use( gentity_t *self, gentity_t *other, gentity_t *activator )
+//-----------------------------------------------------------------------------
+{
+	self->nextthink = level.time + 50;
+	self->e_ThinkFunc = thinkF_FinishSpawningItem;
+	// I could be fancy and add a count or something like that to be able to spawn the item numerous times...
+	self->e_UseFunc = NULL;
+}
 
 /*
 ============
@@ -914,10 +999,17 @@ void G_SpawnItem (gentity_t *ent, gitem_t *item) {
 	RegisterItem( item );
 	ent->item = item;
 
-	// some movers spawn on the second frame, so delay item
-	// spawns until the third frame so they can ride trains
-	ent->nextthink = level.time + START_TIME_MOVERS_SPAWNED;
-	ent->e_ThinkFunc = thinkF_FinishSpawningItem;
+	// targetname indicates they want to spawn it later
+	if( ent->targetname )
+	{
+		ent->e_UseFunc = useF_item_spawn_use;
+	}
+	else
+	{	// some movers spawn on the second frame, so delay item
+		// spawns until the third frame so they can ride trains
+		ent->nextthink = level.time + START_TIME_MOVERS_SPAWNED + 50;
+		ent->e_ThinkFunc = thinkF_FinishSpawningItem;
+	}
 
 	ent->physicsBounce = 0.50;		// items are bouncy
 
@@ -990,7 +1082,9 @@ void G_RunItem( gentity_t *ent ) {
 		{
 			ent->s.pos.trType = TR_GRAVITY;
 			ent->s.pos.trTime = level.time;
-			ent->s.pos.trDelta[2] += 100;
+			ent->s.pos.trDelta[0] += crandom() * 40.0f; // I dunno, just do this??
+			ent->s.pos.trDelta[1] += crandom() * 40.0f;
+			ent->s.pos.trDelta[2] += random() * 20.0f;
 		}
 		return;
 	}

@@ -225,7 +225,6 @@ static int GetModelDataAllocSize(void)
 			Z_MemSize( TAG_MODEL_GLA);
 }
 extern cvar_t *r_modelpoolmegs;
-extern qboolean Sys_LowPhysicalMemory();
 //
 // return qtrue if at least one cached model was freed (which tells z_malloc()-fail recoveryt code to try again)
 //
@@ -404,6 +403,9 @@ void RE_RegisterMedia_LevelLoadEnd(void)
 	}
 
 	S_RestartMusic();
+	
+	extern qboolean gbAlreadyDoingLoad;
+					gbAlreadyDoingLoad = qfalse;
 }
 
 

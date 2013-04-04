@@ -12,6 +12,8 @@ static qboolean networkingEnabled = qfalse;
 static cvar_t	*net_noudp;
 static cvar_t	*net_noipx;
 
+static cvar_t	*net_forcenonlocal;
+
 static cvar_t	*net_socksEnabled;
 static cvar_t	*net_socksServer;
 static cvar_t	*net_socksPort;
@@ -365,6 +367,16 @@ LAN clients will have their rate var ignored
 */
 qboolean Sys_IsLANAddress( netadr_t adr ) {
 	int		i;
+
+	if (!net_forcenonlocal)
+	{
+		net_forcenonlocal = Cvar_Get( "net_forcenonlocal", "0", 0 );
+	}
+
+	if (net_forcenonlocal && net_forcenonlocal->integer)
+	{
+		return qfalse;
+	}
 
 	if( adr.type == NA_LOOPBACK ) {
 		return qtrue;
@@ -845,7 +857,13 @@ static qboolean NET_GetCvars( void ) {
 	if( net_noipx && net_noipx->modified ) {
 		modified = qtrue;
 	}
-	net_noipx = Cvar_Get( "net_noipx", "0", CVAR_LATCH | CVAR_ARCHIVE );
+	net_noipx = Cvar_Get( "net_noipx", "1", CVAR_LATCH | CVAR_ARCHIVE );
+
+
+	if( net_forcenonlocal && net_forcenonlocal->modified ) {
+		modified = qtrue;
+	}
+	net_forcenonlocal = Cvar_Get( "net_forcenonlocal", "0", CVAR_LATCH | CVAR_ARCHIVE );
 
 
 	if( net_socksEnabled && net_socksEnabled->modified ) {

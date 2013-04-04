@@ -336,16 +336,20 @@ visibility_t NPC_CheckVisibility ( gentity_t *ent, int flags )
 NPC_CheckSoundEvents
 -------------------------
 */
-static int G_CheckSoundEvents( gentity_t *self, float maxHearDist, qboolean mustHaveOwner, int minAlertLevel )
+static int G_CheckSoundEvents( gentity_t *self, float maxHearDist, int ignoreAlert, qboolean mustHaveOwner, int minAlertLevel )
 {
 	int	bestEvent = -1;
 	int bestAlert = -1;
+	int	bestTime = -1;
 	float dist, radius;
 
 	maxHearDist *= maxHearDist;
 
 	for ( int i = 0; i < level.numAlertEvents; i++ )
 	{
+		//are we purposely ignoring this alert?
+		if ( i == ignoreAlert )
+			continue;
 		//We're only concerned about sounds
 		if ( level.alertEvents[i].type != AET_SOUND )
 			continue;
@@ -366,23 +370,26 @@ static int G_CheckSoundEvents( gentity_t *self, float maxHearDist, qboolean must
 		if ( dist > radius )
 			continue;
 
+		if ( level.alertEvents[i].addLight )
+		{//a quiet sound, must have LOS to hear it
+			if ( G_ClearLOS( self, level.alertEvents[i].position ) == qfalse )
+			{//no LOS, didn't hear it
+				continue;
+			}
+		}
+
 		//See if this one takes precedence over the previous one
-		if ( level.alertEvents[i].level > bestAlert )
-		{
+		if ( level.alertEvents[i].level >= bestAlert //higher alert level
+			|| (level.alertEvents[i].level==bestAlert&&level.alertEvents[i].timestamp >= bestTime) )//same alert level, but this one is newer
+		{//NOTE: equal is better because it's later in the array
 			bestEvent = i;
 			bestAlert = level.alertEvents[i].level;
+			bestTime = level.alertEvents[i].timestamp;
 		}
 	}
 
 	return bestEvent;
 }
-
-/*
-static int NPC_CheckSoundEvents( void )
-{
-	return G_CheckSoundEvents( NPC );
-}
-*/
 
 float G_GetLightLevel( vec3_t pos, vec3_t fromDir )
 {
@@ -400,15 +407,19 @@ float G_GetLightLevel( vec3_t pos, vec3_t fromDir )
 NPC_CheckSightEvents
 -------------------------
 */
-static int G_CheckSightEvents( gentity_t *self, int hFOV, int vFOV, float maxSeeDist, qboolean mustHaveOwner, int minAlertLevel )
+static int G_CheckSightEvents( gentity_t *self, int hFOV, int vFOV, float maxSeeDist, int ignoreAlert, qboolean mustHaveOwner, int minAlertLevel )
 {
 	int	bestEvent = -1;
 	int bestAlert = -1;
+	int	bestTime = -1;
 	float	dist, radius;
 
 	maxSeeDist *= maxSeeDist;
 	for ( int i = 0; i < level.numAlertEvents; i++ )
 	{
+		//are we purposely ignoring this alert?
+		if ( i == ignoreAlert )
+			continue;
 		//We're only concerned about sounds
 		if ( level.alertEvents[i].type != AET_SIGHT )
 			continue;
@@ -445,22 +456,18 @@ static int G_CheckSightEvents( gentity_t *self, int hFOV, int vFOV, float maxSee
 		//			is added to the actual light level at this position?
 
 		//See if this one takes precedence over the previous one
-		if ( level.alertEvents[i].level > bestAlert )
-		{
+		if ( level.alertEvents[i].level >= bestAlert //higher alert level
+			|| (level.alertEvents[i].level==bestAlert&&level.alertEvents[i].timestamp >= bestTime) )//same alert level, but this one is newer
+		{//NOTE: equal is better because it's later in the array
 			bestEvent = i;
 			bestAlert = level.alertEvents[i].level;
+			bestTime = level.alertEvents[i].timestamp;
 		}
 	}
 
 	return bestEvent;
 }
 
-/*
-static int NPC_CheckSightEvents( void )
-{
-	return G_CheckSightEvents( NPC, NPCInfo->stats.hfov, NPCInfo->stats.vfov );
-}
-*/
 /*
 -------------------------
 NPC_CheckAlertEvents
@@ -469,7 +476,7 @@ NPC_CheckAlertEvents
 -------------------------
 */
 
-int G_CheckAlertEvents( gentity_t *self, qboolean checkSight, qboolean checkSound, float maxSeeDist, float maxHearDist, qboolean mustHaveOwner, int minAlertLevel )
+int G_CheckAlertEvents( gentity_t *self, qboolean checkSight, qboolean checkSound, float maxSeeDist, float maxHearDist, int ignoreAlert, qboolean mustHaveOwner, int minAlertLevel )
 {
 	if ( &g_entities[0] == NULL || g_entities[0].health <= 0 )
 	{
@@ -483,7 +490,7 @@ int G_CheckAlertEvents( gentity_t *self, qboolean checkSight, qboolean checkSoun
 	int bestSightAlert = -1;
 
 	//get sound event
-	bestSoundEvent = G_CheckSoundEvents( self, maxHearDist, mustHaveOwner, minAlertLevel );
+	bestSoundEvent = G_CheckSoundEvents( self, maxHearDist, ignoreAlert, mustHaveOwner, minAlertLevel );
 	//get sound event alert level
 	if ( bestSoundEvent >= 0 )
 	{
@@ -493,11 +500,11 @@ int G_CheckAlertEvents( gentity_t *self, qboolean checkSight, qboolean checkSoun
 	//get sight event
 	if ( self->NPC )
 	{
-		bestSightEvent = G_CheckSightEvents( self, self->NPC->stats.hfov, self->NPC->stats.vfov, maxSeeDist, mustHaveOwner, minAlertLevel );
+		bestSightEvent = G_CheckSightEvents( self, self->NPC->stats.hfov, self->NPC->stats.vfov, maxSeeDist, ignoreAlert, mustHaveOwner, minAlertLevel );
 	}
 	else
 	{
-		bestSightEvent = G_CheckSightEvents( self, 80, 80, maxSeeDist, mustHaveOwner, minAlertLevel );//FIXME: look at cg_view to get more accurate numbers?
+		bestSightEvent = G_CheckSightEvents( self, 80, 80, maxSeeDist, ignoreAlert, mustHaveOwner, minAlertLevel );//FIXME: look at cg_view to get more accurate numbers?
 	}
 	//get sight event alert level
 	if ( bestSightEvent >= 0 )
@@ -522,9 +529,10 @@ int G_CheckAlertEvents( gentity_t *self, qboolean checkSight, qboolean checkSoun
 	//return the sound event
 	return bestSoundEvent;
 }
-int NPC_CheckAlertEvents( qboolean checkSight, qboolean checkSound, qboolean mustHaveOwner, int minAlertLevel )
+
+int NPC_CheckAlertEvents( qboolean checkSight, qboolean checkSound, int ignoreAlert, qboolean mustHaveOwner, int minAlertLevel )
 {
-	return G_CheckAlertEvents( NPC, checkSight, checkSound, NPCInfo->stats.visrange, NPCInfo->stats.earshot, mustHaveOwner, minAlertLevel );
+	return G_CheckAlertEvents( NPC, checkSight, checkSound, NPCInfo->stats.visrange, NPCInfo->stats.earshot, ignoreAlert, mustHaveOwner, minAlertLevel );
 }
 
 qboolean G_CheckForDanger( gentity_t *self, int alertEvent )
@@ -568,12 +576,17 @@ qboolean NPC_CheckForDanger( int alertEvent )
 AddSoundEvent
 -------------------------
 */
-
-void AddSoundEvent( gentity_t *owner, vec3_t position, float radius, alertEventLevel_e alertLevel )
+qboolean RemoveOldestAlert( void );
+void AddSoundEvent( gentity_t *owner, vec3_t position, float radius, alertEventLevel_e alertLevel, qboolean needLOS )
 {
 	//FIXME: Handle this in another manner?
 	if ( level.numAlertEvents >= MAX_ALERT_EVENTS )
-		return;
+	{
+		if ( !RemoveOldestAlert() )
+		{//how could that fail?
+			return;
+		}
+	}
 	
 	if ( owner == NULL && alertLevel < AEL_DANGER )	//allows un-owned danger alerts
 		return;
@@ -591,7 +604,16 @@ void AddSoundEvent( gentity_t *owner, vec3_t position, float radius, alertEventL
 	level.alertEvents[ level.numAlertEvents ].level		= alertLevel;
 	level.alertEvents[ level.numAlertEvents ].type		= AET_SOUND;
 	level.alertEvents[ level.numAlertEvents ].owner		= owner;
+	if ( needLOS )
+	{//a very low-level sound, when check this sound event, check for LOS
+		level.alertEvents[ level.numAlertEvents ].addLight	= 1;	//will force an LOS trace on this sound
+	}
+	else
+	{
+		level.alertEvents[ level.numAlertEvents ].addLight	= 0;	//will force an LOS trace on this sound
+	}
 	level.alertEvents[ level.numAlertEvents ].ID		= level.curAlertID++;
+	level.alertEvents[ level.numAlertEvents ].timestamp	= level.time;
 
 	level.numAlertEvents++;
 }
@@ -606,7 +628,12 @@ void AddSightEvent( gentity_t *owner, vec3_t position, float radius, alertEventL
 {
 	//FIXME: Handle this in another manner?
 	if ( level.numAlertEvents >= MAX_ALERT_EVENTS )
-		return;
+	{
+		if ( !RemoveOldestAlert() )
+		{//how could that fail?
+			return;
+		}
+	}
 
 	if ( owner == NULL && alertLevel < AEL_DANGER )	//allows un-owned danger alerts
 		return;
@@ -626,6 +653,7 @@ void AddSightEvent( gentity_t *owner, vec3_t position, float radius, alertEventL
 	level.alertEvents[ level.numAlertEvents ].owner		= owner;		
 	level.alertEvents[ level.numAlertEvents ].addLight	= addLight;	//will get added to actual light at that point when it's checked
 	level.alertEvents[ level.numAlertEvents ].ID		= level.curAlertID++;
+	level.alertEvents[ level.numAlertEvents ].timestamp	= level.time;
 
 	level.numAlertEvents++;
 }
@@ -638,7 +666,67 @@ ClearPlayerAlertEvents
 
 void ClearPlayerAlertEvents( void )
 {
-	level.numAlertEvents = 0;
+	int curNumAlerts = level.numAlertEvents;
+	//loop through them all (max 32)
+	for ( int i = 0; i < curNumAlerts; i++ )
+	{
+		//see if the event is old enough to delete
+		if ( level.alertEvents[i].timestamp && level.alertEvents[i].timestamp + ALERT_CLEAR_TIME < level.time )
+		{//this event has timed out
+			//drop the count
+			level.numAlertEvents--;
+			//shift the rest down
+			if ( level.numAlertEvents > 0 )
+			{//still have more in the array
+				if ( (i+1) < MAX_ALERT_EVENTS )
+				{
+					memmove( &level.alertEvents[i], &level.alertEvents[i+1], sizeof(alertEvent_t)*(MAX_ALERT_EVENTS-(i+1) ) );
+				}
+			}
+			else
+			{//just clear this one... or should we clear the whole array?
+				memset( &level.alertEvents[i], 0, sizeof( alertEvent_t ) );
+			}
+		}
+	}
+	//make sure this never drops below zero... if it does, something very very bad happened
+	assert( level.numAlertEvents >= 0 );
+}
+
+qboolean RemoveOldestAlert( void )
+{
+	int	oldestEvent = -1, oldestTime = Q3_INFINITE;
+	//loop through them all (max 32)
+	for ( int i = 0; i < level.numAlertEvents; i++ )
+	{
+		//see if the event is old enough to delete
+		if ( level.alertEvents[i].timestamp < oldestTime )
+		{
+			oldestEvent = i;
+			oldestTime = level.alertEvents[i].timestamp;
+		}
+	}
+	if ( oldestEvent != -1 )
+	{
+		//drop the count
+		level.numAlertEvents--;
+		//shift the rest down
+		if ( level.numAlertEvents > 0 )
+		{//still have more in the array
+			if ( (oldestEvent+1) < MAX_ALERT_EVENTS )
+			{
+				memmove( &level.alertEvents[oldestEvent], &level.alertEvents[oldestEvent+1], sizeof(alertEvent_t)*(MAX_ALERT_EVENTS-(oldestEvent+1) ) );
+			}
+		}
+		else
+		{//just clear this one... or should we clear the whole array?
+			memset( &level.alertEvents[oldestEvent], 0, sizeof( alertEvent_t ) );
+		}
+	}
+	//make sure this never drops below zero... if it does, something very very bad happened
+	assert( level.numAlertEvents >= 0 );
+	//return true is have room for one now
+	return (level.numAlertEvents<MAX_ALERT_EVENTS);
 }
 
 /*

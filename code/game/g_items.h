@@ -79,16 +79,8 @@ typedef enum //# item_e
 	INV_LIGHTAMP_GOGGLES,
 	INV_SENTRY,		
 	//# #eol
-	INV_GOODIE_KEY1,	// don't want to include keys in the icarus list
-	INV_GOODIE_KEY2,
-	INV_GOODIE_KEY3,
-	INV_GOODIE_KEY4,
-	INV_GOODIE_KEY5,
-	INV_SECURITY_KEY1,
-	INV_SECURITY_KEY2,
-	INV_SECURITY_KEY3,
-	INV_SECURITY_KEY4,
-	INV_SECURITY_KEY5,
+	INV_GOODIE_KEY,	// don't want to include keys in the icarus list
+	INV_SECURITY_KEY,
 
 	INV_MAX						// Be sure to update MAX_INVENTORY
 };

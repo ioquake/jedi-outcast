@@ -1,6 +1,7 @@
 // sv_client.c -- server code for dealing with clients
 
 #include "server.h"
+#include "../qcommon/strip.h"
 
 static void SV_CloseDownload( client_t *cl );
 
@@ -363,7 +364,8 @@ void SV_DirectConnect( netadr_t from ) {
 			}
 		}
 		else {
-			NET_OutOfBandPrint( NS_SERVER, from, "print\nServer is full.\n" );
+			const char *SV_GetStripEdString(char *refSection, char *refName);
+			NET_OutOfBandPrint( NS_SERVER, from, va("print\n%s\n", SV_GetStripEdString("SVINGAME","SERVER_IS_FULL")));
 			Com_DPrintf ("Rejected a connection.\n");
 			return;
 		}
@@ -520,6 +522,17 @@ void SV_SendClientGameState( client_t *client ) {
 	entityState_t	*base, nullstate;
 	msg_t		msg;
 	byte		msgBuffer[MAX_MSGLEN];
+
+	// MW - my attempt to fix illegible server message errors caused by 
+	// packet fragmentation of initial snapshot.
+	while(client->state&&client->netchan.unsentFragments)
+	{
+		// send additional message fragments if the last message
+		// was too large to send at once
+	
+		Com_Printf ("[ISM]SV_SendClientGameState() [2] for %s, writing out old fragments\n", client->name);
+		SV_Netchan_TransmitNextFragment(&client->netchan);
+	}
 
 	Com_DPrintf ("SV_SendClientGameState() for %s\n", client->name);
 	Com_DPrintf( "Going from CS_CONNECTED to CS_PRIMED for %s\n", client->name );
@@ -919,8 +932,10 @@ SV_Disconnect_f
 The client is going to disconnect, so remove the connection immediately  FIXME: move to game?
 =================
 */
+const char *SV_GetStripEdString(char *refSection, char *refName);
 static void SV_Disconnect_f( client_t *cl ) {
-	SV_DropClient( cl, "disconnected" );
+//	SV_DropClient( cl, "disconnected" );
+	SV_DropClient( cl, SV_GetStripEdString("SVINGAME","DISCONNECTED") );
 }
 
 /*

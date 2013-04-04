@@ -105,7 +105,7 @@ cvarTable_t		cvarTable[] =
 	{ &ui_menuFiles,			"ui_menuFiles",			"ui/menus.txt", CVAR_ARCHIVE },
 	{ &ui_smallFont,			"ui_smallFont",			"0.25",			CVAR_ARCHIVE},
 	{ &ui_bigFont,				"ui_bigFont",			"0.4",			CVAR_ARCHIVE},
-	{ &ui_hudFiles,				"cg_hudFiles",			"ui/jk2hud.txt",CVAR_ARCHIVE},
+	{ &ui_hudFiles,				"cg_hudFiles",			"ui/jk2hud.txt",CVAR_ARCHIVE}, 
 };
 
 int		cvarTableSize = sizeof(cvarTable) / sizeof(cvarTable[0]);
@@ -414,7 +414,7 @@ static qboolean UI_DeferMenuScript ( const char **args )
 		}
 
 		// Defer if the video options were modified
-		deferred = Cvar_VariableValue ( "ui_r_modified" ) ? qtrue : qfalse;
+		deferred = Cvar_VariableIntegerValue( "ui_r_modified" ) ? qtrue : qfalse;
 
 		if ( deferred )
 		{
@@ -439,21 +439,7 @@ static qboolean UI_RunMenuScript ( const char **args )
 
 	if (String_Parse(args, &name)) 
 	{
-		if (Q_stricmp(name, "StartServer") == 0) 
-		{
-//			int i, clients;
-			int clients;
-			float skill;
-			Cvar_Set("cg_thirdPerson", "0");
-			Cvar_Set("cg_cameraOrbit", "0");
-			Cvar_Set("ui_singlePlayerActive", "0");
-			skill = trap_Cvar_VariableValue( "g_spSkill" );
-			// set max clients based on spots
-			clients = 8;
-			Cvar_Set("sv_maxClients", va("%d",clients));
-
-		} 
-		else if (Q_stricmp(name, "resetdefaults") == 0)		
+		if (Q_stricmp(name, "resetdefaults") == 0)		
 		{
 			UI_ResetDefaults();
 		}
@@ -494,7 +480,9 @@ static qboolean UI_RunMenuScript ( const char **args )
 				ui.Printf( va("%s\n","Attempting to delete game"));
 
 				ui.Cmd_ExecuteText( EXEC_NOW, va("wipe %s\n", s_savedata[s_savegame.currentLine].currentSaveFileName));
-				ReadSaveDirectory();	//refresh
+//				ReadSaveDirectory();	//refresh
+				s_savegame.saveFileCnt = -1;	//force a refresh at drawtime
+
 			}
 		}
 		else if (Q_stricmp(name, "savegame") == 0) 
@@ -541,7 +529,6 @@ static qboolean UI_RunMenuScript ( const char **args )
 		} */
 		else if (Q_stricmp(name, "Quit") == 0) 
 		{
-			Cvar_Set("ui_singlePlayerActive", "0");
 			Cbuf_ExecuteText( EXEC_NOW, "quit");
 		} 
 		else if (Q_stricmp(name, "Controls") == 0) 
@@ -630,6 +617,11 @@ static qboolean UI_RunMenuScript ( const char **args )
 			Cvar_Set( "cl_paused", "0" );
 			Menus_CloseAll();
 			Menus_ActivateByName("mainhud");
+
+			Cvar_Set( "cg_updatedDataPadForcePower1", "0" );
+			Cvar_Set( "cg_updatedDataPadForcePower2", "0" );
+			Cvar_Set( "cg_updatedDataPadForcePower3", "0" );
+			Cvar_Set( "cg_updatedDataPadObjective", "0" );
 		} 
 		else if (Q_stricmp(name, "glCustom") == 0) 
 		{
@@ -643,8 +635,12 @@ static qboolean UI_RunMenuScript ( const char **args )
 			}
 			else 
 			{
-			Com_Printf("unknown UI script %s\n", name);
+				Com_Printf("update missing cmd\n");
 			}
+		}
+		else 
+		{
+			Com_Printf("unknown UI script %s\n", name);
 		}
 	}
 
@@ -781,6 +777,45 @@ static void UI_FeederSelection(float feederID, int index)
 void Key_KeynumToStringBuf( int keynum, char *buf, int buflen );
 void Key_GetBindingBuf( int keynum, char *buf, int buflen );
 
+static qboolean UI_Crosshair_HandleKey(int flags, float *special, int key) 
+{
+  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) 
+  {
+		if (key == K_MOUSE2) 
+		{
+			uiInfo.currentCrosshair--;
+		} else {
+			uiInfo.currentCrosshair++;
+		}
+
+		if (uiInfo.currentCrosshair >= NUM_CROSSHAIRS) {
+			uiInfo.currentCrosshair = 0;
+		} else if (uiInfo.currentCrosshair < 0) {
+			uiInfo.currentCrosshair = NUM_CROSSHAIRS - 1;
+		}
+		Cvar_Set("cg_drawCrosshair", va("%d", uiInfo.currentCrosshair)); 
+		return qtrue;
+	}
+	return qfalse;
+}
+
+
+static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float *special, int key) 
+{
+
+	switch (ownerDraw) 
+	{
+		case UI_CROSSHAIR:
+			UI_Crosshair_HandleKey(flags, special, key);
+			break;
+		default:
+			break;
+	}
+
+  return qfalse;
+}
+
+
 /*
 =================
 UI_Init
@@ -851,6 +886,7 @@ void _UI_Init( qboolean inGameLoad )
 	uiInfo.uiDC.textWidth			= &Text_Width;
 	uiInfo.uiDC.feederItemImage		= &UI_FeederItemImage;
 	uiInfo.uiDC.feederItemText		= &UI_FeederItemText;
+	uiInfo.uiDC.ownerDrawHandleKey	= &UI_OwnerDrawHandleKey;
 
 	UI_Load();
 
@@ -1015,13 +1051,18 @@ qboolean Load_Menu(const char **holdBuffer)
 		{
 			return qfalse;
 		}
-		
+			
 		if ( *token2 == '}' ) 
 		{
 			return qtrue;
 		}
 
+//#ifdef _DEBUG
+//		extern void UI_Debug_AddMenuFilePath(const char *);
+//		UI_Debug_AddMenuFilePath(token2);
+//#endif
 		UI_ParseMenu(token2); 
+
 	}
 	return qfalse;
 }
@@ -1114,6 +1155,15 @@ void UI_Load(void)
 	char lastName[1024];
 	menuDef_t *menu = Menu_GetFocused();
 	char *menuSet = UI_Cvar_VariableString("ui_menuFiles");
+
+	// sod it, parse every menu strip file until we find a gap in the sequence...
+	//
+	for (int i=0; i<10; i++)
+	{
+		if (!ui.SP_Register(va("menus%d",i), /*SP_REGISTER_REQUIRED|*/SP_REGISTER_MENU))
+			break;
+	}
+
 
 	if (menu && menu->window.name) 
 	{
@@ -1240,12 +1290,17 @@ qboolean Asset_Parse(char **buffer)
 				return qfalse;
 			}
 
-			Q_strncpyz( uiInfo.uiDC.Assets.stripedFile, tempStr,  sizeof(uiInfo.uiDC.Assets.stripedFile) );
-
-			if (!ui.SP_Register(uiInfo.uiDC.Assets.stripedFile, SP_REGISTER_REQUIRED|SP_REGISTER_MENU))
+			char sTemp[1024];
+			Q_strncpyz( sTemp, tempStr,  sizeof(sTemp) );
+			if (!ui.SP_Register(sTemp, /*SP_REGISTER_REQUIRED|*/SP_REGISTER_MENU))
 			{
-				PC_ParseWarning(va("(.SP file \"%s\" not found)",uiInfo.uiDC.Assets.stripedFile));
+				PC_ParseWarning(va("(.SP file \"%s\" not found)",sTemp));
 				//return qfalse;	// hmmm... dunno about this, don't want to break scripts for just missing subtitles
+			}
+			else
+			{
+//				extern void AddMenuPackageRetryKey(const char *);
+//				AddMenuPackageRetryKey(sTemp);
 			}
 
 			continue;
@@ -1440,17 +1495,14 @@ static void UI_Update(const char *name)
 		{
 			case 0:
 				Cvar_SetValue( "ui_r_depthbits", 0 );
-				Cvar_SetValue( "ui_r_stencilbits", 8 );
 				break;
 
 			case 16:
 				Cvar_SetValue( "ui_r_depthbits", 16 );
-				Cvar_SetValue( "ui_r_stencilbits", 0 );
 				break;
 
 			case 32:
 				Cvar_SetValue( "ui_r_depthbits", 24 );
-				Cvar_SetValue( "ui_r_stencilbits", 8 );
 				break;
 		}
 	} 
@@ -1486,38 +1538,38 @@ static void UI_Update(const char *name)
 				Cvar_SetValue( "ui_r_texturebits", 32 );
 				Cvar_SetValue( "ui_r_fastSky", 0 );
 				Cvar_SetValue( "ui_r_inGameVideo", 1 );
-				Cvar_SetValue( "ui_cg_shadows", 2 );//stencil
+				//Cvar_SetValue( "ui_cg_shadows", 2 );//stencil
 				Cvar_Set( "ui_r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
 				break;
 
 			case 1: // normal 
 				Cvar_SetValue( "ui_r_fullScreen", 1 );
-				Cvar_SetValue( "ui_r_subdivisions", 12 );
+				Cvar_SetValue( "ui_r_subdivisions", 4 );
 				Cvar_SetValue( "ui_r_lodbias", 0 );
 				Cvar_SetValue( "ui_r_colorbits", 0 );
 				Cvar_SetValue( "ui_r_depthbits", 24 );
-				Cvar_SetValue( "ui_r_picmip", 0 );
+				Cvar_SetValue( "ui_r_picmip", 1 );
 				Cvar_SetValue( "ui_r_mode", 3 );
 				Cvar_SetValue( "ui_r_texturebits", 0 );
 				Cvar_SetValue( "ui_r_fastSky", 0 );
 				Cvar_SetValue( "ui_r_inGameVideo", 1 );
+				//Cvar_SetValue( "ui_cg_shadows", 2 );
 				Cvar_Set( "ui_r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
-				Cvar_SetValue( "ui_cg_shadows", 2 );
 				break;
 
 			case 2: // fast
 
 				Cvar_SetValue( "ui_r_fullScreen", 1 );
-				Cvar_SetValue( "ui_r_subdivisions", 8 );
+				Cvar_SetValue( "ui_r_subdivisions", 12 );
 				Cvar_SetValue( "ui_r_lodbias", 1 );
 				Cvar_SetValue( "ui_r_colorbits", 0 );
 				Cvar_SetValue( "ui_r_depthbits", 0 );
-				Cvar_SetValue( "ui_r_picmip", 1 );
+				Cvar_SetValue( "ui_r_picmip", 2 );
 				Cvar_SetValue( "ui_r_mode", 3 );
 				Cvar_SetValue( "ui_r_texturebits", 0 );
-				Cvar_SetValue( "ui_cg_shadows", 1 );
 				Cvar_SetValue( "ui_r_fastSky", 1 );
 				Cvar_SetValue( "ui_r_inGameVideo", 0 );
+				//Cvar_SetValue( "ui_cg_shadows", 1 );
 				Cvar_Set( "ui_r_texturemode", "GL_LINEAR_MIPMAP_NEAREST" );
 				break;
 
@@ -1529,11 +1581,11 @@ static void UI_Update(const char *name)
 				Cvar_SetValue( "ui_r_colorbits", 16 );
 				Cvar_SetValue( "ui_r_depthbits", 16 );
 				Cvar_SetValue( "ui_r_mode", 3 );
-				Cvar_SetValue( "ui_r_picmip", 2 );
+				Cvar_SetValue( "ui_r_picmip", 3 );
 				Cvar_SetValue( "ui_r_texturebits", 16 );
-				Cvar_SetValue( "ui_cg_shadows", 0 );
 				Cvar_SetValue( "ui_r_fastSky", 1 );
 				Cvar_SetValue( "ui_r_inGameVideo", 0 );
+				//Cvar_SetValue( "ui_cg_shadows", 0 );
 				Cvar_Set( "ui_r_texturemode", "GL_LINEAR_MIPMAP_NEAREST" );
 			break;
 		}
@@ -1694,17 +1746,13 @@ static void UI_DrawGLInfo(rectDef_t *rect, float scale, vec4_t color, int textSt
 	char * eptr = buff;
 	const char *lines[MAX_LINES];
 	int y, numLines=0, i=0;
-	const char * string;
 
-	y = rect->y;
-	string = ui.SP_GetStringTextString(va("%s_VENDOR",uiInfo.uiDC.Assets.stripedFile));
-	Text_Paint(rect->x, y, scale, color, va("%s %s",string,uiInfo.uiDC.glconfig.vendor_string), rect->w, textStyle, iFontIndex);
+	y = rect->y;	
+	Text_Paint(rect->x, y, scale, color, va("GL_VENDOR: %s",uiInfo.uiDC.glconfig.vendor_string), rect->w, textStyle, iFontIndex);
 	y += 15;
-	string = ui.SP_GetStringTextString(va("%s_VERSION",uiInfo.uiDC.Assets.stripedFile));
-	Text_Paint(rect->x, y, scale, color, va("%s: %s: %s", string,uiInfo.uiDC.glconfig.version_string,uiInfo.uiDC.glconfig.renderer_string), rect->w, textStyle, iFontIndex);
+	Text_Paint(rect->x, y, scale, color, va("GL_VERSION: %s: %s", uiInfo.uiDC.glconfig.version_string,uiInfo.uiDC.glconfig.renderer_string), rect->w, textStyle, iFontIndex);
 	y += 15;
-	string = ui.SP_GetStringTextString(va("%s_PIXELFORMAT",uiInfo.uiDC.Assets.stripedFile));
-	Text_Paint(rect->x, y, scale, color, string, rect->w, textStyle, iFontIndex);
+	Text_Paint(rect->x, y, scale, color, "GL_PIXELFORMAT:", rect->w, textStyle, iFontIndex);
 	y += 15;
 	Text_Paint(rect->x, y, scale, color, va ("Color(%d-bits) Z(%d-bits) stencil(%d-bits)",uiInfo.uiDC.glconfig.colorBits, uiInfo.uiDC.glconfig.depthBits, uiInfo.uiDC.glconfig.stencilBits), rect->w, textStyle, iFontIndex);
 	y += 15;
@@ -1773,6 +1821,16 @@ static void UI_DataPad_ForcePowers(rectDef_t *rect, float scale, vec4_t color, i
 }
 */
 
+static void UI_DrawCrosshair(rectDef_t *rect, float scale, vec4_t color) {
+ 	trap_R_SetColor( color );
+	if (uiInfo.currentCrosshair < 0 || uiInfo.currentCrosshair >= NUM_CROSSHAIRS) {
+		uiInfo.currentCrosshair = 0;
+	}
+	UI_DrawHandlePic( rect->x, rect->y, rect->w, rect->h, uiInfo.uiDC.Assets.crosshairShader[uiInfo.currentCrosshair]);
+ 	trap_R_SetColor( NULL );
+}
+
+
 /*
 =================
 UI_OwnerDraw
@@ -1832,8 +1890,7 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
 //			UI_DrawPreviewCinematic(&rect, scale, color);
 			break;
 		case UI_CROSSHAIR:
-			// FIXME BOB - do we need this?
-//			UI_DrawCrosshair(&rect, scale, color);
+			UI_DrawCrosshair(&rect, scale, color);
 			break;
 		case UI_GLINFO:
 			UI_DrawGLInfo(&rect,scale, color, textStyle, iFontIndex);
@@ -2040,23 +2097,6 @@ int UI_OwnerDrawWidth(int ownerDraw, float scale)
 
 	switch (ownerDraw) 
 	{
-	// FIXME BOB
-	/*
-	case UI_SKILL:
-		i = trap_Cvar_VariableValue( "g_spSkill" );
-		if (i < 1 || i > numSkillLevels) 
-		{
-			i = 1;
-		}
-		s = skillLevels[i-1];
-		break;
-	case UI_NETSOURCE:
-		if (ui_netSource.integer < 0 || ui_netSource.integer > uiInfo.numJoinGameTypes) 
-		{
-			ui_netSource.integer = 0;
-		}
-		s = va("Source: %s", netSources[ui_netSource.integer]);
-		break; */
 	case UI_KEYBINDSTATUS:
 		if (Display_KeyBindPending()) 
 		{
@@ -2218,11 +2258,9 @@ void UI_DataPadMenu(void)
 {
 	int	newForcePower,newObjective;
 
-	ui.PrecacheScreenshot();
-
 	Menus_CloseByName("mainhud");
 
-	newForcePower = (int)trap_Cvar_VariableValue("cg_updatedDataPadForcePower");
+	newForcePower = (int)trap_Cvar_VariableValue("cg_updatedDataPadForcePower1");
 	newObjective = (int)trap_Cvar_VariableValue("cg_updatedDataPadObjective");
 
 	if (newForcePower)
@@ -2334,7 +2372,6 @@ you to discard your changes if you did something you didnt want
 */
 void UI_UpdateVideoSetup ( void )
 {
-	Cvar_Set ( "r_glCustom", Cvar_VariableString ( "ui_r_glCustom" ) );
 	Cvar_Set ( "r_mode", Cvar_VariableString ( "ui_r_mode" ) );
 	Cvar_Set ( "r_fullscreen", Cvar_VariableString ( "ui_r_fullscreen" ) );
 	Cvar_Set ( "r_colorbits", Cvar_VariableString ( "ui_r_colorbits" ) );
@@ -2348,6 +2385,7 @@ void UI_UpdateVideoSetup ( void )
 	Cvar_Set ( "r_subdivisions", Cvar_VariableString ( "ui_r_subdivisions" ) );
 	Cvar_Set ( "r_fastSky", Cvar_VariableString ( "ui_r_fastSky" ) );
 	Cvar_Set ( "r_inGameVideo", Cvar_VariableString ( "ui_r_inGameVideo" ) );
+	Cvar_Set ( "r_allowExtensions", Cvar_VariableString ( "ui_r_allowExtensions" ) );
 	Cvar_Set ( "cg_shadows", Cvar_VariableString ( "ui_cg_shadows" ) );
 	Cvar_Set ( "ui_r_modified", "0" );
 
@@ -2365,7 +2403,8 @@ interface versions of the cvars.
 void UI_GetVideoSetup ( void )
 {
 	// Make sure the cvars are registered as read only.
-	Cvar_Register ( NULL, "ui_r_glCustom",				"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_glCustom",				"4", CVAR_ROM|CVAR_ARCHIVE );
+
 	Cvar_Register ( NULL, "ui_r_mode",					"0", CVAR_ROM );
 	Cvar_Register ( NULL, "ui_r_fullscreen",			"0", CVAR_ROM );
 	Cvar_Register ( NULL, "ui_r_colorbits",				"0", CVAR_ROM );
@@ -2379,11 +2418,11 @@ void UI_GetVideoSetup ( void )
 	Cvar_Register ( NULL, "ui_r_subdivisions",			"0", CVAR_ROM );
 	Cvar_Register ( NULL, "ui_r_fastSky",				"0", CVAR_ROM );
 	Cvar_Register ( NULL, "ui_r_inGameVideo",			"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_allowExtensions",		"0", CVAR_ROM );
 	Cvar_Register ( NULL, "ui_cg_shadows",				"0", CVAR_ROM );
 	Cvar_Register ( NULL, "ui_r_modified",				"0", CVAR_ROM );
 	
 	// Copy over the real video cvars into their temporary counterparts
-	Cvar_Set ( "ui_r_glCustom", Cvar_VariableString ( "r_glCustom" ) );
 	Cvar_Set ( "ui_r_mode", Cvar_VariableString ( "r_mode" ) );
 	Cvar_Set ( "ui_r_colorbits", Cvar_VariableString ( "r_colorbits" ) );
 	Cvar_Set ( "ui_r_fullscreen", Cvar_VariableString ( "r_fullscreen" ) );
@@ -2391,11 +2430,13 @@ void UI_GetVideoSetup ( void )
 	Cvar_Set ( "ui_r_picmip", Cvar_VariableString ( "r_picmip" ) );
 	Cvar_Set ( "ui_r_texturebits", Cvar_VariableString ( "r_texturebits" ) );
 	Cvar_Set ( "ui_r_texturemode", Cvar_VariableString ( "r_texturemode" ) );
+	Cvar_Set ( "ui_r_detailtextures", Cvar_VariableString ( "r_detailtextures" ) );
 	Cvar_Set ( "ui_r_ext_compress_textures", Cvar_VariableString ( "r_ext_compress_textures" ) );
 	Cvar_Set ( "ui_r_depthbits", Cvar_VariableString ( "r_depthbits" ) );
 	Cvar_Set ( "ui_r_subdivisions", Cvar_VariableString ( "r_subdivisions" ) );
 	Cvar_Set ( "ui_r_fastSky", Cvar_VariableString ( "r_fastSky" ) );
 	Cvar_Set ( "ui_r_inGameVideo", Cvar_VariableString ( "r_inGameVideo" ) );
+	Cvar_Set ( "ui_r_allowExtensions", Cvar_VariableString ( "r_allowExtensions" ) );
 	Cvar_Set ( "ui_cg_shadows", Cvar_VariableString ( "cg_shadows" ) );
 	Cvar_Set ( "ui_r_modified", "0" );
 }
@@ -2459,8 +2500,8 @@ UI_ResetDefaults
 */
 void UI_ResetDefaults( void )
 {
-	ui.Cmd_ExecuteText( EXEC_APPEND, "exec default.cfg\n");
 	ui.Cmd_ExecuteText( EXEC_APPEND, "cvar_restart\n");
+	ui.Cmd_ExecuteText( EXEC_APPEND, "exec default.cfg\n");
 	ui.Cmd_ExecuteText( EXEC_APPEND, "vid_restart\n" );
 	Cvar_Set("com_introPlayed", "1" );
 }

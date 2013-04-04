@@ -72,9 +72,12 @@ qboolean PM_AdjustAnglesToGripper( gentity_t *ent, usercmd_t *ucmd )
 
 		VectorSubtract( ent->enemy->currentOrigin, ent->currentOrigin, dir );
 		vectoangles( dir, angles );
-		angles[PITCH] = -AngleNormalize180( angles[PITCH] );
+		angles[PITCH] = AngleNormalize180( angles[PITCH] );
 		angles[YAW] = AngleNormalize180( angles[YAW] );
-		SetClientViewAngle( ent, angles );
+		if ( ent->client->ps.viewEntity <= 0 || ent->client->ps.viewEntity >= ENTITYNUM_WORLD )
+		{//don't clamp angles when looking through a viewEntity
+			SetClientViewAngle( ent, angles );
+		}
 		ucmd->angles[PITCH] = ANGLE2SHORT(angles[PITCH]) - ent->client->ps.delta_angles[PITCH];
 		ucmd->angles[YAW] = ANGLE2SHORT(angles[YAW]) - ent->client->ps.delta_angles[YAW];
 		return qtrue;
@@ -108,47 +111,64 @@ qboolean PM_AdjustAngleForWallRun( gentity_t *ent, usercmd_t *ucmd, qboolean doM
 		{//still a vertical wall there
 			//FIXME: don't pull around 90 turns
 			//FIXME: simulate stepping up steps here, somehow?
-			if ( ent->client->ps.legsAnim == BOTH_WALL_RUN_RIGHT )
+			if ( ent->s.number || !player_locked )
 			{
-				ucmd->rightmove = 127;
-			}
-			else
-			{
-				ucmd->rightmove = -127;
+				if ( ent->client->ps.legsAnim == BOTH_WALL_RUN_RIGHT )
+				{
+					ucmd->rightmove = 127;
+				}
+				else
+				{
+					ucmd->rightmove = -127;
+				}
 			}
 			if ( ucmd->upmove < 0 )
 			{
 				ucmd->upmove = 0;
 			}
+			if ( ent->NPC )
+			{//invalid now
+				VectorClear( ent->client->ps.moveDir );
+			}
 			//make me face perpendicular to the wall
 			ent->client->ps.viewangles[YAW] = vectoyaw( trace.plane.normal )+yawAdjust;
-			SetClientViewAngle( ent, ent->client->ps.viewangles );
+			if ( ent->client->ps.viewEntity <= 0 || ent->client->ps.viewEntity >= ENTITYNUM_WORLD )
+			{//don't clamp angles when looking through a viewEntity
+				SetClientViewAngle( ent, ent->client->ps.viewangles );
+			}
 			ucmd->angles[YAW] = ANGLE2SHORT( ent->client->ps.viewangles[YAW] ) - ent->client->ps.delta_angles[YAW];
-			if ( doMove )
+			if ( ent->s.number || !player_locked )
 			{
-				//push me forward
-				vec3_t	fwd;
-				float	zVel = ent->client->ps.velocity[2];
-				if ( ent->client->ps.legsAnimTimer > 500 )
-				{//not at end of anim yet
-					fwdAngles[YAW] = ent->client->ps.viewangles[YAW];
-					AngleVectors( fwdAngles, fwd, NULL, NULL );
-					//FIXME: or MA?
-					float speed = 175;
-					if ( ucmd->forwardmove < 0 )
-					{//slower
-						speed = 100;
-					}
-					else if ( ucmd->forwardmove > 0 )
+				if ( doMove )
+				{
+					//push me forward
+					vec3_t	fwd;
+					float	zVel = ent->client->ps.velocity[2];
+					if ( zVel > forceJumpStrength[FORCE_LEVEL_2]/2.0f )
 					{
-						speed = 250;//running speed
+						zVel = forceJumpStrength[FORCE_LEVEL_2]/2.0f;
 					}
-					VectorScale( fwd, speed, ent->client->ps.velocity );
+					if ( ent->client->ps.legsAnimTimer > 500 )
+					{//not at end of anim yet
+						fwdAngles[YAW] = ent->client->ps.viewangles[YAW];
+						AngleVectors( fwdAngles, fwd, NULL, NULL );
+						//FIXME: or MA?
+						float speed = 175;
+						if ( ucmd->forwardmove < 0 )
+						{//slower
+							speed = 100;
+						}
+						else if ( ucmd->forwardmove > 0 )
+						{
+							speed = 250;//running speed
+						}
+						VectorScale( fwd, speed, ent->client->ps.velocity );
+					}
+					ent->client->ps.velocity[2] = zVel;//preserve z velocity
+					VectorMA( ent->client->ps.velocity, -128, trace.plane.normal, ent->client->ps.velocity );
+					//pull me toward the wall, too
+					//VectorMA( ent->client->ps.velocity, dist, rt, ent->client->ps.velocity );
 				}
-				ent->client->ps.velocity[2] = zVel;//preserve z velocity
-				VectorMA( ent->client->ps.velocity, -128, trace.plane.normal, ent->client->ps.velocity );
-				//pull me toward the wall, too
-				//VectorMA( ent->client->ps.velocity, dist, rt, ent->client->ps.velocity );
 			}
 			ucmd->forwardmove = 0;
 			return qtrue;
@@ -209,7 +229,10 @@ qboolean PM_AdjustAnglesForSpinningFlip( gentity_t *ent, usercmd_t *ucmd, qboole
 		spinLength = spinEnd - spinStart;
 		VectorCopy( ent->client->ps.viewangles, newAngles );
 		newAngles[YAW] = ent->angle + (spinAmt * (elapsedTime-spinStart) / spinLength);
-		SetClientViewAngle( ent, newAngles );
+		if ( ent->client->ps.viewEntity <= 0 || ent->client->ps.viewEntity >= ENTITYNUM_WORLD )
+		{//don't clamp angles when looking through a viewEntity
+			SetClientViewAngle( ent, newAngles );
+		}
 		ucmd->angles[PITCH] = ANGLE2SHORT( ent->client->ps.viewangles[PITCH] ) - ent->client->ps.delta_angles[PITCH];
 		ucmd->angles[YAW] = ANGLE2SHORT( ent->client->ps.viewangles[YAW] ) - ent->client->ps.delta_angles[YAW];
 		if ( anglesOnly )
@@ -224,11 +247,14 @@ qboolean PM_AdjustAnglesForSpinningFlip( gentity_t *ent, usercmd_t *ucmd, qboole
 	//push me
 	if ( ent->client->ps.legsAnimTimer > 300 )//&& ent->client->ps.groundEntityNum == ENTITYNUM_NONE )
 	{//haven't landed or reached end of anim yet
-		vec3_t pushDir, pushAngles = {0,ent->angle,0};
-		AngleVectors( pushAngles, pushDir, NULL, NULL );
-		if ( DotProduct( ent->client->ps.velocity, pushDir ) < 100 )
+		if ( ent->s.number || !player_locked )
 		{
-			VectorMA( ent->client->ps.velocity, 10, pushDir, ent->client->ps.velocity );
+			vec3_t pushDir, pushAngles = {0,ent->angle,0};
+			AngleVectors( pushAngles, pushDir, NULL, NULL );
+			if ( DotProduct( ent->client->ps.velocity, pushDir ) < 100 )
+			{
+				VectorMA( ent->client->ps.velocity, 10, pushDir, ent->client->ps.velocity );
+			}
 		}
 	}
 	//do a dip in the view
@@ -252,25 +278,39 @@ qboolean PM_AdjustAnglesForSpinningFlip( gentity_t *ent, usercmd_t *ucmd, qboole
 
 qboolean PM_AdjustAnglesForBackAttack( gentity_t *ent, usercmd_t *ucmd )
 {
+	if ( ent->s.number )
+	{
+		return qfalse;
+	}
 	if ( ( ent->client->ps.saberMove == LS_A_BACK || ent->client->ps.saberMove == LS_A_BACK_CR || ent->client->ps.saberMove == LS_A_BACKSTAB )
 		&& PM_InAnimForSaberMove( ent->client->ps.torsoAnim, ent->client->ps.saberMove ) )
 	{
-		//if ( ent->client->ps.saberMove != LS_A_BACKSTAB )
+		if ( ent->client->ps.saberMove != LS_A_BACKSTAB || !ent->enemy || ent->s.number )
 		{
-			SetClientViewAngle( ent, ent->client->ps.viewangles );
+			if ( ent->client->ps.viewEntity <= 0 || ent->client->ps.viewEntity >= ENTITYNUM_WORLD )
+			{//don't clamp angles when looking through a viewEntity
+				SetClientViewAngle( ent, ent->client->ps.viewangles );
+			}
 			ucmd->angles[PITCH] = ANGLE2SHORT( ent->client->ps.viewangles[PITCH] ) - ent->client->ps.delta_angles[PITCH];
 			ucmd->angles[YAW] = ANGLE2SHORT( ent->client->ps.viewangles[YAW] ) - ent->client->ps.delta_angles[YAW];
 		}
-		/*
 		else 
-		{//FIXME: keep NPC facing away from their enemy
-			if ( ent->s.number )
+		{//keep player facing away from their enemy
+			vec3_t enemyBehindDir;
+			VectorSubtract( ent->currentOrigin, ent->enemy->currentOrigin, enemyBehindDir );
+			float enemyBehindYaw = AngleNormalize180( vectoyaw( enemyBehindDir ) );
+			float yawError = AngleNormalize180( enemyBehindYaw - AngleNormalize180( ent->client->ps.viewangles[YAW] ) );
+			if ( yawError > 1 )
 			{
-				ucmd->angles[YAW] *= -1;
+				yawError = 1;
 			}
-			return qfalse;
+			else if ( yawError < -1 )
+			{
+				yawError = -1;
+			}
+			ucmd->angles[YAW] = ANGLE2SHORT( AngleNormalize180( ent->client->ps.viewangles[YAW] + yawError ) ) - ent->client->ps.delta_angles[YAW];
+			ucmd->angles[PITCH] = ANGLE2SHORT( ent->client->ps.viewangles[PITCH] ) - ent->client->ps.delta_angles[PITCH];
 		}
-		*/
 		return qtrue;
 	}
 	return qfalse;
@@ -280,7 +320,10 @@ qboolean PM_AdjustAnglesForSaberLock( gentity_t *ent, usercmd_t *ucmd )
 {
 	if ( ent->client->ps.saberLockTime > level.time )
 	{
-		SetClientViewAngle( ent, ent->client->ps.viewangles );
+		if ( ent->client->ps.viewEntity <= 0 || ent->client->ps.viewEntity >= ENTITYNUM_WORLD )
+		{//don't clamp angles when looking through a viewEntity
+			SetClientViewAngle( ent, ent->client->ps.viewangles );
+		}
 		ucmd->angles[PITCH] = ANGLE2SHORT( ent->client->ps.viewangles[PITCH] ) - ent->client->ps.delta_angles[PITCH];
 		ucmd->angles[YAW] = ANGLE2SHORT( ent->client->ps.viewangles[YAW] ) - ent->client->ps.delta_angles[YAW];
 		return qtrue;
@@ -303,13 +346,17 @@ qboolean PM_AdjustAnglesForKnockdown( gentity_t *ent, usercmd_t *ucmd, qboolean 
 			//you can jump up out of a knockdown and you get get up into a crouch from a knockdown
 			//ucmd->upmove = 0;
 			//if ( !PM_InForceGetUp( &ent->client->ps ) || ent->client->ps.torsoAnimTimer > 800 || ent->s.weapon != WP_SABER )
+			if ( ent->health > 0 )
 			{//can only attack if you've started a force-getup and are using the saber
 				ucmd->buttons = 0;
 			}
 		}
 		if ( !PM_InForceGetUp( &ent->client->ps ) )
 		{//can't turn unless in a force getup
-			SetClientViewAngle( ent, ent->client->ps.viewangles );
+			if ( ent->client->ps.viewEntity <= 0 || ent->client->ps.viewEntity >= ENTITYNUM_WORLD )
+			{//don't clamp angles when looking through a viewEntity
+				SetClientViewAngle( ent, ent->client->ps.viewangles );
+			}
 			ucmd->angles[PITCH] = ANGLE2SHORT( ent->client->ps.viewangles[PITCH] ) - ent->client->ps.delta_angles[PITCH];
 			ucmd->angles[YAW] = ANGLE2SHORT( ent->client->ps.viewangles[YAW] ) - ent->client->ps.delta_angles[YAW];
 			return qtrue;

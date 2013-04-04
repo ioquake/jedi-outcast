@@ -1231,7 +1231,6 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(FACE_SMILE),				//# 
 	ENUM2STRING(FACE_FROWN),				//# 
 	ENUM2STRING(FACE_DEAD),				//# 
-	ENUM2STRING(FACE_GALAK),			//# This has to be last for Galak Mech to talk
 
 	//must be terminated
 	NULL,-1

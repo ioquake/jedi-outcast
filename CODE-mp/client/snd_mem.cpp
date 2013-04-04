@@ -219,11 +219,44 @@ void S_LoadSound_Finalize(wavinfo_t	*info, sfx_t *sfx, byte *data)
 //
 // returns qfalse if failed to load, else fills in *pData
 //
+extern	cvar_t	*com_buildScript;
 static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pData, int *piSize, int iNameStrlen)
 {
 	char *psVoice = strstr(psFilename,"chars");
 	if (psVoice)
 	{
+		// cache foreign voices...
+		//		
+		if (com_buildScript->integer)
+		{
+			fileHandle_t hFile;
+			strncpy(psVoice,"chr_d",5);	// same number of letters as "chars"
+			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cache this file
+			if (!hFile)
+			{
+				strcpy(&psFilename[iNameStrlen-3],"mp3");		//not there try mp3
+				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache this file
+			}
+			if (hFile)
+			{
+				FS_FCloseFile(hFile);
+			}
+			strcpy(&psFilename[iNameStrlen-3],"wav");
+
+			strncpy(psVoice,"chr_f",5);	// same number of letters as "chars"
+			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cahce this file
+			if (!hFile)
+			{
+				strcpy(&psFilename[iNameStrlen-3],"mp3");		//not there try mp3
+				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache this file
+			}
+			if (hFile)
+			{
+				FS_FCloseFile(hFile);
+			}
+			strncpy(psVoice,"chars",5);	//put it back to chars
+		}
+
 		// account for foreign voices...
 		//		
 		extern cvar_t* s_language;

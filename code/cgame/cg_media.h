@@ -1,13 +1,14 @@
 #ifndef __CG_MEDIA_H_
 #define __CG_MEDIA_H_
 
-#define	NUM_CROSSHAIRS		12
+#define	NUM_CROSSHAIRS		10
 
 typedef enum {
 	FOOTSTEP_NORMAL,
 	FOOTSTEP_METAL,
 	FOOTSTEP_SPLASH,
-	FOOTSTEP_BORG,
+	FOOTSTEP_WADE,
+	FOOTSTEP_SWIM,
 
 	FOOTSTEP_TOTAL
 } footstep_t;
@@ -41,6 +42,7 @@ typedef enum
 	CHUNK_ROCK3,
 	CHUNK_CRATE1,
 	CHUNK_CRATE2,
+	CHUNK_WHITE_METAL,
 	NUM_CHUNK_TYPES
 };
 
@@ -62,6 +64,7 @@ typedef struct {
 	qhandle_t	chunkyNumberShaders[11];
 
 	qhandle_t	loadTick;
+	qhandle_t	loadTickCap;
 
 	//			HUD artwork
 	int			currentBackground;
@@ -87,6 +90,7 @@ typedef struct {
 	sfxHandle_t	rockBounceSound[2];
 	sfxHandle_t	metalBounceSound[2];
 	sfxHandle_t	glassChunkSound;
+	sfxHandle_t	crateBreakSound[2];
 
 	// Saber shaders
 	//-----------------------------
@@ -177,14 +181,15 @@ typedef struct {
 	qhandle_t	HUDArmorTic;
 	qhandle_t	HUDInnerLeft;
 
-	qhandle_t	HUDSaberStyle1;
-	qhandle_t	HUDSaberStyle2;
-	qhandle_t	HUDSaberStyle3;
+	qhandle_t	HUDSaberStyleFast;
+	qhandle_t	HUDSaberStyleMed;
+	qhandle_t	HUDSaberStyleStrong;
 
 	qhandle_t	HUDRightFrame;
 	qhandle_t	HUDInnerRight;
 
 	qhandle_t	dataPadFrame;
+	qhandle_t	DPForcePowerOverlay;
 
 	qhandle_t	talkingtop;
 	qhandle_t	talkingbot;
@@ -215,6 +220,7 @@ typedef struct {
 	sfxHandle_t	tripMineStickSound;
 	
 	sfxHandle_t	selectSound;
+	sfxHandle_t	selectSound2;
 	sfxHandle_t	overchargeSlowSound;
 	sfxHandle_t overchargeFastSound;
 	sfxHandle_t	overchargeLoopSound;
@@ -286,6 +292,9 @@ typedef struct
 	fxHandle_t	forceConfusion;
 	fxHandle_t	forceLightning;
 	fxHandle_t	forceLightningWide;
+	fxHandle_t	forceInvincibility;
+	fxHandle_t	forceHeal;
+
 } cgEffects_t;
 
 

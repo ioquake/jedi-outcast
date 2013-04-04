@@ -264,26 +264,13 @@ void GunRackAddItem( gitem_t *gun, vec3_t org, vec3_t angs, float ffwd, float fr
 			switch( gun->giTag )
 			{
 			case WP_BLASTER:
-				it_ent->count = 20;
+				it_ent->count = 15;
 				break;
 			case WP_REPEATER:
-				it_ent->count = 40;
+				it_ent->count = 100;
 				break;
 			case WP_ROCKET_LAUNCHER:
-				it_ent->count = 2;
-				break;
-			}
-
-			// then scale based on skill
-			switch ( g_spskill->integer )
-			{
-			case 0:
-				it_ent->count *= 5;
-				break;
-			case 1:
-				it_ent->count *= 3;
-				break;
-			case 2: // No soup for you!, or something..
+				it_ent->count = 4;
 				break;
 			}
 		}
@@ -305,17 +292,27 @@ void GunRackAddItem( gitem_t *gun, vec3_t org, vec3_t angs, float ffwd, float fr
 
 		if ( gun->giType == IT_AMMO )
 		{
-			// scale ammo based on skill
-			switch ( g_spskill->integer )
+			if ( gun->giTag == AMMO_BLASTER ) // I guess this just has to use different logic??
 			{
-			case 0: // do default
-				break;
-			case 1:
-				it_ent->count *= 0.75f;
-				break;
-			case 2:
-				it_ent->count *= 0.5f;
-				break;
+				if ( g_spskill->integer >= 2 )
+				{
+					it_ent->count += 10; // give more on higher difficulty because there will be more/harder enemies?
+				}
+			}
+			else
+			{
+				// scale ammo based on skill
+				switch ( g_spskill->integer )
+				{
+				case 0: // do default
+					break;
+				case 1:
+					it_ent->count *= 0.75f;
+					break;
+				case 2:
+					it_ent->count *= 0.5f;
+					break;
+				}
 			}
 		}
 
@@ -330,6 +327,7 @@ void GunRackAddItem( gitem_t *gun, vec3_t org, vec3_t angs, float ffwd, float fr
 
 		// by doing this, we can force the amount of ammo we desire onto the weapon for when it gets picked-up
 		it_ent->flags |= ( FL_DROPPED_ITEM | FL_FORCE_PULLABLE_ONLY );
+		it_ent->physicsBounce = 0.1f;
 
 		for ( int t = 0; t < 3; t++ )
 		{

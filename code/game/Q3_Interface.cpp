@@ -56,7 +56,6 @@ extern int	BMS_MID;
 extern int	BMS_END;
 extern cvar_t	*g_skippingcin;
 
-
 extern qboolean	stop_icarus;
 
 #define stringIDExpand(str, strEnum)	str, strEnum, ENUM2STRING(strEnum)
@@ -155,6 +154,18 @@ stringID_table_t eventTable[] =
 	"",				EV_BAD,
 };
 
+stringID_table_t DMSTable[] =
+{
+	"NULL",-1,
+	ENUM2STRING(DM_AUTO),	//# let the game determine the dynamic music as normal
+	ENUM2STRING(DM_SILENCE),	//# stop the music
+	ENUM2STRING(DM_EXPLORE),	//# force the exploration music to play
+	ENUM2STRING(DM_ACTION),	//# force the action music to play
+	ENUM2STRING(DM_BOSS),	//# force the boss battle music to play (if there is any)
+	ENUM2STRING(DM_DEATH),	//# force the "player dead" music to play
+	"", -1
+};
+
 stringID_table_t setTable[] =
 {
 	ENUM2STRING(SET_SPAWNSCRIPT),//0
@@ -230,6 +241,7 @@ stringID_table_t setTable[] =
 	ENUM2STRING(SET_FORCED_MARCH),
 	ENUM2STRING(SET_NO_RESPONSE),
 	ENUM2STRING(SET_NO_COMBAT_TALK),
+	ENUM2STRING(SET_NO_ALERT_TALK),
 	ENUM2STRING(SET_UNDYING),
 	ENUM2STRING(SET_TREASONED),
 	ENUM2STRING(SET_DISABLE_SHADER_ANIM),
@@ -287,6 +299,7 @@ stringID_table_t setTable[] =
 	ENUM2STRING(SET_GREET_ALLIES),
 	ENUM2STRING(SET_PLAYER_LOCKED),
 	ENUM2STRING(SET_LOCK_PLAYER_WEAPONS),
+	ENUM2STRING(SET_NO_IMPACT_DAMAGE),
 	ENUM2STRING(SET_PARM1),
 	ENUM2STRING(SET_PARM2),
 	ENUM2STRING(SET_PARM3),
@@ -362,6 +375,11 @@ stringID_table_t setTable[] =
 	ENUM2STRING(SET_NO_FALLTODEATH),
 	ENUM2STRING(SET_DISMEMBERABLE),
 	ENUM2STRING(SET_NO_ACROBATICS),
+	ENUM2STRING(SET_MUSIC_STATE),
+	ENUM2STRING(SET_USE_SUBTITLES),
+	ENUM2STRING(SET_CLEAN_DAMAGING_ENTS),
+	ENUM2STRING(SET_HUD),
+
 //FIXME: add BOTH_ attributes here too
 	"",	SET_,
 };
@@ -735,15 +753,25 @@ static void Q3_SetObjective(const char *ObjEnum, int status)
 Q3_SetMissionFailed
 -------------------------
 */
+extern void G_PlayerGuiltDeath( void );
 static void	Q3_SetMissionFailed(const char *TextEnum)
 {
 	gentity_t	*ent = &g_entities[0];
 
+	if ( ent->health >= 0 )
+	{
+		G_PlayerGuiltDeath();
+	}
 	ent->health = 0;
+	//FIXME: what about other NPCs?  Scripts?
 
 	// statusTextIndex is looked at on the client side. 
 	statusTextIndex = GetIDForString( missionFailedTable, TextEnum );
-
+	cg.missionStatusShow = qtrue;
+	if ( ent->client )
+	{//hold this screen up for at least 2 seconds
+		ent->client->respawnTime = level.time + 2000;
+	}
 }
 
 /*
@@ -785,7 +813,6 @@ static void Q3_ObjectiveClearAll(void)
 {
 	client = &level.clients[0];
 	memset(client->sess.mission_objectives,0,sizeof(client->sess.mission_objectives));
-	memset(client->tourSess.tour_objectives,0,sizeof(client->tourSess.tour_objectives));
 }
 
 /*
@@ -1001,7 +1028,8 @@ static int Q3_PlaySound( int taskID, int entID, const char *name, const char *ch
 		)	// paranoia towards project end <g>
 	{
 		// Text on
-		if (g_subtitles->integer == 1) // Show all text
+		// certain NPC's we always want to use subtitles regardless of subtitle setting
+		if (g_subtitles->integer == 1 || (ent->NPC && (ent->NPC->scriptFlags & SCF_USE_SUBTITLES) ) ) // Show all text
 		{
 			if ( in_camera)	// Cinematic
 			{					
@@ -1444,16 +1472,19 @@ void Blocked_Mover( gentity_t *ent, gentity_t *other ) {
 	// remove anything other than a client -- no longer the case
 
 	// don't remove security keys or goodie keys
-	if ( (other->s.eType == ET_ITEM) && (other->item->giTag >= INV_GOODIE_KEY1 && other->item->giTag <= INV_SECURITY_KEY5) )
+	if ( (other->s.eType == ET_ITEM) && (other->item->giTag >= INV_GOODIE_KEY && other->item->giTag <= INV_SECURITY_KEY) )
 	{
 		// should we be doing anything special if a key blocks it... move it somehow..?
 	}
 	// if your not a client, or your a dead client remove yourself...
 	else if ( other->s.number && (!other->client || (other->client && other->health <= 0 && other->contents == CONTENTS_CORPSE && !other->message)) )
 	{
-		// if an item or weapon can we do a little explosion..?
-		G_FreeEntity( other );
-		return;
+		if ( !other->taskManager || !other->taskManager->IsRunning() )
+		{
+			// if an item or weapon can we do a little explosion..?
+			G_FreeEntity( other );
+			return;
+		}
 	}
 
 	if ( ent->damage ) {
@@ -1837,7 +1868,7 @@ static void Q3_Lerp2Angles( int taskID, int entID, vec3_t angles, float duration
 	
 	Q3_TaskIDSet( ent, TID_ANGLE_FACE, taskID );
 
-	ent->e_ReachedFunc = reachedF_NULL;
+	//ent->e_ReachedFunc = reachedF_NULL;
 	ent->e_ThinkFunc = thinkF_anglerCallback;
 	ent->nextthink = level.time + duration;
 
@@ -1900,33 +1931,46 @@ static void Q3_SetNavGoal( int entID, const char *name )
 		Q3_DebugPrint( WL_ERROR, "Q3_SetNavGoal: tried to set a navgoal (\"%s\") on a dead NPC: \"%s\"\n", name, ent->script_targetname );
 		return;
 	}
-	//Get the position of the goal
-	if ( TAG_GetOrigin2( NULL, name, goalPos ) == false )
+	if ( !ent->NPC->tempGoal->inuse )
 	{
-		gentity_t	*targ = G_Find(NULL, FOFS(targetname), (char*)name);
-		if ( !targ )
-		{
-			Q3_DebugPrint( WL_ERROR, "Q3_SetNavGoal: can't find NAVGOAL \"%s\"\n", name );
-			return;
-		}
-		else
-		{
-			ent->NPC->goalEntity = targ;
-			ent->NPC->goalRadius = sqrt(ent->maxs[0]+ent->maxs[0]) + sqrt(targ->maxs[0]+targ->maxs[0]);
-			ent->NPC->aiFlags &= ~NPCAI_TOUCHED_GOAL;
-		}
+		Q3_DebugPrint( WL_ERROR, "Q3_SetNavGoal: NPC's (\"%s\") navgoal is freed: \"%s\"\n", name, ent->script_targetname );
+		return;
+	}
+	if( Q_stricmp( "null", name) == 0 )
+	{
+		ent->NPC->goalEntity = NULL;
+		Q3_TaskIDComplete( ent, TID_MOVE_NAV );
 	}
 	else
 	{
-		int	goalRadius = TAG_GetRadius( NULL, name );
-		NPC_SetMoveGoal( ent, goalPos, goalRadius, qtrue );
-		//We know we want to clear the lastWaypoint here
-		ent->NPC->goalEntity->lastWaypoint = WAYPOINT_NONE;
-		ent->NPC->aiFlags &= ~NPCAI_TOUCHED_GOAL;
-#ifdef _DEBUG
-		//this is *only* for debugging navigation
-		ent->NPC->tempGoal->target = G_NewString( name );
-#endif// _DEBUG
+		//Get the position of the goal
+		if ( TAG_GetOrigin2( NULL, name, goalPos ) == false )
+		{
+			gentity_t	*targ = G_Find(NULL, FOFS(targetname), (char*)name);
+			if ( !targ )
+			{
+				Q3_DebugPrint( WL_ERROR, "Q3_SetNavGoal: can't find NAVGOAL \"%s\"\n", name );
+				return;
+			}
+			else
+			{
+				ent->NPC->goalEntity = targ;
+				ent->NPC->goalRadius = sqrt(ent->maxs[0]+ent->maxs[0]) + sqrt(targ->maxs[0]+targ->maxs[0]);
+				ent->NPC->aiFlags &= ~NPCAI_TOUCHED_GOAL;
+			}
+		}
+		else
+		{
+			int	goalRadius = TAG_GetRadius( NULL, name );
+			NPC_SetMoveGoal( ent, goalPos, goalRadius, qtrue );
+			//We know we want to clear the lastWaypoint here
+			ent->NPC->goalEntity->lastWaypoint = WAYPOINT_NONE;
+			ent->NPC->aiFlags &= ~NPCAI_TOUCHED_GOAL;
+	#ifdef _DEBUG
+			//this is *only* for debugging navigation
+			ent->NPC->tempGoal->target = G_NewString( name );
+	#endif// _DEBUG
+		}
 	}
 }
 
@@ -2338,6 +2382,12 @@ static void Q3_SetHealth( int entID, int data )
 	}
 
 	ent->health = data;
+
+	// should adjust max if new health is higher than max
+	if ( ent->health > ent->max_health )
+	{
+		ent->max_health = ent->health;
+	}
 
 	if(!ent->client)
 	{
@@ -3270,7 +3320,7 @@ static void Q3_SetWeapon (int entID, const char *wp_name)
 	{//no weapon, drop it
 		TossClientItems( self );
 		self->client->ps.weapon = WP_NONE;
-		if ( self->weaponModel != -1 )
+		if ( self->weaponModel >= 0 )
 		{
 			gi.G2API_RemoveGhoul2Model( self->ghoul2, self->weaponModel );
 			self->weaponModel = -1;
@@ -3282,7 +3332,7 @@ static void Q3_SetWeapon (int entID, const char *wp_name)
 	if(wp == WP_NONE)
 	{//no weapon
 		self->client->ps.weapon = WP_NONE;
-		if ( self->weaponModel != -1 )
+		if ( self->weaponModel >= 0 )
 		{
 			gi.G2API_RemoveGhoul2Model( self->ghoul2, self->weaponModel );
 			self->weaponModel = -1;
@@ -3317,7 +3367,7 @@ static void Q3_SetWeapon (int entID, const char *wp_name)
 		CG_ChangeWeapon( wp );
 		G_AddEvent( self, EV_GENERAL_SOUND, G_SoundIndex( "sound/weapons/change.wav" ));
 	}
-	if ( self->weaponModel != -1 )
+	if ( self->weaponModel >= 0 )
 	{
 		gi.G2API_RemoveGhoul2Model( self->ghoul2, self->weaponModel );
 	}
@@ -3961,6 +4011,15 @@ static void Q3_SetFullName (int entID, const char *fullName)
 	}
 }
 
+static void Q3_SetMusicState( const char *dms )
+{
+	int newDMS = GetIDForString( DMSTable, dms );
+	if ( newDMS != -1 )
+	{
+		level.dmState = newDMS;
+	}
+}
+
 static void Q3_SetForcePowerLevel ( int entID, int forcePower, int forceLevel )
 {
 	if ( forcePower < FP_FIRST || forceLevel >= NUM_FORCE_POWERS )
@@ -3989,10 +4048,26 @@ static void Q3_SetForcePowerLevel ( int entID, int forcePower, int forceLevel )
 		return;
 	}
 
-	if (forceLevel > self->client->ps.forcePowerLevel[forcePower])
+	if ((forceLevel > self->client->ps.forcePowerLevel[forcePower]) && (entID==0) && (forceLevel > 0))
 	{
-		missionInfo_Updated = qtrue;	// Activate flashing text
-		gi.cvar_set("cg_updatedDataPadForcePower", va("%d",forcePower+1)); // The +1 is offset in the print routine. It ain't pretty, I know.
+		if (!cg_updatedDataPadForcePower1.integer)
+		{
+			missionInfo_Updated = qtrue;	// Activate flashing text
+			gi.cvar_set("cg_updatedDataPadForcePower1", va("%d",forcePower+1)); // The +1 is offset in the print routine. It ain't pretty, I know.
+			cg_updatedDataPadForcePower1.integer = forcePower+1;
+		}
+		else if (!cg_updatedDataPadForcePower2.integer)
+		{
+			missionInfo_Updated = qtrue;	// Activate flashing text
+			gi.cvar_set("cg_updatedDataPadForcePower2", va("%d",forcePower+1)); // The +1 is offset in the print routine. It ain't pretty, I know.
+			cg_updatedDataPadForcePower2.integer = forcePower+1;
+		}
+		else if (!cg_updatedDataPadForcePower3.integer)
+		{
+			missionInfo_Updated = qtrue;	// Activate flashing text
+			gi.cvar_set("cg_updatedDataPadForcePower3", va("%d",forcePower+1)); // The +1 is offset in the print routine. It ain't pretty, I know.
+			cg_updatedDataPadForcePower3.integer = forcePower+1;
+		}
 	}
 
 	self->client->ps.forcePowerLevel[forcePower] = forceLevel;
@@ -5021,6 +5096,39 @@ static void Q3_SetCombatTalk( int entID, qboolean add)
 
 /*
 ============
+Q3_SetAlertTalk
+
+?
+============
+*/
+static void Q3_SetAlertTalk( int entID, qboolean add)
+{
+	gentity_t	*ent  = &g_entities[entID];
+
+	if ( !ent )
+	{
+		Q3_DebugPrint( WL_WARNING, "Q3_SetAlertTalk: invalid entID %d\n", entID);
+		return;
+	}
+
+	if ( !ent->NPC )
+	{
+		Q3_DebugPrint( WL_ERROR, "Q3_SetAlertTalk: '%s' is not an NPC!\n", ent->targetname );
+		return;
+	}
+
+	if ( add )
+	{
+		ent->NPC->scriptFlags |= SCF_NO_ALERT_TALK;
+	}
+	else
+	{
+		ent->NPC->scriptFlags &= ~SCF_NO_ALERT_TALK;
+	}
+}
+
+/*
+============
 Q3_SetUseCpNearest
 
 ?
@@ -5115,6 +5223,39 @@ static void Q3_SetNoAcrobatics( int entID, qboolean add)
 	else
 	{
 		ent->NPC->scriptFlags &= ~SCF_NO_ACROBATICS;
+	}
+}
+
+/*
+============
+Q3_SetUseSubtitles
+
+?
+============
+*/
+static void Q3_SetUseSubtitles( int entID, qboolean add)
+{
+	gentity_t	*ent  = &g_entities[entID];
+
+	if ( !ent )
+	{
+		Q3_DebugPrint( WL_WARNING, "Q3_SetUseSubtitles: invalid entID %d\n", entID);
+		return;
+	}
+
+	if ( !ent->NPC )
+	{
+		Q3_DebugPrint( WL_ERROR, "Q3_SetUseSubtitles: '%s' is not an NPC!\n", ent->targetname );
+		return;
+	}
+
+	if ( add )
+	{
+		ent->NPC->scriptFlags |= SCF_USE_SUBTITLES;
+	}
+	else
+	{
+		ent->NPC->scriptFlags &= ~SCF_USE_SUBTITLES;
 	}
 }
 
@@ -5637,8 +5778,10 @@ static void Q3_RemoveRHandModel( int entID, char *addModel)
 {
 	gentity_t	*ent  = &g_entities[entID];
 
-	gi.G2API_RemoveGhoul2Model(ent->ghoul2,ent->cinematicModel);
-
+	if ( ent->cinematicModel >= 0 )
+	{
+		gi.G2API_RemoveGhoul2Model(ent->ghoul2,ent->cinematicModel);
+	}
 }
 
 /*
@@ -5686,8 +5829,10 @@ static void Q3_RemoveLHandModel( int entID, char *addModel)
 {
 	gentity_t	*ent  = &g_entities[entID];
 
-	gi.G2API_RemoveGhoul2Model(ent->ghoul2, ent->cinematicModel);
-
+	if ( ent->cinematicModel >= 0 )
+	{
+		gi.G2API_RemoveGhoul2Model(ent->ghoul2, ent->cinematicModel);
+	}
 }
 
 /*
@@ -6101,19 +6246,19 @@ static void Q3_SetSaberActive( int entID, qboolean active )
 
 	if ( !ent )
 	{
-		Q3_DebugPrint( WL_WARNING, "Q3_SetShields: invalid entID %d\n", entID);
+		Q3_DebugPrint( WL_WARNING, "Q3_SetSaberActive: invalid entID %d\n", entID);
 		return;
 	}
 
 	if ( !ent->client )
 	{
-		Q3_DebugPrint( WL_ERROR, "Q3_SetShields: '%s' is not an player/NPC!\n", ent->targetname );
+		Q3_DebugPrint( WL_ERROR, "Q3_SetSaberActive: '%s' is not an player/NPC!\n", ent->targetname );
 		return;
 	}
 
 	if ( ent->client->ps.weapon != WP_SABER )
 	{
-		Q3_DebugPrint( WL_ERROR, "Q3_SetShields: '%s' is not using a saber!\n", ent->targetname );
+		Q3_DebugPrint( WL_ERROR, "Q3_SetSaberActive: '%s' is not using a saber!\n", ent->targetname );
 		return;
 	}
 	//FIXME: need an externalized call for the sound and any other internal changes?
@@ -6146,6 +6291,47 @@ static void Q3_SetNoKnockback( int entID, qboolean noKnockback )
 	else
 	{
 		ent->flags &= ~FL_NO_KNOCKBACK;
+	}
+}
+
+/*
+============
+Q3_SetCleanDamagingEnts
+  Description	: 
+  Return type	: void 
+============
+*/
+static void Q3_SetCleanDamagingEnts( void )
+{
+	gentity_t *ent = NULL;
+
+	for ( int i = 0; i < ENTITYNUM_WORLD; i++ )
+	{
+		if ( !PInUse( i ))
+		{
+			continue;
+		}
+
+		ent = &g_entities[i];
+
+		if ( ent )
+		{
+			if ( !ent->client && ( ent->s.weapon == WP_DET_PACK || ent->s.weapon == WP_TRIP_MINE || ent->s.weapon == WP_THERMAL ))
+			{
+				// check for a client, otherwise we could remove someone holding this weapon
+				G_FreeEntity( ent );
+			}
+			else if ( ent->s.weapon == WP_TURRET && ent->activator && ent->activator->s.number == 0 && !Q_stricmp( "PAS", ent->classname ))
+			{
+				// is a player owner personal assault sentry gun.
+				G_FreeEntity( ent );
+			}
+			else if ( ent->client && ent->client->NPC_class == CLASS_SEEKER )
+			{
+				// they blow up when they run out of ammo, so this may as well just do the same.
+				G_Damage( ent, ent, ent, NULL, NULL, 999, 0, MOD_UNKNOWN );
+			}
+		}
 	}
 }
 
@@ -6232,6 +6418,29 @@ static void Q3_SetLockPlayerWeapons( int entID, qboolean locked )
 	if( locked )
 	{
 		ent->flags |= FL_LOCK_PLAYER_WEAPONS;
+	}
+	
+}
+
+
+/*
+============
+Q3_SetNoImpactDamage
+  Description	: 
+  Return type	: void 
+  Argument		:  int entID
+  Argument		: qboolean locked
+============
+*/
+static void Q3_SetNoImpactDamage( int entID, qboolean noImp )
+{
+	gentity_t	*ent = &g_entities[0];
+
+	ent->flags &= ~FL_NO_IMPACT_DMG;
+
+	if( noImp )
+	{
+		ent->flags |= FL_NO_IMPACT_DMG;
 	}
 	
 }
@@ -6863,6 +7072,13 @@ static void Q3_Set( int taskID, int entID, const char *type_name, const char *da
 			Q3_SetCombatTalk( entID, qfalse);	
 		break;
 
+	case SET_NO_ALERT_TALK:
+		if(!stricmp("true", ((char *)data)))
+			Q3_SetAlertTalk( entID, qtrue);	
+		else
+			Q3_SetAlertTalk( entID, qfalse);	
+		break;
+
 	case SET_USE_CP_NEAREST:
 		if(!stricmp("true", ((char *)data)))
 			Q3_SetUseCpNearest( entID, qtrue);	
@@ -6882,6 +7098,13 @@ static void Q3_Set( int taskID, int entID, const char *type_name, const char *da
 			Q3_SetNoAcrobatics( entID, qtrue);	
 		else
 			Q3_SetNoAcrobatics( entID, qfalse);	
+		break;
+
+	case SET_USE_SUBTITLES:
+		if(!stricmp("true", ((char *)data)))
+			Q3_SetUseSubtitles( entID, qtrue);	
+		else
+			Q3_SetUseSubtitles( entID, qfalse);	
 		break;
 
 	case SET_NO_FALLTODEATH:
@@ -6990,6 +7213,13 @@ static void Q3_Set( int taskID, int entID, const char *type_name, const char *da
 			Q3_SetLockPlayerWeapons( entID, qtrue );
 		else
 			Q3_SetLockPlayerWeapons( entID, qfalse );
+		break;
+
+	case SET_NO_IMPACT_DAMAGE:
+		if( !stricmp("true", ((char *)data)) )
+			Q3_SetNoImpactDamage( entID, qtrue );
+		else
+			Q3_SetNoImpactDamage( entID, qfalse );
 		break;
 
 	case SET_FORWARDMOVE:
@@ -7362,6 +7592,25 @@ extern void LockDoors(gentity_t *const ent);
 		}
 		break;
 
+	case SET_MUSIC_STATE:
+		Q3_SetMusicState( (char *) data );
+		break;
+
+	case SET_CLEAN_DAMAGING_ENTS:
+		Q3_SetCleanDamagingEnts();
+		break;
+
+	case SET_HUD:
+		if(!stricmp("true", ((char *)data)))
+		{
+			gi.cvar_set("cg_drawHUD", "1");
+		}
+		else
+		{
+			gi.cvar_set("cg_drawHUD", "0");
+		}
+		break;
+
 	case SET_FORCE_HEAL_LEVEL:
 	case SET_FORCE_JUMP_LEVEL:
 	case SET_FORCE_SPEED_LEVEL:
@@ -7376,7 +7625,7 @@ extern void LockDoors(gentity_t *const ent);
 		int_data = atoi((char *) data);
 		Q3_SetForcePowerLevel( entID, (toSet-SET_FORCE_HEAL_LEVEL), int_data );
 		break;
-
+	
 	default:
 		//Q3_DebugPrint( WL_ERROR, "Q3_Set: '%s' is not a valid set field\n", type_name );
 		Q3_SetVar( taskID, entID, type_name, data );
@@ -7579,7 +7828,7 @@ void MakeOwnerEnergy(gentity_t *self)
 {
 	if(self->owner && self->owner->client)
 	{
-		self->owner->client->ps.powerups[PW_QUAD] = level.time + 1000;
+//		self->owner->client->ps.powerups[PW_QUAD] = level.time + 1000;
 	}
 
 	G_FreeEntity(self);
@@ -8110,6 +8359,9 @@ static int Q3_GetFloat( int entID, int type, const char *name, float *value )
 	case SET_LOCK_PLAYER_WEAPONS://## %t="BOOL_TYPES" # Makes it so player cannot switch weapons
 		*value = (ent->flags&FL_LOCK_PLAYER_WEAPONS);
 		break;
+	case SET_NO_IMPACT_DAMAGE://## %t="BOOL_TYPES" # Makes it so player cannot switch weapons
+		*value = (ent->flags&FL_NO_IMPACT_DMG);
+		break;
 	case SET_NO_KNOCKBACK://## %t="BOOL_TYPES" # Stops this ent from taking knockback from weapons
 		*value = (ent->flags&FL_NO_KNOCKBACK);
 		break;
@@ -8142,6 +8394,15 @@ static int Q3_GetFloat( int entID, int type, const char *name, float *value )
 			return false;
 		}
 		*value = (ent->NPC->scriptFlags&SCF_NO_COMBAT_TALK);
+		break;
+	case SET_NO_ALERT_TALK://## %t="BOOL_TYPES" # NPCs will not do their combat talking noises when this is on
+		if ( ent->NPC == NULL )
+		{
+			Q3_DebugPrint( WL_WARNING, "Q3_GetFloat: SET_NO_ALERT_TALK, %s not an NPC\n", ent->targetname );
+			return false;
+		}
+		*value = (ent->NPC->scriptFlags&SCF_NO_ALERT_TALK);
+		break;
 	case SET_USE_CP_NEAREST://## %t="BOOL_TYPES" # NPCs will use their closest combat points, not try and find ones next to the player, or flank player
 		if ( ent->NPC == NULL )
 		{
@@ -8173,6 +8434,14 @@ static int Q3_GetFloat( int entID, int type, const char *name, float *value )
 			return false;
 		}
 		*value = (ent->NPC->scriptFlags&SCF_NO_ACROBATICS);
+		break;
+	case SET_USE_SUBTITLES:
+		if ( ent->NPC == NULL )
+		{
+			Q3_DebugPrint( WL_WARNING, "Q3_GetFloat: SET_USE_SUBTITLES, %s not an NPC\n", ent->targetname );
+			return false;
+		}
+		*value = (ent->NPC->scriptFlags&SCF_USE_SUBTITLES);
 		break;
 	case SET_NO_FALLTODEATH://## %t="BOOL_TYPES" # NPC will not be affected by force powers
 		if ( ent->NPC == NULL )
@@ -8485,7 +8754,9 @@ static int Q3_GetString( int entID, int type, const char *name, char **value )
 		//	*value = (char *)GetStringForID( WPTable, ent->client->ps.weapon );
 		}
 		break;
-
+	case SET_MUSIC_STATE:
+		*value = (char *)GetStringForID( DMSTable, level.dmState );
+		break;
 	//The below cannot be gotten
 	case SET_NAVGOAL://## %s="NULL" # *Move to this navgoal then continue script
 		Q3_DebugPrint( WL_WARNING, "Q3_GetString: SET_NAVGOAL not implemented\n" );
@@ -8960,7 +9231,6 @@ void Interface_Init( interface_export_t *pe )
 	gclient_t	*client;
 	client = &level.clients[0];
 	memset(&client->sess,0,sizeof(client->sess));
-	memset(&client->tourSess,0,sizeof(client->tourSess));
 }
 
 // leave these two as standard mallocs for the moment, there's something weird happening in ICARUS...

@@ -20,6 +20,7 @@ extern void G_PilotXWing( gentity_t *ent );
 extern void G_DriveATST( gentity_t *ent, gentity_t *atst );
 extern void G_StartMatrixEffect( gentity_t *ent, qboolean falling = qfalse, int length = 1000 );
 extern void ItemUse_Bacta(gentity_t *ent);
+extern gentity_t *G_GetSelfForPlayerCmd( void );
 
 /*
 ==================
@@ -203,16 +204,8 @@ void Cmd_Give_f (gentity_t *ent)
 		ent->client->ps.inventory[INV_SEEKER] = 5;
 		ent->client->ps.inventory[INV_LIGHTAMP_GOGGLES] = 1;
 		ent->client->ps.inventory[INV_SENTRY] = 5;
-		ent->client->ps.inventory[INV_GOODIE_KEY1] = 1;
-		ent->client->ps.inventory[INV_GOODIE_KEY2] = 1;
-		ent->client->ps.inventory[INV_GOODIE_KEY3] = 1;
-		ent->client->ps.inventory[INV_GOODIE_KEY4] = 1;
-		ent->client->ps.inventory[INV_GOODIE_KEY5] = 1;
-		ent->client->ps.inventory[INV_SECURITY_KEY1] = 1;
-		ent->client->ps.inventory[INV_SECURITY_KEY2] = 1;
-		ent->client->ps.inventory[INV_SECURITY_KEY3] = 1;
-		ent->client->ps.inventory[INV_SECURITY_KEY4] = 1;
-		ent->client->ps.inventory[INV_SECURITY_KEY5] = 1;
+		ent->client->ps.inventory[INV_GOODIE_KEY] = 5;
+		ent->client->ps.inventory[INV_SECURITY_KEY] = 5;
 
 		if (!give_all)
 		{
@@ -592,7 +585,7 @@ Cmd_Kill_f
 */
 void Cmd_Kill_f( gentity_t *ent ) {
 	if( ( level.time - ent->client->respawnTime ) < 5000 ) {
-		gi.SendServerCommand( ent-g_entities, "cp \"Only one kill every five seconds\n\"");
+		gi.SendServerCommand( ent-g_entities, "cp @INGAME_ONE_KILL_PER_5_SECONDS");
 		return;
 	}
 	ent->flags &= ~FL_GODMODE;
@@ -804,6 +797,67 @@ void Cmd_UseBacta_f(gentity_t *ent)
 	ItemUse_Bacta(ent);
 }
 
+//----------------------------------------------------------------------------------
+qboolean PickSeekerSpawnPoint( vec3_t org, vec3_t fwd, vec3_t right, int skip, vec3_t spot )
+{
+	vec3_t	mins, maxs, forward, end;
+	trace_t tr;
+
+	VectorSet( maxs, -8, -8, -24); // ?? size
+	VectorSet( maxs, 8, 8, 8 );
+
+	VectorCopy( fwd, forward );
+
+	// to the front and side a bit
+	forward[2] = 0.3f; // start up a bit
+
+	VectorMA( org, 48, forward, end );
+	VectorMA( end, -8, right, end );
+
+	gi.trace( &tr, org, mins, maxs, end, skip, MASK_PLAYERSOLID );
+
+	if ( !tr.startsolid && !tr.allsolid && tr.fraction >= 1.0f )
+	{
+		VectorCopy( tr.endpos, spot );
+		return qtrue;
+	}
+
+	// side
+	VectorMA( org, 48, right, end );
+
+	gi.trace( &tr, org, mins, maxs, end, skip, MASK_PLAYERSOLID );
+
+	if ( !tr.startsolid && !tr.allsolid && tr.fraction >= 1.0f )
+	{
+		VectorCopy( tr.endpos, spot );
+		return qtrue;
+	}
+
+	// other side
+	VectorMA( org, -48, right, end );
+
+	gi.trace( &tr, org, mins, maxs, end, skip, MASK_PLAYERSOLID );
+
+	if ( !tr.startsolid && !tr.allsolid && tr.fraction >= 1.0f )
+	{
+		VectorCopy( tr.endpos, spot );
+		return qtrue;
+	}
+
+	// behind
+	VectorMA( org, -48, fwd, end );
+
+	gi.trace( &tr, org, mins, maxs, end, skip, MASK_PLAYERSOLID );
+
+	if ( !tr.startsolid && !tr.allsolid && tr.fraction >= 1.0f )
+	{
+		VectorCopy( tr.endpos, spot );
+		return qtrue;
+	}
+
+	return qfalse;
+}
+
 /*
 ================
 Cmd_UseSeeker_f
@@ -819,30 +873,32 @@ void Cmd_UseSeeker_f( gentity_t *ent )
 	// don't use them if we don't have any...also don't use them if one is already going
 	if ( ent->client && ent->client->ps.inventory[INV_SEEKER] > 0 && level.time > ent->client->ps.powerups[PW_SEEKER] )
 	{
-		vec3_t		fwd, right;
 		gentity_t	*tent = G_Spawn();
 	
 		if ( tent )
 		{
+			vec3_t	fwd, right, spot;
+
 			AngleVectors( ent->client->ps.viewangles, fwd, right, NULL );
 
-			fwd[2] = 0.3f; // start up a bit
-			VectorMA( ent->currentOrigin, 48, fwd, tent->s.origin );
-			VectorMA( tent->s.origin, -8, right, tent->s.origin );
+			VectorCopy( ent->currentOrigin, spot ); // does nothing really, just initialize the goods...
 
-			G_SetOrigin( tent, tent->s.origin );
-			G_SetAngles( tent, ent->currentAngles );
+			if ( PickSeekerSpawnPoint( ent->currentOrigin, fwd, right, ent->s.number, spot ))
+			{
+				VectorCopy( spot, tent->s.origin );
+				G_SetOrigin( tent, spot );
+				G_SetAngles( tent, ent->currentAngles );
 
 extern void SP_NPC_Droid_Seeker( gentity_t *ent );
 
-//			tent->playerTeam = TEAM_PLAYER;
-//			tent->enemyTeam = TEAM_ENEMY;
+				SP_NPC_Droid_Seeker( tent );
+				G_Sound( tent, G_SoundIndex( "sound/chars/seeker/misc/hiss" ));
 
-			SP_NPC_Droid_Seeker( tent );
+				// make sure that we even have some
+				ent->client->ps.inventory[INV_SEEKER]--;
+				ent->client->ps.powerups[PW_SEEKER] = level.time + 1000;// can only drop one every second..maybe this is annoying?
 
-			// make sure that we even have some
-			ent->client->ps.inventory[INV_SEEKER]--;
-			ent->client->ps.powerups[PW_SEEKER] = level.time + 1000;// can only drop one every second..maybe this is annoying?
+			}
 		}
 	}
 }
@@ -998,19 +1054,40 @@ void ClientCommand( int clientNum ) {
 	else if (Q_stricmp (cmd, "viewobjective") == 0)
 		Cmd_ViewObjective_f( ent );
 	else if (Q_stricmp (cmd, "force_throw") == 0)
+	{
+		ent = G_GetSelfForPlayerCmd();
 		ForceThrow( ent, qfalse );
+	}
 	else if (Q_stricmp (cmd, "force_pull") == 0)
+	{
+		ent = G_GetSelfForPlayerCmd();
 		ForceThrow( ent, qtrue );
+	}
 	else if (Q_stricmp (cmd, "force_speed") == 0)
+	{
+		ent = G_GetSelfForPlayerCmd();
 		ForceSpeed( ent );
+	}
 	else if (Q_stricmp (cmd, "force_heal") == 0)
+	{
+		ent = G_GetSelfForPlayerCmd();
 		ForceHeal( ent );
+	}
 	else if (Q_stricmp (cmd, "force_grip") == 0)
+	{
+		ent = G_GetSelfForPlayerCmd();
 		ForceGrip( ent );
+	}
 	else if (Q_stricmp (cmd, "force_distract") == 0)
+	{
+		ent = G_GetSelfForPlayerCmd();
 		ForceTelepathy( ent );
+	}
 	else if (Q_stricmp (cmd, "taunt") == 0)
+	{
+		ent = G_GetSelfForPlayerCmd();
 		G_Taunt( ent );
+	}
 	else if (Q_stricmp (cmd, "victory") == 0)
 		G_Victory( ent );
 //	else if (Q_stricmp (cmd, "use_shield") == 0)	// sounds like the design doc states that the shields will be a pickup and so the player never decides whether to use them or not.

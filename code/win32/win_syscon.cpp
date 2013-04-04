@@ -98,9 +98,9 @@ static LONG WINAPI ConWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 		break;
 
 	case WM_CLOSE:
-		cmdString = CopyString( "quit" );
-		Sys_QueEvent( 0, SE_CONSOLE, 0, 0, strlen( cmdString ) + 1, cmdString );
-/*		if ( s_wcd.quitOnClose )
+		//cmdString = CopyString( "quit" );
+		//Sys_QueEvent( 0, SE_CONSOLE, 0, 0, strlen( cmdString ) + 1, cmdString );
+		if ( s_wcd.quitOnClose )
 		{
 			PostQuitMessage( 0 );
 		}
@@ -109,13 +109,12 @@ static LONG WINAPI ConWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 			Sys_ShowConsole( 0, qfalse );
 			Cvar_Set( "viewlog", "0" );
 		}
-*/		return 0;
+		return 0;
 	case WM_CTLCOLORSTATIC:
 		if ( ( HWND ) lParam == s_wcd.hwndBuffer )
 		{
-			SetBkColor( ( HDC ) wParam, RGB( 230, 100, 230 ) );
-			SetTextColor( ( HDC ) wParam, RGB( 0x00, 0x00, 0xF0 ) );
-
+			SetBkColor( ( HDC ) wParam, RGB( 0, 0, 0 ) );
+			SetTextColor( ( HDC ) wParam, RGB( 249, 249, 000 ) );
 			return ( long ) s_wcd.hbrEditBackground;
 		}
 		else if ( ( HWND ) lParam == s_wcd.hwndErrorBox )
@@ -161,7 +160,7 @@ static LONG WINAPI ConWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 		}
 		break;
 	case WM_CREATE:
-		s_wcd.hbrEditBackground =  CreateSolidBrush( RGB( 230, 100, 230 ) );
+		s_wcd.hbrEditBackground =  CreateSolidBrush( RGB( 0x00, 0x00, 0x00 ) );
 		s_wcd.hbrErrorBackground = CreateSolidBrush( RGB( 0x80, 0x80, 0x80 ) );
 		SetTimer( hWnd, 1, 1000, NULL );
 		break;
@@ -222,7 +221,7 @@ void Sys_CreateConsole( void )
 	HDC hDC;
 	WNDCLASS wc;
 	RECT rect;
-	const char *DEDCLASS = "Q3 WinConsole";
+	const char *DEDCLASS = "JK2MP WinConsole";
 	int nHeight;
 	int swidth, sheight;
 	int DEDSTYLE = WS_POPUPWINDOW | WS_CAPTION | WS_MINIMIZEBOX;
@@ -236,7 +235,7 @@ void Sys_CreateConsole( void )
 	wc.hInstance     = g_wv.hInstance;
 	wc.hIcon         = LoadIcon( g_wv.hInstance, MAKEINTRESOURCE(IDI_ICON1));
 	wc.hCursor       = LoadCursor (NULL,IDC_ARROW);
-	wc.hbrBackground = (HBRUSH__ *)COLOR_WINDOW;
+	wc.hbrBackground = (HBRUSH__ *)COLOR_INACTIVEBORDER;//(HBRUSH__ *)COLOR_WINDOW;
 	wc.lpszMenuName  = 0;
 	wc.lpszClassName = DEDCLASS;
 
@@ -245,7 +244,7 @@ void Sys_CreateConsole( void )
 	}
 
 	rect.left = 0;
-	rect.right = 580;
+	rect.right = 600;
 	rect.top = 0;
 	rect.bottom = 450;
 	AdjustWindowRect( &rect, DEDSTYLE, FALSE );
@@ -260,7 +259,7 @@ void Sys_CreateConsole( void )
 
 	s_wcd.hWnd = CreateWindowEx( 0,
 							   DEDCLASS,
-							   "Console",
+							   "Jedi Knight 2: Jedi Outcast SP Console",
 							   DEDSTYLE,
 							   ( swidth - 600 ) / 2, ( sheight - 450 ) / 2 , rect.right - rect.left + 1, rect.bottom - rect.top + 1,
 							   NULL,
@@ -301,7 +300,7 @@ void Sys_CreateConsole( void )
 	//
 	s_wcd.hwndInputLine = CreateWindow( "edit", NULL, WS_CHILD | WS_VISIBLE | WS_BORDER | 
 												ES_LEFT | ES_AUTOHSCROLL,
-												6, 400, 528, 20,
+												6, 400, s_wcd.windowWidth-20, 20,
 												s_wcd.hWnd, 
 												( HMENU ) INPUT_ID,	// child window ID
 												g_wv.hInstance, NULL );
@@ -324,7 +323,7 @@ void Sys_CreateConsole( void )
 	SendMessage( s_wcd.hwndButtonClear, WM_SETTEXT, 0, ( LPARAM ) "clear" );
 
 	s_wcd.hwndButtonQuit = CreateWindow( "button", NULL, BS_PUSHBUTTON | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-												462, 425, 72, 24,
+												s_wcd.windowWidth-92, 425, 72, 24,
 												s_wcd.hWnd, 
 												( HMENU ) QUIT_ID,	// child window ID
 												g_wv.hInstance, NULL );
@@ -336,7 +335,7 @@ void Sys_CreateConsole( void )
 	//
 	s_wcd.hwndBuffer = CreateWindow( "edit", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | 
 												ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,
-												6, 40, 526, 354,
+												6, 40, s_wcd.windowWidth-20, 354,
 												s_wcd.hWnd, 
 												( HMENU ) EDIT_ID,	// child window ID
 												g_wv.hInstance, NULL );
@@ -344,6 +343,7 @@ void Sys_CreateConsole( void )
 
 	s_wcd.SysInputLineWndProc = ( WNDPROC ) SetWindowLong( s_wcd.hwndInputLine, GWL_WNDPROC, ( long ) InputLineWndProc );
 	SendMessage( s_wcd.hwndInputLine, WM_SETFONT, ( WPARAM ) s_wcd.hfBufferFont, 0 );
+	SendMessage( s_wcd.hwndBuffer, EM_LIMITTEXT, ( WPARAM ) 0x7fff, 0 );
 
 	ShowWindow( s_wcd.hWnd, SW_SHOWDEFAULT);
 	UpdateWindow( s_wcd.hWnd );
@@ -523,7 +523,7 @@ void Sys_SetErrorText( const char *buf )
 	if ( !s_wcd.hwndErrorBox )
 	{
 		s_wcd.hwndErrorBox = CreateWindow( "static", NULL, WS_CHILD | WS_VISIBLE | SS_SUNKEN,
-													6, 5, 526, 30,
+													6, 5, s_wcd.windowWidth-20, 30,
 													s_wcd.hWnd, 
 													( HMENU ) ERRORBOX_ID,	// child window ID
 													g_wv.hInstance, NULL );

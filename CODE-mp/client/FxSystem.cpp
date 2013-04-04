@@ -45,7 +45,7 @@ void SFxHelper::Print( const char *msg, ... )
 }
 
 //------------------------------------------------------
-void SFxHelper::AdjustTime( int time )
+void SFxHelper::AdjustTime_Pos( int time, vec3_t refdef_vieworg, vec3_t refdef_viewaxis[3] )
 {
 	if ( fx_freeze.integer )
 	{
@@ -53,6 +53,10 @@ void SFxHelper::AdjustTime( int time )
 	}
 	else
 	{
+		VectorCopy( refdef_vieworg, refdef.vieworg );
+		VectorCopy( refdef_viewaxis[0], refdef.viewaxis[0] );
+		VectorCopy( refdef_viewaxis[1], refdef.viewaxis[1] );
+		VectorCopy( refdef_viewaxis[2], refdef.viewaxis[2] );
 		mOldTime = mTime;
 		mTime = time;
 		mFrameTime = mTime - mOldTime;

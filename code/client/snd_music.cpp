@@ -763,22 +763,6 @@ qboolean Music_DynamicDataAvailable(const char *psDynamicMusicLabel)
 						Music_GetBaseMusicFile(	eBGRNDTRACK_ACTION	)
 						);
 		}
-		else
-		{
-			/*
-			// ALPHACODE only!!!!!!!!!!!!!, fall back to "kejim_base" music...
-			// fixme
-			// findmeste
-			//
-	//		Com_DPrintf("Falling back to \"kejim_base\" music\n");
-			if (Music_ParseLeveldata("kejim_base"))
-			{
-				return !!(	Music_GetBaseMusicFile( eBGRNDTRACK_EXPLORE ) &&
-							Music_GetBaseMusicFile(	eBGRNDTRACK_ACTION	)
-							);
-			}
-			*/
-		}
 	}
 
 	return qfalse;
@@ -1108,6 +1092,19 @@ float Music_GetRandomEntryTime( MusicState_e eMusicState )
 	return 0.0f;
 }
 
+// info only, used in "soundinfo" command...
+//
+const char *Music_GetLevelSetName(void)
+{
+	if (Q_stricmp(gsLevelNameForCompare.c_str(), gsLevelNameForLoad.c_str()))
+	{
+		// music remap via USES command...
+		//
+		return va("%s -> %s",gsLevelNameForCompare.c_str(), gsLevelNameForLoad.c_str());
+	}
+
+	return gsLevelNameForLoad.c_str();
+}
 
 ///////////////// eof /////////////////////
 

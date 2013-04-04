@@ -134,6 +134,21 @@ extern cvar_t	*g_skippingcin;
 	}
 }
 
+gentity_t *G_GetSelfForPlayerCmd( void )
+{
+	if ( g_entities[0].client->ps.viewEntity > 0 
+		&& g_entities[0].client->ps.viewEntity < ENTITYNUM_WORLD 
+		&& g_entities[g_entities[0].client->ps.viewEntity].client 
+		&& g_entities[g_entities[0].client->ps.viewEntity].s.weapon == WP_SABER )
+	{//you're controlling another NPC
+		return (&g_entities[g_entities[0].client->ps.viewEntity]);
+	}
+	else
+	{
+		return (&g_entities[0]);
+	}
+}
+
 static void Svcmd_SaberColor_f()
 {
 	char *color = gi.argv(1);
@@ -144,31 +159,32 @@ static void Svcmd_SaberColor_f()
 
 		return;
 	}
-
 	
+	gentity_t *self = G_GetSelfForPlayerCmd();
+
 	if ( !Q_stricmp( color, "red" ))
 	{
-		g_entities[0].client->ps.saberColor = SABER_RED;
+		self->client->ps.saberColor = SABER_RED;
 	}
 	else if ( !Q_stricmp( color, "green" ))
 	{
-		g_entities[0].client->ps.saberColor = SABER_GREEN;
+		self->client->ps.saberColor = SABER_GREEN;
 	}
 	else if ( !Q_stricmp( color, "yellow" ))
 	{
-		g_entities[0].client->ps.saberColor = SABER_YELLOW;
+		self->client->ps.saberColor = SABER_YELLOW;
 	}
 	else if ( !Q_stricmp( color, "orange" ))
 	{
-		g_entities[0].client->ps.saberColor = SABER_ORANGE;
+		self->client->ps.saberColor = SABER_ORANGE;
 	}
 	else if ( !Q_stricmp( color, "purple" ))
 	{
-		g_entities[0].client->ps.saberColor = SABER_PURPLE;
+		self->client->ps.saberColor = SABER_PURPLE;
 	}
 	else if ( !Q_stricmp( color, "blue" ))
 	{
-		g_entities[0].client->ps.saberColor = SABER_BLUE;
+		self->client->ps.saberColor = SABER_BLUE;
 	}
 	else
 	{
@@ -510,11 +526,12 @@ void Svcmd_MindTrick_f( void )
 	{
 		g_entities[0].client->ps.forcePowerLevel[FP_TELEPATHY] = FORCE_LEVEL_0;
 	}
-	else if ( g_entities[0].client->ps.forcePowerLevel[FP_TELEPATHY] > FORCE_LEVEL_3 )
+	else if ( g_entities[0].client->ps.forcePowerLevel[FP_TELEPATHY] > FORCE_LEVEL_4 )
 	{
-		g_entities[0].client->ps.forcePowerLevel[FP_TELEPATHY] = FORCE_LEVEL_3;
+		g_entities[0].client->ps.forcePowerLevel[FP_TELEPATHY] = FORCE_LEVEL_4;
 	}
 }
+
 void Svcmd_SaberDefense_f( void )
 {
 	if ( !&g_entities[0] || !g_entities[0].client )
@@ -552,6 +569,7 @@ void Svcmd_SaberDefense_f( void )
 		g_entities[0].client->ps.forcePowerLevel[FP_SABER_DEFENSE] = FORCE_LEVEL_3;
 	}
 }
+
 void Svcmd_SaberOffense_f( void )
 {
 	if ( !&g_entities[0] || !g_entities[0].client )
@@ -599,47 +617,77 @@ void Svcmd_SaberAttackCycle_f( void )
 	{
 		return;
 	}
-	if ( g_entities[0].s.weapon != WP_SABER )
+
+	gentity_t *self = G_GetSelfForPlayerCmd();
+	if ( self->s.weapon != WP_SABER )
 	{
 		return;
 	}
-	cg.saberAnimLevelPending++;
-	if ( g_entities[0].client->ps.forcePowerLevel[FP_SABER_OFFENSE] == FORCE_LEVEL_1 )
+
+	int	saberAnimLevel;
+	if ( !self->s.number )
 	{
-		cg.saberAnimLevelPending = FORCE_LEVEL_2;
+		saberAnimLevel = cg.saberAnimLevelPending;
 	}
-	else if ( g_entities[0].client->ps.forcePowerLevel[FP_SABER_OFFENSE] == FORCE_LEVEL_2 )
+	else
 	{
-		if ( cg.saberAnimLevelPending > FORCE_LEVEL_2 )
+		saberAnimLevel = self->client->ps.saberAnimLevel;
+	}
+	saberAnimLevel++;
+	if ( self->client->ps.forcePowerLevel[FP_SABER_OFFENSE] == FORCE_LEVEL_1 )
+	{
+		saberAnimLevel = FORCE_LEVEL_2;
+	}
+	else if ( self->client->ps.forcePowerLevel[FP_SABER_OFFENSE] == FORCE_LEVEL_2 )
+	{
+		if ( saberAnimLevel > FORCE_LEVEL_2 )
 		{
-			cg.saberAnimLevelPending = FORCE_LEVEL_1;
+			saberAnimLevel = FORCE_LEVEL_1;
 		}
 	}
 	else
 	{//level 3
-		if ( cg.saberAnimLevelPending > g_entities[0].client->ps.forcePowerLevel[FP_SABER_OFFENSE] )
+		if ( saberAnimLevel > self->client->ps.forcePowerLevel[FP_SABER_OFFENSE] )
 		{//wrap around
-			cg.saberAnimLevelPending = FORCE_LEVEL_1;
+			saberAnimLevel = FORCE_LEVEL_1;
 		}
 	}
-	switch ( cg.saberAnimLevelPending )
+
+	if ( !self->s.number )
+	{
+		cg.saberAnimLevelPending = saberAnimLevel;
+	}
+	else
+	{
+		self->client->ps.saberAnimLevel = saberAnimLevel;
+	}
+
+#ifndef FINAL_BUILD
+	switch ( saberAnimLevel )
 	{
 	case FORCE_LEVEL_1:
-		gi.Printf( S_COLOR_GREEN"Saber Attack Set: fast\n" );
+		gi.Printf( S_COLOR_BLUE"Lightsaber Combat Style: Fast\n" );
+		//LIGHTSABERCOMBATSTYLE_FAST
 		break;
 	case FORCE_LEVEL_2:
-		gi.Printf( S_COLOR_YELLOW"Saber Attack Set: medium\n" );
+		gi.Printf( S_COLOR_YELLOW"Lightsaber Combat Style: Medium\n" );
+		//LIGHTSABERCOMBATSTYLE_MEDIUM
 		break;
 	case FORCE_LEVEL_3:
-		gi.Printf( S_COLOR_RED"Saber Attack Set: strong\n" );
+		gi.Printf( S_COLOR_RED"Lightsaber Combat Style: Strong\n" );
+		//LIGHTSABERCOMBATSTYLE_STRONG
 		break;
 	case FORCE_LEVEL_4:
-		gi.Printf( S_COLOR_BLUE"Saber Attack Set: desann\n" );
+		gi.Printf( S_COLOR_CYAN"Lightsaber Combat Style: Desann\n" );
+		//LIGHTSABERCOMBATSTYLE_DESANN
 		break;
 	case FORCE_LEVEL_5:
-		gi.Printf( S_COLOR_MAGENTA"Saber Attack Set: tavion\n" );
+		gi.Printf( S_COLOR_MAGENTA"Lightsaber Combat Style: Tavion\n" );
+		//LIGHTSABERCOMBATSTYLE_TAVION
 		break;
 	}
+	//gi.Printf("\n");
+#endif
 }
 /*
 =================

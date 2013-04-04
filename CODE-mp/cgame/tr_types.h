@@ -264,6 +264,12 @@ typedef enum {
 ** being run right now.  These are constant once the OpenGL
 ** subsystem is initialized.
 */
+typedef enum {
+	TC_NONE,
+	TC_S3TC,
+	TC_S3TC_DXT
+} textureCompression_t;
+
 typedef struct {
 	char					renderer_string[MAX_STRING_CHARS];
 	char					vendor_string[MAX_STRING_CHARS];
@@ -273,22 +279,10 @@ typedef struct {
 	int						maxTextureSize;			// queried from GL
 	int						maxActiveTextures;		// multitexture ability
 
-	int						tfSolidCompressed;
-	float					tfSolidCompressedBPT;
-	int						tfAlphaCompressed;	
-	float					tfAlphaCompressedBPT;	
-	int						tfSolidUncompressed;
-	float					tfSolidUncompressedBPT;
-	int						tfAlphaUncompressed;
-	float					tfAlphaUncompressedBPT;
-	int						tfLightmap;			
-	float					tfLightmapBPT;			
-	int						tfCinematic;					// Specially for the Voodoo4 - glTexImage2D can only handle 16 bit
-	float					tfCinematicBPT;
-
 	int						colorBits, depthBits, stencilBits;
 
 	qboolean				deviceSupportsGamma;
+	textureCompression_t	textureCompression;
 	qboolean				textureEnvAddAvailable;
 	qboolean				textureFilterAnisotropicAvailable;
 	qboolean				clampToEdgeAvailable;

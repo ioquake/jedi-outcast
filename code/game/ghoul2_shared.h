@@ -52,16 +52,14 @@ surfaceInfo_t():
 #define BONE_ANGLES_PREMULT			0x0001
 #define BONE_ANGLES_POSTMULT		0x0002
 #define BONE_ANGLES_REPLACE			0x0004
-#define	BONE_ANGLES_REPLACE_TO_ANIM	0x0400
-#define BONE_ANGLES_TOTAL			( BONE_ANGLES_PREMULT | BONE_ANGLES_POSTMULT | BONE_ANGLES_REPLACE | BONE_ANGLES_REPLACE_TO_ANIM )
+#define BONE_ANGLES_TOTAL			( BONE_ANGLES_PREMULT | BONE_ANGLES_POSTMULT | BONE_ANGLES_REPLACE )
 
 #define BONE_ANIM_OVERRIDE			0x0008
 #define BONE_ANIM_OVERRIDE_LOOP		0x0010	// Causes Last Frame To Lerp to First Frame And Start Over
-#define BONE_ANIM_OVERRIDE_DEFAULT	(0x0020 + BONE_ANIM_OVERRIDE)
 #define BONE_ANIM_OVERRIDE_FREEZE	(0x0040 + BONE_ANIM_OVERRIDE)	// Causes Last Frame To Freeze And Not Loop To Beginning
 #define BONE_ANIM_BLEND				0x0080		// Blends to and from previously played frame on same bone for given time
 #define	BONE_ANIM_NO_LERP			0x1000
-#define BONE_ANIM_TOTAL				(BONE_ANIM_NO_LERP| BONE_ANIM_OVERRIDE | BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_OVERRIDE_DEFAULT | BONE_ANIM_OVERRIDE_FREEZE | BONE_ANIM_BLEND )
+#define BONE_ANIM_TOTAL				(BONE_ANIM_NO_LERP| BONE_ANIM_OVERRIDE | BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_OVERRIDE_FREEZE | BONE_ANIM_BLEND )
 
 #define BONE_INDEX_INVALID			-1
 
@@ -90,7 +88,6 @@ struct  boneInfo_t
 	int			blendStart;		// Time when blending starts - not necessarily the same as startTime since we might start half way through an anim
 	int			boneBlendTime;	// time for duration of bone angle blend with normal animation
 	int			boneBlendStart;	// time bone angle blend with normal animation began
-	int			lastTime;		// this does not go across the network
 	mdxaBone_t	newMatrix;		// This is the lerped matrix that Ghoul2 uses on the client side - does not go across the network
 
 boneInfo_t():
@@ -106,8 +103,7 @@ boneInfo_t():
 	blendTime(0),
 	blendStart(0),
 	boneBlendTime(0),
-	boneBlendStart(0),
-	lastTime(0)
+	boneBlendStart(0)
 	{
 		matrix.matrix[0][0] = matrix.matrix[0][1] = matrix.matrix[0][2] = matrix.matrix[0][3] = 
 		matrix.matrix[1][0] = matrix.matrix[1][1] = matrix.matrix[1][2] = matrix.matrix[1][3] = 

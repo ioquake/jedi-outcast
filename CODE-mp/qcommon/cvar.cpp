@@ -429,7 +429,14 @@ void Cvar_SetCheatState( void ) {
 
 	// set all default vars to the safe value
 	for ( var = cvar_vars ; var ; var = var->next ) {
-		if ( var->flags & CVAR_CHEAT && !com_developer->integer ) {
+		if ( var->flags & CVAR_CHEAT ) {
+			// the CVAR_LATCHED|CVAR_CHEAT vars might escape the reset here 
+			// because of a different var->latchedString
+			if (var->latchedString)
+			{
+				Z_Free(var->latchedString);
+				var->latchedString = NULL;
+			}
 			if (strcmp(var->resetString,var->string)) {
 				Cvar_Set( var->name, var->resetString );
 			}
@@ -669,6 +676,12 @@ void Cvar_List_f( void ) {
 	i = 0;
 	for (var = cvar_vars ; var ; var = var->next, i++)
 	{
+		// Dont show internal cvars
+		if ( var->flags & CVAR_INTERNAL )
+		{
+			continue;
+		}
+
 		if (match && !Com_Filter(match, var->name, qfalse)) continue;
 
 		if (var->flags & CVAR_SERVERINFO) {
@@ -889,7 +902,7 @@ Reads in all archived cvars
 ============
 */
 void Cvar_Init (void) {
-	cvar_cheats = Cvar_Get("sv_cheats", "1", CVAR_ROM | CVAR_SYSTEMINFO );
+	cvar_cheats = Cvar_Get("sv_cheats", "0", CVAR_ROM | CVAR_SYSTEMINFO );
 
 	Cmd_AddCommand ("toggle", Cvar_Toggle_f);
 	Cmd_AddCommand ("set", Cvar_Set_f);

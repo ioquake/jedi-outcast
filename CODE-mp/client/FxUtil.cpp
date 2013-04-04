@@ -1,5 +1,5 @@
 #include "client.h"
-
+//#include "..\smartheap\smrtheap.h"
 #if !defined(FX_SCHEDULER_H_INC)
 	#include "FxScheduler.h"
 #endif
@@ -7,6 +7,10 @@
 #ifdef EFFECTSED
 	#include "../EffectsCoreInterface.h"
 #endif
+
+#include <set>
+
+set<CCloud *> OutstandClouds;
 
 vec3_t	WHITE = {1.0f, 1.0f, 1.0f};
 
@@ -275,8 +279,6 @@ void FX_AddPrimitive( CEffect **pEffect, CCloud *effectCloud, int killTime )
 	if (!effectCloud)
 	{
 		SEffectList *item = FX_GetValidEffect();
-
-
 #ifdef EFFECTSED
 		if (item == NULL)
 		{
@@ -290,9 +292,24 @@ void FX_AddPrimitive( CEffect **pEffect, CCloud *effectCloud, int killTime )
 	}
 	else
 	{
-		effectCloud->AddEffect(*pEffect);
+/*		dbgMemCheckAll();
+		DBGMEM_PTR_INFO dbg1;
+		if(dbgMemPtrInfo((void *)effectCloud,&dbg1))
+		{
+			assert(dbg1.isInUse);
+		}
+		DBGMEM_PTR_INFO dbg2;
+		if(dbgMemPtrInfo((void *)*pEffect,&dbg2))
+		{
+			assert(dbg2.isInUse);
+		}
+*/
+		if (effectCloud&&OutstandClouds.find(effectCloud)!=OutstandClouds.end())
+		{
+			effectCloud->AddEffect(*pEffect);
+		}
+//		dbgMemCheckAll();
 	}
-
 	(*pEffect)->SetKillTime(theFxHelper.mTime + killTime);
 	activeFx++;
 
@@ -301,12 +318,12 @@ void FX_AddPrimitive( CEffect **pEffect, CCloud *effectCloud, int killTime )
 	(*pEffect)->SetTimeEnd( theFxHelper.mTime + killTime );
 }
 
-
 CCloud	*FX_AddCloud(void)
 {
 	CCloud		*cloud;
 
 	cloud = new CCloud;
+	OutstandClouds.insert(cloud);
 	FX_AddPrimitive((CEffect **)&cloud, 0, 99999);
 
 	return cloud;

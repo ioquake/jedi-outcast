@@ -490,14 +490,17 @@ static void SV_UserMove( client_t *cl, msg_t *msg ) {
 		SV_ClientEnterWorld( cl, &cmds[0], eSavedGameJustLoaded );
 		if ( sv_mapname->string[0]!='_' )
 		{
+			char savename[MAX_QPATH];
 			if ( eSavedGameJustLoaded == eNO )
 			{
 				SG_WriteSavegame("auto",qtrue);
-				SG_WriteSavegame(va("auto_%s",sv_mapname->string),qtrue);
+				Com_sprintf (savename, sizeof(savename), "auto_%s",sv_mapname->string);
+				SG_WriteSavegame(savename,qtrue);//can't use va becuase it's nested
 			}
 			else if ( qbLoadTransition == qtrue )
 			{
-				SG_WriteSavegame( va( "hub/%s", sv_mapname->string ), qfalse );//save a full one
+				Com_sprintf (savename, sizeof(savename), "hub/%s", sv_mapname->string );
+				SG_WriteSavegame( savename, qfalse );//save a full one
 				SG_WriteSavegame( "auto", qfalse );//need a copy for auto, too
 			}
 		}

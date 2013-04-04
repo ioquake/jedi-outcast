@@ -99,7 +99,14 @@ void NPC_SetMoveGoal( gentity_t *ent, vec3_t point, int radius, qboolean isNavGo
 	ent->NPC->tempGoal->target = NULL;
 	ent->NPC->tempGoal->clipmask = ent->clipmask;
 	ent->NPC->tempGoal->svFlags &= ~SVF_NAVGOAL;
-	ent->NPC->tempGoal->waypoint = WAYPOINT_NONE;
+	if ( targetEnt && targetEnt->waypoint >= 0 )
+	{
+		ent->NPC->tempGoal->waypoint = targetEnt->waypoint;
+	}
+	else
+	{
+		ent->NPC->tempGoal->waypoint = WAYPOINT_NONE;
+	}
 	ent->NPC->tempGoal->noWaypointTime = 0;
 
 	if ( isNavGoal )
@@ -971,7 +978,7 @@ int NAV_TestBestNode( gentity_t *self, int startID, int endID, qboolean failEdge
 				//path is blocked by a locked door, mark it as such if instructed to do so
 				if ( failEdge )
 				{
-				//	navigator.AddFailedEdge( self->s.number, startID, endID );
+					navigator.AddFailedEdge( self->s.number, startID, endID );
 				}
 			}
 		}

@@ -38,6 +38,7 @@
 
 #define LEVELFLAG_NOPOINTPREDICTION			1 //don't take waypoint beyond current into account when adjusting path view angles
 #define LEVELFLAG_IGNOREINFALLBACK			2 //ignore enemies when in a fallback navigation routine
+#define LEVELFLAG_IMUSTNTRUNAWAY			4 //don't be scared
 
 #define WP_KEEP_FLAG_DIST			128
 
@@ -241,6 +242,7 @@ typedef struct bot_state_s
 	float				duckTime;
 	float				jumpTime;
 	float				jumpHoldTime;
+	float				jumpPrep;
 	float				forceJumping;
 	float				jDelay;
 

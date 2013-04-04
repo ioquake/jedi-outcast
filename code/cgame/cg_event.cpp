@@ -10,7 +10,6 @@
 #include "..\game\anims.h"
 
 extern void CG_TryPlayCustomSound( vec3_t origin, int entityNum, soundChannel_t channel, const char *soundName, int customSoundSet );
-extern void CG_FireSeeker( centity_t *cent );
 
 //==========================================================================
 
@@ -68,17 +67,30 @@ CG_ItemPickup
 A new item was picked up this frame
 ================
 */
-void CG_ItemPickup( int itemNum ) {
+void CG_ItemPickup( int itemNum, qboolean bHadItem ) {
 	cg.itemPickup = itemNum;
 	cg.itemPickupTime = cg.time;
 	cg.itemPickupBlendTime = cg.time;
+
+	if (bg_itemlist[itemNum].classname && bg_itemlist[itemNum].classname[0])
+	{ 
+		char text[1024], data[1024];
+		if (cgi_SP_GetStringTextString("INGAME_PICKUPLINE",text, sizeof(text)) )
+		{			
+			if ( cgi_SP_GetStringTextString( va("INGAME_%s",bg_itemlist[itemNum].classname ), data, sizeof( data )))
+			{
+				Com_Printf("%s %s\n", text, data );
+			}
+		}
+	}
+	
 	// see if it should be the grabbed weapon
 	if ( bg_itemlist[itemNum].giType == IT_WEAPON ) 
 	{
 		const int nCurWpn = cg.predicted_player_state.weapon;
 		const int nNewWpn = bg_itemlist[itemNum].giTag;
 
-		if ( nCurWpn == WP_SABER )
+		if ( nCurWpn == WP_SABER || bHadItem)
 		{//never switch away from the saber!
 			return;
 		}
@@ -92,7 +104,12 @@ void CG_ItemPickup( int itemNum ) {
 		// NOTE: automatically switching to any weapon you pick up is stupid and annoying and we won't do it.
 		//
 
-		if (0 == cg_autoswitch.integer)
+		if ( nNewWpn == WP_SABER )
+		{//always switch to saber
+			SetWeaponSelectTime();
+			cg.weaponSelect = nNewWpn;
+		}
+		else if (0 == cg_autoswitch.integer)
 		{
 			// don't switch
 		}
@@ -123,17 +140,6 @@ void CG_ItemPickup( int itemNum ) {
 			}
 		}
 	}
-	if (bg_itemlist[itemNum].classname && bg_itemlist[itemNum].classname[0])
-	{ 
-		char text[1024], data[1024];
-		if (cgi_SP_GetStringTextString("INGAME_PICKUPLINE",text, sizeof(text)) )
-		{			
-			if ( cgi_SP_GetStringTextString( va("INGAME_%s",bg_itemlist[itemNum].classname ), data, sizeof( data )))
-			{
-				Com_Printf("%s %s\n", text, data );
-			}
-		}
-	}
 }
 
 
@@ -159,24 +165,16 @@ void UseItem(int itemNum)
 	case INV_LIGHTAMP_GOGGLES:
 		CG_ToggleLAGoggles();
 		break;
-	case INV_GOODIE_KEY1:
-	case INV_GOODIE_KEY2:
-	case INV_GOODIE_KEY3:
-	case INV_GOODIE_KEY4:
-	case INV_GOODIE_KEY5:
-		if (cent->gent->client->ps.inventory[INV_GOODIE_KEY1])
+	case INV_GOODIE_KEY:
+		if (cent->gent->client->ps.inventory[INV_GOODIE_KEY])
 		{
-			cent->gent->client->ps.inventory[INV_GOODIE_KEY1]--;
+			cent->gent->client->ps.inventory[INV_GOODIE_KEY]--;
 		}
 		break;
-	case INV_SECURITY_KEY1:
-	case INV_SECURITY_KEY2:
-	case INV_SECURITY_KEY3:
-	case INV_SECURITY_KEY4:
-	case INV_SECURITY_KEY5:
-		if (cent->gent->client->ps.inventory[INV_SECURITY_KEY1])
+	case INV_SECURITY_KEY:
+		if (cent->gent->client->ps.inventory[INV_SECURITY_KEY])
 		{
-			cent->gent->client->ps.inventory[INV_SECURITY_KEY1]--;
+			cent->gent->client->ps.inventory[INV_SECURITY_KEY]--;
 		}
 		break;
 	}
@@ -240,7 +238,7 @@ An entity has an event value
 void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 	entityState_t	*es;
 	int				event;
-	vec3_t			dir, axis[3];
+	vec3_t			axis[3];
 	const char		*s, *s2;
 	int				clientNum;
 	//clientInfo_t	*ci;
@@ -300,14 +298,14 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		DEBUGNAME("EV_FOOTWADE");
 		if (cg_footsteps.integer) {
 			cgi_S_StartSound (NULL, es->number, CHAN_BODY, 
-				cgs.media.footsteps[ FOOTSTEP_SPLASH ][rand()&3] );
+				cgs.media.footsteps[ FOOTSTEP_WADE ][rand()&3] );
 		}
 		break;
 	case EV_SWIM:
 		DEBUGNAME("EV_SWIM");
 		if (cg_footsteps.integer) {
 			cgi_S_StartSound (NULL, es->number, CHAN_BODY, 
-				cgs.media.footsteps[ FOOTSTEP_SPLASH ][rand()&3] );
+				cgs.media.footsteps[ FOOTSTEP_SWIM ][rand()&3] );
 		}
 		break;
 
@@ -328,6 +326,10 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		if ( g_entities[es->number].health <= 0 )
 		{//dead
 			cgi_S_StartSound( NULL, es->number, CHAN_AUTO, cgs.media.landSound  );
+		}
+		else if ( g_entities[es->number].s.weapon == WP_SABER )
+		{//jedi
+			CG_TryPlayCustomSound( NULL, es->number, CHAN_BODY, "*land1.wav", CS_BASIC );
 		}
 		else
 		{//still alive
@@ -437,10 +439,17 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		{
 			gitem_t	*item;
 			int		index;
-
+			qboolean bHadItem = qfalse;
+					
 			index = es->eventParm;		// player predicted
 
-			if ( index < 1 || index >= bg_numItems ) {
+			if ( (char)index < 0 ) 
+			{
+				index = -(char)index;
+				bHadItem = qtrue;
+			}
+
+			if ( index >= bg_numItems ) {
 				break;
 			}
 			item = &bg_itemlist[ index ];
@@ -448,7 +457,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 			// show icon and name on status bar
 			if ( es->number == cg.snap->ps.clientNum ) {
-				CG_ItemPickup( index );
+				CG_ItemPickup( index, bHadItem );
 			}
 		}
 		break;
@@ -660,14 +669,12 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 	case EV_MISSILE_HIT:
 		DEBUGNAME("EV_MISSILE_HIT");
-		ByteToDir( es->eventParm, dir );
-		CG_MissileHitPlayer( cent, es->weapon, position, dir, cent->gent->alt_fire );
+		CG_MissileHitPlayer( cent, es->weapon, position, cent->gent->pos1, cent->gent->alt_fire );
 		break;
 
 	case EV_MISSILE_MISS:
 		DEBUGNAME("EV_MISSILE_MISS");
-		ByteToDir( es->eventParm, dir );
-		CG_MissileHitWall( cent, es->weapon, position, dir, cent->gent->alt_fire );
+		CG_MissileHitWall( cent, es->weapon, position, cent->gent->pos1, cent->gent->alt_fire );
 		break;
 
 	case EV_BMODEL_SOUND:
@@ -850,6 +857,17 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		DEBUGNAME("EV_CHOKEx");
 		CG_TryPlayCustomSound( NULL, es->number, CHAN_VOICE, va("*choke%i.wav", event - EV_CHOKE1 + 1), CS_COMBAT );
 		break;
+
+	case EV_FFWARN:	//Warn ally to stop shooting you
+		DEBUGNAME("EV_FFWARN");
+		CG_TryPlayCustomSound( NULL, es->number, CHAN_VOICE, "*ffwarn.wav", CS_COMBAT );
+		break;
+
+	case EV_FFTURN:	//Turn on ally after being shot by them
+		DEBUGNAME("EV_FFTURN");
+		CG_TryPlayCustomSound( NULL, es->number, CHAN_VOICE, "*ffturn.wav", CS_COMBAT );
+		break;
+
 	//extra sounds for ST
 	case EV_CHASE1:
 	case EV_CHASE2:

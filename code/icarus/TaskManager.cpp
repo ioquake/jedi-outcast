@@ -333,6 +333,16 @@ int CTaskManager::Update( void )
 
 /*
 -------------------------
+IsRunning
+-------------------------
+*/
+
+qboolean CTaskManager::IsRunning( void )
+{
+	return ( m_tasks.empty() == false );
+}
+/*
+-------------------------
 Check
 -------------------------
 */
@@ -939,7 +949,12 @@ CBlock *CTaskManager::RecallTask( void )
 
 	if ( task )
 	{
-		return task->GetBlock();
+	// fixed 2/12/2 to free the task that has been popped (called from sequencer Recall)
+		CBlock* retBlock = task->GetBlock();
+		task->Free();
+
+		return retBlock;
+	//	return task->GetBlock();
 	}
 
 	return NULL;
@@ -1022,8 +1037,12 @@ CBlock *CTaskManager::GetCurrentTask( void )
 
 	if ( task == NULL )
 		return NULL;
+// fixed 2/12/2 to free the task that has been popped (called from sequencer Interrupt)
+	CBlock* retBlock = task->GetBlock();
+	task->Free();
 
-	return task->GetBlock();
+	return retBlock;
+//	return task->GetBlock();
 }
 
 /*

@@ -46,9 +46,17 @@ CG_ParseScores
 =================
 */
 static void CG_ParseScores( void ) {
-	int		i, powerups;
+	int		i, powerups, readScores;
 
 	cg.numScores = atoi( CG_Argv( 1 ) );
+
+	readScores = cg.numScores;
+
+	if (readScores > MAX_CLIENT_SCORE_SEND)
+	{
+		readScores = MAX_CLIENT_SCORE_SEND;
+	}
+
 	if ( cg.numScores > MAX_CLIENTS ) {
 		cg.numScores = MAX_CLIENTS;
 	}
@@ -57,7 +65,7 @@ static void CG_ParseScores( void ) {
 	cg.teamScores[1] = atoi( CG_Argv( 3 ) );
 
 	memset( cg.scores, 0, sizeof( cg.scores ) );
-	for ( i = 0 ; i < cg.numScores ; i++ ) {
+	for ( i = 0 ; i < readScores ; i++ ) {
 		//
 		cg.scores[i].client = atoi( CG_Argv( i * 14 + 4 ) );
 		cg.scores[i].score = atoi( CG_Argv( i * 14 + 5 ) );
@@ -129,10 +137,15 @@ void CG_ParseServerinfo( void ) {
 	cgs.dmflags = atoi( Info_ValueForKey( info, "dmflags" ) );
 	cgs.teamflags = atoi( Info_ValueForKey( info, "teamflags" ) );
 	cgs.fraglimit = atoi( Info_ValueForKey( info, "fraglimit" ) );
+	cgs.duel_fraglimit = atoi( Info_ValueForKey( info, "duel_fraglimit" ) );
 	cgs.capturelimit = atoi( Info_ValueForKey( info, "capturelimit" ) );
 	cgs.timelimit = atoi( Info_ValueForKey( info, "timelimit" ) );
 	cgs.maxclients = atoi( Info_ValueForKey( info, "sv_maxclients" ) );
 	mapname = Info_ValueForKey( info, "mapname" );
+
+	//rww - You must do this one here, Info_ValueForKey always uses the same memory pointer.
+	trap_Cvar_Set ( "ui_about_mapname", mapname );
+
 	Com_sprintf( cgs.mapname, sizeof( cgs.mapname ), "maps/%s.bsp", mapname );
 	Q_strncpyz( cgs.redTeam, Info_ValueForKey( info, "g_redTeam" ), sizeof(cgs.redTeam) );
 	trap_Cvar_Set("g_redTeam", cgs.redTeam);
@@ -141,11 +154,11 @@ void CG_ParseServerinfo( void ) {
 
 	trap_Cvar_Set ( "ui_about_gametype", va("%i", cgs.gametype ) );
 	trap_Cvar_Set ( "ui_about_fraglimit", va("%i", cgs.fraglimit ) );
+	trap_Cvar_Set ( "ui_about_duellimit", va("%i", cgs.duel_fraglimit ) );
 	trap_Cvar_Set ( "ui_about_capturelimit", va("%i", cgs.capturelimit ) );
 	trap_Cvar_Set ( "ui_about_timelimit", va("%i", cgs.timelimit ) );
 	trap_Cvar_Set ( "ui_about_maxclients", va("%i", cgs.maxclients ) );
 	trap_Cvar_Set ( "ui_about_dmflags", va("%i", cgs.dmflags ) );
-	trap_Cvar_Set ( "ui_about_mapname", mapname );
 	trap_Cvar_Set ( "ui_about_hostname", Info_ValueForKey( info, "sv_hostname" ) );
 	trap_Cvar_Set ( "ui_about_needpass", Info_ValueForKey( info, "g_needpass" ) );
 	trap_Cvar_Set ( "ui_about_botminplayers", Info_ValueForKey ( info, "bot_minplayers" ) );
@@ -178,6 +191,7 @@ Called on load to set the initial values from configure strings
 void CG_SetConfigValues( void ) 
 {
 	const char *s;
+	const char *str;
 
 	cgs.scores1 = atoi( CG_ConfigString( CS_SCORES1 ) );
 	cgs.scores2 = atoi( CG_ConfigString( CS_SCORES2 ) );
@@ -191,6 +205,38 @@ void CG_SetConfigValues( void )
 
 	// Track who the jedi master is
 	cgs.jediMaster = atoi ( CG_ConfigString ( CS_CLIENT_JEDIMASTER ) );
+	cgs.duelWinner = atoi ( CG_ConfigString ( CS_CLIENT_DUELWINNER ) );
+
+	str = CG_ConfigString(CS_CLIENT_DUELISTS);
+
+	if (str && str[0])
+	{
+		char buf[64];
+		int c = 0;
+		int i = 0;
+
+		while (str[i] && str[i] != '|')
+		{
+			buf[c] = str[i];
+			c++;
+			i++;
+		}
+		buf[c] = 0;
+
+		cgs.duelist1 = atoi ( buf );
+		c = 0;
+
+		i++;
+		while (str[i])
+		{
+			buf[c] = str[i];
+			c++;
+			i++;
+		}
+		buf[c] = 0;
+
+		cgs.duelist2 = atoi ( buf );
+	}
 }
 
 /*
@@ -265,6 +311,34 @@ static void CG_ConfigStringModified( void ) {
 		cgs.scores2 = atoi( str );
 	} else if ( num == CS_CLIENT_JEDIMASTER ) {
 		cgs.jediMaster = atoi ( str );
+	} else if ( num == CS_CLIENT_DUELWINNER ) {
+		cgs.duelWinner = atoi ( str );
+	} else if ( num == CS_CLIENT_DUELISTS ) {
+		char buf[64];
+		int c = 0;
+		int i = 0;
+
+		while (str[i] && str[i] != '|')
+		{
+			buf[c] = str[i];
+			c++;
+			i++;
+		}
+		buf[c] = 0;
+
+		cgs.duelist1 = atoi ( buf );
+		c = 0;
+
+		i++;
+		while (str[i])
+		{
+			buf[c] = str[i];
+			c++;
+			i++;
+		}
+		buf[c] = 0;
+
+		cgs.duelist2 = atoi ( buf );
 	} else if ( num == CS_LEVEL_START_TIME ) {
 		cgs.levelStartTime = atoi( str );
 	} else if ( num == CS_VOTE_TIME ) {
@@ -459,6 +533,8 @@ void CG_KillCEntityInstances()
 		cg_entities[i].trickAlphaTime = 0;
 		VectorClear(cg_entities[i].turAngles);
 		cg_entities[i].weapon = 0;
+		cg_entities[i].teamPowerEffectTime = 0;
+		cg_entities[i].teamPowerType = 0;
 
 		i++;
 	}
@@ -505,7 +581,7 @@ static void CG_MapRestart( void ) {
 	// play the "fight" sound if this is a restart without warmup
 	if ( cg.warmup == 0 /* && cgs.gametype == GT_TOURNAMENT */) {
 		trap_S_StartLocalSound( cgs.media.countFightSound, CHAN_ANNOUNCER );
-		CG_CenterPrint( "BEGIN", 120, GIANTCHAR_WIDTH*2 );
+		CG_CenterPrint( CG_GetStripEdString("SVINGAME", "BEGIN_DUEL"), 120, GIANTCHAR_WIDTH*2 );
 	}
 	if (cg_singlePlayerActive.integer) {
 		trap_Cvar_Set("ui_matchStartTime", va("%i", cg.time));
@@ -546,7 +622,7 @@ typedef struct headModelVoiceChat_s
 } headModelVoiceChat_t;
 
 voiceChatList_t voiceChatLists[MAX_VOICEFILES];
-headModelVoiceChat_t headModelVoiceChat[MAX_HEADMODELS];
+//headModelVoiceChat_t headModelVoiceChat[MAX_HEADMODELS];
 
 /*
 =================
@@ -740,13 +816,14 @@ CG_VoiceChatListForClient
 */
 voiceChatList_t *CG_VoiceChatListForClient( int clientNum ) {
 	clientInfo_t *ci;
-	int voiceChatNum, i, j, k, gender;
-	char filename[MAX_QPATH], headModelName[MAX_QPATH];
 
 	if ( clientNum < 0 || clientNum >= MAX_CLIENTS ) {
 		clientNum = 0;
 	}
 	ci = &cgs.clientinfo[ clientNum ];
+/*
+	int voiceChatNum, i, j, k, gender;
+	char filename[MAX_QPATH], headModelName[MAX_QPATH];
 
 	for ( k = 0; k < 2; k++ ) {
 		if ( k == 0 ) {
@@ -821,6 +898,7 @@ voiceChatList_t *CG_VoiceChatListForClient( int clientNum ) {
 			break;
 		}
 	}
+	*/
 	// just return the first voice chat list
 	return &voiceChatLists[0];
 }
@@ -996,6 +1074,77 @@ static void CG_RemoveChatEscapeChar( char *text ) {
 	text[l] = '\0';
 }
 
+#define MAX_STRIPED_SV_STRING 1024
+
+void CG_CheckSVStripEdRef(char *buf, const char *str)
+{ //I don't really like doing this. But it utilizes the system that was already in place.
+	int i = 0;
+	int b = 0;
+	int strLen = 0;
+	qboolean gotStrip = qfalse;
+
+	if (!str || !str[0])
+	{
+		if (str)
+		{
+			strcpy(buf, str);
+		}
+		return;
+	}
+
+	strcpy(buf, str);
+
+	strLen = strlen(str);
+
+	if (strLen >= MAX_STRIPED_SV_STRING)
+	{
+		return;
+	}
+
+	while (i < strLen && str[i])
+	{
+		gotStrip = qfalse;
+
+		if (str[i] == '@' && (i+1) < strLen)
+		{
+			if (str[i+1] == '@' && (i+2) < strLen)
+			{
+				if (str[i+2] == '@' && (i+3) < strLen)
+				{ //@@@ should mean to insert a striped reference here, so insert it into buf at the current place
+					char stripRef[MAX_STRIPED_SV_STRING];
+					int r = 0;
+
+					while (i < strLen && str[i] == '@')
+					{
+						i++;
+					}
+
+					while (i < strLen && str[i] && str[i] != ' ' && str[i] != ':' && str[i] != '.' && str[i] != '\n')
+					{
+						stripRef[r] = str[i];
+						r++;
+						i++;
+					}
+					stripRef[r] = 0;
+
+					buf[b] = 0;
+					Q_strcat(buf, MAX_STRIPED_SV_STRING, CG_GetStripEdString("SVINGAME", stripRef));
+					b = strlen(buf);
+				}
+			}
+		}
+
+		if (!gotStrip)
+		{
+			buf[b] = str[i];
+			b++;
+		}
+		i++;
+	}
+
+	buf[b] = 0;
+}
+
 /*
 =================
 CG_ServerCommand
@@ -1039,8 +1188,75 @@ static void CG_ServerCommand( void ) {
 		return;
 	}
 
+	if ( !strcmp( cmd, "nfr" ) )
+	{ //"nfr" == "new force rank" (want a short string)
+		int doMenu = 0;
+		int setTeam = 0;
+		int newRank = 0;
+
+		if (trap_Argc() < 3)
+		{
+#ifdef _DEBUG
+			Com_Printf("WARNING: Invalid newForceRank string\n");
+#endif
+			return;
+		}
+
+		newRank = atoi(CG_Argv(1));
+		doMenu = atoi(CG_Argv(2));
+		setTeam = atoi(CG_Argv(3));
+
+		trap_Cvar_Set("ui_rankChange", va("%i", newRank));
+
+		trap_Cvar_Set("ui_myteam", va("%i", setTeam));
+
+		if (!( trap_Key_GetCatcher() & KEYCATCH_UI ) && doMenu)
+		{
+			trap_OpenUIMenu(3);
+		}
+
+		return;
+	}
+
+	if ( !strcmp( cmd, "kg2" ) )
+	{ //Kill a ghoul2 instance in this slot.
+	  //If it has been occupied since this message was sent somehow, the worst that can (should) happen
+	  //is the instance will have to reinit with its current info.
+		int indexNum = 0;
+		int argNum = trap_Argc();
+		int i = 1;
+		
+		if (argNum < 1)
+		{
+			return;
+		}
+
+		while (i < argNum)
+		{
+			indexNum = atoi(CG_Argv(i));
+
+			if (cg_entities[indexNum].ghoul2 && trap_G2_HaveWeGhoul2Models(cg_entities[indexNum].ghoul2))
+			{
+				if (indexNum < MAX_CLIENTS)
+				{ //You try to do very bad thing!
+#ifdef _DEBUG
+					Com_Printf("WARNING: Tried to kill a client ghoul2 instance with a kg2 command!\n");
+#endif
+					return;
+				}
+				trap_G2API_CleanGhoul2Models(&(cg_entities[indexNum].ghoul2));
+			}
+
+			i++;
+		}
+		
+		return;
+	}
+
 	if ( !strcmp( cmd, "cp" ) ) {
-		CG_CenterPrint( CG_Argv(1), SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
+		char strEd[MAX_STRIPED_SV_STRING];
+		CG_CheckSVStripEdRef(strEd, CG_Argv(1));
+		CG_CenterPrint( strEd, SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
 		return;
 	}
 
@@ -1050,7 +1266,9 @@ static void CG_ServerCommand( void ) {
 	}
 
 	if ( !strcmp( cmd, "print" ) ) {
-		CG_Printf( "%s", CG_Argv(1) );
+		char strEd[MAX_STRIPED_SV_STRING];
+		CG_CheckSVStripEdRef(strEd, CG_Argv(1));
+		CG_Printf( "%s", strEd );
 		return;
 	}
 

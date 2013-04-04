@@ -63,7 +63,7 @@ struct CachedEndianedModelBinary_s
 };
 typedef struct CachedEndianedModelBinary_s CachedEndianedModelBinary_t;
 typedef map <sstring_t,CachedEndianedModelBinary_t>	CachedModels_t;
-													CachedModels_t CachedModels;	// the important cache item.
+CachedModels_t CachedModels;	// the important cache item.
 
 void RE_RegisterModels_StoreShaderRequest(const char *psModelFileName, const char *psShaderName, int *piShaderIndexPoke)
 {
@@ -202,6 +202,7 @@ void *RE_RegisterModels_Malloc(int iSize, const char *psModelFileName, qboolean 
 	}
 	else
 	{
+#ifndef DEDICATED
 		// if we already had this model entry, then re-register all the shaders it wanted...
 		//
 		int iEntries = ModelBin.ShaderRegisterData.size();
@@ -222,6 +223,7 @@ void *RE_RegisterModels_Malloc(int iSize, const char *psModelFileName, qboolean 
 				*piShaderPokePtr = sh->index;
 			}
 		}
+#endif //!DEDICATED
 		*pqbAlreadyFound = qtrue;	// tell caller not to re-Endian or re-Shader this binary		
 	}
 
@@ -306,8 +308,6 @@ static int GetModelDataAllocSize(void)
 			Z_MemSize( TAG_MODEL_GLA);
 }
 extern cvar_t *r_modelpoolmegs;
-extern qboolean Sys_LowPhysicalMemory();
-
 //
 // return qtrue if at least one cached model was freed (which tells z_malloc()-fail recoveryt code to try again)
 //
@@ -325,7 +325,7 @@ qboolean RE_RegisterModels_LevelLoadEnd(qboolean bDeleteEverythingNotUsedThisLev
 	else
 	{
 		int iLoadedModelBytes	=	GetModelDataAllocSize();
-		const int iMaxModelBytes=	(!Sys_LowPhysicalMemory() && r_modelpoolmegs) ? (r_modelpoolmegs->integer * 1024 * 1024) : 0;
+		const int iMaxModelBytes=	r_modelpoolmegs->integer * 1024 * 1024;
 
 		qboolean bEraseOccured = qfalse;
 		for (CachedModels_t::iterator itModel = CachedModels.begin(); itModel != CachedModels.end() && ( bDeleteEverythingNotUsedThisLevel || iLoadedModelBytes > iMaxModelBytes ); bEraseOccured?itModel:++itModel)
@@ -361,9 +361,18 @@ qboolean RE_RegisterModels_LevelLoadEnd(qboolean bDeleteEverythingNotUsedThisLev
 					//CachedModel.pModelDiskImage = NULL;	// REM for reference, erase() call below negates the need for it.
 					bAtLeastoneModelFreed = qtrue;
 				}
-
+#ifndef __linux__
 				itModel = CachedModels.erase(itModel);
 				bEraseOccured = qtrue;
+#else
+				// Both MS and Dinkumware got the map::erase wrong
+				// The STL has the return type as a void
+				CachedModels_t::iterator itTemp;
+				itTemp = itModel;
+				itModel++;
+				CachedModels.erase(itTemp);
+				
+#endif
 
 				iLoadedModelBytes = GetModelDataAllocSize();				
 			}
@@ -409,9 +418,18 @@ static void RE_RegisterModels_DumpNonPure(void)
 					Z_Free(CachedModel.pModelDiskImage);	
 					//CachedModel.pModelDiskImage = NULL;	// REM for reference, erase() call below negates the need for it.
 				}
-
+#ifndef __linux__
 				itModel = CachedModels.erase(itModel);
 				bEraseOccured = qtrue;
+#else
+				// Both MS and Dinkumware got the map::erase wrong
+				// The STL has the return type as a void
+				CachedModels_t::iterator itTemp;
+				itTemp = itModel;
+				itModel++;
+				CachedModels.erase(itTemp);
+
+#endif
 			}
 		}
 	}
@@ -444,6 +462,7 @@ void RE_RegisterModels_Info_f( void )
 //
 static void RE_RegisterModels_DeleteAll(void)
 {
+#ifndef __linux__
 	for (CachedModels_t::iterator itModel = CachedModels.begin(); itModel != CachedModels.end(); )
 	{
 		CachedEndianedModelBinary_t &CachedModel = (*itModel).second;
@@ -454,6 +473,9 @@ static void RE_RegisterModels_DeleteAll(void)
 
 		itModel = CachedModels.erase(itModel);			
 	}
+#else
+	CachedModels.erase(CachedModels.begin(),CachedModels.end());
+#endif
 }
 
 
@@ -478,7 +500,7 @@ void RE_RegisterMedia_LevelLoadBegin(const char *psMapName, ForceReload_e eForce
 			RE_RegisterModels_DumpNonPure();
 		}
 	}
-
+#ifndef DEDICATED
 // not used in MP codebase...
 //
 //	if (bDeleteBSP)
@@ -486,7 +508,7 @@ void RE_RegisterMedia_LevelLoadBegin(const char *psMapName, ForceReload_e eForce
 //		CM_DeleteCachedMap();
 		R_Images_DeleteLightMaps();	// always do this now, makes no real load time difference, and lets designers work ok
 //	}
-
+#endif
 
 	// at some stage I'll probably want to put some special logic here, like not incrementing the level number
 	//	when going into a map like "brig" or something, so returning to the previous level doesn't require an 
@@ -515,10 +537,12 @@ extern void S_RestartMusic(void);
 void RE_RegisterMedia_LevelLoadEnd(void)
 {
 	RE_RegisterModels_LevelLoadEnd(qfalse);
+#ifndef DEDICATED
 	RE_RegisterImages_LevelLoadEnd();
 	SND_RegisterAudio_LevelLoadEnd(qfalse);
 //	RE_InitDissolve();
 	S_RestartMusic();
+#endif
 }
 
 
@@ -971,10 +995,9 @@ Ghoul2 Insert Start
 Ghoul2 Insert End
 */
 
-	if (!r_noServerGhoul2 || !r_noGhoul2)
+	if (!r_noServerGhoul2)
 	{ //keep it from choking when it gets to these checks in the g2 code. Registering all r_ cvars for the server would be a Bad Thing though.
 		r_noServerGhoul2 = Cvar_Get( "r_noserverghoul2", "0", 0);
-		r_noGhoul2 = Cvar_Get( "r_noghoul2", "0", 0);
 	}
 
 	if ( !name || !name[0] ) {
@@ -1003,10 +1026,10 @@ Ghoul2 Insert End
 	// only set the name after the model has been successfully loaded
 	Q_strncpyz( mod->name, name, sizeof( mod->name ) );
 
-
+#ifndef DEDICATED
 	// make sure the render thread is stopped
 	R_SyncRenderThread();
-
+#endif
 
 	int iLODStart = 0;
 	if (strstr (name, ".md3")) {
@@ -1192,10 +1215,10 @@ Ghoul2 Insert End
 	// only set the name after the model has been successfully loaded
 	Q_strncpyz( mod->name, name, sizeof( mod->name ) );
 
-
+#ifndef DEDICATED
 	// make sure the render thread is stopped
 	R_SyncRenderThread();
-
+#endif
 
 	int iLODStart = 0;
 	if (strstr (name, ".md3")) {
@@ -1482,7 +1505,7 @@ static qboolean R_LoadMD3 (model_t *mod, int lod, void *buffer, const char *mod_
 		if ( j > 2 && surf->name[j-2] == '_' ) {
 			surf->name[j-2] = 0;
 		}
-
+#ifndef DEDICATED
         // register the shaders
         shader = (md3Shader_t *) ( (byte *)surf + surf->ofsShaders );
         for ( j = 0 ; j < surf->numShaders ; j++, shader++ ) {
@@ -1496,7 +1519,7 @@ static qboolean R_LoadMD3 (model_t *mod, int lod, void *buffer, const char *mod_
 			}
 			RE_RegisterModels_StoreShaderRequest(mod_name, &shader->name[0], &shader->shaderIndex);
         }
-
+#endif
 
 #ifndef _M_IX86
 //
@@ -1665,7 +1688,7 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name, qbo
 
 			// change to surface identifier
 			surf->ident = SF_MD4;
-		
+#ifndef DEDICATED		
 			// register the shaders
 			sh = R_FindShader( surf->shader, lightmapsNone, stylesDefault, qtrue );
 			if ( sh->defaultShader ) {
@@ -1674,6 +1697,7 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name, qbo
 				surf->shaderIndex = sh->index;
 			}
 			RE_RegisterModels_StoreShaderRequest(mod_name, &surf->shader[0], &surf->shaderIndex);
+#endif
 
 #ifndef _M_IX86
 //
@@ -1724,7 +1748,7 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name, qbo
 
 
 //=============================================================================
-
+#ifndef DEDICATED
 /*
 ** RE_BeginRegistration
 */
@@ -1753,6 +1777,7 @@ void RE_BeginRegistration( glconfig_t *glconfigOut ) {
 
 //=============================================================================
 
+#endif // !DEDICATED
 void R_SVModelInit()
 {
 	model_t		*mod;

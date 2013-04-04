@@ -56,6 +56,11 @@ void CG_RegisterItemVisuals( int itemNum ) {
 	{ //in CTY the flag model is different
 		itemInfo->models[0] = trap_R_RegisterModel( item->world_model[1] );
 	}
+	else if (item->giType == IT_WEAPON &&
+		(item->giTag == WP_THERMAL || item->giTag == WP_TRIP_MINE || item->giTag == WP_DET_PACK))
+	{
+		itemInfo->models[0] = trap_R_RegisterModel( item->world_model[1] );
+	}
 	else
 	{
 		itemInfo->models[0] = trap_R_RegisterModel( item->world_model[0] );
@@ -111,6 +116,14 @@ VIEW WEAPON
 ========================================================================================
 */
 
+#define WEAPON_FORCE_BUSY_HOLSTER
+
+#ifdef WEAPON_FORCE_BUSY_HOLSTER
+//rww - this was done as a last resort. Forgive me.
+static int cgWeapFrame = 0;
+static int cgWeapFrameTime = 0;
+#endif
+
 /*
 =================
 CG_MapTorsoToWeaponFrame
@@ -119,6 +132,36 @@ CG_MapTorsoToWeaponFrame
 */
 static int CG_MapTorsoToWeaponFrame( clientInfo_t *ci, int frame, int animNum ) {
 	animation_t *animations = bgGlobalAnimations;
+#ifdef WEAPON_FORCE_BUSY_HOLSTER
+	if (cg.snap->ps.forceHandExtend != HANDEXTEND_NONE || cgWeapFrameTime > cg.time)
+	{ //the reason for the after delay is so that it doesn't snap the weapon frame to the "idle" (0) frame
+		//for a very quick moment
+		if (cgWeapFrame < 6)
+		{
+			cgWeapFrame = 6;
+			cgWeapFrameTime = cg.time + 10;
+		}
+
+		if (cgWeapFrameTime < cg.time && cgWeapFrame < 10)
+		{
+			cgWeapFrame++;
+			cgWeapFrameTime = cg.time + 10;
+		}
+
+		if (cg.snap->ps.forceHandExtend != HANDEXTEND_NONE &&
+			cgWeapFrame == 10)
+		{
+			cgWeapFrameTime = cg.time + 100;
+		}
+
+		return cgWeapFrame;
+	}
+	else
+	{
+		cgWeapFrame = 0;
+		cgWeapFrameTime = 0;
+	}
+#endif
 
 	switch( animNum )
 	{
@@ -135,7 +178,6 @@ static int CG_MapTorsoToWeaponFrame( clientInfo_t *ci, int frame, int animNum ) 
 			return frame - animations[animNum].firstFrame + 6 + 4;
 		}
 		break;
-
 	case BOTH_ATTACK1:
 	case BOTH_ATTACK2:
 	case BOTH_ATTACK3:
@@ -325,40 +367,6 @@ static void CG_LightningBolt( centity_t *cent, vec3_t origin ) {
 
 
 /*
-======================
-CG_MachinegunSpinAngle
-======================
-*/
-#define		SPIN_SPEED	0.9
-#define		COAST_TIME	1000
-static float	CG_MachinegunSpinAngle( centity_t *cent ) {
-	int		delta;
-	float	angle;
-	float	speed;
-
-	delta = cg.time - cent->pe.barrelTime;
-	if ( cent->pe.barrelSpinning ) {
-		angle = cent->pe.barrelAngle + delta * SPIN_SPEED;
-	} else {
-		if ( delta > COAST_TIME ) {
-			delta = COAST_TIME;
-		}
-
-		speed = 0.5 * ( SPIN_SPEED + (float)( COAST_TIME - delta ) / COAST_TIME );
-		angle = cent->pe.barrelAngle + delta * speed;
-	}
-
-	if ( cent->pe.barrelSpinning == !(cent->currentState.eFlags & EF_FIRING) ) {
-		cent->pe.barrelTime = cg.time;
-		cent->pe.barrelAngle = AngleMod( angle );
-		cent->pe.barrelSpinning = !!(cent->currentState.eFlags & EF_FIRING);
-	}
-
-	return angle;
-}
-
-
-/*
 ========================
 CG_AddWeaponWithPowerups
 ========================
@@ -453,6 +461,7 @@ Ghoul2 Insert Start
 			cg.snap->ps.clientNum))
 		{
 			CG_AddWeaponWithPowerups( &gun, cent->currentState.powerups ); //don't draw the weapon if the player is invisible
+			/*
 			if ( weaponNum == WP_STUN_BATON )
 			{
 				gun.shaderRGBA[0] = gun.shaderRGBA[1] = gun.shaderRGBA[2] = 25;
@@ -461,25 +470,75 @@ Ghoul2 Insert Start
 				gun.renderfx = RF_RGB_TINT | RF_FIRST_PERSON | RF_DEPTHHACK;
 				trap_R_AddRefEntityToScene( &gun );
 			}
+			*/
 		}
 
-		// add the spinning barrel
-		if ( weapon->barrelModel ) {
-			memset( &barrel, 0, sizeof( barrel ) );
-			VectorCopy( parent->lightingOrigin, barrel.lightingOrigin );
-			barrel.shadowPlane = parent->shadowPlane;
-			barrel.renderfx = parent->renderfx;
+		if (weaponNum == WP_STUN_BATON)
+		{
+			int i = 0;
 
-			barrel.hModel = weapon->barrelModel;
-			angles[YAW] = 0;
-			angles[PITCH] = 0;
-			angles[ROLL] = 0;
+			while (i < 3)
+			{
+				memset( &barrel, 0, sizeof( barrel ) );
+				VectorCopy( parent->lightingOrigin, barrel.lightingOrigin );
+				barrel.shadowPlane = parent->shadowPlane;
+				barrel.renderfx = parent->renderfx;
 
-			AnglesToAxis( angles, barrel.axis );
+				if (i == 0)
+				{
+					barrel.hModel = trap_R_RegisterModel("models/weapons2/stun_baton/baton_barrel.md3");
+				}
+				else if (i == 1)
+				{
+					barrel.hModel = trap_R_RegisterModel("models/weapons2/stun_baton/baton_barrel2.md3");
+				}
+				else
+				{
+					barrel.hModel = trap_R_RegisterModel("models/weapons2/stun_baton/baton_barrel3.md3");
+				}
+				angles[YAW] = 0;
+				angles[PITCH] = 0;
+				angles[ROLL] = 0;
 
-			CG_PositionRotatedEntityOnTag( &barrel, parent/*&gun*/, /*weapon->weaponModel*/weapon->handsModel, "tag_barrel" );
+				AnglesToAxis( angles, barrel.axis );
 
-			CG_AddWeaponWithPowerups( &barrel, cent->currentState.powerups );
+				if (i == 0)
+				{
+					CG_PositionRotatedEntityOnTag( &barrel, parent/*&gun*/, /*weapon->weaponModel*/weapon->handsModel, "tag_barrel" );
+				}
+				else if (i == 1)
+				{
+					CG_PositionRotatedEntityOnTag( &barrel, parent/*&gun*/, /*weapon->weaponModel*/weapon->handsModel, "tag_barrel2" );
+				}
+				else
+				{
+					CG_PositionRotatedEntityOnTag( &barrel, parent/*&gun*/, /*weapon->weaponModel*/weapon->handsModel, "tag_barrel3" );
+				}
+				CG_AddWeaponWithPowerups( &barrel, cent->currentState.powerups );
+
+				i++;
+			}
+		}
+		else
+		{
+			// add the spinning barrel
+			if ( weapon->barrelModel ) {
+				memset( &barrel, 0, sizeof( barrel ) );
+				VectorCopy( parent->lightingOrigin, barrel.lightingOrigin );
+				barrel.shadowPlane = parent->shadowPlane;
+				barrel.renderfx = parent->renderfx;
+
+				barrel.hModel = weapon->barrelModel;
+				angles[YAW] = 0;
+				angles[PITCH] = 0;
+				angles[ROLL] = 0;
+
+				AnglesToAxis( angles, barrel.axis );
+
+				CG_PositionRotatedEntityOnTag( &barrel, parent/*&gun*/, /*weapon->weaponModel*/weapon->handsModel, "tag_barrel" );
+
+				CG_AddWeaponWithPowerups( &barrel, cent->currentState.powerups );
+			}
 		}
 	}
 /*
@@ -683,6 +742,16 @@ void CG_AddViewWeapon( playerState_t *ps ) {
 	float		fovOffset;
 	vec3_t		angles;
 	weaponInfo_t	*weapon;
+	float	cgFov = cg_fov.value;
+
+	if (cgFov < 1)
+	{
+		cgFov = 1;
+	}
+	if (cgFov > 97)
+	{
+		cgFov = 97;
+	}
 
 	if ( ps->persistant[PERS_TEAM] == TEAM_SPECTATOR ) {
 		return;
@@ -717,8 +786,8 @@ void CG_AddViewWeapon( playerState_t *ps ) {
 	}
 
 	// drop gun lower at higher fov
-	if ( cg_fov.integer > 90 ) {
-		fovOffset = -0.2 * ( cg_fov.integer - 90 );
+	if ( cgFov > 90 ) {
+		fovOffset = -0.2 * ( cgFov - 90 );
 	} else {
 		fovOffset = 0;
 	}
@@ -797,6 +866,11 @@ void CG_DrawIconBackground(void)
 	// don't display if dead
 	if ( cg.snap->ps.stats[STAT_HEALTH] <= 0 ) 
 	{
+		return;
+	}
+
+	if (cg_hudFiles.integer)
+	{ //simple hud
 		return;
 	}
 
@@ -965,7 +1039,6 @@ void CG_DrawWeaponSelect( void ) {
 	int				i;
 	int				bits;
 	int				count;
-	char			*name;
 	int				smallIconSize,bigIconSize;
 	int				holdX,x,y,pad;
 	int				sideLeftIconCnt,sideRightIconCnt;
@@ -1177,15 +1250,16 @@ void CG_DrawWeaponSelect( void ) {
 	// draw the selected name
 	if ( cg_weapons[ cg.weaponSelect ].item ) 
 	{
-		name = cg_weapons[ cg.weaponSelect ].item->pickup_name;
-		if ( name ) 
+		vec4_t			textColor = { .875f, .718f, .121f, 1.0f };
+		char	text[1024];
+		
+		if ( trap_SP_GetStringTextString( va("INGAME_%s",cg_weapons[ cg.weaponSelect ].item->classname), text, sizeof( text )))
 		{
-			vec4_t			textColor = { .875f, .718f, .121f, 1.0f };
-// Just doing this for now......
-//#ifdef _DEBUG
-			//CG_DrawProportionalString(320, y + 48, name, CG_CENTER | CG_SMALLFONT, colorTable[CT_ICON_BLUE]);
-			UI_DrawProportionalString(320, y+48, name, UI_CENTER|UI_SMALLFONT, textColor);
-//#endif
+			UI_DrawProportionalString(320, y+45, text, UI_CENTER|UI_SMALLFONT, textColor);
+		}
+		else
+		{
+			UI_DrawProportionalString(320, y+45, cg_weapons[ cg.weaponSelect ].item->classname, UI_CENTER|UI_SMALLFONT, textColor);
 		}
 	}
 

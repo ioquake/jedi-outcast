@@ -73,7 +73,6 @@ typedef enum
 	thinkF_MoveOwner,
 	thinkF_SolidifyOwner,
 	thinkF_cycleCamera,
-	thinkF_WaitNPCRespond,
 	thinkF_spawn_ammo_crystal_trigger,
 	thinkF_NPC_ShySpawn,
 	thinkF_func_wait_return_solid,
@@ -172,7 +171,6 @@ extern void trigger_cleared_fire	( gentity_t *self );
 extern void MoveOwner				( gentity_t *self );
 extern void SolidifyOwner			( gentity_t *self );
 extern void cycleCamera				( gentity_t *self );
-extern void WaitNPCRespond			( gentity_t *self );
 extern void spawn_ammo_crystal_trigger	( gentity_t *ent );
 extern void NPC_ShySpawn			( gentity_t *ent );
 extern void func_wait_return_solid	( gentity_t *self );
@@ -386,6 +384,7 @@ typedef enum
 	useF_jabba_cam_use,
 	useF_misc_use,
 	useF_pas_use,
+	useF_item_spawn_use,
 
 } useFunc_t;
 
@@ -463,6 +462,7 @@ extern void welder_use				( gentity_t *self, gentity_t *other, gentity_t *activa
 extern void jabba_cam_use			( gentity_t *self, gentity_t *other, gentity_t *activator );
 extern void misc_use				( gentity_t *self, gentity_t *other, gentity_t *activator );
 extern void pas_use					( gentity_t *self, gentity_t *other, gentity_t *activator );
+extern void item_spawn_use			( gentity_t *self, gentity_t *other, gentity_t *activator );
 
 //	void		(*pain)(gentity_t *self, gentity_t *attacker, int damage,int mod,int hitLoc);
 typedef enum

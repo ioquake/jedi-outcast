@@ -6,35 +6,7 @@
 // q_shared.h -- included first by ALL program modules.
 // A user mod should never modify this file
 
-#define	Q3_VERSION		"JK2MP: v0.56"
-
-
 #define MAX_TEAMNAME 32
-
-#ifdef _WIN32
-
-#pragma warning(disable : 4018)     // signed/unsigned mismatch
-#pragma warning(disable : 4032)
-#pragma warning(disable : 4051)
-#pragma warning(disable : 4057)		// slightly different base types
-#pragma warning(disable : 4100)		// unreferenced formal parameter
-#pragma warning(disable : 4115)
-#pragma warning(disable : 4125)		// decimal digit terminates octal escape sequence
-#pragma warning(disable : 4127)		// conditional expression is constant
-#pragma warning(disable : 4136)
-#pragma warning(disable : 4152)		// nonstandard extension, function/data pointer conversion in expression
-//#pragma warning(disable : 4201)
-//#pragma warning(disable : 4214)
-#pragma warning(disable : 4244)
-#pragma warning(disable : 4142)		// benign redefinition
-//#pragma warning(disable : 4305)		// truncation from const double to float
-//#pragma warning(disable : 4310)		// cast truncates constant value
-//#pragma warning(disable:  4505) 	// unreferenced local function has been removed
-#pragma warning(disable : 4514)
-#pragma warning(disable : 4702)		// unreachable code
-#pragma warning(disable : 4711)		// selected for automatic inline expansion
-#pragma warning(disable : 4220)		// varargs matches remaining parameters
-#endif
 
 #include "../qcommon/disablewarnings.h"
 
@@ -303,6 +275,8 @@ static float LittleFloat (const float *l) { return FloatSwap(l); }
 #endif
 
 #endif
+
+//=============================================================
 
 //=============================================================
 
@@ -1287,7 +1261,7 @@ typedef enum {
 //
 // per-level limits
 //
-#define	MAX_CLIENTS			64		// absolute limit
+#define	MAX_CLIENTS			32		// absolute limit
 #define MAX_LOCATIONS		64
 
 #define	GENTITYNUM_BITS		10		// don't need to send any more
@@ -1494,6 +1468,7 @@ typedef struct playerState_s {
 	int			damageYaw;
 	int			damagePitch;
 	int			damageCount;
+	int			damageType;
 
 	int			painTime;		// used for both game and client side to process the pain twitch - NOT sent across the network
 	int			painDirection;	// NOT sent across the network
@@ -1522,9 +1497,9 @@ typedef struct playerState_s {
 	qboolean	saberInFlight;
 	qboolean	saberActive;
 
-	short		saberMove;
-	short		saberBlocking;
-	short		saberBlocked;
+	int			saberMove;
+	int			saberBlocking;
+	int			saberBlocked;
 
 	int			saberLockTime;
 	int			saberLockEnemy;
@@ -1886,7 +1861,7 @@ typedef struct entityState_s {
 
 	qboolean	saberInFlight;
 	int			saberEntityNum;
-	short		saberMove;
+	int			saberMove;
 	int			forcePowersActive;
 
 	qboolean	isJediMaster;
@@ -1947,10 +1922,10 @@ typedef struct qtime_s {
 
 // server browser sources
 #define AS_LOCAL			0
-#define AS_MPLAYER		1
-#define AS_GLOBAL			2
-#define AS_FAVORITES	3
+#define AS_GLOBAL			1
+#define AS_FAVORITES		2
 
+#define AS_MPLAYER			3 // (Obsolete)
 
 // cinematic states
 typedef enum {
@@ -2071,6 +2046,7 @@ enum {
 	FONT_MEDIUM,
 	FONT_LARGE
 };
+
 
 
 #endif	// __Q_SHARED_H

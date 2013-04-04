@@ -8,6 +8,8 @@
 	#include "FxScheduler.h"
 #endif
 
+#include <set>
+
 void FX_AddPrimitive( CEffect **pEffect, CCloud *effectCloud, int killTime );
 
 // Helper function
@@ -90,8 +92,11 @@ CCloud::CCloud() :
 	//mRefEnt.reType = RT_ENT_CHAIN;
 }
 
+extern set<CCloud *> OutstandClouds;
+
 CCloud::~CCloud()
 {
+	OutstandClouds.erase(this);
 	Die();
 }
 
@@ -326,7 +331,7 @@ bool CParticle::Cull()
 	float len = VectorLengthSquared( dir );
 
 	// Can't be too close
-	if ( len < 24 * 24 )
+	if ( len < 12 * 12 )
 	{
 		return true;
 	}
@@ -846,7 +851,7 @@ bool COrientedParticle::Cull()
 	float len = VectorLengthSquared( dir );
 
 	// Can't be too close
-	if ( len < 24 * 24 )
+	if ( len < 16 * 16 )
 	{
 		return true;
 	}

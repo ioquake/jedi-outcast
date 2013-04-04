@@ -16,6 +16,7 @@
 #define LEFT_ARM_HEALTH 40
 #define RIGHT_ARM_HEALTH 40
 
+extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
 /*
 -------------------------
 NPC_ATST_Precache
@@ -23,15 +24,39 @@ NPC_ATST_Precache
 */
 void NPC_ATST_Precache(void)
 {
+	G_SoundIndex( "sound/chars/atst/atst_damaged1" );
+	G_SoundIndex( "sound/chars/atst/atst_damaged2" );
+
 	RegisterItem( FindItemForWeapon( WP_ATST_MAIN ));	//precache the weapon
 	RegisterItem( FindItemForWeapon( WP_BOWCASTER ));	//precache the weapon
 	RegisterItem( FindItemForWeapon( WP_ROCKET_LAUNCHER ));	//precache the weapon
 
-	G_EffectIndex( "mouseexplosion1" );
-	G_EffectIndex( "smaller_chunks" );
+	G_EffectIndex( "env/med_explode2" );
+//	G_EffectIndex( "smaller_chunks" );
 	G_EffectIndex( "blaster/smoke_bolton" );
 	G_EffectIndex( "droidexplosion1" );
 }
+
+//-----------------------------------------------------------------
+static void ATST_PlayEffect( gentity_t *self, const int boltID, const char *fx )
+{
+	if ( boltID >=0 && fx && fx[0] )
+	{
+		mdxaBone_t	boltMatrix;
+		vec3_t		org, dir;
+
+		gi.G2API_GetBoltMatrix( self->ghoul2, self->playerModel, 
+					boltID,
+					&boltMatrix, self->currentAngles, self->currentOrigin, (cg.time?cg.time:level.time),
+					NULL, self->s.modelScale );
+
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, org );
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, dir );
+
+		G_PlayEffect( fx, org, dir );
+	}
+}
+
 /*
 -------------------------
 G_ATSTCheckPain
@@ -44,6 +69,15 @@ void G_ATSTCheckPain( gentity_t *self, gentity_t *other, vec3_t point, int damag
 {
 	int newBolt;
 	
+	if ( rand() & 1 )
+	{
+		G_SoundOnEnt( self, CHAN_LESS_ATTEN, "sound/chars/atst/atst_damaged1" );
+	}
+	else
+	{
+		G_SoundOnEnt( self, CHAN_LESS_ATTEN, "sound/chars/atst/atst_damaged2" );
+	}
+
 	if ((hitLoc==HL_ARM_LT) && (self->locationDamage[HL_ARM_LT] > LEFT_ARM_HEALTH))
 	{
 		if (self->locationDamage[hitLoc] >= LEFT_ARM_HEALTH)	// Blow it up?
@@ -51,8 +85,8 @@ void G_ATSTCheckPain( gentity_t *self, gentity_t *other, vec3_t point, int damag
 			newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*flash3" );
 			if ( newBolt != -1 )
 			{
-				G_PlayEffect( "small_chunks", self->playerModel, self->genericBolt1, self->s.number);
-				G_PlayEffect( "mouseexplosion1", self->playerModel, self->genericBolt1, self->s.number);
+//				G_PlayEffect( "small_chunks", self->playerModel, self->genericBolt1, self->s.number);
+				ATST_PlayEffect( self, self->genericBolt1, "env/med_explode2" );
 				G_PlayEffect( "blaster/smoke_bolton", self->playerModel, newBolt, self->s.number);
 			}
 
@@ -66,8 +100,8 @@ void G_ATSTCheckPain( gentity_t *self, gentity_t *other, vec3_t point, int damag
 			newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*flash4" );
 			if ( newBolt != -1 )
 			{
-				G_PlayEffect( "small_chunks", self->playerModel, self->genericBolt2, self->s.number);
-				G_PlayEffect( "mouseexplosion1", self->playerModel, self->genericBolt2, self->s.number);
+//				G_PlayEffect( "small_chunks", self->playerModel, self->genericBolt2, self->s.number);
+				ATST_PlayEffect( self, self->genericBolt2, "env/med_explode2" );
 				G_PlayEffect( "blaster/smoke_bolton", self->playerModel, newBolt, self->s.number);
 			}
 
@@ -113,7 +147,7 @@ ATST_Ranged
 void ATST_Ranged( qboolean visible, qboolean advance, qboolean altAttack )
 {
 
-	if ( TIMER_Done( NPC, "atkDelay" ) )	// Attack?
+	if ( TIMER_Done( NPC, "atkDelay" ) && visible )	// Attack?
 	{
 		TIMER_Set( NPC, "atkDelay", Q_irand( 500, 3000 ) );
 
@@ -148,6 +182,8 @@ void ATST_Attack( void )
 		NPC->enemy = NULL;
 		return;
 	}
+
+	NPC_FaceEnemy( qtrue );
 
 	// Rate our distance to the target, and our visibilty
 	float		distance	= (int) DistanceHorizontalSquared( NPC->currentOrigin, NPC->enemy->currentOrigin );	

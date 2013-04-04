@@ -18,6 +18,7 @@ static vec3_t NPCDEBUG_BLUE = {0.0, 0.0, 1.0};
 extern void CG_Cube( vec3_t mins, vec3_t maxs, vec3_t color, float alpha );
 extern void NPC_CheckGetNewWeapon( void );
 extern qboolean PM_InKnockDown( playerState_t *ps );
+extern void NPC_AimAdjust( int change );
 /*
  void NPC_BSAdvanceFight (void)
 
@@ -192,7 +193,6 @@ void BeamOut (gentity_t *self)
 {
 //	gentity_t *tent = G_Spawn();
 	
-	self->client->ps.powerups[PW_QUAD] = level.time + 2000;
 /*
 	tent->owner = self;
 	tent->think = MakeOwnerInvis;
@@ -547,6 +547,46 @@ void NPC_BSFollowLeader (void)
 		{//just found one
 			NPCInfo->enemyCheckDebounceTime = level.time + Q_irand( 3000, 10000 );
 		}
+		else
+		{
+			if ( !(NPCInfo->scriptFlags&SCF_IGNORE_ALERTS) )
+			{
+				int eventID = NPC_CheckAlertEvents( qtrue, qtrue );
+				if ( level.alertEvents[eventID].level >= AEL_SUSPICIOUS && (NPCInfo->scriptFlags&SCF_LOOK_FOR_ENEMIES) )
+				{
+					NPCInfo->lastAlertID = level.alertEvents[eventID].ID;
+					if ( !level.alertEvents[eventID].owner || 
+						!level.alertEvents[eventID].owner->client || 
+						level.alertEvents[eventID].owner->health <= 0 ||
+						level.alertEvents[eventID].owner->client->playerTeam != NPC->client->enemyTeam )
+					{//not an enemy
+					}
+					else
+					{
+						//FIXME: what if can't actually see enemy, don't know where he is... should we make them just become very alert and start looking for him?  Or just let combat AI handle this... (act as if you lost him)
+						G_SetEnemy( NPC, level.alertEvents[eventID].owner );
+						NPCInfo->enemyCheckDebounceTime = level.time + Q_irand( 3000, 10000 );
+						NPCInfo->enemyLastSeenTime = level.time;
+						TIMER_Set( NPC, "attackDelay", Q_irand( 500, 1000 ) );
+					}
+				}
+
+			}
+		}
+		if ( !NPC->enemy )
+		{
+			if ( NPC->client->leader 
+				&& NPC->client->leader->enemy 
+				&& NPC->client->leader->enemy != NPC
+				&& ( (NPC->client->leader->enemy->client&&NPC->client->leader->enemy->client->playerTeam==NPC->client->enemyTeam)
+					||(NPC->client->leader->enemy->svFlags&SVF_NONNPC_ENEMY&&NPC->client->leader->enemy->noDamageTeam==NPC->client->enemyTeam) )
+				&& NPC->client->leader->enemy->health > 0 )
+			{
+				G_SetEnemy( NPC, NPC->client->leader->enemy );
+				NPCInfo->enemyCheckDebounceTime = level.time + Q_irand( 3000, 10000 );
+				NPCInfo->enemyLastSeenTime = level.time;
+			}
+		}
 	}
 	else 
 	{
@@ -598,10 +638,23 @@ void NPC_BSFollowLeader (void)
 
 			if ( enemyVisibility >= VIS_SHOOT )
 			{//shoot
-				WeaponThink( qtrue );
+				NPC_AimAdjust( 2 );
+				if ( NPC_GetHFOVPercentage( NPC->enemy->currentOrigin, NPC->currentOrigin, NPC->client->ps.viewangles, NPCInfo->stats.hfov ) > 0.6f 
+					&& NPC_GetHFOVPercentage( NPC->enemy->currentOrigin, NPC->currentOrigin, NPC->client->ps.viewangles, NPCInfo->stats.vfov ) > 0.5f )
+				{//actually withing our front cone
+					WeaponThink( qtrue );
+				}
+			}
+			else
+			{
+				NPC_AimAdjust( 1 );
 			}
 			
 			//NPC_CheckCanAttack(1.0, qfalse);
+		}
+		else
+		{
+			NPC_AimAdjust( -1 );
 		}
 	}
 	else
@@ -1255,6 +1308,10 @@ extern void ChangeWeapon( gentity_t *ent, int newWeapon );
 extern int g_crosshairEntNum;
 void NPC_Surrender( void )
 {//FIXME: say "don't shoot!" if we weren't already surrendering
+	if ( NPC->client->ps.weaponTime || PM_InKnockDown( &NPC->client->ps ) )
+	{
+		return;
+	}
 	if ( NPC->s.weapon != WP_NONE && 
 		NPC->s.weapon != WP_MELEE &&
 		NPC->s.weapon != WP_SABER )
@@ -1572,7 +1629,6 @@ void G_StartFlee( gentity_t *self, gentity_t *enemy, vec3_t dangerPoint, int dan
 	RestoreNPCGlobals();
 }
 
-extern void NPC_AimAdjust( int change );
 void NPC_BSEmplaced( void )
 {
 	//Don't do anything if we're hurt

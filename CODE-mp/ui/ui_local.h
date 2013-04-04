@@ -18,6 +18,8 @@ extern vmCvar_t	ui_ffa_timelimit;
 extern vmCvar_t	ui_tourney_fraglimit;
 extern vmCvar_t	ui_tourney_timelimit;
 
+extern vmCvar_t ui_selectedModelIndex;
+
 extern vmCvar_t	ui_team_fraglimit;
 extern vmCvar_t	ui_team_timelimit;
 extern vmCvar_t	ui_team_friendly;
@@ -123,7 +125,7 @@ extern vmCvar_t ui_serverStatusTimeOut;
 #define	MAX_EDIT_LINE			256
 
 #define MAX_MENUDEPTH			8
-#define MAX_MENUITEMS			128
+#define MAX_MENUITEMS			256
 
 #define MAX_FORCE_CONFIGS		128
 
@@ -333,6 +335,7 @@ extern sfxHandle_t	MenuField_Key( menufield_s* m, int* key );
 //
 // ui_main.c
 //
+qboolean UI_FeederSelection(float feederID, int index);
 void UI_Report();
 void UI_Load();
 void UI_LoadMenus(const char *menuFile, qboolean reset);
@@ -341,6 +344,7 @@ int UI_AdjustTimeByGame(int time);
 void UI_ShowPostGame(qboolean newHigh);
 void UI_ClearScores();
 void UI_LoadArenas(void);
+void UI_LoadForceConfig_List( void );
 
 //
 // ui_menu.c
@@ -510,8 +514,8 @@ typedef struct {
 	qhandle_t		torsoSkin;
 	lerpFrame_t		torso;
 
-	qhandle_t		headModel;
-	qhandle_t		headSkin;
+//	qhandle_t		headModel;
+//	qhandle_t		headSkin;
 
 	animation_t		animations[MAX_TOTALANIMATIONS];
 
@@ -549,10 +553,10 @@ typedef struct {
 	int				realWeapon;
 } playerInfo_t;
 
-void UI_DrawPlayer( float x, float y, float w, float h, playerInfo_t *pi, int time );
-void UI_PlayerInfo_SetModel( playerInfo_t *pi, const char *model, const char *headmodel, char *teamName );
-void UI_PlayerInfo_SetInfo( playerInfo_t *pi, int legsAnim, int torsoAnim, vec3_t viewAngles, vec3_t moveAngles, weapon_t weaponNum, qboolean chat );
-qboolean UI_RegisterClientModelname( playerInfo_t *pi, const char *modelSkinName , const char *headName, const char *teamName);
+//void UI_DrawPlayer( float x, float y, float w, float h, playerInfo_t *pi, int time );
+//void UI_PlayerInfo_SetModel( playerInfo_t *pi, const char *model, const char *headmodel, char *teamName );
+//void UI_PlayerInfo_SetInfo( playerInfo_t *pi, int legsAnim, int torsoAnim, vec3_t viewAngles, vec3_t moveAngles, weapon_t weaponNum, qboolean chat );
+//qboolean UI_RegisterClientModelname( playerInfo_t *pi, const char *modelSkinName , const char *headName, const char *teamName);
 
 //
 // ui_atoms.c
@@ -827,6 +831,9 @@ typedef struct {
 	int				forceConfigCount;
 	int				forceConfigSelected;
 	char			forceConfigNames[MAX_FORCE_CONFIGS][128];
+	qboolean		forceConfigSide[MAX_FORCE_CONFIGS]; //true if it's a light side config, false if dark side
+	int				forceConfigDarkIndexBegin; //mark the index number dark configs start at
+	int				forceConfigLightIndexBegin; //mark the index number light configs start at
 
 	int effectsColor;
 

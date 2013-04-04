@@ -409,6 +409,8 @@ vmCvar_t	cg_simpleItems;
 vmCvar_t	cg_fov;
 vmCvar_t	cg_zoomFov;
 
+vmCvar_t	cg_swingAngles;
+
 vmCvar_t	cg_saberContact;
 vmCvar_t	cg_saberTrail;
 
@@ -485,6 +487,8 @@ vmCvar_t	cg_singlePlayerActive;
 vmCvar_t	cg_recordSPDemo;
 vmCvar_t	cg_recordSPDemoName;
 
+vmCvar_t	ui_myteam;
+
 typedef struct {
 	vmCvar_t	*vmCvar;
 	char		*cvarName;
@@ -547,6 +551,8 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_tracerWidth, "cg_tracerwidth", "1", CVAR_CHEAT },
 	{ &cg_tracerLength, "cg_tracerlength", "100", CVAR_CHEAT },
 
+	{ &cg_swingAngles, "cg_swingAngles", "1", 0 },
+
 	{ &cg_saberContact, "cg_saberContact", "1", 0 },
 	{ &cg_saberTrail, "cg_saberTrail", "1", 0 },
 
@@ -562,7 +568,7 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_thirdPersonAngle, "cg_thirdPersonAngle", "0", CVAR_CHEAT },
 	{ &cg_thirdPersonPitchOffset, "cg_thirdPersonPitchOffset", "0", CVAR_CHEAT },
 	{ &cg_thirdPersonVertOffset, "cg_thirdPersonVertOffset", "16", CVAR_CHEAT },
-	{ &cg_thirdPersonCameraDamp, "cg_thirdPersonCameraDamp", "0.3", CVAR_CHEAT },
+	{ &cg_thirdPersonCameraDamp, "cg_thirdPersonCameraDamp", "0.3", 0 },
 	{ &cg_thirdPersonTargetDamp, "cg_thirdPersonTargetDamp", "0.5", CVAR_CHEAT },
 	
 	{ &cg_thirdPersonHorzOffset, "cg_thirdPersonHorzOffset", "0", CVAR_CHEAT },
@@ -592,8 +598,8 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_currentSelectedPlayer, "cg_currentSelectedPlayer", "0", CVAR_ARCHIVE},
 	{ &cg_currentSelectedPlayerName, "cg_currentSelectedPlayerName", "", CVAR_ARCHIVE},
 	{ &cg_singlePlayer, "ui_singlePlayerActive", "0", CVAR_USERINFO},
-	{ &cg_enableDust, "g_enableDust", "0", CVAR_SERVERINFO},
-	{ &cg_enableBreath, "g_enableBreath", "0", CVAR_SERVERINFO},
+	{ &cg_enableDust, "g_enableDust", "0", 0},
+	{ &cg_enableBreath, "g_enableBreath", "0", 0},
 	{ &cg_singlePlayerActive, "ui_singlePlayerActive", "0", CVAR_USERINFO},
 	{ &cg_recordSPDemo, "ui_recordSPDemo", "0", CVAR_ARCHIVE},
 	{ &cg_recordSPDemoName, "ui_recordSPDemoName", "", CVAR_ARCHIVE},
@@ -604,6 +610,7 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_timescaleFadeSpeed, "cg_timescaleFadeSpeed", "0", 0},
 	{ &cg_timescale, "timescale", "1", 0},
 	{ &cg_scorePlum, "cg_scorePlums", "1", CVAR_USERINFO | CVAR_ARCHIVE},
+	{ &cg_hudFiles, "cg_hudFiles", "0", CVAR_USERINFO | CVAR_ARCHIVE},
 	{ &cg_smoothClients, "cg_smoothClients", "0", CVAR_USERINFO | CVAR_ARCHIVE},
 	{ &cg_cameraMode, "com_cameraMode", "0", CVAR_CHEAT},
 
@@ -614,6 +621,9 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_smallFont, "ui_smallFont", "0.25", CVAR_ARCHIVE},
 	{ &cg_bigFont, "ui_bigFont", "0.4", CVAR_ARCHIVE},
 	{ &cg_trueLightning, "cg_trueLightning", "0.0", CVAR_ARCHIVE},
+
+	{ &ui_myteam, "ui_myteam", "0", CVAR_ROM|CVAR_INTERNAL},
+
 //	{ &cg_pmove_fixed, "cg_pmove_fixed", "0", CVAR_USERINFO | CVAR_ARCHIVE }
 /*
 Ghoul2 Insert Start
@@ -648,15 +658,16 @@ void CG_RegisterCvars( void ) {
 	forceModelModificationCount = cg_forceModel.modificationCount;
 
 	trap_Cvar_Register(NULL, "model", DEFAULT_MODEL, CVAR_USERINFO | CVAR_ARCHIVE );
-	trap_Cvar_Register(NULL, "headmodel", DEFAULT_MODEL, CVAR_USERINFO | CVAR_ARCHIVE );
+	//trap_Cvar_Register(NULL, "headmodel", DEFAULT_MODEL, CVAR_USERINFO | CVAR_ARCHIVE );
 	trap_Cvar_Register(NULL, "team_model", DEFAULT_TEAM_MODEL, CVAR_USERINFO | CVAR_ARCHIVE );
-	trap_Cvar_Register(NULL, "team_headmodel", DEFAULT_TEAM_HEAD, CVAR_USERINFO | CVAR_ARCHIVE );
+	//trap_Cvar_Register(NULL, "team_headmodel", DEFAULT_TEAM_HEAD, CVAR_USERINFO | CVAR_ARCHIVE );
 	trap_Cvar_Register(NULL, "forcepowers", DEFAULT_FORCEPOWERS, CVAR_USERINFO | CVAR_ARCHIVE );
 
 	// Cvars uses for transferring data between client and server
 	trap_Cvar_Register(NULL, "ui_about_gametype",		"0", CVAR_ROM|CVAR_INTERNAL );
 	trap_Cvar_Register(NULL, "ui_about_fraglimit",		"0", CVAR_ROM|CVAR_INTERNAL );
 	trap_Cvar_Register(NULL, "ui_about_capturelimit",	"0", CVAR_ROM|CVAR_INTERNAL );
+	trap_Cvar_Register(NULL, "ui_about_duellimit",		"0", CVAR_ROM|CVAR_INTERNAL );
 	trap_Cvar_Register(NULL, "ui_about_timelimit",		"0", CVAR_ROM|CVAR_INTERNAL );
 	trap_Cvar_Register(NULL, "ui_about_maxclients",		"0", CVAR_ROM|CVAR_INTERNAL );
 	trap_Cvar_Register(NULL, "ui_about_dmflags",		"0", CVAR_ROM|CVAR_INTERNAL );
@@ -940,9 +951,10 @@ static void CG_RegisterSounds( void ) {
 	trap_S_RegisterSound( "sound/weapons/saber/saberhitwall3" );
 	trap_S_RegisterSound("sound/weapons/saber/saberhit.wav");
 
+	cgs.media.teamHealSound = trap_S_RegisterSound("sound/weapons/force/teamheal.wav");
+	cgs.media.teamRegenSound = trap_S_RegisterSound("sound/weapons/force/teamforce.wav");
+
 	trap_S_RegisterSound("sound/weapons/force/heal.wav");
-	trap_S_RegisterSound("sound/weapons/force/teamheal.wav");
-	trap_S_RegisterSound("sound/weapons/force/teamforce.wav");
 	trap_S_RegisterSound("sound/weapons/force/speed.wav");
 	trap_S_RegisterSound("sound/weapons/force/see.wav");
 	trap_S_RegisterSound("sound/weapons/force/rage.wav");
@@ -950,12 +962,10 @@ static void CG_RegisterSounds( void ) {
 	trap_S_RegisterSound("sound/weapons/force/lightninghit.wav");
 	trap_S_RegisterSound("sound/weapons/force/drain.wav");
 	trap_S_RegisterSound("sound/weapons/force/jumpbuild.wav");
-	trap_S_RegisterSound("sound/weapons/force/jump.wav");
 	trap_S_RegisterSound("sound/weapons/force/distract.wav");
 	trap_S_RegisterSound("sound/weapons/force/distractstop.wav");
 	trap_S_RegisterSound("sound/weapons/force/pull.wav");
 	trap_S_RegisterSound("sound/weapons/force/push.wav");
-	trap_S_RegisterSound("sound/weapons/force/grip.mp3");
 
 	if (cg_buildScript.integer)
 	{
@@ -982,7 +992,8 @@ static void CG_RegisterSounds( void ) {
 	trap_S_RegisterSound("sound/chars/turret/startup.wav");
 	trap_S_RegisterSound("sound/chars/turret/shutdown.wav");
 	trap_S_RegisterSound("sound/chars/turret/move.wav");
-	trap_S_RegisterSound("sound/player/suitenergy.wav");
+	trap_S_RegisterSound("sound/player/pickuphealth.wav");
+	trap_S_RegisterSound("sound/player/pickupshield.wav");
 
 	trap_S_RegisterSound("sound/effects/glassbreak1.wav");
 
@@ -990,6 +1001,13 @@ static void CG_RegisterSounds( void ) {
 	trap_S_RegisterSound( "sound/weapons/rocket/lock.wav" );
 
 	trap_S_RegisterSound("sound/weapons/force/speedloop.wav");
+
+	trap_S_RegisterSound("sound/weapons/force/protecthit.mp3"); //PDSOUND_PROTECTHIT
+	trap_S_RegisterSound("sound/weapons/force/protect.mp3"); //PDSOUND_PROTECT
+	trap_S_RegisterSound("sound/weapons/force/absorbhit.mp3"); //PDSOUND_ABSORBHIT
+	trap_S_RegisterSound("sound/weapons/force/absorb.mp3"); //PDSOUND_ABSORB
+	trap_S_RegisterSound("sound/weapons/force/jump.mp3"); //PDSOUND_FORCEJUMP
+	trap_S_RegisterSound("sound/weapons/force/grip.mp3"); //PDSOUND_FORCEGRIP
 
 	if ( cgs.gametype >= GT_TEAM || cg_buildScript.integer ) {
 
@@ -1015,6 +1033,8 @@ static void CG_RegisterSounds( void ) {
 			cgs.media.blueTookYsalSound = trap_S_RegisterSound( "sound/chars/mothma/misc/40MOM047" );
 		}
 	}
+
+	cgs.media.drainSound = trap_S_RegisterSound("sound/weapons/force/drained.mp3");
 
 	cgs.media.happyMusic = trap_S_RegisterSound("music/goodsmall.mp3");
 	cgs.media.dramaticFailure = trap_S_RegisterSound("music/badsmall.mp3");
@@ -1132,6 +1152,7 @@ static void CG_RegisterSounds( void ) {
 	cg.loadLCARSStage = 2;
 
 	// FIXME: only needed with item
+	cgs.media.deploySeeker = trap_S_RegisterSound ("sound/chars/seeker/misc/hiss");
 	cgs.media.medkitSound = trap_S_RegisterSound ("sound/items/use_bacta.wav");
 	
 	cgs.media.winnerSound = trap_S_RegisterSound( "sound/chars/mothma/misc/40MOM006" );
@@ -1318,6 +1339,8 @@ static void CG_RegisterGraphics( void ) {
 
 	cgs.media.playerShieldDamage = trap_R_RegisterShader("gfx/misc/personalshield");
 	cgs.media.forceSightBubble = trap_R_RegisterShader("gfx/misc/sightbubble");
+	cgs.media.forceShell = trap_R_RegisterShader("powerups/forceshell");
+	cgs.media.sightShell = trap_R_RegisterShader("powerups/sightshell");
 
 	cgs.media.itemHoloModel = trap_R_RegisterModel("models/map_objects/mp/holo.md3");
 
@@ -1353,19 +1376,16 @@ static void CG_RegisterGraphics( void ) {
 			cgs.media.blueFlagModel = trap_R_RegisterModel( "models/flags/b_flag_ysal.md3" );
 		}
 
-		trap_R_RegisterShader( "gfx/hud/mpi_rflag_x" );
-		trap_R_RegisterShader( "gfx/hud/mpi_bflag_x" );
+		trap_R_RegisterShaderNoMip( "gfx/hud/mpi_rflag_x" );
+		trap_R_RegisterShaderNoMip( "gfx/hud/mpi_bflag_x" );
 
-		trap_R_RegisterShader( "gfx/hud/mpi_rflag_ys" );
-		trap_R_RegisterShader( "gfx/hud/mpi_bflag_ys" );
+		trap_R_RegisterShaderNoMip( "gfx/hud/mpi_rflag_ys" );
+		trap_R_RegisterShaderNoMip( "gfx/hud/mpi_bflag_ys" );
 
-		trap_R_RegisterShader( "gfx/hud/mpi_rflag" );
-		trap_R_RegisterShader( "gfx/hud/mpi_bflag" );
+		trap_R_RegisterShaderNoMip( "gfx/hud/mpi_rflag" );
+		trap_R_RegisterShaderNoMip( "gfx/hud/mpi_bflag" );
 
-		if (cg_buildScript.integer)
-		{
-			trap_R_RegisterShader("gfx/2d/net.tga");
-		}
+		trap_R_RegisterShaderNoMip("gfx/2d/net.tga");
 
 		cgs.media.flagPoleModel = trap_R_RegisterModel( "models/flag2/flagpole.md3" );
 		cgs.media.flagFlapModel = trap_R_RegisterModel( "models/flag2/flagflap3.md3" );
@@ -1394,11 +1414,23 @@ static void CG_RegisterGraphics( void ) {
 		cgs.media.redQuadShader = trap_R_RegisterShader("powerups/blueflag" );
 		cgs.media.teamStatusBar = trap_R_RegisterShader( "gfx/2d/colorbar.tga" );
 	}
+	else if ( cgs.gametype == GT_JEDIMASTER )
+	{
+		cgs.media.teamRedShader = trap_R_RegisterShader( "sprites/team_red" );
+	}
 
 	cgs.media.armorModel = 0;//trap_R_RegisterModel( "models/powerups/armor/armor_yel.md3" );
 	cgs.media.armorIcon  = 0;//trap_R_RegisterShaderNoMip( "icons/iconr_yellow" );
 
 	cgs.media.heartShader			= trap_R_RegisterShaderNoMip( "ui/assets/statusbar/selectedhealth.tga" );
+
+	cgs.media.ysaliredShader		= trap_R_RegisterShader( "powerups/ysaliredshell");
+	cgs.media.ysaliblueShader		= trap_R_RegisterShader( "powerups/ysaliblueshell");
+	cgs.media.ysalimariShader		= trap_R_RegisterShader( "powerups/ysalimarishell");
+	cgs.media.boonShader			= trap_R_RegisterShader( "powerups/boonshell");
+	cgs.media.endarkenmentShader	= trap_R_RegisterShader( "powerups/endarkenmentshell");
+	cgs.media.enlightenmentShader	= trap_R_RegisterShader( "powerups/enlightenmentshell");
+	cgs.media.invulnerabilityShader = trap_R_RegisterShader( "powerups/invulnerabilityshell");
 
 #ifdef JK2AWARDS
 	cgs.media.medalImpressive		= trap_R_RegisterShaderNoMip( "medal_impressive" );
@@ -1454,7 +1486,10 @@ Ghoul2 Insert End
 	cgs.media.shadowMarkShader	= trap_R_RegisterShader( "markShadow" );
 	cgs.media.wakeMarkShader	= trap_R_RegisterShader( "wake" );
 	cgs.media.bloodMarkShader	= trap_R_RegisterShader( "bloodMark" );
-	cgs.media.viewPainShader	= trap_R_RegisterShader( "gfx/misc/borgeyeflare" );
+
+	cgs.media.viewPainShader					= trap_R_RegisterShader( "gfx/misc/borgeyeflare" );
+	cgs.media.viewPainShader_Shields			= trap_R_RegisterShader( "gfx/mp/dmgshader_shields" );
+	cgs.media.viewPainShader_ShieldsAndHealth	= trap_R_RegisterShader( "gfx/mp/dmgshader_shieldsandhealth" );
 
 	// register the inline models
 	cgs.numInlineModels = trap_CM_NumInlineModels();
@@ -1545,9 +1580,12 @@ Ghoul2 Insert End
 
 const char *CG_GetStripEdString(char *refSection, char *refName)
 {
-	static char text[1024]={0};
-	trap_SP_GetStringTextString(va("%s_%s", refSection, refName), text, sizeof(text));
-	return text;
+	static char text[2][1024]={0};	//just incase it's nested
+	static int		index = 0;
+
+	index ^= 1;
+	trap_SP_GetStringTextString(va("%s_%s", refSection, refName), text[index], sizeof(text[0]));
+	return text[index];
 }
 
 
@@ -2057,7 +2095,7 @@ static qhandle_t CG_FeederItemImage(float feederID, int index) {
 	return 0;
 }
 
-static void CG_FeederSelection(float feederID, int index) {
+static qboolean CG_FeederSelection(float feederID, int index) {
 	if ( cgs.gametype >= GT_TEAM ) {
 		int i, count;
 		int team = (feederID == FEEDER_REDTEAM_LIST) ? TEAM_RED : TEAM_BLUE;
@@ -2073,6 +2111,8 @@ static void CG_FeederSelection(float feederID, int index) {
 	} else {
 		cg.selectedScore = index;
 	}
+
+	return qtrue;
 }
 
 static float CG_Cvar_Get(const char *cvar) {
@@ -2159,6 +2199,7 @@ void CG_LoadHudMenu()
 	cgDC.getValue = &CG_GetValue;
 	cgDC.ownerDrawVisible = &CG_OwnerDrawVisible;
 	cgDC.runScript = &CG_RunMenuScript;
+	cgDC.deferScript = &CG_DeferMenuScript;
 	cgDC.getTeamColor = &CG_GetTeamColor;
 	cgDC.setCVar = trap_Cvar_Set;
 	cgDC.getCVarString = trap_Cvar_VariableStringBuffer;
@@ -2345,6 +2386,7 @@ Ghoul2 Insert End
 	cgs.media.whiteShader		= trap_R_RegisterShader( "white" );
 
 	cgs.media.loadBarLED		= trap_R_RegisterShaderNoMip( "gfx/hud/load_tick" );
+	cgs.media.loadBarLEDCap		= trap_R_RegisterShaderNoMip( "gfx/hud/load_tick_cap" );
 	cgs.media.loadBarLEDSurround= trap_R_RegisterShaderNoMip( "gfx/hud/mp_levelload" );
 
 	//rww - precache HUD weapon icons here
@@ -2438,9 +2480,9 @@ Ghoul2 Insert End
 	cgs.media.HUDLeftStatic		= cgs.media.HUDLeftFrame;//trap_R_RegisterShaderNoMip( "gfx/hud/static_test" );
 	cgs.media.HUDLeft			= cgs.media.HUDInnerLeft;//trap_R_RegisterShaderNoMip( "gfx/hud/hudleft" );
 
-	cgs.media.HUDSaberStyle1	= trap_R_RegisterShader( "gfx/hud/saber_styles1" );
-	cgs.media.HUDSaberStyle2	= trap_R_RegisterShader( "gfx/hud/saber_styles2" );
-	cgs.media.HUDSaberStyle3	= trap_R_RegisterShader( "gfx/hud/saber_styles3" );
+	cgs.media.HUDSaberStyle1	= trap_R_RegisterShader( "gfx/hud/saber_stylesFast"   );
+	cgs.media.HUDSaberStyle2	= trap_R_RegisterShader( "gfx/hud/saber_stylesMed"	  );
+	cgs.media.HUDSaberStyle3	= trap_R_RegisterShader( "gfx/hud/saber_stylesStrong" );
 
 	cgs.media.HUDRightFrame		= trap_R_RegisterShaderNoMip("gfx/hud/hudrightframe");
 	cgs.media.HUDInnerRight		= trap_R_RegisterShaderNoMip( "gfx/hud/hudright_innerframe" );

@@ -202,13 +202,15 @@ void CG_RegisterWeapon( int weaponNum ) {
 		theFxScheduler.RegisterEffect( "saber/fizz" );
 		theFxScheduler.RegisterEffect( "saber/boil" );
 
+		cgs.effects.forceHeal			= theFxScheduler.RegisterEffect( "force/heal" );
+		cgs.effects.forceInvincibility	= theFxScheduler.RegisterEffect( "force/invin" );
 		cgs.effects.forceConfusion		= theFxScheduler.RegisterEffect( "force/confusion" );
 		cgs.effects.forceLightning		= theFxScheduler.RegisterEffect( "force/lightning" );
 		cgs.effects.forceLightningWide	= theFxScheduler.RegisterEffect( "force/lightningwide" );
 
-		cgs.media.HUDSaberStyle1 = cgi_R_RegisterShader( "gfx/hud/saber_styles1" );
-		cgs.media.HUDSaberStyle2 = cgi_R_RegisterShader( "gfx/hud/saber_styles2" );
-		cgs.media.HUDSaberStyle3 = cgi_R_RegisterShader( "gfx/hud/saber_styles3" );
+		cgs.media.HUDSaberStyleFast		= cgi_R_RegisterShader( "gfx/hud/saber_stylesFast" );
+		cgs.media.HUDSaberStyleMed		= cgi_R_RegisterShader( "gfx/hud/saber_stylesMed" );
+		cgs.media.HUDSaberStyleStrong	= cgi_R_RegisterShader( "gfx/hud/saber_stylesStrong" );
 
 		//saber sounds
 		cgi_S_RegisterSound( "sound/weapons/saber/saberon.wav" );
@@ -298,7 +300,7 @@ void CG_RegisterWeapon( int weaponNum ) {
 		cgs.media.purpleSaberGlowShader		= cgi_R_RegisterShader( "gfx/effects/sabers/purple_glow" );
 		cgs.media.purpleSaberCoreShader		= cgi_R_RegisterShader( "gfx/effects/sabers/purple_line" );
 
-		cgs.media.forceCoronaShader			= cgi_R_RegisterShaderNoMip( "gfx/2d/corona" );
+		cgs.media.forceCoronaShader			= cgi_R_RegisterShaderNoMip( "gfx/hud/force_swirl" );
 		break;
 
 	case WP_BRYAR_PISTOL:
@@ -404,9 +406,6 @@ void CG_RegisterWeapon( int weaponNum ) {
 
 //		theFxScheduler.RegisterEffect( "flechette/explosion" );
 		theFxScheduler.RegisterEffect( "flechette/alt_blow" );
-
-		cgi_S_RegisterSound( "sound/weapons/flechette/warning.wav" );
-		cgs.media.flechetteStickSound = cgi_S_RegisterSound( "sound/weapons/flechette/stick.wav" );
 		break;
 
 	case WP_ROCKET_LAUNCHER:
@@ -454,8 +453,6 @@ void CG_RegisterWeapon( int weaponNum ) {
 		theFxScheduler.RegisterEffect( "emplaced/shot" );
 		theFxScheduler.RegisterEffect( "emplaced/shotNPC" );
 		theFxScheduler.RegisterEffect( "emplaced/wall_impact" );
-		theFxScheduler.RegisterEffect( "emplaced/flesh_impact" );
-		theFxScheduler.RegisterEffect( "emplaced/droid_impact" );
 		cgi_R_RegisterShader( "models/map_objects/imp_mine/turret_chair_dmg" );
 		cgi_R_RegisterShader( "models/map_objects/imp_mine/turret_chair_on" );
 
@@ -481,6 +478,7 @@ void CG_RegisterWeapon( int weaponNum ) {
 		cgi_S_RegisterSound( "sound/weapons/melee/punch2.mp3" );
 		cgi_S_RegisterSound( "sound/weapons/melee/punch3.mp3" );
 		cgi_S_RegisterSound( "sound/weapons/melee/punch4.mp3" );
+		cgi_S_RegisterSound( "sound/weapons/baton/fire" );
 		break;
 
 	case WP_TURRET:
@@ -524,7 +522,14 @@ void CG_RegisterItemVisuals( int itemNum ) {
 
 	itemInfo->models = cgi_R_RegisterModel( item->world_model );
 
-//	itemInfo->icon = cgi_R_RegisterShaderNoMip( item->icon );
+	if ( item->icon && item->icon[0] )
+	{
+		itemInfo->icon = cgi_R_RegisterShaderNoMip( item->icon );
+	}
+	else
+	{
+		itemInfo->icon = -1;
+	}
 
 	if ( item->giType == IT_WEAPON ) 
 	{
@@ -564,6 +569,7 @@ void CG_RegisterItemVisuals( int itemNum ) {
 
 		case INV_SENTRY:
 			CG_RegisterWeapon( WP_TURRET );
+			cgi_S_RegisterSound( "sound/player/use_sentry" );
 			break;
 
 		case INV_ELECTROBINOCULARS:
@@ -630,7 +636,18 @@ int CG_MapTorsoToWeaponFrame( const clientInfo_t *ci, int frame, int animNum, in
 
 	switch( animNum )
 	{
+	case TORSO_WEAPONREADY1:
+	case TORSO_WEAPONREADY2:
 	case TORSO_WEAPONREADY3:
+	case TORSO_WEAPONREADY4:
+	case TORSO_WEAPONREADY5:
+	case TORSO_WEAPONREADY6:
+	case TORSO_WEAPONREADY7:
+	case TORSO_WEAPONREADY8:
+	case TORSO_WEAPONREADY9:
+	case TORSO_WEAPONREADY10:
+	case TORSO_WEAPONREADY11:
+	case TORSO_WEAPONREADY12:
 		ret = 0;
 		break;
 
@@ -851,7 +868,7 @@ void CG_AddViewWeapon( playerState_t *ps )
 	const weaponInfo_t	*weapon;
 	weaponData_t  *wData;
 	centity_t	*cent;
-	float		fovOffset;
+	float		fovOffset, leanOffset;
 
 	// no gun if in third person view
 	if ( cg.renderingThirdPerson )
@@ -939,17 +956,36 @@ void CG_AddViewWeapon( playerState_t *ps )
 		fovOffset = 0;
 	}
 
+	if ( cg.snap->ps.leanofs != 0 )
+	{
+		//add leaning offset
+		leanOffset = cg.snap->ps.leanofs * 0.25f;
+		fovOffset += fabs(cg.snap->ps.leanofs) * -0.1f;
+	}
+	else
+	{
+		leanOffset = 0;
+	}
+
 	CG_RegisterWeapon( ps->weapon );
 	weapon = &cg_weapons[ps->weapon];
 	wData =  &weaponData[ps->weapon];
 
 	memset (&hand, 0, sizeof(hand));
 
+	if ( ps->weapon == WP_STUN_BATON )
+	{
+		cgi_S_AddLoopingSound( cent->currentState.number, 
+			cent->lerpOrigin, 
+			vec3_origin, 
+			weapon->firingSound );
+	}
+
 	// set up gun position
 	CG_CalculateWeaponPosition( hand.origin, angles );
 
 	VectorMA( hand.origin, cg_gun_x.value, cg.refdef.viewaxis[0], hand.origin );
-	VectorMA( hand.origin, cg_gun_y.value, cg.refdef.viewaxis[1], hand.origin );
+	VectorMA( hand.origin, (cg_gun_y.value+leanOffset), cg.refdef.viewaxis[1], hand.origin );
 	VectorMA( hand.origin, (cg_gun_z.value+fovOffset), cg.refdef.viewaxis[2], hand.origin );
 
 	AnglesToAxis( angles, hand.axis );
@@ -965,7 +1001,7 @@ void CG_AddViewWeapon( playerState_t *ps )
 	{
 		// get clientinfo for animation map
 		const clientInfo_t	*ci = &cent->gent->client->clientInfo;
-		int torsoAnim = cent->pe.torso.animationNumber;
+		int torsoAnim = cent->gent->client->ps.torsoAnim;//pe.torso.animationNumber;
 		float currentFrame;
 		int startFrame,endFrame,flags;
 		float animSpeed;
@@ -974,10 +1010,10 @@ void CG_AddViewWeapon( playerState_t *ps )
 			hand.oldframe = CG_MapTorsoToWeaponFrame( ci,floor(currentFrame), torsoAnim, cent->currentState.weapon, ( cent->currentState.eFlags & EF_FIRING ) );
 			hand.frame = CG_MapTorsoToWeaponFrame( ci,ceil(currentFrame), torsoAnim, cent->currentState.weapon, ( cent->currentState.eFlags & EF_FIRING ) );
 			hand.backlerp=1.0f-(currentFrame-floor(currentFrame));
-//			if ( cg_debugAnim.integer == 1 && cent->currentState.clientNum == 0 )
-//			{
-//				Com_Printf( "Torso frame %d to %d makes Weapon frame %d to %d\n", cent->pe.torso.oldFrame,  cent->pe.torso.frame, hand.oldframe, hand.frame );
-//			}
+			if ( cg_debugAnim.integer == 1 && cent->currentState.clientNum == 0 )
+			{
+				Com_Printf( "Torso frame %d to %d makes Weapon frame %d to %d\n", cent->pe.torso.oldFrame,  cent->pe.torso.frame, hand.oldframe, hand.frame );
+			}
 		}
 		else
 		{
@@ -1209,7 +1245,7 @@ void CG_DrawIconBackground(void)
 	int				prongLeftX,prongRightX;
 	qhandle_t		background;
 
-	if ( cg.zoomMode != 0 )
+	if (( cg.zoomMode != 0 ) || !( cg_drawHUD.integer ))
 	{
 		return;
 	}
@@ -1366,6 +1402,7 @@ void CG_DrawDataPadWeaponSelect( void )
 	int				height;
 	vec4_t			calcColor;
 	char			text[1024]={0};
+	vec4_t			textColor = { .875f, .718f, .121f, 1.0f };
 
 	// showing weapon select clears pickup item display, but not the blend blob
 	cg.itemPickupTime = 0;
@@ -1407,11 +1444,21 @@ void CG_DrawDataPadWeaponSelect( void )
 		sideRightIconCnt = holdCount - sideLeftIconCnt;
 	}
 
+	// This seems to be a problem is datapad comes up too early
+	if (cg.DataPadWeaponSelect<FIRST_WEAPON)
+	{
+		cg.DataPadWeaponSelect = FIRST_WEAPON;
+	}
+	else if (cg.DataPadWeaponSelect>MAX_PLAYER_WEAPONS)
+	{
+		cg.DataPadWeaponSelect = MAX_PLAYER_WEAPONS;
+	}
+	
 	i = cg.DataPadWeaponSelect - 1;
 	if (i<1)
 	{
 		i = 13;
-	}
+	}	
 
 	smallIconSize = 40;
 	bigIconSize = 80;
@@ -1468,9 +1515,8 @@ void CG_DrawDataPadWeaponSelect( void )
 	height = bigIconSize * cg.iconHUDPercent;
 	cgi_R_SetColor(NULL);
 
-	char buffer[256];
-
-	cgi_UI_GetItemText("datapadWeaponsMenu",va("weapondesc%d",cg.DataPadWeaponSelect+1),buffer);
+//	char buffer[256];
+//	cgi_UI_GetItemText("datapadWeaponsMenu",va("weapondesc%d",cg.DataPadWeaponSelect+1),buffer);
 
 	if (weaponData[cg.DataPadWeaponSelect].weaponIcon[0])
 	{
@@ -1544,7 +1590,7 @@ void CG_DrawDataPadWeaponSelect( void )
 		CG_DisplayBoxedText(70,50,500,300,text,
 												cgs.media.qhFontSmall,
 												0.7f,
-												colorTable[CT_WHITE]	
+												textColor	
 												);
 	}
 
@@ -1735,7 +1781,7 @@ void CG_DrawWeaponSelect( void )
 	cg.iconSelectTime = cg.weaponSelectTime;
 
 	// showing weapon select clears pickup item display, but not the blend blob
-	cg.itemPickupTime = 0;
+	//cg.itemPickupTime = 0;
 
 	bits = cg.snap->ps.stats[ STAT_WEAPONS ];
 
@@ -1900,18 +1946,13 @@ void CG_DrawWeaponSelect( void )
 	// draw the selected name
 	if ( item && item->classname && item->classname[0] ) 
 	{
-		char itemName[256], data[1024];
-
-		sprintf( itemName, "INGAME_%s",	item->classname );
+		char text[1024];
 		
-		if ( cgi_SP_GetStringTextString( itemName, data, sizeof( data )))
+		if ( cgi_SP_GetStringTextString( va("INGAME_%s",item->classname), text, sizeof( text )))
 		{
-// Just doing this for now......
-//#ifdef _DEBUG
-			int w = cgi_R_Font_StrLenPixels(data, cgs.media.qhFontSmall, 1.0f);	
+			int w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 1.0f);	
 			int x = ( SCREEN_WIDTH - w ) / 2;
-			cgi_R_Font_DrawString(x, (SCREEN_HEIGHT - 24), data, textColor, cgs.media.qhFontSmall, -1, 1.0f);
-//#endif
+			cgi_R_Font_DrawString(x, (SCREEN_HEIGHT - 24), text, textColor, cgs.media.qhFontSmall, -1, 1.0f);
 		}
 	}
 
@@ -1953,7 +1994,7 @@ qboolean CG_WeaponSelectable( int i, int original, qboolean dpMode )
 									? weaponData[i].energyPerShot 
 									: weaponData[i].altEnergyPerShot;
 
-		if ( cg.snap->ps.ammo[weaponData[i].ammoIndex] - usage_for_weap <= 0 ) 
+		if ( cg.snap->ps.ammo[weaponData[i].ammoIndex] - usage_for_weap < 0 ) 
 		{
 			if ( i != WP_DET_PACK ) // detpack can be switched to...should possibly check if there are any stuck to a wall somewhere?
 			{
@@ -2039,8 +2080,7 @@ void CG_NextWeapon_f( void ) {
 		CG_PlayerLockedWeaponSpeech( qfalse );
 		return;
 	}
-	//FIXME: cheaper check?
-//	if ( !Q_stricmp( "atst", g_entities[0].NPC_type ) )
+
 	if( g_entities[0].client && g_entities[0].client->NPC_class == CLASS_ATST )
 	{
 		CG_ToggleATSTWeapon();
@@ -2186,8 +2226,7 @@ void CG_PrevWeapon_f( void ) {
 		CG_PlayerLockedWeaponSpeech( qfalse );
 		return;
 	}
-	//FIXME: cheaper check?
-//	if ( !Q_stricmp( "atst", g_entities[0].NPC_type ) )
+
 	if( g_entities[0].client && g_entities[0].client->NPC_class == CLASS_ATST )
 	{
 		CG_ToggleATSTWeapon();
@@ -2255,6 +2294,24 @@ void CG_ChangeWeapon( int num )
 		return;		// don't have the weapon
 	}
 
+	// because we don't have an empty hand model for the thermal, don't allow selecting that weapon if it has no ammo
+	if ( num == WP_THERMAL )
+	{
+		if ( cg.snap->ps.ammo[AMMO_THERMAL] <= 0 ) 
+		{
+			return;
+		}
+	}
+	
+	// because we don't have an empty hand model for the thermal, don't allow selecting that weapon if it has no ammo
+	if ( num == WP_TRIP_MINE )
+	{
+		if ( cg.snap->ps.ammo[AMMO_TRIPMINE] <= 0 ) 
+		{
+			return;
+		}
+	}
+
 	SetWeaponSelectTime();
 //	cg.weaponSelectTime = cg.time;
 	cg.weaponSelect = num;
@@ -2265,8 +2322,14 @@ void CG_ChangeWeapon( int num )
 CG_Weapon_f
 ===============
 */
-void CG_Weapon_f( void ) {
+void CG_Weapon_f( void ) 
+{
 	int		num;
+
+	if ( cg.weaponSelectTime + 200 > cg.time )
+	{
+		return;
+	}
 
 	if ( !cg.snap ) {
 		return;
@@ -2282,8 +2345,7 @@ void CG_Weapon_f( void ) {
 		CG_PlayerLockedWeaponSpeech( qfalse );
 		return;
 	}
-	//FIXME: cheaper check?
-//	if ( !Q_stricmp( "atst", g_entities[0].NPC_type ) )
+
 	if( g_entities[0].client && g_entities[0].client->NPC_class == CLASS_ATST )
 	{
 		CG_ToggleATSTWeapon();
@@ -2321,67 +2383,66 @@ void CG_Weapon_f( void ) {
 		}
 		else if ( num == cg.snap->ps.weapon )
 		{//already have it up, let's try to toggle it
-			//can't toggle it if not holding it and not controlling it or dead
-			if ( cg.predicted_player_state.stats[STAT_HEALTH] > 0 && (!cg_entities[0].currentState.saberInFlight || (&g_entities[cg_entities[0].gent->client->ps.saberEntityNum] != NULL && g_entities[cg_entities[0].gent->client->ps.saberEntityNum].s.pos.trType == TR_LINEAR) ) )
-			{//it's either in-hand or it's under telekinetic control
-				if ( cg_entities[0].currentState.saberActive )
-				{
-					cg_entities[0].gent->client->ps.saberActive = qfalse;
-					if ( cg_entities[0].currentState.saberInFlight )
-					{//play it on the saber
-						cgi_S_UpdateEntityPosition( cg_entities[0].gent->client->ps.saberEntityNum, g_entities[cg_entities[0].gent->client->ps.saberEntityNum].currentOrigin );
-						cgi_S_StartSound (NULL, cg_entities[0].gent->client->ps.saberEntityNum, CHAN_AUTO, cgi_S_RegisterSound( "sound/weapons/saber/saberoff.wav" ) );
+			if ( !in_camera )
+			{//player can't activate/deactivate saber when in a cinematic
+				//can't toggle it if not holding it and not controlling it or dead
+				if ( cg.predicted_player_state.stats[STAT_HEALTH] > 0 && (!cg_entities[0].currentState.saberInFlight || (&g_entities[cg_entities[0].gent->client->ps.saberEntityNum] != NULL && g_entities[cg_entities[0].gent->client->ps.saberEntityNum].s.pos.trType == TR_LINEAR) ) )
+				{//it's either in-hand or it's under telekinetic control
+					if ( cg_entities[0].currentState.saberActive )
+					{
+						cg_entities[0].gent->client->ps.saberActive = qfalse;
+						if ( cg_entities[0].currentState.saberInFlight )
+						{//play it on the saber
+							cgi_S_UpdateEntityPosition( cg_entities[0].gent->client->ps.saberEntityNum, g_entities[cg_entities[0].gent->client->ps.saberEntityNum].currentOrigin );
+							cgi_S_StartSound (NULL, cg_entities[0].gent->client->ps.saberEntityNum, CHAN_AUTO, cgi_S_RegisterSound( "sound/weapons/saber/saberoff.wav" ) );
+						}
+						else
+						{
+							cgi_S_StartSound (NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgi_S_RegisterSound( "sound/weapons/saber/saberoff.wav" ) );
+						}
 					}
 					else
 					{
-						cgi_S_StartSound (NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgi_S_RegisterSound( "sound/weapons/saber/saberoff.wav" ) );
+						cg_entities[0].gent->client->ps.saberActive = qtrue;
 					}
-				}
-				else
-				{
-					cg_entities[0].gent->client->ps.saberActive = qtrue;
 				}
 			}
 		}
 	}
-	else if ( num >= WP_THERMAL && num <= WP_DET_PACK )
+	else if ( num >= WP_THERMAL && num <= WP_DET_PACK ) // these weapons cycle
 	{
-		if (cg.snap->ps.weapon >= WP_THERMAL && cg.snap->ps.weapon <= WP_DET_PACK )
+		int weap, i = 0;
+
+		if ( cg.snap->ps.weapon >= WP_THERMAL && cg.snap->ps.weapon <= WP_DET_PACK )
 		{
-			//cycle through these
-			int weap = cg.snap->ps.weapon + 1, ct = 0;
+			// already in cycle range so start with next cycle item
+			weap = cg.snap->ps.weapon + 1;
+		}
+		else
+		{
+			// not in cycle range, so start with thermal detonator
+			weap = WP_THERMAL;
+		}
 
-			// prevent an endless loop
-			while ( ct <= 3 )
+		// prevent an endless loop
+		while ( i <= 4 )
+		{
+			if ( weap > WP_DET_PACK )
 			{
-				if ( weap > WP_DET_PACK )
-				{
-					weap = WP_THERMAL;
-				}
+				weap = WP_THERMAL;
+			}
 
+			if ( cg.snap->ps.ammo[weaponData[weap].ammoIndex] > 0 || weap == WP_DET_PACK )
+			{
 				if ( CG_WeaponSelectable( weap, cg.snap->ps.weapon, qfalse ) ) 
 				{	
 					num = weap;
 					break;
 				}
+			}
 
-				weap++;
-				ct++;
-			}
-		}
-		else	//not in cycle range, but tyring to choose one
-		{
-			for (int ct=0; ct<3; ct++)
-			{
-				if ( cg.snap->ps.stats[STAT_WEAPONS] & ( 1 << num ) ) {
-					break;		//have the weapon
-				}
-				num++;
-				if ( num > WP_DET_PACK )
-				{
-					num = WP_THERMAL;
-				}
-			}
+			weap++;
+			i++;
 		}
 	}
 
@@ -2410,8 +2471,6 @@ void CG_OutOfAmmoChange( void ) {
 	if ( cg.weaponSelectTime + 200 > cg.time )
 		return;
 
-	//FIXME: cheaper check?
-//	if ( !Q_stricmp( "atst", g_entities[0].NPC_type ) )
 	if( g_entities[0].client && g_entities[0].client->NPC_class == CLASS_ATST )
 	{
 		CG_ToggleATSTWeapon();
@@ -2420,22 +2479,44 @@ void CG_OutOfAmmoChange( void ) {
 
 	original = cg.weaponSelect;
 
-	for ( i = WP_DET_PACK; i > 0 ; i-- ) {	//We don't want the emplaced, or melee here
+	for ( i = WP_ROCKET_LAUNCHER; i > 0 ; i-- ) 
+	{	
+		// We don't want the emplaced, melee, or explosive devices here
 		if ( original != i && CG_WeaponSelectable( i, original, qfalse ) )
 		{
-			if ( 1 == cg_autoswitch.integer && 
-				( i == WP_TRIP_MINE || i == WP_DET_PACK || i == WP_THERMAL || i == WP_ROCKET_LAUNCHER) ) // safe weapon switch
+			SetWeaponSelectTime();
+			cg.weaponSelect = i;
+			break;
+		}
+	}
+
+	if ( cg_autoswitch.integer != 1 )
+	{
+		// didn't have that, so try these. Start with thermal...
+		for ( i = WP_THERMAL; i <= WP_DET_PACK; i++ ) 
+		{	
+			// We don't want the emplaced, or melee here
+			if ( original != i && CG_WeaponSelectable( i, original, qfalse ) )
 			{
-				// don't switch to this weapon
-			}
-			else
-			{
-				SetWeaponSelectTime();
-//				cg.weaponSelectTime = cg.time;
-				cg.weaponSelect = i;
-				break;
+				if ( i == WP_DET_PACK && cg.snap->ps.ammo[weaponData[i].ammoIndex] <= 0 )
+				{
+					// crap, no point in switching to this
+				}
+				else
+				{
+					SetWeaponSelectTime();
+					cg.weaponSelect = i;
+					break;
+				}
 			}
 		}
+	}
+
+	// try stun baton as a last ditch effort
+	if ( CG_WeaponSelectable( WP_STUN_BATON, original, qfalse ))
+	{
+		SetWeaponSelectTime();
+		cg.weaponSelect = WP_STUN_BATON;
 	}
 }
 
@@ -2495,48 +2576,53 @@ void CG_FireWeapon( centity_t *cent, qboolean alt_fire )
 	if ( cent->gent->s.number == 0 )
 	switch (ent->weapon)
 	{
-		// FIXME: These will need to be remapped to the most appropriate weapon since these are just leftovers
-		//	from EF
+		// FIXME: I can NOT get this !@#$% iFeel USB mouse to work, it completely fails to register even with their
+		//		latest drivers, and I haven't got time to get it working now so close to release, so here's a complete 
+		//		guess as to which FX forces go with which weapon. Sorry if they're crap...
+		//
 		case WP_SABER:				
-			//cgi_FF_StartFX( fffx_SwitchClick );	// repeat-fire handled above, but this just give an initial jolt
+			cgi_FF_StartFX( fffx_SwitchClick );	// repeat-fire handled above, but this just give an initial jolt
 			break;
 
 		case WP_DISRUPTOR:
 		case WP_BRYAR_PISTOL:	
 		case WP_THERMAL:
+		case WP_DET_PACK:
 			cgi_FF_StartFX( alt_fire ? fffx_Shotgun : fffx_Pistol);	
 			break;
 
 		case WP_FLECHETTE:	
+			cgi_FF_StartFX( alt_fire ? fffx_Shotgun : fffx_ShortPlasma);
+			break;			
+			
 		case WP_REPEATER:
 			cgi_FF_StartFX( alt_fire ? fffx_MachineGun : fffx_GatlingGun);
 			break;
 
 		case WP_BLASTER:
-			cgi_FF_StartFX( alt_fire ? fffx_Missile : fffx_Pistol);	
+			cgi_FF_StartFX( alt_fire ? fffx_Shotgun : fffx_Pistol);	
 			break;
-/*
-		case WP_CHAOTICA_GUARD_GUN:
-			
-			cgi_FF_StartFX( alt_fire ? fffx_Missile : fffx_Pistol);	
-			break;
-
-		case WP_QUANTUM_BURST:		
-			
-			cgi_FF_StartFX( alt_fire ? fffx_RocketLaunch : fffx_Punched);	
+ 
+		case WP_ROCKET_LAUNCHER:
+			cgi_FF_StartFX( fffx_RocketLaunch );
 			break;
 
-		case WP_DREADNOUGHT:		
-			
-			cgi_FF_StartFX( fffx_Shotgun );		// repeat-fire handled above
+		case WP_BOWCASTER:
+			cgi_FF_StartFX( alt_fire ? fffx_Land : fffx_Jump);	
 			break;
 
-		case WP_TRICORDER:			
-			
-			cgi_FF_StartFX( fffx_SwitchClick);	
+		case WP_DEMP2:
+			cgi_FF_StartFX( alt_fire ? fffx_Shotgun : fffx_Pistol);	
 			break;
-*/
-	}	
+
+		case WP_STUN_BATON:
+			cgi_FF_StartFX( fffx_Laser1 );
+			break;
+
+		case WP_TRIP_MINE:
+			cgi_FF_StartFX( fffx_OutOfAmmo );
+			break;
+	}
 
 	// Do overcharge sound that get's added to the top
 /*	if (( ent->powerups & ( 1<<PW_WEAPON_OVERCHARGE )))
@@ -2583,33 +2669,6 @@ void CG_FireWeapon( centity_t *cent, qboolean alt_fire )
 			}
 		}
 	}*/
-}
-
-/*
-================
-CG_FireSeeker
-
-Caused by an EV_FIRE_WEAPON event
-================
-*/
-void CG_FireSeeker( centity_t *cent )
-{
-	vec3_t			org;
-	entityState_t	*ent;
-	weaponInfo_t	*weap;
-
-	ent = &cent->currentState;
-	weap = &cg_weapons[ WP_BLASTER ];
-
-	// must match cg_effects ( CG_Seeker ) & g_weapon ( SeekerAcquiresTarget ) & cg_weapons ( CG_FireSeeker )
-	float angle = cg.time * 0.004f;
-
-	org[0] = cg_entities[ent->eventParm].lerpOrigin[0] + 18 * cos( angle );
-	org[1] = cg_entities[ent->eventParm].lerpOrigin[1] + 18 * sin( angle );
-	org[2] = cg_entities[ent->eventParm].lerpOrigin[2] + cg.predicted_player_state.viewheight + 8 + (3 * cos(cg.time * 0.001));
-
-	cgi_S_StartSound( NULL, ent->eventParm, CHAN_WEAPON, cgi_S_RegisterSound( "sound/weapons/blaster/fire.wav" ));
-	theFxScheduler.PlayEffect( "blaster/muzzle_flash", org, cent->gent->pos1 );
 }
 
 /*
@@ -2884,7 +2943,7 @@ void CG_MissileHitPlayer( centity_t *cent, int weapon, vec3_t origin, vec3_t dir
 		break;
 
 	case WP_EMPLACED_GUN:
-		FX_EmplacedHitPlayer( origin, dir, humanoid );
+		FX_EmplacedHitWall( origin, dir );
 		break;
 
 	case WP_TRIP_MINE:
@@ -2900,7 +2959,7 @@ void CG_MissileHitPlayer( centity_t *cent, int weapon, vec3_t origin, vec3_t dir
 		break;
 
 	case WP_ATST_MAIN:
-		FX_EmplacedHitPlayer( origin, dir, humanoid );
+		FX_EmplacedHitWall( origin, dir );
 		break;
 
 	case WP_ATST_SIDE:

@@ -13,14 +13,14 @@ FORCE INTERFACE
 #include "ui_force.h"
 
 int uiForceSide = FORCE_LIGHTSIDE;
-int uiForceRank = FORCE_MASTERY_JEDI_LORD;
+int uiForceRank = FORCE_MASTERY_JEDI_KNIGHT;
 int uiMaxRank = MAX_FORCE_RANK;
 int uiMaxPoints = 20;
 int	uiForceUsed = 0;
 int uiForceAvailable=0;
 
 qboolean gTouchedForce = qfalse;
-vmCvar_t	ui_freeSaber;
+vmCvar_t	ui_freeSaber, ui_forcePowerDisable;
 void Menu_ShowItemByName(menuDef_t *menu, const char *p, qboolean bShow);
 
 int uiForcePowersRank[NUM_FORCE_POWERS] = {
@@ -39,8 +39,8 @@ int uiForcePowersRank[NUM_FORCE_POWERS] = {
 	0,//FP_TEAM_FORCE,
 	0,//FP_DRAIN,
 	0,//FP_SEE,
-	0,//FP_SABERATTACK,
-	0,//FP_SABERDEFEND,
+	1,//FP_SABERATTACK, //default to 1 point in attack
+	1,//FP_SABERDEFEND, //defualt to 1 point in defense
 	0//FP_SABERTHROW,
 };
 
@@ -66,30 +66,6 @@ int uiForcePowerDarkLight[NUM_FORCE_POWERS] = //0 == neutral
 	0//FP_SABERTHROW,
 		//NUM_FORCE_POWERS
 };
-
-int uiForcePowerCost[NUM_FORCE_POWERS][NUM_FORCE_POWER_LEVELS] = //0 == neutral
-{
-	{	0,	2,	3,	4	},	// FP_HEAL
-	{	0,	0,	1,	1	},	//FP_LEVITATION,//hold/duration
-	{	0,	1,	1,	1	},	//FP_SPEED,//duration
-	{	0,	1,	2,	3	},	//FP_PUSH,//hold/duration
-	{	0,	1,	2,	3	},	//FP_PULL,//hold/duration
-	{	0,	2,	3,	4	},	//FP_TELEPATHY,//instant
-	{	0,	1,	2,	3	},	//FP_GRIP,//hold/duration
-	{	0,	2,	3,	4	},	//FP_LIGHTNING,//hold/duration
-	{	0,	2,	3,	4	},	//FP_RAGE,//duration
-	{	0,	1,	2,	3	},	//FP_PROTECT,//duration
-	{	0,	1,	2,	3	},	//FP_ABSORB,//duration
-	{	0,	1,	1,	1	},	//FP_TEAM_HEAL,//instant
-	{	0,	1,	1,	1	},	//FP_TEAM_FORCE,//instant
-	{	0,	1,	2,	3	},	//FP_DRAIN,//hold/duration
-	{	0,	1,	2,	3	},	//FP_SEE,//duration
-	{	0,	1,	2,	4	},	//FP_SABERATTACK,
-	{	0,	1,	2,	4	},	//FP_SABERDEFEND,
-	{	0,	1,	2,	4	}	//FP_SABERTHROW,
-	//NUM_FORCE_POWERS
-};
-
 
 int uiForceStarShaders[NUM_FORCE_STAR_IMAGES][2];
 int uiSaberColorShaders[NUM_SABER_COLORS];
@@ -122,7 +98,6 @@ void UI_InitForceShaders(void)
 	uiSaberColorShaders[SABER_PURPLE]	= trap_R_RegisterShaderNoMip("menu/art/saber_purple");
 }
 
-
 // Draw the stars spent on the current force power
 void UI_DrawForceStars(rectDef_t *rect, float scale, vec4_t color, int textStyle, int forceindex, int val, int min, int max) 
 {
@@ -141,7 +116,7 @@ void UI_DrawForceStars(rectDef_t *rect, float scale, vec4_t color, int textStyle
 
 		for (i=FORCE_LEVEL_1;i<=max;i++)
 		{
-			starcolor = uiForcePowerCost[forceindex][i];
+			starcolor = bgForcePowerCost[forceindex][i];
 
 			if (val >= i)
 			{	// Draw a star.
@@ -157,7 +132,7 @@ void UI_DrawForceStars(rectDef_t *rect, float scale, vec4_t color, int textStyle
 }
 
 // Set the client's force power layout.
-void UI_UpdateClientForcePowers()
+void UI_UpdateClientForcePowers(const char *teamArg)
 {
 	trap_Cvar_Set( "forcepowers", va("%i-%i-%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i%i",
 		uiForceRank, uiForceSide, uiForcePowersRank[0], uiForcePowersRank[1],
@@ -170,10 +145,27 @@ void UI_UpdateClientForcePowers()
 
 	if (gTouchedForce)
 	{
-		trap_Cmd_ExecuteText( EXEC_APPEND, "forcechanged\n" );
+		if (teamArg && teamArg[0])
+		{
+			trap_Cmd_ExecuteText( EXEC_APPEND, va("forcechanged \"%s\"\n", teamArg) );
+		}
+		else
+		{
+			trap_Cmd_ExecuteText( EXEC_APPEND, "forcechanged\n" );
+		}
 	}
 
 	gTouchedForce = qfalse;
+}
+
+int UI_TranslateFCFIndex(int index)
+{
+	if (uiForceSide == FORCE_LIGHTSIDE)
+	{
+		return index-uiInfo.forceConfigLightIndexBegin;
+	}
+
+	return index-uiInfo.forceConfigDarkIndexBegin;
 }
 
 void UI_SaveForceTemplate()
@@ -184,6 +176,8 @@ void UI_SaveForceTemplate()
 	fileHandle_t f;
 	int strPlace = 0;
 	int forcePlace = 0;
+	int i = 0;
+	qboolean foundFeederItem = qfalse;
 
 	if (!selectedName || !selectedName[0])
 	{
@@ -191,7 +185,14 @@ void UI_SaveForceTemplate()
 		return;
 	}
 
-	trap_FS_FOpenFile(va("forcecfg/%s.fcf", selectedName), &f, FS_WRITE);
+	if (uiForceSide == FORCE_LIGHTSIDE)
+	{ //write it into the light side folder
+		trap_FS_FOpenFile(va("forcecfg/light/%s.fcf", selectedName), &f, FS_WRITE);
+	}
+	else
+	{ //if it isn't light it must be dark
+		trap_FS_FOpenFile(va("forcecfg/dark/%s.fcf", selectedName), &f, FS_WRITE);
+	}
 
 	if (!f)
 	{
@@ -217,6 +218,31 @@ void UI_SaveForceTemplate()
 	trap_FS_FCloseFile(f);
 
 	Com_Printf("Template saved as \"%s\".\n", selectedName);
+
+	//Now, update the FCF list
+	UI_LoadForceConfig_List();
+
+	//Then, scroll through and select the template for the file we just saved
+	while (i < uiInfo.forceConfigCount)
+	{
+		if (!Q_stricmp(uiInfo.forceConfigNames[i], selectedName))
+		{
+			if ((uiForceSide == FORCE_LIGHTSIDE && uiInfo.forceConfigSide[i]) ||
+				(uiForceSide == FORCE_DARKSIDE && !uiInfo.forceConfigSide[i]))
+			{
+				Menu_SetFeederSelection(NULL, FEEDER_FORCECFG, UI_TranslateFCFIndex(i), NULL);
+				foundFeederItem = qtrue;
+			}
+		}
+
+		i++;
+	}
+
+	//Else, go back to 0
+	if (!foundFeederItem)
+	{
+		Menu_SetFeederSelection(NULL, FEEDER_FORCECFG, 0, NULL);
+	}
 }
 
 // 
@@ -242,11 +268,16 @@ void UpdateForceUsed()
 	// Set the cost of the saberattack according to whether its free.
 	if (ui_freeSaber.integer)
 	{	// Make saber free
-		uiForcePowerCost[FP_SABERATTACK][FORCE_LEVEL_1] = 0;
+		bgForcePowerCost[FP_SABERATTACK][FORCE_LEVEL_1] = 0;
+		bgForcePowerCost[FP_SABERDEFEND][FORCE_LEVEL_1] = 0;
 		// Make sure that we have one freebie in saber if applicable.
 		if (uiForcePowersRank[FP_SABERATTACK]<1)
 		{
 			uiForcePowersRank[FP_SABERATTACK]=1;
+		}
+		if (uiForcePowersRank[FP_SABERDEFEND]<1)
+		{
+			uiForcePowersRank[FP_SABERDEFEND]=1;
 		}
 		if (menu)
 		{
@@ -259,7 +290,8 @@ void UpdateForceUsed()
 	}
 	else
 	{	// Make saber normal cost
-		uiForcePowerCost[FP_SABERATTACK][FORCE_LEVEL_1] = 1;
+		bgForcePowerCost[FP_SABERATTACK][FORCE_LEVEL_1] = 1;
+		bgForcePowerCost[FP_SABERDEFEND][FORCE_LEVEL_1] = 1;
 		// Also, check if there is no saberattack.  If there isn't, there had better not be any defense or throw!
 		if (uiForcePowersRank[FP_SABERATTACK]<1)
 		{
@@ -300,13 +332,14 @@ void UpdateForceUsed()
 			if (uiForcePowersRank[curpower]>0)
 			{	// Do not charge the player for the one freebie in jump, or if there is one in saber.
 				if  (	(curpower == FP_LEVITATION && currank == FORCE_LEVEL_1) ||
-						(curpower == FP_SABERATTACK && currank == FORCE_LEVEL_1 && ui_freeSaber.integer))
+						(curpower == FP_SABERATTACK && currank == FORCE_LEVEL_1 && ui_freeSaber.integer) ||
+						(curpower == FP_SABERDEFEND && currank == FORCE_LEVEL_1 && ui_freeSaber.integer) )
 				{
 					// Do nothing (written this way for clarity)
 				}
 				else
 				{	// Check if we can accrue the cost of this power.
-					if (uiForcePowerCost[curpower][currank] > uiForceAvailable)
+					if (bgForcePowerCost[curpower][currank] > uiForceAvailable)
 					{	// We can't afford this power.  Break to the next one.
 						// Remove this power from the player's roster.
 						uiForcePowersRank[curpower] = currank-1;
@@ -314,55 +347,182 @@ void UpdateForceUsed()
 					}
 					else
 					{	// Sure we can afford it.
-						uiForceUsed += uiForcePowerCost[curpower][currank];
-						uiForceAvailable -= uiForcePowerCost[curpower][currank];
+						uiForceUsed += bgForcePowerCost[curpower][currank];
+						uiForceAvailable -= bgForcePowerCost[curpower][currank];
 					}
 				}
 			}
 		}
 	}
 
-	if (menu)
-	{
-		char	info[MAX_INFO_STRING];
-		trap_GetConfigString( CS_SERVERINFO, info, sizeof(info) );
+}
 
-		// Set or reset buttons based on choices
-		if (atoi(Info_ValueForKey(info, "g_gametype")) >= GT_TEAM)
-		{	// This is a team-based game.
-			Menu_ShowItemByName(menu, "playerforcejoin", qtrue);
-			Menu_ShowItemByName(menu, "playerforcespectate", qtrue);
-			if (atoi(Info_ValueForKey(info, "g_forceBasedTeams")))
-			{	// Show red or blue based on what side is chosen.
-				if (uiForceSide==FORCE_LIGHTSIDE)
-				{
-					Menu_ShowItemByName(menu, "playerforcered", qfalse);
-					Menu_ShowItemByName(menu, "playerforceblue", qtrue);
-				}
-				else if (uiForceSide==FORCE_DARKSIDE)
-				{
-					Menu_ShowItemByName(menu, "playerforcered", qtrue);
-					Menu_ShowItemByName(menu, "playerforceblue", qfalse);
-				}
-				else
-				{
-					Menu_ShowItemByName(menu, "playerforcered", qtrue);
-					Menu_ShowItemByName(menu, "playerforceblue", qtrue);
-				}
-			}
-			else
-			{
-				Menu_ShowItemByName(menu, "playerforcered", qtrue);
-				Menu_ShowItemByName(menu, "playerforceblue", qtrue);
-			}
-		}
-		else
+
+//Mostly parts of other functions merged into one another.
+//Puts the current UI stuff into a string, legalizes it, and then reads it back out.
+void UI_ReadLegalForce(void)
+{
+	char fcfString[512];
+	char forceStringValue[4];
+	int strPlace = 0;
+	int forcePlace = 0;
+	int i = 0;
+	char singleBuf[64];
+	char info[MAX_INFO_VALUE];
+	int c = 0;
+	int iBuf = 0;
+	int forcePowerRank = 0;
+	int currank = 0;
+	int forceTeam = 0;
+	qboolean updateForceLater = qfalse;
+
+	//First, stick them into a string.
+	Com_sprintf(fcfString, sizeof(fcfString), "%i-%i-", uiForceRank, uiForceSide);
+	strPlace = strlen(fcfString);
+
+	while (forcePlace < NUM_FORCE_POWERS)
+	{
+		Com_sprintf(forceStringValue, sizeof(forceStringValue), "%i", uiForcePowersRank[forcePlace]);
+		//Just use the force digit even if multiple digits. Shouldn't be longer than 1.
+		fcfString[strPlace] = forceStringValue[0];
+		strPlace++;
+		forcePlace++;
+	}
+	fcfString[strPlace] = '\n';
+	fcfString[strPlace+1] = 0;
+
+	info[0] = '\0';
+	trap_GetConfigString(CS_SERVERINFO, info, sizeof(info));
+
+	if (atoi( Info_ValueForKey( info, "g_forceBasedTeams" ) ))
+	{
+		switch((int)(trap_Cvar_VariableValue("ui_myteam")))
 		{
-			Menu_ShowItemByName(menu, "playerforcejoin", qtrue);
-			Menu_ShowItemByName(menu, "playerforcered", qfalse);
-			Menu_ShowItemByName(menu, "playerforceblue", qfalse);
-			Menu_ShowItemByName(menu, "playerforcespectate", qtrue);
+		case TEAM_RED:
+			forceTeam = FORCE_DARKSIDE;
+			break;
+		case TEAM_BLUE:
+			forceTeam = FORCE_LIGHTSIDE;
+			break;
+		default:
+			break;
 		}
+	}
+	//Second, legalize them.
+	if (!BG_LegalizedForcePowers(fcfString, uiMaxRank, ui_freeSaber.integer, forceTeam, atoi( Info_ValueForKey( info, "g_gametype" )), 0))
+	{ //if they were illegal, we should refresh them.
+		updateForceLater = qtrue;
+	}
+
+	//Lastly, put them back into the UI storage from the legalized string
+	i = 0;
+
+	while (fcfString[i] && fcfString[i] != '-')
+	{
+		singleBuf[c] = fcfString[i];
+		c++;
+		i++;
+	}
+	singleBuf[c] = 0;
+	c = 0;
+	i++;
+
+	iBuf = atoi(singleBuf);
+
+	if (iBuf > uiMaxRank || iBuf < 0)
+	{ //this force config uses a rank level higher than our currently restricted level.. so we can't use it
+	  //FIXME: Print a message indicating this to the user
+	//	return;
+	}
+
+	uiForceRank = iBuf;
+
+	while (fcfString[i] && fcfString[i] != '-')
+	{
+		singleBuf[c] = fcfString[i];
+		c++;
+		i++;
+	}
+	singleBuf[c] = 0;
+	c = 0;
+	i++;
+
+	uiForceSide = atoi(singleBuf);
+
+	if (uiForceSide != FORCE_LIGHTSIDE &&
+		uiForceSide != FORCE_DARKSIDE)
+	{
+		uiForceSide = FORCE_LIGHTSIDE;
+		return;
+	}
+
+	//clear out the existing powers
+	while (c < NUM_FORCE_POWERS)
+	{
+		uiForcePowersRank[c] = 0;
+		c++;
+	}
+	uiForceUsed = 0;
+	uiForceAvailable = forceMasteryPoints[uiForceRank];
+	gTouchedForce = qtrue;
+
+	for (c=0;fcfString[i]&&c<NUM_FORCE_POWERS;c++,i++)
+	{
+		singleBuf[0] = fcfString[i];
+		singleBuf[1] = 0;
+		iBuf = atoi(singleBuf);	// So, that means that Force Power "c" wants to be set to rank "iBuf".
+		
+		if (iBuf < 0)
+		{
+			iBuf = 0;
+		}
+
+		forcePowerRank = iBuf;
+
+		if (forcePowerRank > FORCE_LEVEL_3 || forcePowerRank < 0)
+		{ //err..  not correct
+			continue;  // skip this power
+		}
+
+		if (uiForcePowerDarkLight[c] && uiForcePowerDarkLight[c] != uiForceSide)
+		{ //Apparently the user has crafted a force config that has powers that don't fit with the config's side.
+			continue;  // skip this power
+		}
+
+		// Accrue cost for each assigned rank for this power.
+		for (currank=FORCE_LEVEL_1;currank<=forcePowerRank;currank++)
+		{	
+			if (bgForcePowerCost[c][currank] > uiForceAvailable)
+			{	// Break out, we can't afford any more power.
+				break;
+			}
+			// Pay for this rank of this power.
+			uiForceUsed += bgForcePowerCost[c][currank];
+			uiForceAvailable -= bgForcePowerCost[c][currank];
+
+			uiForcePowersRank[c]++;
+		}
+	}
+
+	if (uiForcePowersRank[FP_LEVITATION] < 1)
+	{
+		uiForcePowersRank[FP_LEVITATION]=1;
+	}
+	if (uiForcePowersRank[FP_SABERATTACK] < 1 && ui_freeSaber.integer)
+	{
+		uiForcePowersRank[FP_SABERATTACK]=1;
+	}
+	if (uiForcePowersRank[FP_SABERDEFEND] < 1 && ui_freeSaber.integer)
+	{
+		uiForcePowersRank[FP_SABERDEFEND]=1;
+	}
+
+	UpdateForceUsed();
+
+	if (updateForceLater)
+	{
+		gTouchedForce = qtrue;
+		UI_UpdateClientForcePowers(NULL);
 	}
 }
 
@@ -440,6 +600,13 @@ void UI_UpdateForcePowers()
 					uiForcePowersRank[i_f] = 1;
 				}
 
+				if (i_f == FP_SABERDEFEND &&
+					uiForcePowersRank[i_f] < 1 &&
+					ui_freeSaber.integer)
+				{
+					uiForcePowersRank[i_f] = 1;
+				}
+
 				i_f++;
 				i++;
 			}
@@ -470,6 +637,10 @@ validitycheck:
 			{
 				uiForcePowersRank[i] = 1;
 			}
+			else if (i == FP_SABERDEFEND && ui_freeSaber.integer)
+			{
+				uiForcePowersRank[i] = 1;
+			}
 			else
 			{
 				uiForcePowersRank[i] = 0;
@@ -478,7 +649,7 @@ validitycheck:
 			i++;
 		}
 
-		UI_UpdateClientForcePowers();
+		UI_UpdateClientForcePowers(NULL);
 	}
 
 	UpdateForceUsed();
@@ -513,6 +684,8 @@ qboolean UI_SkinColor_HandleKey(int flags, float *special, int key, int num, int
 
 	uiSkinColor = num;
 
+	UI_FeederSelection(FEEDER_Q3HEADS, uiInfo.q3SelectedHead);
+
     return qtrue;
   }
   return qfalse;
@@ -523,10 +696,31 @@ qboolean UI_SkinColor_HandleKey(int flags, float *special, int key, int num, int
 
 qboolean UI_ForceSide_HandleKey(int flags, float *special, int key, int num, int min, int max, int type) 
 {
+	char info[MAX_INFO_VALUE];
+
+	info[0] = '\0';
+	trap_GetConfigString(CS_SERVERINFO, info, sizeof(info));
+
+	if (atoi( Info_ValueForKey( info, "g_forceBasedTeams" ) ))
+	{
+		switch((int)(trap_Cvar_VariableValue("ui_myteam")))
+		{
+		case TEAM_RED:
+			return qfalse;
+		case TEAM_BLUE:
+			return qfalse;
+		default:
+			break;
+		}
+	}
+
 	if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) 
 	{
 		int i = num;
 		int x = 0;
+
+		//update the feeder item selection, it might be different depending on side
+		Menu_SetFeederSelection(NULL, FEEDER_FORCECFG, 0, NULL);
 
 		if (key == K_MOUSE2)
 		{
@@ -563,7 +757,6 @@ qboolean UI_ForceSide_HandleKey(int flags, float *special, int key, int num, int
 		UpdateForceUsed();
 
 		gTouchedForce = qtrue;
-
 		return qtrue;
 	}
 	return qfalse;
@@ -597,6 +790,8 @@ qboolean UI_ForceMaxRank_HandleKey(int flags, float *special, int key, int num, 
     num = i;
 
 	uiMaxRank = num;
+
+	trap_Cvar_Set( "g_maxForceRank", va("%i", num));
 
 	// The update force used will remove overallocated powers automatically.
 	UpdateForceUsed();
@@ -642,6 +837,10 @@ qboolean UI_ForcePowerRank_HandleKey(int flags, float *special, int key, int num
 		{
 			min += 1;
 		}
+		if (type == UI_FORCE_RANK_SABERDEFEND && ui_freeSaber.integer)
+		{
+			min += 1;
+		}
 
 		if (key == K_MOUSE2)
 		{	// Lower a point.
@@ -663,22 +862,22 @@ qboolean UI_ForcePowerRank_HandleKey(int flags, float *special, int key, int num
 		if (raising)
 		{	// Check if we can accrue the cost of this power.
 			rank = uiForcePowersRank[forcepower]+1;
-			if (uiForcePowerCost[forcepower][rank] > uiForceAvailable)
+			if (bgForcePowerCost[forcepower][rank] > uiForceAvailable)
 			{	// We can't afford this power.  Abandon ship.
 				return qtrue;
 			}
 			else
 			{	// Sure we can afford it.
-				uiForceUsed += uiForcePowerCost[forcepower][rank];
-				uiForceAvailable -= uiForcePowerCost[forcepower][rank];
+				uiForceUsed += bgForcePowerCost[forcepower][rank];
+				uiForceAvailable -= bgForcePowerCost[forcepower][rank];
 				uiForcePowersRank[forcepower]=rank;
 			}
 		}
 		else
 		{	// Lower the point.
 			rank = uiForcePowersRank[forcepower];
-			uiForceUsed -= uiForcePowerCost[forcepower][rank];
-			uiForceAvailable += uiForcePowerCost[forcepower][rank];
+			uiForceUsed -= bgForcePowerCost[forcepower][rank];
+			uiForceAvailable += bgForcePowerCost[forcepower][rank];
 			uiForcePowersRank[forcepower]--;
 		}
 
@@ -730,6 +929,8 @@ void UI_ForceConfigHandle( int oldindex, int newindex )
 	int iBuf = 0, forcePowerRank, currank;
 	char fcfBuffer[8192];
 	char singleBuf[64];
+	char info[MAX_INFO_VALUE];
+	int forceTeam = 0;
 
 	if (oldindex == 0)
 	{ //switching out from custom config, so first shove the current values into the custom storage
@@ -758,15 +959,46 @@ void UI_ForceConfigHandle( int oldindex, int newindex )
 		}
 		uiForceRank = gCustRank;
 		uiForceSide = gCustSide;
+
+		UpdateForceUsed();
 		return;
 	}
 
 	//If we made it here, we want to load in a new config
-	len = trap_FS_FOpenFile(va("forcecfg/%s.fcf", uiInfo.forceConfigNames[newindex]), &f, FS_READ);
+	if (uiForceSide == FORCE_LIGHTSIDE)
+	{ //we should only be displaying lightside configs, so.. look in the light folder
+		newindex += uiInfo.forceConfigLightIndexBegin;
+		if (newindex >= uiInfo.forceConfigCount)
+		{
+			return;
+		}
+		len = trap_FS_FOpenFile(va("forcecfg/light/%s.fcf", uiInfo.forceConfigNames[newindex]), &f, FS_READ);
+	}
+	else
+	{ //else dark
+		newindex += uiInfo.forceConfigDarkIndexBegin;
+		if (newindex >= uiInfo.forceConfigCount || newindex > uiInfo.forceConfigLightIndexBegin)
+		{ //dark gets read in before light
+			return;
+		}
+		len = trap_FS_FOpenFile(va("forcecfg/dark/%s.fcf", uiInfo.forceConfigNames[newindex]), &f, FS_READ);
+	}
 
 	if (len <= 0)
-	{
-		return;
+	{ //This should not have happened. But, before we quit out, attempt searching the other light/dark folder for the file.
+		if (uiForceSide == FORCE_LIGHTSIDE)
+		{
+			len = trap_FS_FOpenFile(va("forcecfg/dark/%s.fcf", uiInfo.forceConfigNames[newindex]), &f, FS_READ);
+		}
+		else
+		{
+			len = trap_FS_FOpenFile(va("forcecfg/light/%s.fcf", uiInfo.forceConfigNames[newindex]), &f, FS_READ);
+		}
+
+		if (len <= 0)
+		{ //still failure? Oh well.
+			return;
+		}
 	}
 
 	if (len >= 8192)
@@ -779,6 +1011,27 @@ void UI_ForceConfigHandle( int oldindex, int newindex )
 	trap_FS_FCloseFile(f);
 
 	i = 0;
+
+	info[0] = '\0';
+	trap_GetConfigString(CS_SERVERINFO, info, sizeof(info));
+
+	if (atoi( Info_ValueForKey( info, "g_forceBasedTeams" ) ))
+	{
+		switch((int)(trap_Cvar_VariableValue("ui_myteam")))
+		{
+		case TEAM_RED:
+			forceTeam = FORCE_DARKSIDE;
+			break;
+		case TEAM_BLUE:
+			forceTeam = FORCE_LIGHTSIDE;
+			break;
+		default:
+			break;
+		}
+	}
+
+	BG_LegalizedForcePowers(fcfBuffer, uiMaxRank, ui_freeSaber.integer, forceTeam, atoi( Info_ValueForKey( info, "g_gametype" )), 0);
+	//legalize the config based on the max rank
 
 	//now that we're done with the handle, it's time to parse our force data out of the string
 	//we store strings in rank-side-xxxxxxxxx format (where the x's are individual force power levels)
@@ -824,6 +1077,7 @@ void UI_ForceConfigHandle( int oldindex, int newindex )
 	//clear out the existing powers
 	while (c < NUM_FORCE_POWERS)
 	{
+		/*
 		if (c==FP_LEVITATION)
 		{
 			uiForcePowersRank[c]=1;
@@ -832,10 +1086,17 @@ void UI_ForceConfigHandle( int oldindex, int newindex )
 		{
 			uiForcePowersRank[c]=1;
 		}
+		else if (c==FP_SABERDEFEND && ui_freeSaber.integer)
+		{
+			uiForcePowersRank[c]=1;
+		}
 		else
 		{
 			uiForcePowersRank[c] = 0;
 		}
+		*/
+		//rww - don't need to do these checks. Just trust whatever the saber config says.
+		uiForcePowersRank[c] = 0;
 		c++;
 	}
 	uiForceUsed = 0;
@@ -868,16 +1129,29 @@ void UI_ForceConfigHandle( int oldindex, int newindex )
 		// Accrue cost for each assigned rank for this power.
 		for (currank=FORCE_LEVEL_1;currank<=forcePowerRank;currank++)
 		{	
-			if (uiForcePowerCost[c][currank] > uiForceAvailable)
+			if (bgForcePowerCost[c][currank] > uiForceAvailable)
 			{	// Break out, we can't afford any more power.
 				break;
 			}
 			// Pay for this rank of this power.
-			uiForceUsed += uiForcePowerCost[c][currank];
-			uiForceAvailable -= uiForcePowerCost[c][currank];
+			uiForceUsed += bgForcePowerCost[c][currank];
+			uiForceAvailable -= bgForcePowerCost[c][currank];
 
 			uiForcePowersRank[c]++;
 		}
+	}
+
+	if (uiForcePowersRank[FP_LEVITATION] < 1)
+	{
+		uiForcePowersRank[FP_LEVITATION]=1;
+	}
+	if (uiForcePowersRank[FP_SABERATTACK] < 1 && ui_freeSaber.integer)
+	{
+		uiForcePowersRank[FP_SABERATTACK]=1;
+	}
+	if (uiForcePowersRank[FP_SABERDEFEND] < 1 && ui_freeSaber.integer)
+	{
+		uiForcePowersRank[FP_SABERDEFEND]=1;
 	}
 
 	UpdateForceUsed();

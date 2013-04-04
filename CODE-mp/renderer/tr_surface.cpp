@@ -25,10 +25,16 @@ RB_CheckOverflow
 ==============
 */
 void RB_CheckOverflow( int verts, int indexes ) {
-	if (tess.numVertexes + verts < SHADER_MAX_VERTEXES
-		&& tess.numIndexes + indexes < SHADER_MAX_INDEXES) {
-		return;
-	}
+	if ( tess.shader == tr.shadowShader ) {
+		if (tess.numVertexes + verts < SHADER_MAX_VERTEXES/2
+			&& tess.numIndexes + indexes < SHADER_MAX_INDEXES) {
+			return;
+		}
+	} else 
+		if (tess.numVertexes + verts < SHADER_MAX_VERTEXES
+			&& tess.numIndexes + indexes < SHADER_MAX_INDEXES) {
+			return;
+		}
 
 	RB_EndSurface();
 
@@ -83,7 +89,7 @@ void RB_AddQuadStampExt( vec3_t origin, vec3_t left, vec3_t up, byte *color, flo
 
 
 	// constant normal all the way around
-	VectorSubtract( vec3_origin, backEnd.viewParms.or.axis[0], normal );
+	VectorSubtract( vec3_origin, backEnd.viewParms.ori.axis[0], normal );
 
 	tess.normal[ndx][0] = tess.normal[ndx+1][0] = tess.normal[ndx+2][0] = tess.normal[ndx+3][0] = normal[0];
 	tess.normal[ndx][1] = tess.normal[ndx+1][1] = tess.normal[ndx+2][1] = tess.normal[ndx+3][1] = normal[1];
@@ -136,8 +142,8 @@ static void RB_SurfaceSprite( void ) {
 	// calculate the xyz locations for the four corners
 	radius = backEnd.currentEntity->e.radius;
 	if ( backEnd.currentEntity->e.rotation == 0 ) {
-		VectorScale( backEnd.viewParms.or.axis[1], radius, left );
-		VectorScale( backEnd.viewParms.or.axis[2], radius, up );
+		VectorScale( backEnd.viewParms.ori.axis[1], radius, left );
+		VectorScale( backEnd.viewParms.ori.axis[2], radius, up );
 	} else {
 		float	s, c;
 		float	ang;
@@ -146,11 +152,11 @@ static void RB_SurfaceSprite( void ) {
 		s = sin( ang );
 		c = cos( ang );
 
-		VectorScale( backEnd.viewParms.or.axis[1], c * radius, left );
-		VectorMA( left, -s * radius, backEnd.viewParms.or.axis[2], left );
+		VectorScale( backEnd.viewParms.ori.axis[1], c * radius, left );
+		VectorMA( left, -s * radius, backEnd.viewParms.ori.axis[2], left );
 
-		VectorScale( backEnd.viewParms.or.axis[2], c * radius, up );
-		VectorMA( up, s * radius, backEnd.viewParms.or.axis[1], up );
+		VectorScale( backEnd.viewParms.ori.axis[2], c * radius, up );
+		VectorMA( up, s * radius, backEnd.viewParms.ori.axis[1], up );
 	}
 	if ( backEnd.viewParms.isMirror ) {
 		VectorSubtract( vec3_origin, left, left );
@@ -428,11 +434,11 @@ static void DoSprite( vec3_t origin, float radius, float rotation )
 	s = sin( ang );
 	c = cos( ang );
 
-	VectorScale( backEnd.viewParms.or.axis[1], c * radius, left );
-	VectorMA( left, -s * radius, backEnd.viewParms.or.axis[2], left );
+	VectorScale( backEnd.viewParms.ori.axis[1], c * radius, left );
+	VectorMA( left, -s * radius, backEnd.viewParms.ori.axis[2], left );
 
-	VectorScale( backEnd.viewParms.or.axis[2], c * radius, up );
-	VectorMA( up, s * radius, backEnd.viewParms.or.axis[1], up );
+	VectorScale( backEnd.viewParms.ori.axis[2], c * radius, up );
+	VectorMA( up, s * radius, backEnd.viewParms.ori.axis[1], up );
 
 	if ( backEnd.viewParms.isMirror ) 
 	{
@@ -665,8 +671,8 @@ void RB_SurfaceLine( void )
 	VectorCopy( e->origin, start );
 
 	// compute side vector
-	VectorSubtract( start, backEnd.viewParms.or.origin, v1 );
-	VectorSubtract( end, backEnd.viewParms.or.origin, v2 );
+	VectorSubtract( start, backEnd.viewParms.ori.origin, v1 );
+	VectorSubtract( end, backEnd.viewParms.ori.origin, v2 );
 	CrossProduct( v1, v2, right );
 	VectorNormalize( right );
 
@@ -749,7 +755,7 @@ void RB_SurfaceCylinder( void )
 	VectorAdd( e->origin, e->oldorigin, midpoint );
 	VectorScale(midpoint, 0.5f, midpoint);		// Average start and end
 
-	VectorSubtract( midpoint, backEnd.viewParms.or.origin, midpoint );
+	VectorSubtract( midpoint, backEnd.viewParms.ori.origin, midpoint );
 	length = VectorNormalize( midpoint );
 
 	// this doesn't need to be perfect....just a rough compensation for zoom level is enough
@@ -837,6 +843,8 @@ void RB_SurfaceCylinder( void )
 
 static vec3_t sh1, sh2;
 static float f_count;
+
+#define LIGHTNING_RECURSION_LEVEL 1 // was 2
 
 // these functions are pretty crappy in terms of returning a nice range of rnd numbers, but it's probably good enough?
 /*static int Q_rand( int *seed ) {
@@ -975,7 +983,7 @@ static void DoBoltSeg( vec3_t start, vec3_t end, vec3_t right, float radius )
 		}
 
 		// Apply the random shape to our line seg to give it some micro-detail-jaggy-coolness.
-        ApplyShape( cur, old, right, newRadius, oldRadius, 2 );
+        ApplyShape( cur, old, right, newRadius, oldRadius, LIGHTNING_RECURSION_LEVEL );
   
 		// randomly split off to create little tendrils, but don't do it too close to the end and especially if we are not even of the forked variety
         if ( ( e->renderfx & RF_FORKED ) && f_count > 0 && Q_random(&e->frame) > 0.94f && radius * (1.0f - perc) > 0.2f )
@@ -1041,8 +1049,8 @@ static void RB_SurfaceElectricity()
 	VectorCopy( e->oldorigin, end );
 
 	// compute side vector
-	VectorSubtract( start, backEnd.viewParms.or.origin, v1 );
-	VectorSubtract( end, backEnd.viewParms.or.origin, v2 );
+	VectorSubtract( start, backEnd.viewParms.ori.origin, v1 );
+	VectorSubtract( end, backEnd.viewParms.ori.origin, v2 );
 	CrossProduct( v1, v2, right );
 	VectorNormalize( right );
 
@@ -1336,15 +1344,15 @@ static float	LodErrorForVolume( vec3_t local, float radius ) {
 		return 0;
 	}
 
-	world[0] = local[0] * backEnd.or.axis[0][0] + local[1] * backEnd.or.axis[1][0] + 
-		local[2] * backEnd.or.axis[2][0] + backEnd.or.origin[0];
-	world[1] = local[0] * backEnd.or.axis[0][1] + local[1] * backEnd.or.axis[1][1] + 
-		local[2] * backEnd.or.axis[2][1] + backEnd.or.origin[1];
-	world[2] = local[0] * backEnd.or.axis[0][2] + local[1] * backEnd.or.axis[1][2] + 
-		local[2] * backEnd.or.axis[2][2] + backEnd.or.origin[2];
+	world[0] = local[0] * backEnd.ori.axis[0][0] + local[1] * backEnd.ori.axis[1][0] + 
+		local[2] * backEnd.ori.axis[2][0] + backEnd.ori.origin[0];
+	world[1] = local[0] * backEnd.ori.axis[0][1] + local[1] * backEnd.ori.axis[1][1] + 
+		local[2] * backEnd.ori.axis[2][1] + backEnd.ori.origin[1];
+	world[2] = local[0] * backEnd.ori.axis[0][2] + local[1] * backEnd.ori.axis[1][2] + 
+		local[2] * backEnd.ori.axis[2][2] + backEnd.ori.origin[2];
 
-	VectorSubtract( world, backEnd.viewParms.or.origin, world );
-	d = DotProduct( world, backEnd.viewParms.or.axis[0] );
+	VectorSubtract( world, backEnd.viewParms.ori.origin, world );
+	d = DotProduct( world, backEnd.viewParms.ori.axis[0] );
 
 	if ( d < 0 ) {
 		d = -d;

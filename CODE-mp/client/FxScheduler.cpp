@@ -24,6 +24,9 @@
 	#include "../game/q_shared.h"
 #endif
 
+#include <set>
+extern set<CCloud *> OutstandClouds;
+
 
 #endif	// EFFECTSED
 
@@ -96,7 +99,7 @@ void CFxScheduler::Clean(bool bRemoveTemplates /*= true*/, int idToPreserve /*= 
 		next = itr;
 		next++;
 
-		if ((*itr)->mParent)
+		if ((*itr)->mParent&&OutstandClouds.find((*itr)->mParent)!=OutstandClouds.end())
 		{
 			(*itr)->mParent->DecreasePending();
 		}
@@ -704,10 +707,14 @@ int CFxScheduler::ParseEffect( const char *file, CGPGroup *base )
 		{
 			type = CameraShake;
 		}
+/*
+		// NOTE:  Pat requested that flashes be disabled in MP.  Since fx files are shared with SP, this is the easiest way to accomplish that....
+		//	 code will fall through and become type NONE....and therefore not parsed and added to the effect definition.
 		else if ( !stricmp( grpName, "flash" ))
 		{
 			type = ScreenFlash;
 		}
+*/
 		else 
 		{
 			type = None;
@@ -1028,6 +1035,8 @@ int	totalEffects = 0;
 // Return:
 //	none
 //------------------------------------------------------
+extern cvar_t	*cl_autolodscale;
+extern int gCLTotalClientNum;
 void CFxScheduler::PlayEffect( int id, CFxBoltInterface *obj )
 {
 	SEffectTemplate			*fx;
@@ -1082,6 +1091,8 @@ void CFxScheduler::PlayEffect( int id, CFxBoltInterface *obj )
 
 	effectCloud = FX_AddCloud();
 
+	float cullRange, effectDistSq = DistanceSquared( origin, theFxHelper.refdef.vieworg );
+
 	// Loop through the primitives and schedule each bit
 	for ( i = 0; i < fx->mPrimitiveCount; i++ )
 	{
@@ -1094,6 +1105,23 @@ void CFxScheduler::PlayEffect( int id, CFxBoltInterface *obj )
 			continue;
 		}
 #endif
+
+		if ( prim->mCullRange )
+		{
+			cullRange = prim->mCullRange;
+			if ( cl_autolodscale->integer )
+			{
+				if ( gCLTotalClientNum >= 8 )
+				{
+					cullRange *= 8.0f/gCLTotalClientNum;
+				}
+			}
+			if ( effectDistSq > cullRange )  // cull range has already been squared
+			{
+				// is too far away, so don't add this primitive group
+				continue;
+			}
+		}
 
 		count = prim->mSpawnCount.GetRoundedVal();
 
@@ -1571,6 +1599,8 @@ void CFxScheduler::PlayEffect( int id, vec3_t origin, vec3_t axis[3], const int 
 
 	effectCloud = FX_AddCloud();
 
+	float cullRange, effectDistSq = DistanceSquared( origin, theFxHelper.refdef.vieworg );
+
 	// Loop through the primitives and schedule each bit
 	for ( i = 0; i < fx->mPrimitiveCount; i++ )
 	{
@@ -1583,6 +1613,23 @@ void CFxScheduler::PlayEffect( int id, vec3_t origin, vec3_t axis[3], const int 
 			continue;
 		}
 #endif
+
+		if ( prim->mCullRange )
+		{
+			cullRange = prim->mCullRange;
+			if ( cl_autolodscale->integer )
+			{
+				if ( gCLTotalClientNum >= 8 )
+				{
+					cullRange *= 8.0f/gCLTotalClientNum;
+				}
+			}
+			if ( effectDistSq > cullRange )  // cull range has already been squared
+			{
+				// is too far away, so don't add this primitive group
+				continue;
+			}
+		}
 
 		count = prim->mSpawnCount.GetRoundedVal();
 
@@ -1762,8 +1809,69 @@ void CFxScheduler::PlayEffect( const char *file, vec3_t origin, vec3_t forward )
 // Return:
 //	none
 //------------------------------------------------------
+
+#if _JK2
+#define CHC
+
 void CFxScheduler::AddScheduledEffects( void )
 {
+	TScheduledEffect::iterator	itr, next;
+	SScheduledEffect			*schedEffect = 0;
+
+	itr = mFxSchedule.begin();
+
+	while ( itr != mFxSchedule.end() )
+	{
+		next = itr;
+		next++;
+		schedEffect = (*itr);
+		if ( *(*itr) <= theFxHelper.mTime )
+		{
+			if ((*itr)->mParent && OutstandClouds.find((*itr)->mParent)!=OutstandClouds.end())
+			{
+				// ok, are we spawning a bolt on effect or a normal one?
+				if ( (*itr)->mEntNum != -1 )
+				{
+					// Find out where the entity currently is
+					vec3_t	lerpOrigin;
+
+//					VM_Call( cgvm, CG_GET_LERP_ORIGIN, (*itr)->mEntNum, lerpOrigin);
+					TCGVectorData	*data = (TCGVectorData*)cl.mSharedMemory;
+					data->mEntityNum = (*itr)->mEntNum;
+					VM_Call( cgvm, CG_GET_LERP_ORIGIN );
+					VectorCopy(data->mPoint, lerpOrigin);
+
+					CreateEffect( (*itr)->mpTemplate, 
+								lerpOrigin, (*itr)->mAxis, 
+								theFxHelper.mTime - (*itr)->mStartTime, (*itr)->mParent );
+				}
+				else
+				{
+					CreateEffect( (*itr)->mpTemplate, 
+								(*itr)->mOrigin, (*itr)->mAxis, 
+								theFxHelper.mTime - (*itr)->mStartTime, (*itr)->mParent );
+				}
+				// Get 'em out of there.
+				if ((*itr)->mParent&&OutstandClouds.find((*itr)->mParent)!=OutstandClouds.end())
+				{
+					(*itr)->mParent->DecreasePending();
+				}
+			}
+			delete *itr;
+			mFxSchedule.erase(itr); 
+		}
+
+		itr = next;
+	}
+	// Add all active effects into the scene
+	FX_Add();
+}
+
+#else
+
+void CFxScheduler::AddScheduledEffects( void )
+{
+
 	TScheduledEffect::iterator	itr, next;
 	SScheduledEffect			*schedEffect = 0;
 #ifndef EFFECTSED
@@ -1792,7 +1900,7 @@ void CFxScheduler::AddScheduledEffects( void )
 								theFxHelper.mTime - (*itr)->mStartTime, (*itr)->mParent );
 			}
 			else
-#endif
+#endif // CHC
 			/*if ((*itr)->mBoltNum == -1)*/
 			if (1)
 			{// ok, are we spawning a bolt on effect or a normal one?
@@ -1813,7 +1921,7 @@ void CFxScheduler::AddScheduledEffects( void )
 				}
 				else
 				{
-#endif
+#endif // EFFECTSED
 					CreateEffect( (*itr)->mpTemplate, 
 								(*itr)->mOrigin, (*itr)->mAxis, 
 								theFxHelper.mTime - (*itr)->mStartTime, (*itr)->mParent );
@@ -1907,6 +2015,8 @@ void CFxScheduler::AddScheduledEffects( void )
 	FX_Add();
 }
 
+#endif // #if1
+
 //------------------------------------------------------
 // CreateEffect
 //	Creates the specified fx taking into account the
@@ -1930,7 +2040,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	trace_t	tr;
 	int		emitterModel;
 	CFxBoltInterface *fxBoltInterface = NULL;
-
 	VectorCopy(origin, origin_certain);
 
 	if (effectCloud->IsBoltInterfaceValid())
@@ -2149,7 +2258,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 			VectorSet( eRGB, fx->mRedEnd.GetVal(), fx->mGreenEnd.GetVal(), fx->mBlueEnd.GetVal() );
 		}
 	}
-
 	// Now create the appropriate effect entity
 	//------------------------
 	switch( fx->mType )
@@ -2157,7 +2265,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	//---------
 	case Particle:
 	//---------
-
 		FX_AddParticle( effectCloud, org, vel, accel, 
 						fx->mSizeStart.GetVal(), fx->mSizeEnd.GetVal(), fx->mSizeParm.GetVal(),
 						fx->mAlphaStart.GetVal(), fx->mAlphaEnd.GetVal(), fx->mAlphaParm.GetVal(),
@@ -2171,7 +2278,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	//---------
 	case Line:
 	//---------
-
 		FX_AddLine( effectCloud, org, org2, 
 						fx->mSizeStart.GetVal(), fx->mSizeEnd.GetVal(), fx->mSizeParm.GetVal(),
 						fx->mAlphaStart.GetVal(), fx->mAlphaEnd.GetVal(), fx->mAlphaParm.GetVal(),
@@ -2182,7 +2288,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	//---------
 	case Tail:
 	//---------
-
 		FX_AddTail( effectCloud, org, vel, accel,
 						fx->mSizeStart.GetVal(), fx->mSizeEnd.GetVal(), fx->mSizeParm.GetVal(),
 						fx->mLengthStart.GetVal(), fx->mLengthEnd.GetVal(), fx->mLengthParm.GetVal(),
@@ -2196,7 +2301,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	//----------------
 	case Electricity:
 	//----------------
-
 		FX_AddElectricity( effectCloud, org, org2, 
 						fx->mSizeStart.GetVal(), fx->mSizeEnd.GetVal(), fx->mSizeParm.GetVal(),
 						fx->mAlphaStart.GetVal(), fx->mAlphaEnd.GetVal(), fx->mAlphaParm.GetVal(),
@@ -2207,7 +2311,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	//---------
 	case Cylinder:
 	//---------
-
 		FX_AddCylinder( effectCloud, org, ax[0],
 						fx->mSizeStart.GetVal(), fx->mSizeEnd.GetVal(), fx->mSizeParm.GetVal(),
 						fx->mSize2Start.GetVal(), fx->mSize2End.GetVal(), fx->mSize2Parm.GetVal(),
@@ -2220,7 +2323,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	//---------
 	case Emitter:
 	//---------
-
 		// for chunk angles, you don't really need much control over the end result...you just want variation..
 		VectorSet( ang, 
 					fx->mAngle1.GetVal(), 
@@ -2259,7 +2361,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 		/*CG_ImpactMark( fx->mMediaHandles.GetHandle(), org, ax[0], fx->mRotation.GetVal(), 
 			sRGB[0], sRGB[1], sRGB[2], fx->mAlphaStart.GetVal(), 
 			qtrue, fx->mSizeStart.GetVal(), qfalse );*/
-
 		//VM_Call(cgvm, CG_IMPACT_MARK, fx->mMediaHandles.GetHandle(), org, ax[0], (int)fx->mRotation.GetVal(), 
 		//	(int)sRGB[0], (int)sRGB[1], (int)sRGB[2], (int)fx->mAlphaStart.GetVal(), (int)fx->mSizeStart.GetVal());
 		TCGImpactMark	*data = (TCGImpactMark *)cl.mSharedMemory;
@@ -2280,7 +2381,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	//-------------------
 	case OrientedParticle:
 	//-------------------
-
 		FX_AddOrientedParticle( effectCloud, org, ax[0], vel, accel,
 					fx->mSizeStart.GetVal(), fx->mSizeEnd.GetVal(), fx->mSizeParm.GetVal(),
 					fx->mAlphaStart.GetVal(), fx->mAlphaEnd.GetVal(), fx->mAlphaParm.GetVal(),
@@ -2294,21 +2394,18 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	//---------
 	case Sound:
 	//---------
-
 		theFxHelper.PlaySound( org, ENTITYNUM_NONE, CHAN_AUTO, fx->mMediaHandles.GetHandle() );
 		break;
 
 	//---------
 	case FxRunner:
 	//---------
-		
 		PlayEffect( fx->mPlayFxHandles.GetHandle(), org, ax );
 		break;
 
 	//---------
 	case Light:
 	//---------
-
 		FX_AddLight( effectCloud, org, fx->mSizeStart.GetVal(), fx->mSizeEnd.GetVal(), fx->mSizeParm.GetVal(),
 						sRGB, eRGB, fx->mRGBParm.GetVal(),
 						fx->mLife.GetVal(), fx->mFlags );
@@ -2326,7 +2423,6 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	//--------------
 	case ScreenFlash:
 	//--------------
-
 		FX_AddFlash( effectCloud, org, 
 					sRGB, eRGB, fx->mRGBParm.GetVal(),
 					fx->mLife.GetVal(), fx->mMediaHandles.GetHandle(), fx->mFlags );

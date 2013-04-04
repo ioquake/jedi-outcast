@@ -27,6 +27,7 @@ CPrimitiveTemplate::CPrimitiveTemplate()
 	mFlags = mSpawnFlags = 0;
 
 	mLife.SetRange( 1.0f, 1.0f );
+	mCullRange = 0;
 	mSpawnCount.SetRange( 1.0f, 1.0f );
 	mRadius.SetRange( 1.0f, 1.0f );
 	mHeight.SetRange( 1.0f, 1.0f );
@@ -77,6 +78,7 @@ void CPrimitiveTemplate::operator=(const CPrimitiveTemplate &that)
 	mSpawnDelay			= that.mSpawnDelay;
 	mSpawnCount			= that.mSpawnCount;
 	mLife				= that.mLife;
+	mCullRange			= that.mCullRange;
 
 	mMediaHandles		= that.mMediaHandles;
 	mImpactFxHandles	= that.mImpactFxHandles;
@@ -2196,6 +2198,11 @@ bool CPrimitiveTemplate::ParsePrimitive( CGPGroup *grp )
 		else if ( !stricmp( key, "life" ))
 		{
 			ParseLife( val );
+		}
+		else if ( !stricmp( key, "cullrange" ))
+		{
+			mCullRange = atoi( val );
+			mCullRange *= mCullRange; // Square
 		}
 		else if ( !stricmp( key, "delay" ))
 		{

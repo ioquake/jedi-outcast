@@ -15,12 +15,6 @@
 extern qboolean G_CheckForStrongAttackMomentum( gentity_t *self );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
 extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
-float g_crosshairEntDist = Q3_INFINITE;
-int g_crosshairSameEntTime = 0;
-int g_crosshairEntNum = ENTITYNUM_NONE;
-int g_crosshairEntTime = 0;
-extern int	teamLastEnemyTime[];
-extern	cvar_t	*g_spskill;
 extern int PM_AnimLength( int index, animNumber_t anim );
 extern void cgi_S_StartSound( vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfx );
 extern qboolean Q3_TaskIDPending( gentity_t *ent, taskID_t taskType );
@@ -39,7 +33,15 @@ extern qboolean PM_FlippingAnim( int anim );
 extern qboolean PM_RollingAnim( int anim );
 extern qboolean PM_InCartwheel( int anim );
 
+extern	cvar_t	*g_spskill;
+extern int	teamLastEnemyTime[];
 extern qboolean	stop_icarus;
+extern int killPlayerTimer;
+
+float g_crosshairEntDist = Q3_INFINITE;
+int g_crosshairSameEntTime = 0;
+int g_crosshairEntNum = ENTITYNUM_NONE;
+int g_crosshairEntTime = 0;
 /*
 -------------------------
 NPC_CheckAttacker
@@ -54,6 +56,9 @@ static void NPC_CheckAttacker( gentity_t *other, int mod )
 	
 	//valid ent - FIXME: a VALIDENT macro would be nice here
 	if ( !other )
+		return;
+
+	if ( other == NPC )
 		return;
 
 	if ( !other->inuse )
@@ -154,28 +159,38 @@ NPC_GetPainChance
 -------------------------
 */
 
-#define	MIN_FLINCH_DAMAGE	50
-
 float NPC_GetPainChance( gentity_t *self, int damage )
 {
-	if ( damage > self->max_health/2.0f )//MIN_FLINCH_DAMAGE )
+	if ( !self->enemy )
+	{//surprised, always take pain
 		return 1.0f;
+	}
 
+	if ( damage > self->max_health/2.0f )
+	{
+		return 1.0f;
+	}
+
+	float pain_chance = (float)(self->max_health-self->health)/(self->max_health*2.0f) + (float)damage/(self->max_health/2.0f);
 	switch ( g_spskill->integer )
 	{
 	case 0:	//easy
-		return 0.75f;
+		//return 0.75f;
 		break;
 
 	case 1://med
-		return 0.35f;
+		pain_chance *= 0.5f;
+		//return 0.35f;
 		break;
 
 	case 2://hard
 	default:
-		return 0.05f;
+		pain_chance *= 0.1f;
+		//return 0.05f;
 		break;
 	}
+	//Com_Printf( "%s: %4.2f\n", self->NPC_type, pain_chance );
+	return pain_chance;
 }
 
 /*
@@ -187,7 +202,7 @@ NPC_ChoosePainAnimation
 #define	MIN_PAIN_TIME	200
 
 extern int G_PickPainAnim( gentity_t *self, vec3_t point, int damage, int hitLoc );
-void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, vec3_t point, int damage, int mod, int hitLoc )
+void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, vec3_t point, int damage, int mod, int hitLoc, int voiceEvent = -1 )
 {
 	//If we've already taken pain, then don't take it again
 	if ( level.time < self->painDebounceTime && mod != MOD_ELECTROCUTE && mod != MOD_MELEE )
@@ -198,9 +213,19 @@ void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, vec3_t point, i
 	int		pain_anim = -1;
 	float	pain_chance;
 	
-	if ( self->client->NPC_class == CLASS_GALAKMECH )
+	if ( self->s.weapon == WP_THERMAL && self->client->fireDelay > 0 )
+	{//don't interrupt thermal throwing anim
+		return;
+	}
+	else if ( self->client->NPC_class == CLASS_GALAKMECH )
 	{
-		if ( self->client->ps.powerups[PW_GALAK_SHIELD] )
+		if ( hitLoc == HL_GENERIC1 )
+		{//hit the antenna!
+			pain_chance = 1.0f;
+			self->s.powerups |= ( 1 << PW_SHOCKED );
+			self->client->ps.powerups[PW_SHOCKED] = level.time + Q_irand( 500, 2500 );
+		}
+		else if ( self->client->ps.powerups[PW_GALAK_SHIELD] )
 		{//shield up
 			return;
 		}
@@ -226,6 +251,10 @@ void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, vec3_t point, i
 		else if ( mod == MOD_MELEE )
 		{//higher in rank (skill) we are, less likely we are to be fazed by a punch
 			pain_chance = 1.0f - ((RANK_CAPTAIN-self->NPC->rank)/(float)RANK_CAPTAIN);
+		}
+		else if ( self->client->NPC_class == CLASS_PROTOCOL )
+		{
+			pain_chance = 1.0f;
 		}
 		else
 		{
@@ -284,7 +313,14 @@ void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, vec3_t point, i
 				}
 				NPC_SetAnim( self, parts, pain_anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 			}
-			NPC_SetPainEvent( self );
+			if ( voiceEvent != -1 )
+			{
+				G_AddVoiceEvent( self, voiceEvent, Q_irand( 2000, 4000 ) );
+			}
+			else
+			{
+				NPC_SetPainEvent( self );
+			}
 		}
 		else
 		{
@@ -309,6 +345,7 @@ NPC_Pain
 void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t point, int damage, int mod, int hitLoc ) 
 {
 	team_t otherTeam = TEAM_FREE;
+	int		voiceEvent = -1;
 
 	if ( self->NPC == NULL ) 
 		return;
@@ -333,7 +370,10 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t p
 	//	}
 	}
 
-	if ( self->client->playerTeam && other->client && otherTeam == self->client->playerTeam && (!player->client->ps.viewEntity || other->s.number != player->client->ps.viewEntity)) 
+	if ( self->client->playerTeam 
+		&& other->client 
+		&& otherTeam == self->client->playerTeam 
+		&& (!player->client->ps.viewEntity || other->s.number != player->client->ps.viewEntity)) 
 	{//hit by a teammate
 		if ( other != self->enemy && self != other->enemy )
 		{//we weren't already enemies
@@ -357,24 +397,48 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t p
 				if ( damage != -1 )
 				{//-1 == don't play pain anim
 					//Set our proper pain animation
-					NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc );
+					if ( Q_irand( 0, 1 ) )
+					{
+						NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc, EV_FFWARN );
+					}
+					else
+					{
+						NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc );
+					}
 				}
 				return;
 			}
 			else if ( self->NPC && !other->s.number )//should be assumed, but...
 			{//dammit, stop that!
-				if ( self->NPC->ffireCount < 3+((2-g_spskill->integer)*2) )
+				if ( self->NPC->charmedTime )
+				{//mindtricked
+					return;
+				}
+				else if ( self->NPC->ffireCount < 3+((2-g_spskill->integer)*2) )
 				{//not mad enough yet
 					//Com_Printf( "chck: %d < %d\n", self->NPC->ffireCount, 3+((2-g_spskill->integer)*2) );
 					if ( damage != -1 )
 					{//-1 == don't play pain anim
 						//Set our proper pain animation
-						NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc );
+						if ( Q_irand( 0, 1 ) )
+						{
+							NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc, EV_FFWARN );
+						}
+						else
+						{
+							NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc );
+						}
 					}
 					return;
 				}
+				else if ( G_ActivateBehavior( self, BSET_FFIRE ) )
+				{//we have a specific script to run, so do that instead
+					return;
+				}
 				else
-				{//okay, we're going to turn on our ally, we need to 
+				{//okay, we're going to turn on our ally, we need to set and lock our enemy and put ourselves in a bstate that lets us attack him (and clear any flags that would stop us)
+					self->NPC->blockedSpeechDebounceTime = 0;
+					voiceEvent = EV_FFTURN;
 					self->NPC->behaviorState = self->NPC->tempBehavior = self->NPC->defaultBehavior = BS_DEFAULT;
 					other->flags &= ~FL_NOTARGET;
 					self->svFlags &= ~(SVF_IGNORE_ENEMIES|SVF_ICARUS_FREEZE|SVF_NO_COMBAT_SOUNDS);
@@ -382,7 +446,12 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t p
 					self->svFlags |= SVF_LOCKEDENEMY;
 					self->NPC->scriptFlags &= ~(SCF_DONT_FIRE|SCF_CROUCHED|SCF_WALKING|SCF_NO_COMBAT_TALK|SCF_FORCED_MARCH);
 					self->NPC->scriptFlags |= (SCF_CHASE_ENEMIES|SCF_NO_MIND_TRICK);
+					//NOTE: we also stop ICARUS altogether
 					stop_icarus = qtrue;
+					if ( !killPlayerTimer )
+					{
+						killPlayerTimer = level.time + 10000;
+					}
 				}
 			}
 		}
@@ -394,34 +463,21 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t p
 	//Do extra bits
 	if ( NPCInfo->ignorePain == qfalse )
 	{
-		if ( NPCInfo->charmedTime && NPCInfo->charmedTime < level.time && NPC->client )
-		{//charmed enemy
-			team_t	saveTeam = NPC->client->enemyTeam;
-			NPC->client->enemyTeam = NPC->client->playerTeam;
-			NPC->client->playerTeam = saveTeam;
-			NPC->client->leader = NULL;
-			if ( NPCInfo->tempBehavior == BS_FOLLOW_LEADER )
-			{
-				NPCInfo->tempBehavior = BS_DEFAULT;
-			}
-			G_ClearEnemy( NPC );
-		}
-		NPCInfo->charmedTime = NPCInfo->confusionTime = 0;//clear any charm or confusion, regardless
-		//Check to take a new enemy
-		if ( NPC->enemy != other )
-		{//not already mad at them
-			NPC_CheckAttacker( other, mod );
-		}
-
+		NPCInfo->confusionTime = 0;//clear any charm or confusion, regardless
 		if ( damage != -1 )
 		{//-1 == don't play pain anim
 			//Set our proper pain animation
-			NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc );
+			NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc, voiceEvent );
+		}
+		//Check to take a new enemy
+		if ( NPC->enemy != other && NPC != other )
+		{//not already mad at them
+			NPC_CheckAttacker( other, mod );
 		}
 	}
 
 	//Attempt to run any pain instructions
-	if(self->client && self->NPC)
+	if ( self->client && self->NPC )
 	{
 		//FIXME: This needs better heuristics perhaps
 		if(self->health <= (self->max_health/3) && G_ActivateBehavior(self, BSET_FLEE) )
@@ -468,6 +524,7 @@ void NPC_Touch(gentity_t *self, gentity_t *other, trace_t *trace)
 				if ( (keyTaken = INV_GoodieKeyGive( other )) == qtrue )
 				{
 					text = "cp @INGAME_TOOK_IMPERIAL_GOODIE_KEY";
+					G_AddEvent( other, EV_ITEM_PICKUP, (FindItemForInventory( INV_GOODIE_KEY )-bg_itemlist) );
 				}
 				else
 				{
@@ -479,6 +536,7 @@ void NPC_Touch(gentity_t *self, gentity_t *other, trace_t *trace)
 				if ( (keyTaken = INV_SecurityKeyGive( player, self->message )) == qtrue )
 				{
 					text = "cp @INGAME_TOOK_IMPERIAL_SECURITY_KEY";
+					G_AddEvent( other, EV_ITEM_PICKUP, (FindItemForInventory( INV_SECURITY_KEY )-bg_itemlist) );
 				}
 				else
 				{
@@ -534,12 +592,20 @@ void NPC_Touch(gentity_t *self, gentity_t *other, trace_t *trace)
 		/*
 		if ( other->s.number == 0 && self->client->playerTeam == other->client->playerTeam )
 		{
-			VectorAdd( self->s.pushVec, other->client->ps.velocity, self->s.pushVec );
+			VectorAdd( self->client->pushVec, other->client->ps.velocity, self->client->pushVec );
 		}
 		*/
 	}
 	else 
 	{//FIXME: check for SVF_NONNPC_ENEMY flag here?
+		if ( other->health > 0 ) 
+		{
+			if ( NPC->enemy == other && (other->svFlags&SVF_NONNPC_ENEMY) )
+			{
+				NPCInfo->touchedByPlayer = other;
+			}
+		}
+
 		if ( other == NPCInfo->goalEntity ) 
 		{
 			NPCInfo->aiFlags |= NPCAI_TOUCHED_GOAL;
@@ -581,8 +647,8 @@ void NPC_TempLookTarget( gentity_t *self, int lookEntNum, int minLookTime, int m
 
 void NPC_Respond( gentity_t *self, int userNum )
 {
+	int event = -1;
 	/*
-	int event;
 
 	if ( Q_irand( 0, 1 ) )
 	{
@@ -599,42 +665,234 @@ void NPC_Respond( gentity_t *self, int userNum )
 		NPC_TempLookTarget( self, userNum, 1000, 3000 );
 	}
 
-	//G_AddVoiceEvent( self, event, 3000 );
-}
-
-void WaitNPCRespond ( gentity_t *self )
-{
-	//make sure the responding ent is still valid
-	if ( !self->enemy || !self->enemy->client || !self->enemy->NPC )
+	//some last-minute hacked in responses
+	switch ( self->client->NPC_class )
 	{
-		G_FreeEntity( self );
-		return;
+	case CLASS_JAN:
+		if ( self->enemy )
+		{
+			if ( !Q_irand( 0, 2 ) )
+			{
+				event = Q_irand( EV_CHASE1, EV_CHASE3 );
+			}
+			else if ( Q_irand( 0, 1 ) )
+			{
+				event = Q_irand( EV_OUTFLANK1, EV_OUTFLANK2 );
+			}
+			else
+			{
+				event = Q_irand( EV_COVER1, EV_COVER5 );
+			}
+		}
+		else if ( !Q_irand( 0, 2 ) )
+		{
+			event = EV_SUSPICIOUS4;
+		}
+		else if ( !Q_irand( 0, 1 ) )
+		{
+			event = EV_SOUND1;
+		}
+		else
+		{
+			event = EV_CONFUSE1;
+		}
+		break;
+	case CLASS_LANDO:
+		if ( self->enemy )
+		{
+			if ( !Q_irand( 0, 2 ) )
+			{
+				event = Q_irand( EV_CHASE1, EV_CHASE3 );
+			}
+			else if ( Q_irand( 0, 1 ) )
+			{
+				event = Q_irand( EV_OUTFLANK1, EV_OUTFLANK2 );
+			}
+			else
+			{
+				event = Q_irand( EV_COVER1, EV_COVER5 );
+			}
+		}
+		else if ( !Q_irand( 0, 6 ) )
+		{
+			event = EV_SIGHT2;
+		}
+		else if ( !Q_irand( 0, 5 ) )
+		{
+			event = EV_GIVEUP4;
+		}
+		else if ( Q_irand( 0, 4 ) > 1 )
+		{
+			event = Q_irand( EV_SOUND1, EV_SOUND3 );
+		}
+		else
+		{
+			event = Q_irand( EV_JDETECTED1, EV_JDETECTED2 );
+		}
+		break;
+	case CLASS_LUKE:
+		if ( self->enemy )
+		{
+			event = EV_COVER1;
+		}
+		else
+		{
+			event = Q_irand( EV_SOUND1, EV_SOUND3 );
+		}
+		break;
+	case CLASS_JEDI:
+		if ( !self->enemy )
+		{
+			if ( !(self->svFlags&SVF_IGNORE_ENEMIES) 
+				&& (self->NPC->scriptFlags&SCF_LOOK_FOR_ENEMIES)
+				&& self->client->enemyTeam == TEAM_ENEMY )
+			{
+				event = Q_irand( EV_ANGER1, EV_ANGER3 );
+			}
+			else
+			{
+				event = Q_irand( EV_TAUNT1, EV_TAUNT2 );
+			}
+		}
+		break;
+	case CLASS_PRISONER:
+		if ( self->enemy )
+		{
+			if ( Q_irand( 0, 1 ) )
+			{
+				event = Q_irand( EV_CHASE1, EV_CHASE3 );
+			}
+			else
+			{
+				event = Q_irand( EV_OUTFLANK1, EV_OUTFLANK2 );
+			}
+		}
+		else
+		{
+			event = Q_irand( EV_SOUND1, EV_SOUND3 );
+		}
+		break;
+	case CLASS_REBEL:
+		if ( self->enemy )
+		{
+			if ( !Q_irand( 0, 2 ) )
+			{
+				event = Q_irand( EV_CHASE1, EV_CHASE3 );
+			}
+			else
+			{
+				event = Q_irand( EV_DETECTED1, EV_DETECTED5 );
+			}
+		}
+		else
+		{
+			event = Q_irand( EV_SOUND1, EV_SOUND3 );
+		}
+		break;
+	case CLASS_BESPIN_COP:
+		if ( !Q_stricmp( "bespincop", self->NPC_type ) )
+		{//variant 1
+			if ( self->enemy )
+			{
+				if ( Q_irand( 0, 9 ) > 6 )
+				{
+					event = Q_irand( EV_CHASE1, EV_CHASE3 );
+				}
+				else if ( Q_irand( 0, 6 ) > 4 )
+				{
+					event = Q_irand( EV_OUTFLANK1, EV_OUTFLANK2 );
+				}
+				else
+				{
+					event = Q_irand( EV_COVER1, EV_COVER5 );
+				}
+			}
+			else if ( !Q_irand( 0, 3 ) )
+			{
+				event = Q_irand( EV_SIGHT2, EV_SIGHT3 );
+			}
+			else if ( !Q_irand( 0, 1 ) )
+			{
+				event = Q_irand( EV_SOUND1, EV_SOUND3 );
+			}
+			else if ( !Q_irand( 0, 2 ) )
+			{
+				event = EV_LOST1;
+			}
+			else if ( !Q_irand( 0, 1 ) )
+			{
+				event = EV_ESCAPING2;
+			}
+			else
+			{
+				event = EV_GIVEUP4;
+			}
+		}
+		else
+		{//variant2
+			if ( self->enemy )
+			{
+				if ( Q_irand( 0, 9 ) > 6 )
+				{
+					event = Q_irand( EV_CHASE1, EV_CHASE3 );
+				}
+				else if ( Q_irand( 0, 6 ) > 4 )
+				{
+					event = Q_irand( EV_OUTFLANK1, EV_OUTFLANK2 );
+				}
+				else
+				{
+					event = Q_irand( EV_COVER1, EV_COVER5 );
+				}
+			}
+			else if ( !Q_irand( 0, 3 ) )
+			{
+				event = Q_irand( EV_SIGHT1, EV_SIGHT2 );
+			}
+			else if ( !Q_irand( 0, 1 ) )
+			{
+				event = Q_irand( EV_SOUND1, EV_SOUND3 );
+			}
+			else if ( !Q_irand( 0, 2 ) )
+			{
+				event = EV_LOST1;
+			}
+			else if ( !Q_irand( 0, 1 ) )
+			{
+				event = EV_GIVEUP3;
+			}
+			else
+			{
+				event = EV_CONFUSE1;
+			}
+		}
+		break;
+	case CLASS_R2D2:				// droid
+		G_Sound(self, G_SoundIndex(va("sound/chars/r2d2/misc/r2d2talk0%d.wav",Q_irand(1, 3))));
+		break;
+	case CLASS_R5D2:				// droid
+		G_Sound(self, G_SoundIndex(va("sound/chars/r5d2/misc/r5talk%d.wav",Q_irand(1, 4))));
+		break;
+	case CLASS_MOUSE:				// droid
+		G_Sound(self, G_SoundIndex(va("sound/chars/mouse/misc/mousego%d.wav",Q_irand(1, 3))));
+		break;
+	case CLASS_GONK:				// droid
+		G_Sound(self, G_SoundIndex(va("sound/chars/gonk/misc/gonktalk%d.wav",Q_irand(1, 2))));
+		break;
 	}
-
-	if ( gi.VoiceVolume[0] )
-	{//player is still talking
-		self->nextthink = level.time + 500;
-		//set enemy to not respond for a bit longer
-		self->enemy->NPC->blockedSpeechDebounceTime = level.time + 1000;
-		return;
-	}
-
-	if ( self->enemy->health <= 0 || (!self->alt_fire && (self->enemy->NPC->scriptFlags&SCF_NO_RESPONSE)) )
+	
+	if ( event != -1 )
 	{
-		G_FreeEntity( self );
-		return;
-	}
+		//hack here because we reuse some "combat" and "extra" sounds
+		qboolean addFlag = (self->NPC->scriptFlags&SCF_NO_COMBAT_TALK);
+		self->NPC->scriptFlags &= ~SCF_NO_COMBAT_TALK;
 
-	//set enemy to be ready to respond
-	self->enemy->NPC->blockedSpeechDebounceTime = 0;
+		G_AddVoiceEvent( self, event, 3000 );
 
-	if ( self->alt_fire )
-	{//Run the NPC's usescript
-		G_ActivateBehavior( self->enemy, BSET_USE );
-	}
-	else
-	{//make them respond generically
-		NPC_Respond( self->enemy, 0 );
+		if ( addFlag )
+		{
+			self->NPC->scriptFlags |= SCF_NO_COMBAT_TALK;
+		}
 	}
 }
 
@@ -660,7 +918,7 @@ void NPC_UseResponse( gentity_t *self, gentity_t *user, qboolean useWhenDone )
 		return;
 	}
 
-	if ( user->client && self->client->playerTeam != user->client->playerTeam )
+	if ( user->client && self->client->playerTeam != user->client->playerTeam && self->client->playerTeam != TEAM_NEUTRAL )
 	{//only those on the same team react
 		if ( useWhenDone )
 		{

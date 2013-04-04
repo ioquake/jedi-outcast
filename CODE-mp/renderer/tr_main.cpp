@@ -1,7 +1,7 @@
 // tr_main.c -- main control flow for each frame
 
 #include "tr_local.h"
-#include "../ghoul2/g2_local.h"
+#include "../ghoul2/G2_local.h"
 
 trGlobals_t		tr;
 
@@ -16,6 +16,8 @@ static float	s_flipMatrix[16] = {
 
 
 refimport_t	ri;
+
+#ifndef DEDICATED
 
 // entities that will have procedurally generated surfaces will just
 // point at this for their sorting surface
@@ -84,6 +86,8 @@ int R_CullLocalBox (vec3_t bounds[2]) {
 	return CULL_CLIP;		// partially clipped
 }
 
+#endif // !DEDICATED
+
 /*
 ** R_CullLocalPointAndRadius
 */
@@ -147,6 +151,7 @@ int R_CullPointAndRadius( vec3_t pt, float radius )
 	return CULL_IN;		// completely inside frustum
 }
 
+#ifndef DEDICATED
 
 /*
 =================
@@ -160,6 +165,7 @@ void R_LocalNormalToWorld (vec3_t local, vec3_t world) {
 	world[2] = local[0] * tr.ori.axis[0][2] + local[1] * tr.ori.axis[1][2] + local[2] * tr.ori.axis[2][2];
 }
 
+#endif // !DEDICATED
 /*
 =================
 R_LocalPointToWorld
@@ -171,6 +177,8 @@ void R_LocalPointToWorld (vec3_t local, vec3_t world) {
 	world[1] = local[0] * tr.ori.axis[0][1] + local[1] * tr.ori.axis[1][1] + local[2] * tr.ori.axis[2][1] + tr.ori.origin[1];
 	world[2] = local[0] * tr.ori.axis[0][2] + local[1] * tr.ori.axis[1][2] + local[2] * tr.ori.axis[2][2] + tr.ori.origin[2];
 }
+
+#ifndef DEDICATED
 
 float preTransEntMatrix[16];
 
@@ -290,47 +298,47 @@ Called by both the front end and the back end
 =================
 */
 void R_RotateForEntity( const trRefEntity_t *ent, const viewParms_t *viewParms,
-					   orientationr_t *or ) {
+					   orientationr_t *ori ) {
 //	float	glMatrix[16];
 	vec3_t	delta;
 	float	axisLength;
 
 	if ( ent->e.reType != RT_MODEL ) {
-		*or = viewParms->world;
+		*ori = viewParms->world;
 		return;
 	}
 
-	VectorCopy( ent->e.origin, or->origin );
+	VectorCopy( ent->e.origin, ori->origin );
 
-	VectorCopy( ent->e.axis[0], or->axis[0] );
-	VectorCopy( ent->e.axis[1], or->axis[1] );
-	VectorCopy( ent->e.axis[2], or->axis[2] );
+	VectorCopy( ent->e.axis[0], ori->axis[0] );
+	VectorCopy( ent->e.axis[1], ori->axis[1] );
+	VectorCopy( ent->e.axis[2], ori->axis[2] );
 
-	preTransEntMatrix[0] = or->axis[0][0];
-	preTransEntMatrix[4] = or->axis[1][0];
-	preTransEntMatrix[8] = or->axis[2][0];
-	preTransEntMatrix[12] = or->origin[0];
+	preTransEntMatrix[0] = ori->axis[0][0];
+	preTransEntMatrix[4] = ori->axis[1][0];
+	preTransEntMatrix[8] = ori->axis[2][0];
+	preTransEntMatrix[12] = ori->origin[0];
 
-	preTransEntMatrix[1] = or->axis[0][1];
-	preTransEntMatrix[5] = or->axis[1][1];
-	preTransEntMatrix[9] = or->axis[2][1];
-	preTransEntMatrix[13] = or->origin[1];
+	preTransEntMatrix[1] = ori->axis[0][1];
+	preTransEntMatrix[5] = ori->axis[1][1];
+	preTransEntMatrix[9] = ori->axis[2][1];
+	preTransEntMatrix[13] = ori->origin[1];
 
-	preTransEntMatrix[2] = or->axis[0][2];
-	preTransEntMatrix[6] = or->axis[1][2];
-	preTransEntMatrix[10] = or->axis[2][2];
-	preTransEntMatrix[14] = or->origin[2];
+	preTransEntMatrix[2] = ori->axis[0][2];
+	preTransEntMatrix[6] = ori->axis[1][2];
+	preTransEntMatrix[10] = ori->axis[2][2];
+	preTransEntMatrix[14] = ori->origin[2];
 
 	preTransEntMatrix[3] = 0;
 	preTransEntMatrix[7] = 0;
 	preTransEntMatrix[11] = 0;
 	preTransEntMatrix[15] = 1;
 
-	myGlMultMatrix( preTransEntMatrix, viewParms->world.modelMatrix, or->modelMatrix );
+	myGlMultMatrix( preTransEntMatrix, viewParms->world.modelMatrix, ori->modelMatrix );
 
 	// calculate the viewer origin in the model's space
 	// needed for fog, specular, and environment mapping
-	VectorSubtract( viewParms->or.origin, or->origin, delta );
+	VectorSubtract( viewParms->ori.origin, ori->origin, delta );
 
 	// compensate for scale in the axes if necessary
 	if ( ent->e.nonNormalizedAxes ) {
@@ -344,9 +352,9 @@ void R_RotateForEntity( const trRefEntity_t *ent, const viewParms_t *viewParms,
 		axisLength = 1.0f;
 	}
 
-	or->viewOrigin[0] = DotProduct( delta, or->axis[0] ) * axisLength;
-	or->viewOrigin[1] = DotProduct( delta, or->axis[1] ) * axisLength;
-	or->viewOrigin[2] = DotProduct( delta, or->axis[2] ) * axisLength;
+	ori->viewOrigin[0] = DotProduct( delta, ori->axis[0] ) * axisLength;
+	ori->viewOrigin[1] = DotProduct( delta, ori->axis[1] ) * axisLength;
+	ori->viewOrigin[2] = DotProduct( delta, ori->axis[2] ) * axisLength;
 }
 
 /*
@@ -365,24 +373,24 @@ void R_RotateForViewer (void)
 	tr.ori.axis[0][0] = 1;
 	tr.ori.axis[1][1] = 1;
 	tr.ori.axis[2][2] = 1;
-	VectorCopy (tr.viewParms.or.origin, tr.ori.viewOrigin);
+	VectorCopy (tr.viewParms.ori.origin, tr.ori.viewOrigin);
 
 	// transform by the camera placement
-	VectorCopy( tr.viewParms.or.origin, origin );
+	VectorCopy( tr.viewParms.ori.origin, origin );
 
-	viewerMatrix[0] = tr.viewParms.or.axis[0][0];
-	viewerMatrix[4] = tr.viewParms.or.axis[0][1];
-	viewerMatrix[8] = tr.viewParms.or.axis[0][2];
+	viewerMatrix[0] = tr.viewParms.ori.axis[0][0];
+	viewerMatrix[4] = tr.viewParms.ori.axis[0][1];
+	viewerMatrix[8] = tr.viewParms.ori.axis[0][2];
 	viewerMatrix[12] = -origin[0] * viewerMatrix[0] + -origin[1] * viewerMatrix[4] + -origin[2] * viewerMatrix[8];
 
-	viewerMatrix[1] = tr.viewParms.or.axis[1][0];
-	viewerMatrix[5] = tr.viewParms.or.axis[1][1];
-	viewerMatrix[9] = tr.viewParms.or.axis[1][2];
+	viewerMatrix[1] = tr.viewParms.ori.axis[1][0];
+	viewerMatrix[5] = tr.viewParms.ori.axis[1][1];
+	viewerMatrix[9] = tr.viewParms.ori.axis[1][2];
 	viewerMatrix[13] = -origin[0] * viewerMatrix[1] + -origin[1] * viewerMatrix[5] + -origin[2] * viewerMatrix[9];
 
-	viewerMatrix[2] = tr.viewParms.or.axis[2][0];
-	viewerMatrix[6] = tr.viewParms.or.axis[2][1];
-	viewerMatrix[10] = tr.viewParms.or.axis[2][2];
+	viewerMatrix[2] = tr.viewParms.ori.axis[2][0];
+	viewerMatrix[6] = tr.viewParms.ori.axis[2][1];
+	viewerMatrix[10] = tr.viewParms.ori.axis[2][2];
 	viewerMatrix[14] = -origin[0] * viewerMatrix[2] + -origin[1] * viewerMatrix[6] + -origin[2] * viewerMatrix[10];
 
 	viewerMatrix[3] = 0;
@@ -450,7 +458,7 @@ static void SetFarClip( void )
 			v[2] = tr.viewParms.visBounds[1][2];
 		}
 
-		VectorSubtract( v, tr.viewParms.or.origin, vecTo );
+		VectorSubtract( v, tr.viewParms.ori.origin, vecTo );
 
 		distance = vecTo[0] * vecTo[0] + vecTo[1] * vecTo[1] + vecTo[2] * vecTo[2];
 
@@ -529,25 +537,25 @@ void R_SetupFrustum (void) {
 	xs = sin( ang );
 	xc = cos( ang );
 
-	VectorScale( tr.viewParms.or.axis[0], xs, tr.viewParms.frustum[0].normal );
-	VectorMA( tr.viewParms.frustum[0].normal, xc, tr.viewParms.or.axis[1], tr.viewParms.frustum[0].normal );
+	VectorScale( tr.viewParms.ori.axis[0], xs, tr.viewParms.frustum[0].normal );
+	VectorMA( tr.viewParms.frustum[0].normal, xc, tr.viewParms.ori.axis[1], tr.viewParms.frustum[0].normal );
 
-	VectorScale( tr.viewParms.or.axis[0], xs, tr.viewParms.frustum[1].normal );
-	VectorMA( tr.viewParms.frustum[1].normal, -xc, tr.viewParms.or.axis[1], tr.viewParms.frustum[1].normal );
+	VectorScale( tr.viewParms.ori.axis[0], xs, tr.viewParms.frustum[1].normal );
+	VectorMA( tr.viewParms.frustum[1].normal, -xc, tr.viewParms.ori.axis[1], tr.viewParms.frustum[1].normal );
 
 	ang = tr.viewParms.fovY / 180 * M_PI * 0.5f;
 	xs = sin( ang );
 	xc = cos( ang );
 
-	VectorScale( tr.viewParms.or.axis[0], xs, tr.viewParms.frustum[2].normal );
-	VectorMA( tr.viewParms.frustum[2].normal, xc, tr.viewParms.or.axis[2], tr.viewParms.frustum[2].normal );
+	VectorScale( tr.viewParms.ori.axis[0], xs, tr.viewParms.frustum[2].normal );
+	VectorMA( tr.viewParms.frustum[2].normal, xc, tr.viewParms.ori.axis[2], tr.viewParms.frustum[2].normal );
 
-	VectorScale( tr.viewParms.or.axis[0], xs, tr.viewParms.frustum[3].normal );
-	VectorMA( tr.viewParms.frustum[3].normal, -xc, tr.viewParms.or.axis[2], tr.viewParms.frustum[3].normal );
+	VectorScale( tr.viewParms.ori.axis[0], xs, tr.viewParms.frustum[3].normal );
+	VectorMA( tr.viewParms.frustum[3].normal, -xc, tr.viewParms.ori.axis[2], tr.viewParms.frustum[3].normal );
 
 	for (i=0 ; i<4 ; i++) {
 		tr.viewParms.frustum[i].type = PLANE_NON_AXIAL;
-		tr.viewParms.frustum[i].dist = DotProduct (tr.viewParms.or.origin, tr.viewParms.frustum[i].normal);
+		tr.viewParms.frustum[i].dist = DotProduct (tr.viewParms.ori.origin, tr.viewParms.frustum[i].normal);
 		SetPlaneSignbits( &tr.viewParms.frustum[i] );
 	}
 }
@@ -817,7 +825,7 @@ static qboolean IsMirror( const drawSurf_t *drawSurf, int entityNum )
 	}
 	return qfalse;
 }
-
+#ifndef DEDICATED
 /*
 ** SurfIsOffscreen
 **
@@ -844,9 +852,7 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, vec4_t clipDest[128
 	R_DecomposeSort( drawSurf->sort, &entityNum, &shader, &fogNum, &dlighted );
 	RB_BeginSurface( shader, fogNum );
 	rb_surfaceTable[ *drawSurf->surface ]( drawSurf->surface );
-
 	assert( tess.numVertexes < 128 );
-
 	for ( i = 0; i < tess.numVertexes; i++ )
 	{
 		int j;
@@ -888,7 +894,7 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, vec4_t clipDest[128
 		float dot;
 		float len;
 
-		VectorSubtract( tess.xyz[tess.indexes[i]], tr.viewParms.or.origin, normal );
+		VectorSubtract( tess.xyz[tess.indexes[i]], tr.viewParms.ori.origin, normal );
 
 		len = VectorLengthSquared( normal );			// lose the sqrt
 		if ( len < shortest )
@@ -921,6 +927,7 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, vec4_t clipDest[128
 	return qfalse;
 }
 
+#endif // DEDICATED
 /*
 ========================
 R_MirrorViewBySurface
@@ -959,14 +966,14 @@ qboolean R_MirrorViewBySurface (drawSurf_t *drawSurf, int entityNum) {
 		return qfalse;		// bad portal, no portalentity
 	}
 
-	R_MirrorPoint (oldParms.or.origin, &surface, &camera, newParms.or.origin );
+	R_MirrorPoint (oldParms.ori.origin, &surface, &camera, newParms.ori.origin );
 
 	VectorSubtract( vec3_origin, camera.axis[0], newParms.portalPlane.normal );
 	newParms.portalPlane.dist = DotProduct( camera.origin, newParms.portalPlane.normal );
 	
-	R_MirrorVector (oldParms.or.axis[0], &surface, &camera, newParms.or.axis[0]);
-	R_MirrorVector (oldParms.or.axis[1], &surface, &camera, newParms.or.axis[1]);
-	R_MirrorVector (oldParms.or.axis[2], &surface, &camera, newParms.or.axis[2]);
+	R_MirrorVector (oldParms.ori.axis[0], &surface, &camera, newParms.ori.axis[0]);
+	R_MirrorVector (oldParms.ori.axis[1], &surface, &camera, newParms.ori.axis[1]);
+	R_MirrorVector (oldParms.ori.axis[2], &surface, &camera, newParms.ori.axis[2]);
 
 	// OPTIMIZE: restrict the viewport on the mirrored view
 
@@ -1533,4 +1540,5 @@ void R_RenderView (viewParms_t *parms) {
 }
 
 
+#endif // !DEDICATED
 

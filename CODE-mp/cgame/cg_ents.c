@@ -493,7 +493,7 @@ static void CG_General( centity_t *cent ) {
 	vec3_t				beamOrg;
 	mdxaBone_t			matrix;
 
-	if (cent->currentState.modelGhoul2 == 999)
+	if (cent->currentState.modelGhoul2 == 127)
 	{ //not ready to be drawn or initialized..
 		return;
 	}
@@ -1056,10 +1056,13 @@ Ghoul2 Insert End
 		VectorScale( ent.oldorigin, tempLength, ent.oldorigin );
 
 		ent.endTime = cent->dustTrailTime;
+
+		/*
 		ent.renderfx |= RF_DISINTEGRATE2;
 
 		ent.customShader = cgs.media.disruptorShader;
 		trap_R_AddRefEntityToScene( &ent );
+		*/
 
 		ent.renderfx &= ~(RF_DISINTEGRATE2);
 		ent.renderfx |= (RF_DISINTEGRATE1);
@@ -1881,7 +1884,9 @@ Ghoul2 Insert End
 
 	if (s1->weapon != WP_SABER && s1->weapon != G2_MODEL_PART)
 	{
-		if ( cent->currentState.eFlags | EF_ALT_FIRING )
+		//if ( cent->currentState.eFlags | EF_ALT_FIRING )
+		//rww - why was this like this?
+		if ( cent->currentState.eFlags & EF_ALT_FIRING )
 		{
 			ent.hModel = weapon->altMissileModel;
 		}
@@ -2418,6 +2423,8 @@ void CG_AddPacketEntities( void ) {
 
 	//rww - update the g2 pointer BEFORE the weapons, otherwise bad things could happen
 	//FIXME: These two pointers seem to differ sometimes, they shouldn't, should they?
+	//the one on predictedPlayerEntity also seems to often be invalid, so it can't be
+	//reliably checked and cleared.
 	cg.predictedPlayerEntity.ghoul2 = cg_entities[ cg.snap->ps.clientNum].ghoul2;
 	CG_CheckPlayerG2Weapons(ps, &cg.predictedPlayerEntity);
 	BG_PlayerStateToEntityState( ps, &cg.predictedPlayerEntity.currentState, qfalse );

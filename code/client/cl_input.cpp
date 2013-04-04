@@ -388,6 +388,8 @@ void CL_JoystickMove( usercmd_t *cmd ) {
 CL_MouseMove
 =================
 */
+float cl_mPitchOverride = 0.0f;
+float cl_mYawOverride = 0.0f;
 void CL_MouseMove( usercmd_t *cmd ) {
 	float	mx, my;
 	float	accelSensitivity;
@@ -426,9 +428,9 @@ void CL_MouseMove( usercmd_t *cmd ) {
 	if ( in_strafe.active ) {
 		cmd->rightmove = ClampChar( cmd->rightmove + m_side->value * mx );
 	} else {
-		if ( m_yawOverride->value )
+		if ( cl_mYawOverride )
 		{
-			cl.viewangles[YAW] -= m_yawOverride->value * mx;
+			cl.viewangles[YAW] -= cl_mYawOverride * mx;
 		}
 		else
 		{
@@ -437,15 +439,15 @@ void CL_MouseMove( usercmd_t *cmd ) {
 	}
 
 	if ( (in_mlooking || cl_freelook->integer) && !in_strafe.active ) {
-		if ( m_pitchOverride->value )
+		if ( cl_mPitchOverride )
 		{
 			if ( m_pitch->value > 0 )
 			{
-				cl.viewangles[PITCH] += m_pitchOverride->value * my;
+				cl.viewangles[PITCH] += cl_mPitchOverride * my;
 			}
 			else
 			{
-				cl.viewangles[PITCH] -= m_pitchOverride->value * my;
+				cl.viewangles[PITCH] -= cl_mPitchOverride * my;
 			}
 		}
 		else

@@ -3,13 +3,13 @@ Microsoft Developer Studio Workspace File, Format Version 6.00
 
 ###############################################################################
 
-Project: "JK2cgame"=.\cgame\JK2_cgame.dsp - Package Owner=<4>
+Project: "JK2cgame"=".\cgame\JK2_cgame.dsp" - Package Owner=<4>
 
 Package=<5>
 {{{
     begin source code control
-	"$/General/code/cgame", UPCAAAAA
-	.\cgame
+    "$/General/code/cgame", UPCAAAAA
+    .\cgame
     end source code control
 }}}
 
@@ -19,13 +19,13 @@ Package=<4>
 
 ###############################################################################
 
-Project: "JK2game"=.\game\JK2_game.dsp - Package Owner=<4>
+Project: "JK2game"=".\game\JK2_game.dsp" - Package Owner=<4>
 
 Package=<5>
 {{{
     begin source code control
-	"$/General/code/game", VPCAAAAA
-	.\game
+    "$/General/code/game", VPCAAAAA
+    .\game
     end source code control
 }}}
 
@@ -35,7 +35,23 @@ Package=<4>
 
 ###############################################################################
 
-Project: "botlib"=.\botlib\botlib.dsp - Package Owner=<4>
+Project: "WinDed"=".\WinDed.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+    begin source code control
+    "$/General/code", EAAAAAAA
+    .
+    end source code control
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "botlib"=".\botlib\botlib.dsp" - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -51,7 +67,7 @@ Package=<4>
 
 ###############################################################################
 
-Project: "jk2mp"=.\jk2mp.dsp - Package Owner=<4>
+Project: "jk2mp"=".\jk2mp.dsp" - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -79,7 +95,7 @@ Package=<4>
 
 ###############################################################################
 
-Project: "ui"=.\ui\ui.dsp - Package Owner=<4>
+Project: "ui"=".\ui\ui.dsp" - Package Owner=<4>
 
 Package=<5>
 {{{

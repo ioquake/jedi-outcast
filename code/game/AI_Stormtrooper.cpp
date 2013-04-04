@@ -145,6 +145,15 @@ static void ST_Speech( gentity_t *self, int speechType, float failChance )
 			{
 				return;
 			}
+			/*
+			else if ( !self->NPC->group->enemy )
+			{
+				if ( groupSpeechDebounceTime[self->client->playerTeam] > level.time )
+				{
+					return;
+				}
+			}
+			*/
 		}
 		else if ( !TIMER_Done( self, "chatter" ) )
 		{//personal timer
@@ -165,8 +174,8 @@ static void ST_Speech( gentity_t *self, int speechType, float failChance )
 	else
 	{
 		TIMER_Set( self, "chatter", Q_irand( 2000, 4000 ) );
-		groupSpeechDebounceTime[self->client->playerTeam] = level.time + Q_irand( 1000, 2000 );
 	}
+	groupSpeechDebounceTime[self->client->playerTeam] = level.time + Q_irand( 2000, 4000 );
 
 	if ( self->NPC->blockedSpeechDebounceTime > level.time )
 	{
@@ -179,7 +188,7 @@ static void ST_Speech( gentity_t *self, int speechType, float failChance )
 		G_AddVoiceEvent( self, Q_irand(EV_CHASE1, EV_CHASE3), 2000 );
 		break;
 	case SPEECH_CONFUSED:
-		G_AddVoiceEvent( self, Q_irand(EV_CONFUSE1, EV_CONFUSE2), 2000 );
+		G_AddVoiceEvent( self, Q_irand(EV_CONFUSE1, EV_CONFUSE3), 2000 );
 		break;
 	case SPEECH_COVER:
 		G_AddVoiceEvent( self, Q_irand(EV_COVER1, EV_COVER5), 2000 );
@@ -222,35 +231,6 @@ static void ST_Speech( gentity_t *self, int speechType, float failChance )
 	}
 
 	self->NPC->blockedSpeechDebounceTime = level.time + 2000;
-}
-
-void NPC_ST_PlayConfusionSound( gentity_t *self )
-{
-	if ( self->health > 0 )
-	{
-		if ( self->enemy ||//was mad
-				!TIMER_Done( self, "enemyLastVisible" ) ||//saw something suspicious
-				self->client->renderInfo.lookTarget	== 0//was looking at player
-			)
-		{
-			self->NPC->blockedSpeechDebounceTime = 0;//make sure we say this
-			G_AddVoiceEvent( self, EV_CONFUSE2, 2000 );
-		}
-		else if ( self->NPC && self->NPC->investigateDebounceTime+self->NPC->pauseTime > level.time )//was checking something out
-		{
-			self->NPC->blockedSpeechDebounceTime = 0;//make sure we say this
-			G_AddVoiceEvent( self, EV_CONFUSE1, 2000 );
-		}
-		//G_AddVoiceEvent( self, Q_irand(EV_CONFUSE1, EV_CONFUSE3), 2000 );
-	}
-	//reset him to be totally unaware again
-	TIMER_Set( self, "enemyLastVisible", 0 );
-	self->NPC->tempBehavior = BS_DEFAULT;
-	
-	//self->NPC->behaviorState = BS_PATROL;
-	G_ClearEnemy( self );//FIXME: or just self->enemy = NULL;?
-
-	self->NPC->investigateCount = 0;
 }
 
 void ST_MarkToCover( gentity_t *self )
@@ -544,7 +524,7 @@ qboolean NPC_CheckEnemyStealth( gentity_t *target )
 	if ( InFOV( target, NPC, NPCInfo->stats.hfov, NPCInfo->stats.vfov ) == qfalse )
 		return qfalse;
 
-	qboolean clearLOS = ( target->client->ps.leanofs ) ? NPC_ClearLOS( target->currentOrigin ) : NPC_ClearLOS( target );
+	qboolean clearLOS = ( target->client->ps.leanofs ) ? NPC_ClearLOS( target->client->renderInfo.eyePoint ) : NPC_ClearLOS( target );
 
 	//Now check for clear line of vision
 	if ( clearLOS )
@@ -968,6 +948,9 @@ NPC_BSST_Investigate
 
 void NPC_BSST_Investigate( void )
 {
+	//get group- mainly for group speech debouncing, but may use for group scouting/investigating AI, too
+	AI_GetGroup( NPC );
+
 	if( NPCInfo->scriptFlags & SCF_FIRE_WEAPON )
 	{
 		WeaponThink( qtrue );
@@ -983,7 +966,7 @@ void NPC_BSST_Investigate( void )
 		return;
 	}
 
-	int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue );
+	int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, NPCInfo->lastAlertID );
 
 	//There is an event to look at
 	if ( alertEvent >= 0 )
@@ -1144,7 +1127,7 @@ void NPC_BSST_Patrol( void )
 			ChangeWeapon( NPC, WP_NONE );
 			NPC->client->ps.weapon = WP_NONE;
 			NPC->client->ps.weaponstate = WEAPON_READY;
-			if ( NPC->weaponModel != -1 )
+			if ( NPC->weaponModel >= 0 )
 			{
 				gi.G2API_RemoveGhoul2Model( NPC->ghoul2, NPC->weaponModel );
 				NPC->weaponModel = -1;
@@ -1860,10 +1843,19 @@ void ST_Commander( void )
 			continue;
 		}
 
+		if ( NPC->s.weapon == WP_NONE 
+			&& NPCInfo->goalEntity 
+			&& NPCInfo->goalEntity == NPCInfo->tempGoal
+			&& NPCInfo->goalEntity->enemy
+			&& NPCInfo->goalEntity->enemy->s.eType == ET_ITEM )
+		{//running to pick up a gun, don't do other logic
+			continue;
+		}
+
 		//see if this member should start running (only if have no officer... FIXME: should always run from AEL_DANGER_GREAT?)
 		if ( !group->commander || group->commander->NPC->rank < RANK_ENSIGN )
 		{
-			if ( NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, qfalse, AEL_DANGER ) ) )
+			if ( NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, -1, qfalse, AEL_DANGER ) ) )
 			{//going to run
 				ST_Speech( NPC, SPEECH_COVER, 0 );
 				continue;
@@ -2429,7 +2421,7 @@ void NPC_BSST_Attack( void )
 #endif//	AI_TIMERS
 		}
 	}
-	else if ( TIMER_Done( NPC, "flee" ) && NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, qfalse, AEL_DANGER ) ) )
+	else if ( TIMER_Done( NPC, "flee" ) && NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, -1, qfalse, AEL_DANGER ) ) )
 	{//not already fleeing, and going to run
 		ST_Speech( NPC, SPEECH_COVER, 0 );
 		NPC_UpdateAngles( qtrue, qtrue );
@@ -2467,6 +2459,20 @@ void NPC_BSST_Attack( void )
 		{//shooting an explosive, but enemy too close, switch to primary fire
 			NPCInfo->scriptFlags &= ~SCF_ALT_FIRE;
 			//FIXME: we can never go back to alt-fire this way since, after this, we don't know if we were initially supposed to use alt-fire or not...
+		}
+	}
+	else if ( enemyDist > 65536 )//256 squared
+	{
+		if ( NPC->client->ps.weapon == WP_DISRUPTOR )
+		{//sniping... should be assumed
+			if ( !(NPCInfo->scriptFlags&SCF_ALT_FIRE) )
+			{//use primary fire
+				NPCInfo->scriptFlags |= SCF_ALT_FIRE;
+				//reset fire-timing variables
+				NPC_ChangeWeapon( WP_DISRUPTOR );
+				NPC_UpdateAngles( qtrue, qtrue );
+				return;
+			}
 		}
 	}
 
@@ -2566,6 +2572,11 @@ void NPC_BSST_Attack( void )
 		}
 	}
 
+	if ( NPC->client->fireDelay && NPC->s.weapon == WP_ROCKET_LAUNCHER )
+	{
+		move = qfalse;
+	}
+
 	if ( move )
 	{//move toward goal
 		if ( NPCInfo->goalEntity )//&& ( NPCInfo->goalEntity != NPC->enemy || enemyDist > 10000 ) )//100 squared
@@ -2626,7 +2637,21 @@ void NPC_BSST_Attack( void )
 		}
 	}
 	//FIXME: don't shoot right away!
-	if ( shoot )
+	if ( NPC->client->fireDelay )
+	{
+		if ( NPC->s.weapon == WP_ROCKET_LAUNCHER )
+		{
+			if ( !enemyLOS || !enemyCS )
+			{//cancel it
+				NPC->client->fireDelay = 0;
+			}
+			else
+			{//delay our next attempt
+				TIMER_Set( NPC, "attackDelay", Q_irand( 3000, 5000 ) );
+			}
+		}
+	}
+	else if ( shoot )
 	{//try to shoot if it's time
 		if ( TIMER_Done( NPC, "attackDelay" ) )
 		{
@@ -2634,14 +2659,17 @@ void NPC_BSST_Attack( void )
 			{
 				WeaponThink( qtrue );
 			}
-			/*
 			//NASTY
-			if ( NPC->s.weapon == WP_ROCKET_LAUNCHER && (ucmd.buttons&BUTTON_ATTACK) && Q_irand( -6, g_spskill->integer*3) >= 0 )
+			if ( NPC->s.weapon == WP_ROCKET_LAUNCHER 
+				&& (ucmd.buttons&BUTTON_ATTACK) 
+				&& !move
+				&& g_spskill->integer > 1 
+				&& !Q_irand( 0, 3 ) )
 			{//every now and then, shoot a homing rocket
 				ucmd.buttons &= ~BUTTON_ATTACK;
 				ucmd.buttons |= BUTTON_ALT_ATTACK;
+				NPC->client->fireDelay = Q_irand( 1000, 2500 );
 			}
-			*/
 		}
 	}
 }

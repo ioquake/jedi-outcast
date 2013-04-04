@@ -33,11 +33,12 @@ NPC_Remote_Pain
 */
 void NPC_Remote_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t point, int damage, int mod,int hitLoc ) 
 {
-	NPC = self;
-	NPCInfo = self->NPC;
+	SaveNPCGlobals();
+	SetNPCGlobals( self );
 	Remote_Strafe();
-	NPC_Pain( self, inflictor, other, point, damage, mod );
+	RestoreNPCGlobals();
 
+	NPC_Pain( self, inflictor, other, point, damage, mod );
 }
 
 /*

@@ -8,6 +8,10 @@
 	#include "cg_lights.h"
 #endif
 
+#define MASK_CAMERACLIP (MASK_SOLID|CONTENTS_PLAYERCLIP)
+#define CAMERA_SIZE	4
+
+
 /*
 =============================================================================
 
@@ -212,8 +216,8 @@ static void CG_StepOffset( void ) {
 
 #define CAMERA_DAMP_INTERVAL	50
 
-static vec3_t	cameramins = { -4, -4, -4 };
-static vec3_t	cameramaxs = { 4, 4, 4 };
+static vec3_t	cameramins = { -CAMERA_SIZE, -CAMERA_SIZE, -CAMERA_SIZE };
+static vec3_t	cameramaxs = { CAMERA_SIZE, CAMERA_SIZE, CAMERA_SIZE };
 vec3_t	camerafwd, cameraup;
 
 vec3_t	cameraFocusAngles,			cameraFocusLoc;
@@ -221,6 +225,9 @@ vec3_t	cameraIdealTarget,			cameraIdealLoc;
 vec3_t	cameraCurTarget={0,0,0},	cameraCurLoc={0,0,0};
 vec3_t	cameraOldLoc={0,0,0},		cameraNewLoc={0,0,0};
 int		cameraLastFrame=0;
+
+float	cameraLastYaw=0;
+float	cameraStiffFactor=0.0f;
 
 /*
 ===============
@@ -236,6 +243,9 @@ cg.refdefViewAngles
 ===============
 */
   
+extern qboolean gCGHasFallVector;
+extern vec3_t gCGFallVector;
+
 /*
 ===============
 CG_CalcTargetThirdPersonViewLocation
@@ -252,7 +262,14 @@ static void CG_CalcIdealThirdPersonViewTarget(void)
 	}
 
 	// Initialize IdealTarget
-	VectorCopy(cg.refdef.vieworg, cameraFocusLoc);
+	if (gCGHasFallVector)
+	{
+		VectorCopy(gCGFallVector, cameraFocusLoc);
+	}
+	else
+	{
+		VectorCopy(cg.refdef.vieworg, cameraFocusLoc);
+	}
 
 	// Add in the new viewheight
 	cameraFocusLoc[2] += cg.snap->ps.viewheight;
@@ -315,20 +332,22 @@ static void CG_ResetThirdPersonViewDamp(void)
 	VectorCopy(cameraIdealTarget, cameraCurTarget);
 
 	// First thing we do is trace from the first person viewpoint out to the new target location.
-	CG_Trace(&trace, cameraFocusLoc, cameramins, cameramaxs, cameraCurTarget, cg.snap->ps.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP);
+	CG_Trace(&trace, cameraFocusLoc, cameramins, cameramaxs, cameraCurTarget, cg.snap->ps.clientNum, MASK_CAMERACLIP);
 	if (trace.fraction <= 1.0)
 	{
 		VectorCopy(trace.endpos, cameraCurTarget);
 	}
 
 	// Now we trace from the new target location to the new view location, to make sure there is nothing in the way.
-	CG_Trace(&trace, cameraCurTarget, cameramins, cameramaxs, cameraCurLoc, cg.snap->ps.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP);
+	CG_Trace(&trace, cameraCurTarget, cameramins, cameramaxs, cameraCurLoc, cg.snap->ps.clientNum, MASK_CAMERACLIP);
 	if (trace.fraction <= 1.0)
 	{
 		VectorCopy(trace.endpos, cameraCurLoc);
 	}
 
 	cameraLastFrame = cg.time;
+	cameraLastYaw = cameraFocusAngles[YAW];
+	cameraStiffFactor = 0.0f;
 }
 
 // This is called every frame.
@@ -368,7 +387,7 @@ static void CG_UpdateThirdPersonTargetDamp(void)
 	// Now we trace to see if the new location is cool or not.
 
 	// First thing we do is trace from the first person viewpoint out to the new target location.
-	CG_Trace(&trace, cameraFocusLoc, cameramins, cameramaxs, cameraCurTarget, cg.snap->ps.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP);
+	CG_Trace(&trace, cameraFocusLoc, cameramins, cameramaxs, cameraCurTarget, cg.snap->ps.clientNum, MASK_CAMERACLIP);
 	if (trace.fraction < 1.0)
 	{
 		VectorCopy(trace.endpos, cameraCurTarget);
@@ -405,6 +424,12 @@ static void CG_UpdateThirdPersonCameraDamp(void)
 		dampfactor = (1.0-cg_thirdPersonCameraDamp.value)*(pitch*pitch);
 
 		dampfactor += cg_thirdPersonCameraDamp.value;
+
+		// Now we also multiply in the stiff factor, so that faster yaw changes are stiffer.
+		if (cameraStiffFactor > 0.0f)
+		{	// The cameraStiffFactor is how much of the remaining damp below 1 should be shaved off, i.e. approach 1 as stiffening increases.
+			dampfactor += (1.0-dampfactor)*cameraStiffFactor;
+		}
 	}
 
 	if (dampfactor>=1.0)
@@ -431,10 +456,12 @@ static void CG_UpdateThirdPersonCameraDamp(void)
 	}
 
 	// Now we trace from the new target location to the new view location, to make sure there is nothing in the way.
-	CG_Trace(&trace, cameraCurTarget, cameramins, cameramaxs, cameraCurLoc, cg.snap->ps.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP);
+	CG_Trace(&trace, cameraCurTarget, cameramins, cameramaxs, cameraCurLoc, cg.snap->ps.clientNum, MASK_CAMERACLIP);
+
 	if (trace.fraction < 1.0)
 	{
 		VectorCopy( trace.endpos, cameraCurLoc );
+
 		//FIXME: when the trace hits movers, it gets very very jaggy... ?
 		/*
 		//this doesn't actually help any
@@ -475,6 +502,9 @@ static void CG_OffsetThirdPersonView( void )
 {
 	vec3_t diff;
 	float thirdPersonHorzOffset = cg_thirdPersonHorzOffset.value;
+	float deltayaw;
+
+	cameraStiffFactor = 0.0;
 
 	// Set camera viewing direction.
 	VectorCopy( cg.refdefViewAngles, cameraFocusAngles );
@@ -510,6 +540,26 @@ static void CG_OffsetThirdPersonView( void )
 		}
 
 		AngleVectors(cameraFocusAngles, camerafwd, NULL, cameraup);
+
+		deltayaw = fabs(cameraFocusAngles[YAW] - cameraLastYaw);
+		if (deltayaw > 180.0f)
+		{ // Normalize this angle so that it is between 0 and 180.
+			deltayaw = fabs(deltayaw - 360.0f);
+		}
+		cameraStiffFactor = deltayaw / (float)(cg.time-cameraLastFrame);
+		if (cameraStiffFactor < 1.0)
+		{
+			cameraStiffFactor = 0.0;
+		}
+		else if (cameraStiffFactor > 2.5)
+		{
+			cameraStiffFactor = 0.75;
+		}
+		else
+		{	// 1 to 2 scales from 0.0 to 0.5
+			cameraStiffFactor = (cameraStiffFactor-1.0f)*0.5f;
+		}
+		cameraLastYaw = cameraFocusAngles[YAW];
 
 		// Move the target to the new location.
 		CG_UpdateThirdPersonTargetDamp();
@@ -601,7 +651,7 @@ static void CG_OffsetThirdPersonView( void ) {
 	// in a solid block.  Use an 8 by 8 block to prevent the view from near clipping anything
 
 	if (!cg_cameraMode.integer) {
-		CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predictedPlayerState.clientNum, MASK_SOLID );
+		CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predictedPlayerState.clientNum, MASK_CAMERACLIP);
 
 		if ( trace.fraction != 1.0 ) {
 			VectorCopy( trace.endpos, view );
@@ -609,7 +659,7 @@ static void CG_OffsetThirdPersonView( void ) {
 			// try another trace to this position, because a tunnel may have the ceiling
 			// close enogh that this is poking out
 
-			CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predictedPlayerState.clientNum, MASK_SOLID );
+			CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predictedPlayerState.clientNum, MASK_CAMERACLIP);
 			VectorCopy( trace.endpos, view );
 		}
 	}
@@ -872,6 +922,16 @@ static int CG_CalcFov( void ) {
 	float	fov_x, fov_y;
 	float	f;
 	int		inwater;
+	float	cgFov = cg_fov.value;
+
+	if (cgFov < 1)
+	{
+		cgFov = 1;
+	}
+	if (cgFov > 97)
+	{
+		cgFov = 97;
+	}
 
 	if ( cg.predictedPlayerState.pm_type == PM_INTERMISSION ) {
 		// if in intermission, use a fixed value
@@ -882,7 +942,7 @@ static int CG_CalcFov( void ) {
 			// dmflag to prevent wide fov for all clients
 			fov_x = 80;//90;
 		} else {
-			fov_x = cg_fov.value;
+			fov_x = cgFov;
 			if ( fov_x < 1 ) {
 				fov_x = 1;
 			} else if ( fov_x > 160 ) {
@@ -900,9 +960,9 @@ static int CG_CalcFov( void ) {
 				{
 					zoomFov = 40.0f;
 				}
-				else if (zoomFov > cg_fov.value)
+				else if (zoomFov > cgFov)
 				{
-					zoomFov = cg_fov.value;
+					zoomFov = cgFov;
 				}
 			}
 
@@ -922,9 +982,9 @@ static int CG_CalcFov( void ) {
 				{
 					zoomFov = MAX_ZOOM_FOV;
 				}
-				else if (zoomFov > cg_fov.value)
+				else if (zoomFov > cgFov)
 				{
-					zoomFov = cg_fov.value;
+					zoomFov = cgFov;
 				}
 				else
 				{	// Still zooming
@@ -980,7 +1040,7 @@ static int CG_CalcFov( void ) {
 
 	if (cg.predictedPlayerState.zoomMode)
 	{
-		cg.zoomSensitivity = zoomFov/cg_fov.value;
+		cg.zoomSensitivity = zoomFov/cgFov;
 	}
 	else if ( !cg.zoomed ) {
 		cg.zoomSensitivity = 1;
@@ -1023,12 +1083,31 @@ static void CG_DamageBlendBlob( void )
 	VectorMA( ent.origin, cg.damageY * 8, cg.refdef.viewaxis[2], ent.origin );
 
 	ent.radius = cg.damageValue * 3 * ( 1.0 - ((float)t / maxTime) );
-	ent.customShader = cgs.media.viewPainShader;
-	ent.shaderRGBA[0] = 180 * ( 1.0 - ((float)t / maxTime) );
-	ent.shaderRGBA[1] = 50 * ( 1.0 - ((float)t / maxTime) );
-	ent.shaderRGBA[2] = 50 * ( 1.0 - ((float)t / maxTime) );
-	ent.shaderRGBA[3] = 255;
 
+	if (cg.snap->ps.damageType == 0)
+	{ //pure health
+		ent.customShader = cgs.media.viewPainShader;
+		ent.shaderRGBA[0] = 180 * ( 1.0 - ((float)t / maxTime) );
+		ent.shaderRGBA[1] = 50 * ( 1.0 - ((float)t / maxTime) );
+		ent.shaderRGBA[2] = 50 * ( 1.0 - ((float)t / maxTime) );
+		ent.shaderRGBA[3] = 255;
+	}
+	else if (cg.snap->ps.damageType == 1)
+	{ //pure shields
+		ent.customShader = cgs.media.viewPainShader_Shields;
+		ent.shaderRGBA[0] = 50 * ( 1.0 - ((float)t / maxTime) );
+		ent.shaderRGBA[1] = 180 * ( 1.0 - ((float)t / maxTime) );
+		ent.shaderRGBA[2] = 50 * ( 1.0 - ((float)t / maxTime) );
+		ent.shaderRGBA[3] = 255;
+	}
+	else
+	{ //shields and health
+		ent.customShader = cgs.media.viewPainShader_ShieldsAndHealth;
+		ent.shaderRGBA[0] = 180 * ( 1.0 - ((float)t / maxTime) );
+		ent.shaderRGBA[1] = 180 * ( 1.0 - ((float)t / maxTime) );
+		ent.shaderRGBA[2] = 50 * ( 1.0 - ((float)t / maxTime) );
+		ent.shaderRGBA[3] = 255;
+	}
 	trap_R_AddRefEntityToScene( &ent );
 }
 
@@ -1131,6 +1210,11 @@ static int CG_CalcViewValues( void ) {
 	cg.bobfracsin = fabs( sin( ( ps->bobCycle & 127 ) / 127.0 * M_PI ) );
 	cg.xyspeed = sqrt( ps->velocity[0] * ps->velocity[0] +
 		ps->velocity[1] * ps->velocity[1] );
+
+	if (cg.xyspeed > 270)
+	{
+		cg.xyspeed = 270;
+	}
 
 	VectorCopy( ps->origin, cg.refdef.vieworg );
 	VectorCopy( ps->viewangles, cg.refdefViewAngles );
@@ -1306,16 +1390,63 @@ void CG_SE_UpdateShake( vec3_t origin, vec3_t angles )
 	VectorAdd( angles, moveDir, angles );
 }
 
+void CG_SE_UpdateMusic(void)
+{
+	if (cgScreenEffects.music_volume_multiplier < 0.1)
+	{
+		cgScreenEffects.music_volume_multiplier = 1.0;
+		return;
+	}
+
+	if (cgScreenEffects.music_volume_time < cg.time)
+	{
+		if (cgScreenEffects.music_volume_multiplier != 1.0 || cgScreenEffects.music_volume_set)
+		{
+			char musMultStr[512];
+
+			cgScreenEffects.music_volume_multiplier += 0.1;
+			if (cgScreenEffects.music_volume_multiplier > 1.0)
+			{
+				cgScreenEffects.music_volume_multiplier = 1.0;
+			}
+
+			Com_sprintf(musMultStr, sizeof(musMultStr), "%f", cgScreenEffects.music_volume_multiplier);
+			trap_Cvar_Set("s_musicMult", musMultStr);
+
+			if (cgScreenEffects.music_volume_multiplier == 1.0)
+			{
+				cgScreenEffects.music_volume_set = qfalse;
+			}
+			else
+			{
+				cgScreenEffects.music_volume_time = cg.time + 200;
+			}
+		}
+
+		return;
+	}
+
+	if (!cgScreenEffects.music_volume_set)
+	{ //if the volume_time is >= cg.time, we should have a volume multiplier set
+		char musMultStr[512];
+
+		Com_sprintf(musMultStr, sizeof(musMultStr), "%f", cgScreenEffects.music_volume_multiplier);
+		trap_Cvar_Set("s_musicMult", musMultStr);
+		cgScreenEffects.music_volume_set = qtrue;
+	}
+}
+
 /*
 =================
 CG_CalcScreenEffects
 
-Currently just for screen shaking
+Currently just for screen shaking (and music volume management)
 =================
 */
 void CG_CalcScreenEffects(void)
 {
 	CG_SE_UpdateShake(cg.refdef.vieworg, cg.refdefViewAngles);
+	CG_SE_UpdateMusic();
 }
 
 void CGCam_Shake( float intensity, int duration )
@@ -1327,6 +1458,24 @@ void CGCam_Shake( float intensity, int duration )
 	cgScreenEffects.shake_duration = duration;
 	cgScreenEffects.shake_start = cg.time;
 }
+
+void CGCam_SetMusicMult( float multiplier, int duration )
+{
+	if (multiplier < 0.1f)
+	{
+		multiplier = 0.1f;
+	}
+
+	if (multiplier > 1.0f)
+	{
+		multiplier = 1.0f;
+	}
+
+	cgScreenEffects.music_volume_multiplier = multiplier;
+	cgScreenEffects.music_volume_time = cg.time + duration;
+	cgScreenEffects.music_volume_set = qfalse;
+}
+
 /*
 ================================
 Screen Effect stuff ends here
@@ -1346,6 +1495,11 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 	cg.time = serverTime;
 	cg.demoPlayback = demoPlayback;
 
+	if (cg.snap && ui_myteam.integer != cg.snap->ps.persistant[PERS_TEAM])
+	{
+		trap_Cvar_Set ( "ui_myteam", va("%i", cg.snap->ps.persistant[PERS_TEAM]) );
+	}
+
 	// update cvars
 	CG_UpdateCvars();
 
@@ -1356,7 +1510,7 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 		return;
 	}
 
-	trap_FX_AdjustTime( cg.time );
+	trap_FX_AdjustTime( cg.time, cg.refdef.vieworg, cg.refdef.viewaxis );
 
 	CG_RunLightStyles();
 
@@ -1403,7 +1557,7 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 	cg.renderingThirdPerson = cg_thirdPerson.integer || (cg.snap->ps.stats[STAT_HEALTH] <= 0);
 
 	if (cg.snap->ps.stats[STAT_HEALTH] > 0 && (cg.predictedPlayerState.weapon == WP_SABER || cg.predictedPlayerState.usingATST ||
-		cg.predictedPlayerState.forceHandExtend == HANDEXTEND_KNOCKDOWN))
+		cg.predictedPlayerState.forceHandExtend == HANDEXTEND_KNOCKDOWN || cg.predictedPlayerState.fallingToDeath))
 	{
 		cg.renderingThirdPerson = 1;
 	}
@@ -1431,7 +1585,7 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 	}
 	CG_AddViewWeapon( &cg.predictedPlayerState );
 
-	if ( !cg.hyperspace ) 
+	if ( !cg.hyperspace) 
 	{
 		trap_FX_AddScheduledEffects();
 	}
@@ -1454,6 +1608,18 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 
 	// if there are any entities flagged as sound trackers and attached to other entities, update their sound pos
 	CG_UpdateSoundTrackers();
+
+	if (gCGHasFallVector)
+	{
+		vec3_t lookAng;
+
+		VectorSubtract(cg.snap->ps.origin, cg.refdef.vieworg, lookAng);
+		VectorNormalize(lookAng);
+		vectoangles(lookAng, lookAng);
+
+		VectorCopy(gCGFallVector, cg.refdef.vieworg);
+		AnglesToAxis(lookAng, cg.refdef.viewaxis);
+	}
 
 	// update audio positions
 	trap_S_Respatialize( cg.snap->ps.clientNum, cg.refdef.vieworg, cg.refdef.viewaxis, inwater );

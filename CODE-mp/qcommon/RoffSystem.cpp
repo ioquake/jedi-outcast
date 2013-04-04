@@ -1,6 +1,6 @@
-#include "RoffSystem.h"
+#include "ROFFSystem.h"
 #include "qcommon.h"
-#include "..\client\client.h"
+#include "../client/client.h"
 
 // The one and only instance...
 CROFFSystem theROFFSystem;
@@ -406,7 +406,15 @@ qboolean CROFFSystem::Unload( int id )
 	{ // requested item found in the list, free mem, then remove from list
 		delete ((CROFF *)(*itr).second);
 
+#ifndef __linux__
 		itr = mROFFList.erase( itr );
+#else
+		// darn stl differences
+		TROFFList::iterator titr;
+		titr = itr;
+		itr++;
+		mROFFList.erase(titr);
+#endif
 
 #ifdef _DEBUG
 		Com_Printf( S_COLOR_GREEN"roff unloaded\n" );
@@ -803,12 +811,14 @@ qboolean CROFFSystem::ApplyROFF( SROFFEntity *roff_ent, CROFFSystem::CROFF *roff
 
 	if (roff_ent->mIsClient)
 	{
+#ifndef DEDICATED
 		originTrajectory = (trajectory_t *)VM_Call( cgvm, CG_GET_ORIGIN_TRAJECTORY, roff_ent->mEntID );
 		angleTrajectory = (trajectory_t *)VM_Call( cgvm, CG_GET_ANGLE_TRAJECTORY, roff_ent->mEntID );
 		VM_Call( cgvm, CG_GET_ORIGIN, roff_ent->mEntID, originTemp );
 		origin = originTemp;
 		VM_Call( cgvm, CG_GET_ANGLES, roff_ent->mEntID, angleTemp );
 		angle = angleTemp;
+#endif
 	}
 	else
 	{
@@ -912,7 +922,9 @@ void CROFFSystem::ProcessNote(SROFFEntity *roff_ent, char *note)
 		{
 			if (roff_ent->mIsClient)
 			{
+#ifndef DEDICATED
 				VM_Call( cgvm, CG_ROFF_NOTETRACK_CALLBACK, roff_ent->mEntID, temp );
+#endif
 			}
 			else
 			{
@@ -941,12 +953,14 @@ qboolean CROFFSystem::ClearLerp( SROFFEntity *roff_ent )
 
 	if (roff_ent->mIsClient)
 	{
+#ifndef DEDICATED
 		originTrajectory = (trajectory_t *)VM_Call( cgvm, CG_GET_ORIGIN_TRAJECTORY, roff_ent->mEntID );
 		angleTrajectory = (trajectory_t *)VM_Call( cgvm, CG_GET_ANGLE_TRAJECTORY, roff_ent->mEntID );
 		VM_Call( cgvm, CG_GET_ORIGIN, roff_ent->mEntID, originTemp );
 		origin = originTemp;
 		VM_Call( cgvm, CG_GET_ANGLES, roff_ent->mEntID, angleTemp );
 		angle = angleTemp;
+#endif
 	}
 	else
 	{

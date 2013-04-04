@@ -10,9 +10,13 @@
 #include "cg_lights.h"
 #include "..\game\wp_saber.h"
 
+#define MASK_CAMERACLIP (MASK_SOLID)
+#define CAMERA_SIZE	4
+
 float cg_zoomFov;
 
 //#define CG_CAM_ABOVE	2
+extern qboolean CG_OnMovingPlat( playerState_t *ps );
 
 /*
 =============================================================================
@@ -313,15 +317,20 @@ void CG_CalcVrect (void) {
 //==============================================================================
 #define CAMERA_DAMP_INTERVAL	50
 
-static vec3_t	cameramins = { -4, -4, -4 };
-static vec3_t	cameramaxs = { 4, 4, 4 };
-vec3_t	camerafwd, cameraup;
+#define CAMERA_CROUCH_NUDGE		6
+
+static vec3_t	cameramins = { -CAMERA_SIZE, -CAMERA_SIZE, -CAMERA_SIZE };
+static vec3_t	cameramaxs = { CAMERA_SIZE, CAMERA_SIZE, CAMERA_SIZE };
+vec3_t	camerafwd, cameraup, camerahorizdir;
 
 vec3_t	cameraFocusAngles,			cameraFocusLoc;
 vec3_t	cameraIdealTarget,			cameraIdealLoc;
 vec3_t	cameraCurTarget={0,0,0},	cameraCurLoc={0,0,0};
 vec3_t	cameraOldLoc={0,0,0},		cameraNewLoc={0,0,0};
 int		cameraLastFrame=0;
+
+float	cameraLastYaw=0;
+float	cameraStiffFactor=0.0f;
 
 /*
 ===============
@@ -339,7 +348,7 @@ cg.refdefViewAngles
   
 /*
 ===============
-CG_CalcTargetThirdPersonViewLocation
+CG_CalcIdealThirdPersonViewTarget
 
 ===============
 */
@@ -348,26 +357,62 @@ static void CG_CalcIdealThirdPersonViewTarget(void)
 	// Initialize IdealTarget
 	VectorCopy(cg.refdef.vieworg, cameraFocusLoc);
 
-	// Add in the new viewheight
-	cameraFocusLoc[2] += cg.predicted_player_state.viewheight;
-
 	if ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )
 	{
-		VectorCopy( cameraFocusLoc, cameraIdealTarget );
+		gentity_t *gent = &g_entities[cg.snap->ps.viewEntity];
+		if ( gent->client && (gent->client->NPC_class != CLASS_GONK ) 
+			&& (gent->client->NPC_class != CLASS_INTERROGATOR) 
+			&& (gent->client->NPC_class != CLASS_SENTRY) 
+			&& (gent->client->NPC_class != CLASS_PROBE ) 
+			&& (gent->client->NPC_class != CLASS_MOUSE ) 
+			&& (gent->client->NPC_class != CLASS_R2D2 ) 
+			&& (gent->client->NPC_class != CLASS_R5D2) )
+		{//use the NPC's viewheight
+			cameraFocusLoc[2] += gent->client->ps.viewheight;
+		}
+		else
+		{//droids use a generic offset
+			cameraFocusLoc[2] += 4;
+		}
+		VectorCopy( cameraFocusLoc,  cameraIdealTarget );
 	}
-	else if ( cg.overrides.active & CG_OVERRIDE_3RD_PERSON_VOF )
+	else 
 	{
-		// Add in a vertical offset from the viewpoint, which puts the actual target above the head, regardless of angle.
-		VectorCopy( cameraFocusLoc, cameraIdealTarget );
-		cameraIdealTarget[2] += cg.overrides.thirdPersonVertOffset;
-		//VectorMA(cameraFocusLoc, cg.overrides.thirdPersonVertOffset, cameraup, cameraIdealTarget);
-	}
-	else
-	{
-		// Add in a vertical offset from the viewpoint, which puts the actual target above the head, regardless of angle.
-		VectorCopy( cameraFocusLoc, cameraIdealTarget );
-		cameraIdealTarget[2] += cg_thirdPersonVertOffset.value;
-		//VectorMA(cameraFocusLoc, cg_thirdPersonVertOffset.value, cameraup, cameraIdealTarget);
+		// Add in the new viewheight
+		cameraFocusLoc[2] += cg.predicted_player_state.viewheight;
+		if ( cg.overrides.active & CG_OVERRIDE_3RD_PERSON_VOF )
+		{
+			// Add in a vertical offset from the viewpoint, which puts the actual target above the head, regardless of angle.
+			VectorCopy( cameraFocusLoc, cameraIdealTarget );
+			cameraIdealTarget[2] += cg.overrides.thirdPersonVertOffset;
+			//VectorMA(cameraFocusLoc, cg.overrides.thirdPersonVertOffset, cameraup, cameraIdealTarget);
+		}
+		else
+		{
+			// Add in a vertical offset from the viewpoint, which puts the actual target above the head, regardless of angle.
+			VectorCopy( cameraFocusLoc, cameraIdealTarget );
+			cameraIdealTarget[2] += cg_thirdPersonVertOffset.value;
+			//VectorMA(cameraFocusLoc, cg_thirdPersonVertOffset.value, cameraup, cameraIdealTarget);
+		}
+
+		// Now, if the player is crouching, do a little special tweak.  The problem is that the player's head is way out of his bbox.
+		if (cg.predicted_player_state.pm_flags & PMF_DUCKED)
+		{ // Nudge to focus location up a tad.
+			vec3_t nudgepos;
+			trace_t trace;
+
+			VectorCopy(cameraFocusLoc, nudgepos);
+			nudgepos[2]+=CAMERA_CROUCH_NUDGE;
+			CG_Trace(&trace, cameraFocusLoc, cameramins, cameramaxs, nudgepos, cg.predicted_player_state.clientNum, MASK_CAMERACLIP);
+			if (trace.fraction < 1.0)
+			{
+				VectorCopy(trace.endpos, cameraFocusLoc);
+			}
+			else
+			{
+				VectorCopy(nudgepos, cameraFocusLoc);
+			}
+		}
 	}
 }
 
@@ -375,7 +420,7 @@ static void CG_CalcIdealThirdPersonViewTarget(void)
 
 /*
 ===============
-CG_CalcTargetThirdPersonViewLocation
+CG_CalcIdealThirdPersonViewLocation
 
 ===============
 */
@@ -438,20 +483,22 @@ static void CG_ResetThirdPersonViewDamp(void)
 	VectorCopy(cameraIdealTarget, cameraCurTarget);
 
 	// First thing we do is trace from the first person viewpoint out to the new target location.
-	CG_Trace(&trace, cameraFocusLoc, cameramins, cameramaxs, cameraCurTarget, cg.predicted_player_state.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP);
+	CG_Trace(&trace, cameraFocusLoc, cameramins, cameramaxs, cameraCurTarget, cg.predicted_player_state.clientNum, MASK_CAMERACLIP);
 	if (trace.fraction <= 1.0)
 	{
 		VectorCopy(trace.endpos, cameraCurTarget);
 	}
 
 	// Now we trace from the new target location to the new view location, to make sure there is nothing in the way.
-	CG_Trace(&trace, cameraCurTarget, cameramins, cameramaxs, cameraCurLoc, cg.predicted_player_state.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP);
+	CG_Trace(&trace, cameraCurTarget, cameramins, cameramaxs, cameraCurLoc, cg.predicted_player_state.clientNum, MASK_CAMERACLIP);
 	if (trace.fraction <= 1.0)
 	{
 		VectorCopy(trace.endpos, cameraCurLoc);
 	}
 
 	cameraLastFrame = cg.time;
+	cameraLastYaw = cameraFocusAngles[YAW];
+	cameraStiffFactor = 0.0f;
 }
 
 // This is called every frame.
@@ -465,7 +512,11 @@ static void CG_UpdateThirdPersonTargetDamp(void)
 	// Automatically get the ideal target, to avoid jittering.
 	CG_CalcIdealThirdPersonViewTarget();
 
-	if (cg_thirdPersonTargetDamp.value>=1.0)//||cg.thisFrameTeleport)
+	if ( CG_OnMovingPlat( &cg.snap->ps ) )
+	{//if moving on a plat, camera is *tight*
+		VectorCopy(cameraIdealTarget, cameraCurTarget);
+	}
+	else if (cg_thirdPersonTargetDamp.value>=1.0)//||cg.thisFrameTeleport)
 	{	// No damping.
 		VectorCopy(cameraIdealTarget, cameraCurTarget);
 	}
@@ -491,7 +542,7 @@ static void CG_UpdateThirdPersonTargetDamp(void)
 	// Now we trace to see if the new location is cool or not.
 
 	// First thing we do is trace from the first person viewpoint out to the new target location.
-	CG_Trace(&trace, cameraFocusLoc, cameramins, cameramaxs, cameraCurTarget, cg.predicted_player_state.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP);
+	CG_Trace(&trace, cameraFocusLoc, cameramins, cameramaxs, cameraCurTarget, cg.predicted_player_state.clientNum, MASK_CAMERACLIP);
 	if (trace.fraction < 1.0)
 	{
 		VectorCopy(trace.endpos, cameraCurTarget);
@@ -516,8 +567,12 @@ static void CG_UpdateThirdPersonCameraDamp(void)
 	
 	
 	// First thing we do is calculate the appropriate damping factor for the camera.
-	dampfactor=0.0;
-	if ( cg.overrides.active & CG_OVERRIDE_3RD_PERSON_CDP )
+	dampfactor=0.0f;
+	if ( CG_OnMovingPlat( &cg.snap->ps ) )
+	{//if moving on a plat, camera is *tight*
+		dampfactor=1.0f;
+	}
+	else if ( cg.overrides.active & CG_OVERRIDE_3RD_PERSON_CDP )
 	{
 		if ( cg.overrides.thirdPersonCameraDamp != 0.0f )
 		{
@@ -545,6 +600,12 @@ static void CG_UpdateThirdPersonCameraDamp(void)
 		dampfactor = (1.0-cg_thirdPersonCameraDamp.value)*(pitch*pitch);
 
 		dampfactor += cg_thirdPersonCameraDamp.value;
+
+		// Now we also multiply in the stiff factor, so that faster yaw changes are stiffer.
+		if (cameraStiffFactor > 0.0f)
+		{	// The cameraStiffFactor is how much of the remaining damp below 1 should be shaved off, i.e. approach 1 as stiffening increases.
+			dampfactor += (1.0-dampfactor)*cameraStiffFactor;
+		}
 	}
 
 	if (dampfactor>=1.0)//||cg.thisFrameTeleport)
@@ -570,11 +631,18 @@ static void CG_UpdateThirdPersonCameraDamp(void)
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
 
-	// Now we trace from the new target location to the new view location, to make sure there is nothing in the way.
-	CG_Trace( &trace, cameraCurTarget, cameramins, cameramaxs, cameraCurLoc, cg.predicted_player_state.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP );
+	// Now we trace from the first person viewpoint to the new view location, to make sure there is nothing in the way between the user and the camera...
+//	CG_Trace(&trace, cameraFocusLoc, cameramins, cameramaxs, cameraCurLoc, cg.predicted_player_state.clientNum, MASK_CAMERACLIP);
+	// (OLD) Now we trace from the new target location to the new view location, to make sure there is nothing in the way.
+	CG_Trace( &trace, cameraCurTarget, cameramins, cameramaxs, cameraCurLoc, cg.predicted_player_state.clientNum, MASK_CAMERACLIP);
 	if ( trace.fraction < 1.0f )
 	{
 		VectorCopy( trace.endpos, cameraCurLoc );
+
+		// We didn't trace all the way back, so push down the target accordingly.
+//		VectorSubtract(cameraCurTarget, cameraFocusLoc, locdiff);
+//		VectorMA(cameraFocusLoc, trace.fraction, locdiff, cameraCurTarget);
+
 		//FIXME: when the trace hits movers, it gets very very jaggy... ?
 		/*
 		//this doesn't actually help any
@@ -614,8 +682,11 @@ extern qboolean	MatrixMode;
 static void CG_OffsetThirdPersonView( void ) 
 {
 	vec3_t diff;
+	float deltayaw;
 
 	camWaterAdjust = 0;
+	cameraStiffFactor = 0.0;
+
 	// Set camera viewing direction.
 	VectorCopy( cg.refdefViewAngles, cameraFocusAngles );
 
@@ -691,6 +762,26 @@ static void CG_OffsetThirdPersonView( void )
 		}
 
 		AngleVectors(cameraFocusAngles, camerafwd, NULL, cameraup);
+
+		deltayaw = fabs(cameraFocusAngles[YAW] - cameraLastYaw);
+		if (deltayaw > 180.0f)
+		{ // Normalize this angle so that it is between 0 and 180.
+			deltayaw = fabs(deltayaw - 360.0f);
+		}
+		cameraStiffFactor = deltayaw / (float)(cg.time-cameraLastFrame);
+		if (cameraStiffFactor < 1.0)
+		{
+			cameraStiffFactor = 0.0;
+		}
+		else if (cameraStiffFactor > 2.5)
+		{
+			cameraStiffFactor = 0.75;
+		}
+		else
+		{	// 1 to 2 scales from 0.0 to 0.5
+			cameraStiffFactor = (cameraStiffFactor-1.0f)*0.5f;
+		}
+		cameraLastYaw = cameraFocusAngles[YAW];
 
 		// Move the target to the new location.
 		CG_UpdateThirdPersonTargetDamp();
@@ -783,7 +874,7 @@ static void CG_OffsetThirdPersonView( void ) {
 	// trace a ray from the origin to the viewpoint to make sure the view isn't
 	// in a solid block.  Use an 8 by 8 block to prevent the view from near clipping anything
 
-	CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predicted_player_state.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP );
+	CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predicted_player_state.clientNum, MASK_CAMERACLIP );
 
 	if ( trace.fraction != 1.0 ) {
 		VectorCopy( trace.endpos, view );
@@ -791,7 +882,7 @@ static void CG_OffsetThirdPersonView( void ) {
 		// try another trace to this position, because a tunnel may have the ceiling
 		// close enogh that this is poking out
 
-		CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predicted_player_state.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP );
+		CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predicted_player_state.clientNum, MASK_CAMERACLIP );
 		VectorCopy( trace.endpos, view );
 	}
 
@@ -856,7 +947,7 @@ static void CG_OffsetThirdPersonOverheadView( void ) {
 	
 	// Trace a ray from the origin to the viewpoint to make sure the view isn't
 	//	in a solid block.
-	CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predicted_player_state.clientNum, MASK_SOLID|CONTENTS_PLAYERCLIP );
+	CG_Trace( &trace, cg.refdef.vieworg, mins, maxs, view, cg.predicted_player_state.clientNum, MASK_CAMERACLIP);
 
 	if ( trace.fraction != 1.0 ) 
 	{
@@ -1217,7 +1308,10 @@ static qboolean	CG_CalcFov( void ) {
 		// if in intermission, use a fixed value
 		fov_x = 80;
 	}
-	else if ( cg.snap && cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD && !cg.renderingThirdPerson )
+	else if ( cg.snap 
+		&& cg.snap->ps.viewEntity > 0 
+		&& cg.snap->ps.viewEntity < ENTITYNUM_WORLD 
+		&& (!cg.renderingThirdPerson || g_entities[cg.snap->ps.viewEntity].e_DieFunc == dieF_camera_die) )
 	{
 		// if in entity camera view, use a special FOV
 		if ( &g_entities[cg.snap->ps.viewEntity] &&
@@ -1246,7 +1340,7 @@ static qboolean	CG_CalcFov( void ) {
 			}
 		}
 	} 
-	else if ( (cg.snap->ps.forcePowersActive&(1<<FP_SPEED)) && player->client->ps.forcePowerDuration[FP_SPEED] )//cg.renderingThirdPerson && 
+	else if ( (!cg.zoomMode || cg.zoomMode > 2) && (cg.snap->ps.forcePowersActive&(1<<FP_SPEED)) && player->client->ps.forcePowerDuration[FP_SPEED] )//cg.renderingThirdPerson && 
 	{
 		fov_x = CG_ForceSpeedFOV();
 	} else {
@@ -1307,9 +1401,10 @@ static qboolean	CG_CalcFov( void ) {
 						{
 							snd = cgs.media.disruptorZoomLoop;
 						}
-						
+
+						// huh?  This could probably just be added as a looping sound??
 						cgi_S_StartSound( cg.refdef.vieworg, ENTITYNUM_WORLD, CHAN_LOCAL, snd );
-						zoomSoundTime = cg.time + 300;
+						zoomSoundTime = cg.time + 150; 
 					}
 				}
 			}
@@ -1468,16 +1563,18 @@ static qboolean CG_CalcViewValues( void ) {
 
 	if ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )
 	{//in an entity camera view
+		/*
 		if ( g_entities[cg.snap->ps.viewEntity].client && cg.renderingThirdPerson )
 		{
 			VectorCopy( g_entities[cg.snap->ps.viewEntity].client->renderInfo.eyePoint, cg.refdef.vieworg );
 		}
 		else
+		*/
 		{
 			VectorCopy( cg_entities[cg.snap->ps.viewEntity].lerpOrigin, cg.refdef.vieworg );
 		}
 		VectorCopy( cg_entities[cg.snap->ps.viewEntity].lerpAngles, cg.refdefViewAngles );
-		if ( !Q_stricmp( "misc_camera", g_entities[cg.snap->ps.viewEntity].classname ))
+		if ( !Q_stricmp( "misc_camera", g_entities[cg.snap->ps.viewEntity].classname ) || g_entities[cg.snap->ps.viewEntity].s.weapon == WP_TURRET )
 		{
 			viewEntIsCam = qtrue;
 		}
@@ -1661,6 +1758,8 @@ Generates and draws a game scene and status information at the given time.
 =================
 */
 extern void CG_BuildSolidList( void );
+void cgi_CM_SnapPVS(vec3_t origin,byte *buffer);
+extern vec3_t	serverViewOrg;
 void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 	qboolean	inwater = qfalse;
 
@@ -1676,6 +1775,7 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 		return;
 	}
 
+
 	CG_RunLightStyles();
 
 	// any looped sounds will be respecified as entities
@@ -1685,11 +1785,10 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 	// clear all the render lists
 	cgi_R_ClearScene();
 
-	// set up cg.snap and possibly cg.nextSnap
-	CG_ProcessSnapshots();
-
 	CG_BuildSolidList();
 
+	// set up cg.snap and possibly cg.nextSnap
+	CG_ProcessSnapshots();
 	// if we haven't received any snapshots yet, all
 	// we can draw is the information screen
 	if ( !cg.snap ) {
@@ -1720,13 +1819,21 @@ if (isForceSpeed&&!wasForceSpeed)
 wasForceSpeed=isForceSpeed;
 
 //
-
-	if ( cg_entities[0].gent->s.eFlags & EF_LOCKED_TO_WEAPON && 
-				cg.snap->ps.clientNum == 0 ) 
-	{
-		speed *= 0.25f;
+	float mPitchOverride = 0.0f;
+	float mYawOverride = 0.0f;
+	if ( cg.snap->ps.clientNum == 0 )
+	{//pointless check, but..
+		if ( cg_entities[0].gent->s.eFlags & EF_LOCKED_TO_WEAPON ) 
+		{
+			speed *= 0.25f;
+		}
+		if ( cg_entities[0].gent->s.eFlags & EF_IN_ATST ) 
+		{
+			mPitchOverride = 0.01f;
+			mYawOverride = 0.0075f;
+		}
 	}
-	cgi_SetUserCmdValue( cg.weaponSelect, speed );
+	cgi_SetUserCmdValue( cg.weaponSelect, speed, mPitchOverride, mYawOverride );
 
 	// this counter will be bumped for every valid scene we generate
 	cg.clientFrame++;
@@ -1756,33 +1863,8 @@ wasForceSpeed=isForceSpeed;
 		inwater = CG_CalcViewValues();
 	}
 
-	//check for opaque water
-	if ( 1 )
-	{
-		vec3_t	camTest;
-		VectorCopy( cg.refdef.vieworg, camTest );
-		camTest[2] += 6;
-		if ( !(CG_PointContents( camTest, ENTITYNUM_NONE )&CONTENTS_SOLID) && !gi.inPVS( cg.refdef.vieworg, camTest ) )
-		{//crossed visible line into another room
-			cg.refdef.vieworg[2] -= 6;
-		}
-		else
-		{
-			VectorCopy( cg.refdef.vieworg, camTest );
-			camTest[2] -= 6;
-			if ( !(CG_PointContents( camTest, ENTITYNUM_NONE )&CONTENTS_SOLID) && !gi.inPVS( cg.refdef.vieworg, camTest ) )
-			{
-				cg.refdef.vieworg[2] += 6;
-			}
-		}
-		/*
-		if ( (trace.contents&(CONTENTS_WATER|CONTENTS_OPAQUE)) )
-		{//opaque water
-		}
-		*/
-	}
-	//This is done from the vieworg to get origin for non-attenuated sounds
-	cgi_S_UpdateAmbientSet( CG_ConfigString( CS_AMBIENT_SET ), cg.refdef.vieworg );
+	// NOTE: this may completely override the camera
+	CG_RunEmplacedWeapon();
 
 	// first person blend blobs, done after AnglesToAxis
 	if ( !cg.renderingThirdPerson ) {
@@ -1796,8 +1878,43 @@ wasForceSpeed=isForceSpeed;
 		CG_AddLocalEntities();
 	}
 
-	// NOTE: this may completely override the camera
-	CG_RunEmplacedWeapon();
+	//check for opaque water
+	if ( 1 )
+	{
+		vec3_t	camTest;
+		VectorCopy( cg.refdef.vieworg, camTest );
+		camTest[2] += 6;
+		if ( !(CG_PointContents( camTest, 0 )&CONTENTS_SOLID) && !gi.inPVS( cg.refdef.vieworg, camTest ) )
+		{//crossed visible line into another room
+			cg.refdef.vieworg[2] -= 6;
+			//cgi_CM_SnapPVS(cg.refdef.vieworg,cg.snap->areamask);
+		}
+		else
+		{
+			VectorCopy( cg.refdef.vieworg, camTest );
+			camTest[2] -= 6;
+			if ( !(CG_PointContents( camTest, 0 )&CONTENTS_SOLID) && !gi.inPVS( cg.refdef.vieworg, camTest ) )
+			{
+				cg.refdef.vieworg[2] += 6;
+				//cgi_CM_SnapPVS(cg.refdef.vieworg,cg.snap->areamask);
+			}
+			else //if ( inwater )
+			{//extra-special hack... sometimes when crouched in water with first person lightsaber, your PVS is wrong???
+				/*
+				if ( !cg.renderingThirdPerson && (cg.snap->ps.weapon == WP_SABER||cg.snap->ps.weapon == WP_MELEE) )
+				{//pseudo first-person for saber and fists
+					cgi_CM_SnapPVS(cg.refdef.vieworg,cg.snap->areamask);
+				}
+				*/
+			}
+		}
+	}
+	//FIXME: first person crouch-uncrouch STILL FUCKS UP THE AREAMASK!!!
+	//if ( !VectorCompare2( cg.refdef.vieworg, cg.snap->ps.serverViewOrg ) && !gi.inPVS( cg.refdef.vieworg, cg.snap->ps.serverViewOrg ) )
+	{//actual view org and server's view org don't match and aren't same PVS, rebuild the areamask
+		//Com_Printf( S_COLOR_RED"%s != %s\n", vtos(cg.refdef.vieworg), vtos(cg.snap->ps.serverViewOrg) );
+		cgi_CM_SnapPVS( cg.refdef.vieworg, cg.snap->areamask );
+	}
 
 	// Don't draw the in-view weapon when in camera mode
 	if ( !in_camera 
@@ -1823,6 +1940,8 @@ wasForceSpeed=isForceSpeed;
 	memcpy( cg.refdef.areamask, cg.snap->areamask, sizeof( cg.refdef.areamask ) );
 
 	// update audio positions
+	//This is done from the vieworg to get origin for non-attenuated sounds
+	cgi_S_UpdateAmbientSet( CG_ConfigString( CS_AMBIENT_SET ), cg.refdef.vieworg );
 	//NOTE: if we want to make you be able to hear far away sounds with electrobinoculars, add the hacked-in positional offset here (base on fov)
 	cgi_S_Respatialize( cg.snap->ps.clientNum, cg.refdef.vieworg, cg.refdef.viewaxis, inwater );
 
@@ -1840,5 +1959,11 @@ wasForceSpeed=isForceSpeed;
 		// actually issue the rendering calls
 		CG_DrawActive( stereoView );
 	}
+	/*
+	if ( in_camera && !cg_skippingcin.integer )
+	{
+		Com_Printf( S_COLOR_GREEN"ang: %s\n", vtos(cg.refdefViewAngles) );
+	}
+	*/
 }
 

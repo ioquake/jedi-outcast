@@ -213,8 +213,8 @@ qboolean AI_FindSelfInPreviousGroup( gentity_t *self )
 	int	i, j;
 	for ( i = 0; i < MAX_FRAME_GROUPS; i++ )
 	{
-		if ( level.groups[i].numGroup && level.groups[i].enemy != NULL )
-		{//make a new one
+		if ( level.groups[i].numGroup )//&& level.groups[i].enemy != NULL )
+		{//check this one
 			for ( j = 0; j < level.groups[i].numGroup; j++ )
 			{
 				if ( level.groups[i].member[j].number == self->s.number )
@@ -260,7 +260,7 @@ qboolean AI_TryJoinPreviousGroup( gentity_t *self )
 	{
 		if ( level.groups[i].numGroup 
 			&& level.groups[i].numGroup < (MAX_GROUP_MEMBERS - 1) 
-			&& level.groups[i].enemy != NULL 
+			//&& level.groups[i].enemy != NULL 
 			&& level.groups[i].enemy == self->enemy )
 		{//has members, not full and has my enemy
 			if ( AI_ValidateGroupMember( &level.groups[i], self ) )
@@ -300,6 +300,37 @@ qboolean AI_GetNextEmptyGroup( gentity_t *self )
 		self->NPC->group = NULL;
 		return qfalse;
 	}
+}
+
+qboolean AI_ValidateNoEnemyGroupMember( AIGroupInfo_t *group, gentity_t *member )
+{
+	if ( !group )
+	{
+		return qfalse;
+	}
+	vec3_t center;
+	if ( group->commander )
+	{
+		VectorCopy( group->commander->currentOrigin, center );
+	}
+	else
+	{//hmm, just pick the first member
+		if ( group->member[0].number < 0 || group->member[0].number >= ENTITYNUM_WORLD )
+		{
+			return qfalse;
+		}
+		VectorCopy( g_entities[group->member[0].number].currentOrigin, center );
+	}
+	//FIXME: maybe it should be based on the center of the mass of the group, not the commander?
+	if ( DistanceSquared( center, member->currentOrigin ) > 147456/*384*384*/ )
+	{
+		return qfalse;
+	}
+	if ( !gi.inPVS( member->currentOrigin, center ) )
+	{//not within PVS of the group enemy
+		return qfalse;
+	}
+	return qtrue;
 }
 
 qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member )
@@ -379,6 +410,13 @@ qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member )
 		}
 		if ( !gi.inPVS( member->currentOrigin, group->enemy->currentOrigin ) )
 		{//not within PVS of the group enemy
+			return qfalse;
+		}
+	}
+	else if ( group->enemy == NULL )
+	{//if the group is a patrol group, only take those within the room and radius
+		if ( !AI_ValidateNoEnemyGroupMember( group, member ) )
+		{
 			return qfalse;
 		}
 	}
@@ -502,12 +540,30 @@ void AI_GetGroup( gentity_t *self )
 	AI_SetClosestBuddy( self->NPC->group );
 }
 
+void AI_SetNewGroupCommander( AIGroupInfo_t *group )
+{
+	gentity_t *member = NULL;
+	group->commander = NULL;
+	for ( int i = 0; i < group->numGroup; i++ )
+	{
+		member = &g_entities[group->member[i].number];
+
+		if ( !group->commander || (member && member->NPC && group->commander->NPC && member->NPC->rank > group->commander->NPC->rank) )
+		{//keep track of highest rank
+			group->commander = member;
+		}
+	}
+}
 
 void AI_DeleteGroupMember( AIGroupInfo_t *group, int memberNum )
 {
 	if ( group->commander && group->commander->s.number == group->member[memberNum].number )
 	{
 		group->commander = NULL;
+	}
+	if ( g_entities[group->member[memberNum].number].NPC )
+	{
+		g_entities[group->member[memberNum].number].NPC->group = NULL;
 	}
 	for ( int i = memberNum; i < (group->numGroup-1); i++ )
 	{
@@ -526,6 +582,7 @@ void AI_DeleteGroupMember( AIGroupInfo_t *group, int memberNum )
 	{
 		group->numGroup = 0;
 	}
+	AI_SetNewGroupCommander( group );
 }
 
 void AI_DeleteSelfFromGroup( gentity_t *self )
@@ -679,10 +736,19 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 			{//2 groups with same enemy
 				if ( level.groups[i].numGroup+group->numGroup < (MAX_GROUP_MEMBERS - 1) )
 				{//combining the members would fit in one group
+					qboolean deleteWhenDone = qtrue;
 					//combine the members of mine into theirs
 					for ( int j = 0; j < group->numGroup; j++ )
 					{
 						member = &g_entities[group->member[j].number];
+						if ( level.groups[i].enemy == NULL )
+						{//special case for groups without enemies, must be in range
+							if ( !AI_ValidateNoEnemyGroupMember( &level.groups[i], member ) )
+							{
+								deleteWhenDone = qfalse;
+								continue;
+							}
+						}
 						//remove this member from this group
 						AI_DeleteGroupMember( group, j );
 						//keep marker at same place since we deleted this guy and shifted everyone up one
@@ -691,7 +757,10 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 						AI_InsertGroupMember( &level.groups[i], member );
 					}
 					//return and delete this group
-					return qfalse;
+					if ( deleteWhenDone )
+					{
+						return qfalse;
+					}
 				}
 			}
 		}
@@ -787,6 +856,10 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 		{
 			group->morale += member->NPC->rank;
 		}
+		if ( group->commander && debugNPCAI->integer )
+		{
+			G_DebugLine( group->commander->currentOrigin, member->currentOrigin, FRAMETIME, 0x00ff00ff, qtrue );
+		}
 	}
 	if ( group->enemy )
 	{//modify morale based on enemy health and weapon
@@ -875,7 +948,7 @@ void AI_UpdateGroups( void )
 	//Clear all Groups
 	for ( int i = 0; i < MAX_FRAME_GROUPS; i++ ) 
 	{
-		if ( !level.groups[i].numGroup || level.groups[i].enemy == NULL || AI_RefreshGroup( &level.groups[i] ) == qfalse )
+		if ( !level.groups[i].numGroup || AI_RefreshGroup( &level.groups[i] ) == qfalse )//level.groups[i].enemy == NULL || 
 		{
 			memset( &level.groups[i], 0, sizeof( level.groups[i] ) );
 		}

@@ -439,9 +439,13 @@ int G_LoadRoff( const char *fileName )
 
 void G_Roff( gentity_t *ent )
 {
-	if ( !ent->next_roff_time || ent->next_roff_time > level.time )
+	if ( !ent->next_roff_time )
 	{
-		// either I don't think or it's just not time to have me think yet
+		return;
+	}
+	
+	if ( ent->next_roff_time > level.time )
+	{// either I don't think or it's just not time to have me think yet
 		return;
 	}
 
@@ -556,6 +560,7 @@ void G_Roff( gentity_t *ent )
 
 	// Lock me to a 20hz update rate
 	ent->next_roff_time = level.time + roff->mFrameTime;
+	assert( roff->mFrameTime >= 50 );//HAS to be at least 50
 }
 
 

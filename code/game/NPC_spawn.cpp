@@ -56,6 +56,8 @@ extern void NPC_Mark1_Precache(void);
 extern void NPC_Mark2_Precache(void);
 extern void NPC_GalakMech_Precache( void );
 extern void NPC_GalakMech_Init( gentity_t *ent );
+extern void NPC_Protocol_Precache( void );
+extern int WP_SetSaberModel( gclient_t *client, class_t npcClass );
 
 #define	NSF_DROP_TO_FLOOR	16
 
@@ -439,7 +441,7 @@ int NPC_WeaponsForTeam( team_t team, int spawnflags, const char *NPC_type )
 		{
 			return ( 1 << WP_BLASTER_PISTOL);
 		}
-		if ( Q_stricmp( "impworker", NPC_type ) == 0 )
+		if ( Q_strncmp( "impworker", NPC_type, 9 ) == 0 )
 		{
 			return ( 1 << WP_BLASTER_PISTOL);
 		}
@@ -455,13 +457,9 @@ int NPC_WeaponsForTeam( team_t team, int spawnflags, const char *NPC_type )
 		{
 			return ( 1 << WP_REPEATER);
 		}
-		if ( Q_stricmp( "ugnaught", NPC_type ) == 0 )
+		if ( Q_strncmp( "ugnaught", NPC_type, 8 ) == 0 )
 		{
 			return WP_NONE;
-		}
-		if ( Q_strncmp( "gran", NPC_type, 4 ) == 0 )
-		{
-			return (( 1 << WP_THERMAL)|( 1 << WP_MELEE));
 		}
 		if ( Q_stricmp( "granshooter", NPC_type ) == 0 )
 		{
@@ -470,6 +468,10 @@ int NPC_WeaponsForTeam( team_t team, int spawnflags, const char *NPC_type )
 		if ( Q_stricmp( "granboxer", NPC_type ) == 0 )
 		{
 			return ( 1 << WP_MELEE);
+		}
+		if ( Q_strncmp( "gran", NPC_type, 4 ) == 0 )
+		{
+			return (( 1 << WP_THERMAL)|( 1 << WP_MELEE));
 		}
 		if ( Q_stricmp( "rodian", NPC_type ) == 0 )
 		{
@@ -485,7 +487,7 @@ int NPC_WeaponsForTeam( team_t team, int spawnflags, const char *NPC_type )
 			return WP_NONE;
 		}
 
-		if ( Q_stricmp( "weequay", NPC_type ) == 0 )
+		if ( Q_strncmp( "weequay", NPC_type, 7 ) == 0 )
 		{
 			return ( 1 << WP_BOWCASTER);//|( 1 << WP_STAFF )(FIXME: new weap?)
 		}
@@ -547,11 +549,11 @@ int NPC_WeaponsForTeam( team_t team, int spawnflags, const char *NPC_type )
 		if ( Q_strncmp( "jedi", NPC_type, 4 ) == 0 || Q_stricmp( "luke", NPC_type ) == 0 )
 			return ( 1 << WP_SABER);
 
-		if ( Q_stricmp( "prisoner", NPC_type ) == 0 )
+		if ( Q_strncmp( "prisoner", NPC_type, 8 ) == 0 )
 		{
 			return WP_NONE;
 		}
-		if ( Q_stricmp( "bespincop", NPC_type ) == 0 )
+		if ( Q_strncmp( "bespincop", NPC_type, 9 ) == 0 )
 		{
 			return ( 1 << WP_BLASTER_PISTOL);
 		}
@@ -575,7 +577,7 @@ int NPC_WeaponsForTeam( team_t team, int spawnflags, const char *NPC_type )
 		{
 			return WP_NONE;
 		}	
-		if ( Q_stricmp( "ugnaught", NPC_type ) == 0 )
+		if ( Q_strncmp( "ugnaught", NPC_type, 8 ) == 0 )
 		{
 			return WP_NONE;
 		}	
@@ -822,15 +824,16 @@ void NPC_Begin (gentity_t *ent)
 	}
 	else if ( ent->NPC->stats.health )	// Was health supplied in NPC.cfg?
 	{
-		/*
-		if ( ent->client->NPC_class == CLASS_REBORN
-			|| ent->client->NPC_class == CLASS_SHADOWTROOPER 
-			|| ent->client->NPC_class == CLASS_TAVION
-			|| ent->client->NPC_class == CLASS_DESANN )
-		{//hmm, up Jedi
-			ent->NPC->stats.health += ent->NPC->stats.health/2 * g_spskill->integer;
+		
+		if ( ent->client->NPC_class != CLASS_REBORN
+			&& ent->client->NPC_class != CLASS_SHADOWTROOPER 
+			//&& ent->client->NPC_class != CLASS_TAVION
+			//&& ent->client->NPC_class != CLASS_DESANN 
+			&& ent->client->NPC_class != CLASS_JEDI )
+		{// up everyone except jedi
+			ent->NPC->stats.health += ent->NPC->stats.health/4 * g_spskill->integer; // 100% on easy, 125% on medium, 150% on hard
 		}
-		*/
+		
 		ent->max_health = client->pers.maxHealth = client->ps.stats[STAT_MAX_HEALTH] = ent->NPC->stats.health;
 	}
 	else
@@ -838,7 +841,23 @@ void NPC_Begin (gentity_t *ent)
 		ent->max_health = client->pers.maxHealth = client->ps.stats[STAT_MAX_HEALTH] = 100;
 	}
 
-	if ( ent->client->NPC_class == CLASS_STORMTROOPER
+	if ( !Q_stricmp( "rodian", ent->NPC_type ) )
+	{//sniper
+		//NOTE: this will get overridden by any aim settings in their spawnscripts
+		switch ( g_spskill->integer )
+		{
+		case 0:
+			ent->NPC->stats.aim = 1;
+			break;
+		case 1:
+			ent->NPC->stats.aim = Q_irand( 2, 3 );
+			break;
+		case 2:
+			ent->NPC->stats.aim = Q_irand( 3, 4 );
+			break;
+		}
+	}
+	else if ( ent->client->NPC_class == CLASS_STORMTROOPER
 		|| ent->client->NPC_class == CLASS_SWAMPTROOPER
 		|| ent->client->NPC_class == CLASS_IMPWORKER
 		|| !Q_stricmp( "rodian2", ent->NPC_type ) )
@@ -847,12 +866,40 @@ void NPC_Begin (gentity_t *ent)
 		{
 		case 0:
 			ent->NPC->stats.yawSpeed *= 0.75f;
+			if ( ent->client->NPC_class == CLASS_IMPWORKER )
+			{
+				ent->NPC->stats.aim -= Q_irand( 3, 6 );
+			}
+			break;
+		case 1:
+			if ( ent->client->NPC_class == CLASS_IMPWORKER )
+			{
+				ent->NPC->stats.aim -= Q_irand( 2, 4 );
+			}
+			break;
+		case 2:
+			ent->NPC->stats.yawSpeed *= 1.5f;
+			if ( ent->client->NPC_class == CLASS_IMPWORKER )
+			{
+				ent->NPC->stats.aim -= Q_irand( 0, 2 );
+			}
+			break;
+		}
+	}
+	else if ( ent->client->NPC_class == CLASS_REBORN
+		|| ent->client->NPC_class == CLASS_SHADOWTROOPER )
+	{
+		switch ( g_spskill->integer )
+		{
+		case 1:
+			ent->NPC->stats.yawSpeed *= 1.25f;
 			break;
 		case 2:
 			ent->NPC->stats.yawSpeed *= 1.5f;
 			break;
 		}
 	}
+
 
 	ent->s.groundEntityNum = ENTITYNUM_NONE;
 	ent->mass = 10;
@@ -1011,6 +1058,17 @@ void NPC_Begin (gentity_t *ent)
 	ClientThink( ent->s.number, &ucmd );
 
 	gi.linkentity( ent );
+
+	if ( ent->client->playerTeam == TEAM_ENEMY )
+	{//valid enemy spawned
+		if ( !(ent->spawnflags&SFB_CINEMATIC) && ent->NPC->behaviorState != BS_CINEMATIC )
+		{//not a cinematic enemy
+			if ( g_entities[0].client )
+			{
+				g_entities[0].client->sess.missionStats.enemiesSpawned++;
+			}
+		}
+	}
 }
 
 gNPC_t *New_NPC_t()
@@ -1242,9 +1300,10 @@ void NPC_Spawn_Go( gentity_t *ent )
 	newent->health = ent->health;
 	newent->script_targetname = ent->NPC_targetname;
 	newent->targetname = ent->NPC_targetname;
-	newent->target = ent->NPC_target;
-	newent->target2 = ent->target2;
-	newent->target3 = ent->target3;
+	newent->target = ent->NPC_target;//death
+	newent->target2 = ent->target2;//knocked out death
+	newent->target3 = ent->target3;//???
+	newent->target4 = ent->target4;//ffire death
 	newent->wait = ent->wait;
 	
 	for( index = BSET_FIRST; index < NUM_BSETS; index++)
@@ -1297,8 +1356,18 @@ void NPC_Spawn_Go( gentity_t *ent )
 	}
 	//FIXME: copy cameraGroup, store mine in message or other string field
 
-	// allow to ride movers
-	newent->s.pos.trType = TR_GRAVITY;
+	//set origin
+	newent->s.pos.trType = TR_INTERPOLATE;
+	newent->s.pos.trTime = level.time;
+	VectorCopy( newent->currentOrigin, newent->s.pos.trBase );
+	VectorClear( newent->s.pos.trDelta );
+	newent->s.pos.trDuration = 0;
+	//set angles
+	newent->s.apos.trType = TR_INTERPOLATE;
+	newent->s.apos.trTime = level.time;
+	VectorCopy( newent->currentOrigin, newent->s.apos.trBase );
+	VectorClear( newent->s.apos.trDelta );
+	newent->s.apos.trDuration = 0;
 	
 	newent->NPC->combatPoint = -1;
 
@@ -1450,6 +1519,7 @@ wait - if trying to spawn and blocked, how many seconds to wait before trying ag
 NPC_targetname - NPC's targetname AND script_targetname
 NPC_target - NPC's target to fire when killed
 NPC_target2 - NPC's target to fire when knocked out
+NPC_target4 - NPC's target to fire when killed by friendly fire
 NPC_type - type of NPC ("Borg" (default), "Xian", etc)
 health - starting health (default = 100)
 
@@ -1489,6 +1559,7 @@ first and so no scripts should be names with these names:
 delay - after spawned or triggered, how many seconds to wait to spawn the NPC
 */
 //void NPC_PrecacheModels ( char *NPCName );
+extern qboolean	spawning;				// the G_Spawn*() functions are valid  (only turned on during one function)
 void SP_NPC_spawner( gentity_t *self)
 {
 	extern void NPC_PrecacheAnimationCFG( const char *NPC_type );
@@ -1543,7 +1614,7 @@ void SP_NPC_spawner( gentity_t *self)
 	//We have to load the animation.cfg now because spawnscripts are going to want to set anims and we need to know their length and if they're valid
 	NPC_PrecacheAnimationCFG( self->NPC_type );
 
-	if(self->targetname)
+	if ( self->targetname )
 	{//Wait for triggering
 		self->e_UseFunc = useF_NPC_Spawn;
 		self->svFlags |= SVF_NPC_PRECACHE;//FIXME: precache my weapons somehow?
@@ -1552,7 +1623,16 @@ void SP_NPC_spawner( gentity_t *self)
 	}
 	else
 	{
-		NPC_Spawn (self, self, self);
+		//NOTE: auto-spawners never check for shy spawning
+		if ( spawning )
+		{//in entity spawn stage - map starting up
+			self->e_ThinkFunc = thinkF_NPC_Spawn_Go;
+			self->nextthink = level.time + START_TIME_REMOVE_ENTS + 50;
+		}
+		else
+		{//else spawn right now
+			NPC_Spawn( self, self, self );
+		}
 	}
 
 	//FIXME: store cameraGroup somewhere else and apply to spawned NPCs' cameraGroup
@@ -1644,7 +1724,9 @@ void SP_NPC_Kyle( gentity_t *self)
 {
 	self->NPC_type = "Kyle";
 
-	SP_NPC_spawner(self);
+	WP_SetSaberModel( NULL, CLASS_KYLE );
+
+	SP_NPC_spawner( self );
 }
 
 /*QUAKED NPC_Lando(1 0 0) (-16 -16 -24) (16 16 40) x x x x DROPTOFLOOR CINEMATIC NOTSOLID STARTINSOLID SHY
@@ -1686,6 +1768,8 @@ void SP_NPC_Luke( gentity_t *self)
 {
 	self->NPC_type = "Luke";
 
+	WP_SetSaberModel( NULL, CLASS_LUKE );
+
 	SP_NPC_spawner( self );
 }
 
@@ -1713,6 +1797,8 @@ SHY - Spawner is shy
 void SP_NPC_Tavion( gentity_t *self)
 {
 	self->NPC_type = "Tavion";
+
+	WP_SetSaberModel( NULL, CLASS_TAVION );
 
 	SP_NPC_spawner( self );
 }
@@ -1765,6 +1851,8 @@ SHY - Spawner is shy
 void SP_NPC_Desann( gentity_t *self)
 {
 	self->NPC_type = "Desann";
+
+	WP_SetSaberModel( NULL, CLASS_DESANN );
 
 	SP_NPC_spawner( self );
 }
@@ -1838,6 +1926,7 @@ void SP_NPC_Jedi( gentity_t *self)
 		}
 	}
 
+	WP_SetSaberModel( NULL, CLASS_JEDI );
 
 	SP_NPC_spawner( self );
 }
@@ -1972,7 +2061,14 @@ void SP_NPC_Ugnaught( gentity_t *self)
 {
 	if ( !self->NPC_type )
 	{
-		self->NPC_type = "Ugnaught";
+		if ( Q_irand( 0, 1 ) )
+		{
+			self->NPC_type = "Ugnaught";
+		}
+		else
+		{
+			self->NPC_type = "Ugnaught2";
+		}
 	}
 
 	SP_NPC_spawner( self );
@@ -2054,7 +2150,21 @@ void SP_NPC_Weequay( gentity_t *self)
 {
 	if ( !self->NPC_type )
 	{
-		self->NPC_type = "Weequay";
+		switch ( Q_irand( 0, 3 ) )
+		{
+		case 0:
+			self->NPC_type = "Weequay";
+			break;
+		case 1:
+			self->NPC_type = "Weequay2";
+			break;
+		case 2:
+			self->NPC_type = "Weequay3";
+			break;
+		case 3:
+			self->NPC_type = "Weequay4";
+			break;
+		}
 	}
 
 	SP_NPC_spawner( self );
@@ -2138,7 +2248,14 @@ void SP_NPC_Imperial( gentity_t *self)
 	if ( self->message )
 	{//may drop a key, precache the key model and pickup sound
 		G_SoundIndex( "sound/weapons/key_pkup.wav" );
-		RegisterItem( FindItemForInventory( INV_SECURITY_KEY1 ) );
+		if ( !Q_stricmp( "goodie", self->message ) )
+		{
+			RegisterItem( FindItemForInventory( INV_GOODIE_KEY ) );
+		}
+		else
+		{
+			RegisterItem( FindItemForInventory( INV_SECURITY_KEY ) );
+		}
 	}
 	SP_NPC_spawner( self );
 }
@@ -2238,6 +2355,7 @@ void SP_NPC_Reborn( gentity_t *self)
 		}
 	}
 	
+	WP_SetSaberModel( NULL, CLASS_REBORN );
 	SP_NPC_spawner( self );
 }
 
@@ -2263,7 +2381,7 @@ void SP_NPC_ShadowTrooper( gentity_t *self)
 	}
 	
 	NPC_ShadowTrooper_Precache();
-	RegisterItem( FindItemForAmmo( AMMO_FORCE ) );
+	WP_SetSaberModel( NULL, CLASS_SHADOWTROOPER );
 
 	SP_NPC_spawner( self );
 }
@@ -2433,8 +2551,6 @@ void SP_NPC_Droid_Probe( gentity_t *self)
 
 	SP_NPC_spawner( self );
 
-	RegisterItem( FindItemForWeapon( WP_BRYAR_PISTOL ) );
-
 	NPC_Probe_Precache();
 }
 
@@ -2474,8 +2590,6 @@ void SP_NPC_Droid_Mark2( gentity_t *self)
 	SP_NPC_spawner( self );
 
 	NPC_Mark2_Precache();
-	RegisterItem( FindItemForAmmo( AMMO_BLASTER ));
-	RegisterItem( FindItemForAmmo( 	AMMO_METAL_BOLTS));
 }
 
 /*QUAKED NPC_Droid_ATST (1 0 0) (-40 -40 -24) (40 40 248) x x x x DROPTOFLOOR CINEMATIC NOTSOLID STARTINSOLID SHY
@@ -2667,6 +2781,7 @@ void SP_NPC_Droid_Protocol( gentity_t *self)
 	}
 
 	SP_NPC_spawner( self );
+	NPC_Protocol_Precache();
 }
 
 
@@ -2787,9 +2902,16 @@ static void NPC_Spawn_f(void)
 	{
 		NPC_Sentry_Precache();
 	}
+	else if ( !Q_stricmp( "protocol", NPCspawner->NPC_type ))
+	{
+		NPC_Protocol_Precache();
+	}
+	else if ( !Q_stricmp( "galak_mech", NPCspawner->NPC_type ))
+	{
+		NPC_GalakMech_Precache();
+	}
 
-
-	NPC_Spawn (NPCspawner, NPCspawner, NPCspawner);
+	NPC_Spawn( NPCspawner, NPCspawner, NPCspawner );
 }
 
 /*

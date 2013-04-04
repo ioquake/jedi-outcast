@@ -7,6 +7,7 @@
 
 gentity_t *CreateMissile( vec3_t org, vec3_t dir, float vel, int life, gentity_t *owner, qboolean altFire = qfalse );
 extern gitem_t	*FindItemForAmmo( ammo_t ammo );
+extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
 
 //Local state enums
 enum
@@ -24,14 +25,19 @@ void NPC_Probe_Precache(void)
 {
 	for ( int i = 1; i < 4; i++)
 	{
-		G_SoundIndex( va( "sound/chars/probe/misc/probetalk%d.wav", i ) );
+		G_SoundIndex( va( "sound/chars/probe/misc/probetalk%d", i ) );
 	}
-	G_SoundIndex( "sound/chars/probe/misc/probedroidloop.wav" );
-	G_SoundIndex("sound/chars/probe/misc/anger1.wav");
+	G_SoundIndex( "sound/chars/probe/misc/probedroidloop" );
+	G_SoundIndex("sound/chars/probe/misc/anger1");
+	G_SoundIndex("sound/chars/probe/misc/fire");
+
+	G_EffectIndex( "probehead" );
+	G_EffectIndex( "env/med_explode2" );
 	G_EffectIndex( "probeexplosion1");
+	G_EffectIndex( "bryar/muzzle_flash" );
 
 	RegisterItem( FindItemForAmmo( AMMO_BLASTER ));
-
+	RegisterItem( FindItemForWeapon( WP_BRYAR_PISTOL ) );
 }
 /*
 -------------------------
@@ -276,7 +282,9 @@ void ImperialProbe_FireBlaster(void)
 
 	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, muzzle1 );
 
-	G_PlayEffect( "blaster/muzzle_flash", muzzle1 );
+	G_PlayEffect( "bryar/muzzle_flash", muzzle1 );
+
+	G_Sound( NPC, G_SoundIndex( "sound/chars/probe/misc/fire" ));
 
 	if (NPC->health)
 	{
@@ -291,8 +299,6 @@ void ImperialProbe_FireBlaster(void)
 	{
 		AngleVectors (NPC->currentAngles, forward, vright, up);
 	}
-
-	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/shoot1.wav"));
 
 	missile = CreateMissile( muzzle1, forward, 1600, 10000, NPC );
 
@@ -376,7 +382,7 @@ void ImperialProbe_AttackDecision( void )
 	{
 		if (TIMER_Done(NPC,"angerNoise"))
 		{
-			G_Sound( NPC, G_SoundIndex(va("sound/chars/probe/misc/probetalk%d.wav",	Q_irand(1, 3))));
+			G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/probe/misc/probetalk%d", Q_irand(1, 3)) );
 
 			TIMER_Set( NPC, "patrolNoise", Q_irand( 4000, 10000 ) );
 		}
@@ -441,9 +447,9 @@ void NPC_Probe_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, ve
 
 				VectorCopy(self->currentOrigin,origin);
 				origin[2] +=50;
-				G_PlayEffect( "small_chunks", origin );
+//				G_PlayEffect( "small_chunks", origin );
 				G_PlayEffect( "probehead", origin );
-				G_PlayEffect( "mouseexplosion1", origin );
+				G_PlayEffect( "env/med_explode2", origin );
 				self->client->clientInfo.headModel = 0;
 				self->NPC->stats.moveType = MT_RUNJUMP;
 				self->client->ps.gravity = g_gravity->value*.1;
@@ -517,21 +523,21 @@ void ImperialProbe_Patrol( void )
 		if ( UpdateGoal() )
 		{
 			//start loop sound once we move
-			NPC->s.loopSound = G_SoundIndex( "sound/chars/probe/misc/probedroidloop.wav" );
+			NPC->s.loopSound = G_SoundIndex( "sound/chars/probe/misc/probedroidloop" );
 			ucmd.buttons |= BUTTON_WALKING;
 			NPC_MoveToGoal( qtrue );
 		}
 		//randomly talk
 		if (TIMER_Done(NPC,"patrolNoise"))
 		{
-			G_Sound( NPC, G_SoundIndex(va("sound/chars/probe/misc/probetalk%d.wav",	Q_irand(1, 3))));
+			G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/probe/misc/probetalk%d", Q_irand(1, 3)) );
 
 			TIMER_Set( NPC, "patrolNoise", Q_irand( 2000, 4000 ) );
 		}
 	}
 	else	// He's got an enemy. Make him angry.
 	{
-		G_Sound( NPC, G_SoundIndex("sound/chars/probe/misc/anger1.wav"));
+		G_SoundOnEnt( NPC, CHAN_AUTO, "sound/chars/probe/misc/anger1" );
 		TIMER_Set( NPC, "angerNoise", Q_irand( 2000, 4000 ) );
 		//NPCInfo->behaviorState = BS_HUNT_AND_KILL;
 	}

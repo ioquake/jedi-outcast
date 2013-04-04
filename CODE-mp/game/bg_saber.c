@@ -24,10 +24,12 @@ void BG_ForcePowerDrain( playerState_t *ps, forcePowers_t forcePower, int overri
 	//take away the power
 	int	drain = overrideAmt;
 
+	/*
 	if (ps->powerups[PW_FORCE_BOON])
 	{
 		return;
 	}
+	*/
 
 	if ( !drain )
 	{
@@ -1229,7 +1231,7 @@ void PM_WeaponLightsaber(void)
 		pm->ps->weaponTime < 1 &&
 		pm->ps->saberCanThrow &&
 		pm->ps->fd.forcePower >= forcePowerNeeded[pm->ps->fd.forcePowerLevel[FP_SABERTHROW]][FP_SABERTHROW] &&
-		!BG_HasYsalimari(pm->gametype, pm->ps) &&
+		!BG_HasYsalamiri(pm->gametype, pm->ps) &&
 		BG_CanUseFPNow(pm->gametype, pm->ps, pm->cmd.serverTime, FP_SABERTHROW)
 		)
 	{ //might as well just check for a saber throw right here
@@ -1408,7 +1410,7 @@ void PM_WeaponLightsaber(void)
 
 		if (pm->ps->saberBlocked != BLOCKED_ATK_BOUNCE && pm->ps->saberBlocked != BLOCKED_PARRY_BROKEN && pm->ps->weaponTime < 1)
 		{
-			pm->ps->torsoTimer = SABER_BLOCK_DUR*2;
+			pm->ps->torsoTimer = SABER_BLOCK_DUR;
 			pm->ps->weaponTime = pm->ps->torsoTimer;
 		}
 
@@ -1620,6 +1622,10 @@ weapChecks:
 					/*
 					if ( PM_HasAnimation( pm->gent, saberMoveData[newmove].animToUse ) )
 					*/
+
+					assert(	bgGlobalAnimations[saberMoveData[newmove].animToUse].firstFrame != 0 || 
+							bgGlobalAnimations[saberMoveData[newmove].animToUse].numFrames != 0);
+
 					if (1)
 					{
 						anim = saberMoveData[newmove].animToUse;
@@ -1710,6 +1716,11 @@ void PM_SetSaberMove(short newMove)
 	else if ( BG_SaberInAttack( newMove ) )
 	{//continuing with a kata, increment attack counter
 		pm->ps->saberAttackChainCount++;
+	}
+
+	if (pm->ps->saberAttackChainCount > 16)
+	{ //for the sake of being able to send the value over the net within a reasonable bit count
+		pm->ps->saberAttackChainCount = 16;
 	}
 
 	if ( pm->ps->fd.saberAnimLevel > FORCE_LEVEL_1 &&

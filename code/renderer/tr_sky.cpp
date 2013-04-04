@@ -274,6 +274,7 @@ CLOUD VERTEX GENERATION
 **
 ** Parms: s, t range from -1 to 1
 */
+
 static void MakeSkyVec( float s, float t, int axis, float outSt[2], vec3_t outXYZ )
 {
 	// 1 = s, 2 = t, 3 = 2048
@@ -371,6 +372,9 @@ static void DrawSkySide( struct image_s *image, const int mins[2], const int max
 static void DrawSkyBox( shader_t *shader )
 {
 	int		i;
+
+	sky_min = 0.0f;
+	sky_max = 1.0f;
 
 	memset( s_skyTexCoords, 0, sizeof( s_skyTexCoords ) );
 
@@ -616,6 +620,7 @@ void R_BuildCloudData( shaderCommands_t *input )
 ** Called when a sky shader is parsed
 */
 #define SQR( a ) ((a)*(a))
+
 void R_InitSkyTexCoords( float heightCloud )
 {
 	int i, s, t;

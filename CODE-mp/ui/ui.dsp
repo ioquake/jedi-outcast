@@ -166,10 +166,6 @@ SOURCE=.\ui_main.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\ui_players.c
-# End Source File
-# Begin Source File
-
 SOURCE=.\ui_shared.c
 # End Source File
 # Begin Source File
@@ -203,6 +199,10 @@ SOURCE=..\game\bg_weapons.h
 # Begin Source File
 
 SOURCE=..\qcommon\disablewarnings.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\qcommon\game_version.h
 # End Source File
 # Begin Source File
 

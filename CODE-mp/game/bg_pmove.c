@@ -12,6 +12,8 @@
 pmove_t		*pm;
 pml_t		pml;
 
+qboolean gPMDoSlowFall = qfalse;
+
 // movement parameters
 float	pm_stopspeed = 100.0f;
 float	pm_duckScale = 0.50f;
@@ -100,7 +102,7 @@ int forcePowerNeeded[NUM_FORCE_POWER_LEVELS][NUM_FORCE_POWERS] =
 		20,//FP_SEE,//duration
 		0,//FP_SABERATTACK,
 		1,//FP_SABERDEFEND,
-		10//FP_SABERTHROW,
+		20//FP_SABERTHROW,
 		//NUM_FORCE_POWERS
 	},
 	{
@@ -110,7 +112,7 @@ int forcePowerNeeded[NUM_FORCE_POWER_LEVELS][NUM_FORCE_POWERS] =
 		20,//FP_PUSH,//hold/duration
 		20,//FP_PULL,//hold/duration
 		20,//FP_TELEPATHY,//instant
-		30,//FP_GRIP,//hold/duration
+		60,//FP_GRIP,//hold/duration
 		1,//FP_LIGHTNING,//hold/duration
 		50,//FP_RAGE,//duration
 		10,//FP_PROTECT,//duration
@@ -121,7 +123,7 @@ int forcePowerNeeded[NUM_FORCE_POWER_LEVELS][NUM_FORCE_POWERS] =
 		20,//FP_SEE,//duration
 		0,//FP_SABERATTACK,
 		0,//FP_SABERDEFEND,
-		5//FP_SABERTHROW,
+		20//FP_SABERTHROW,
 		//NUM_FORCE_POWERS
 	}
 };
@@ -155,6 +157,16 @@ int PM_GetSaberStance(void)
 
 	//fast
 	return BOTH_SABERFAST_STANCE;
+}
+
+qboolean PM_DoSlowFall(void)
+{
+	if ( ( (pm->ps->legsAnim&~ANIM_TOGGLEBIT) == BOTH_WALL_RUN_RIGHT || (pm->ps->legsAnim&~ANIM_TOGGLEBIT) == BOTH_WALL_RUN_LEFT ) && pm->ps->legsTimer > 500 )
+	{
+		return qtrue;
+	}
+
+	return qfalse;
 }
 
 /*
@@ -444,7 +456,7 @@ qboolean PM_ForceJumpingUp(void)
 		return qfalse;
 	}
 
-	if (BG_HasYsalimari(pm->gametype, pm->ps))
+	if (BG_HasYsalamiri(pm->gametype, pm->ps))
 	{
 		return qfalse;
 	}
@@ -496,6 +508,117 @@ static void PM_JumpForDir( void )
 	{
 		PM_SetAnim(SETANIM_LEGS,anim,SETANIM_FLAG_OVERRIDE, 100);		// Only blend over 100ms
 	}
+}
+
+void PM_SetPMViewAngle(playerState_t *ps, vec3_t angle, usercmd_t *ucmd)
+{
+	int			i;
+
+	// set the delta angle
+	for (i=0 ; i<3 ; i++) {
+		int		cmdAngle;
+
+		cmdAngle = ANGLE2SHORT(angle[i]);
+		ps->delta_angles[i] = cmdAngle - ucmd->angles[i];
+	}
+	//VectorCopy( angle, ent->s.angles );
+	VectorCopy (angle, ps->viewangles);
+}
+
+qboolean PM_AdjustAngleForWallRun( playerState_t *ps, usercmd_t *ucmd, qboolean doMove )
+{
+	if (( (ps->legsAnim&~ANIM_TOGGLEBIT) == BOTH_WALL_RUN_RIGHT || (ps->legsAnim&~ANIM_TOGGLEBIT) == BOTH_WALL_RUN_LEFT ) && ps->legsTimer > 500 )
+	{//wall-running and not at end of anim
+		//stick to wall, if there is one
+		vec3_t	rt, traceTo, mins, maxs, fwdAngles;
+		trace_t	trace;
+		float	dist, yawAdjust;
+
+		VectorSet(mins, -15, -15, 0);
+		VectorSet(maxs, 15, 15, 24);
+		VectorSet(fwdAngles, 0, pm->ps->viewangles[YAW], 0);
+
+		AngleVectors( fwdAngles, NULL, rt, NULL );
+		if ( (ps->legsAnim&~ANIM_TOGGLEBIT) == BOTH_WALL_RUN_RIGHT )
+		{
+			dist = 128;
+			yawAdjust = -90;
+		}
+		else
+		{
+			dist = -128;
+			yawAdjust = 90;
+		}
+		VectorMA( ps->origin, dist, rt, traceTo );
+		
+		pm->trace( &trace, ps->origin, mins, maxs, traceTo, ps->clientNum, MASK_PLAYERSOLID );
+
+		if ( trace.fraction < 1.0f )
+		{//still a wall there
+			//FIXME: don't pull around 90 turns
+			//FIXME: simulate stepping up steps here, somehow?
+			if ( (ps->legsAnim&~ANIM_TOGGLEBIT) == BOTH_WALL_RUN_RIGHT )
+			{
+				ucmd->rightmove = 127;
+			}
+			else
+			{
+				ucmd->rightmove = -127;
+			}
+			if ( ucmd->upmove < 0 )
+			{
+				ucmd->upmove = 0;
+			}
+			//make me face perpendicular to the wall
+			ps->viewangles[YAW] = vectoyaw( trace.plane.normal )+yawAdjust;
+
+			//SetClientViewAngle( ent, ent->client->ps.viewangles );
+			PM_SetPMViewAngle(ps, ps->viewangles, ucmd);
+
+			ucmd->angles[YAW] = ANGLE2SHORT( ps->viewangles[YAW] ) - ps->delta_angles[YAW];
+			if ( doMove )
+			{
+				//push me forward
+				vec3_t	fwd;
+				float	zVel = ps->velocity[2];
+				if ( ps->legsTimer > 500 )
+				{//not at end of anim yet
+					float speed = 175;
+
+					fwdAngles[YAW] = ps->viewangles[YAW];
+					AngleVectors( fwdAngles, fwd, NULL, NULL );
+					//FIXME: or MA?
+					if ( ucmd->forwardmove < 0 )
+					{//slower
+						speed = 100;
+					}
+					else if ( ucmd->forwardmove > 0 )
+					{
+						speed = 250;//running speed
+					}
+					VectorScale( fwd, speed, ps->velocity );
+				}
+				ps->velocity[2] = zVel;//preserve z velocity
+				//pull me toward the wall, too
+				VectorMA( ps->velocity, dist, rt, ps->velocity );
+			}
+			ucmd->forwardmove = 0;
+			return qtrue;
+		}
+		else if ( doMove )
+		{//stop it
+			if ( (ps->legsAnim&~ANIM_TOGGLEBIT) == BOTH_WALL_RUN_RIGHT )
+			{
+				PM_SetAnim(SETANIM_BOTH, BOTH_WALL_RUN_RIGHT_STOP, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD, 0);
+			}
+			else if ( (ps->legsAnim&~ANIM_TOGGLEBIT) == BOTH_WALL_RUN_LEFT )
+			{
+				PM_SetAnim(SETANIM_BOTH, BOTH_WALL_RUN_LEFT_STOP, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD, 0);
+			}
+		}
+	}
+
+	return qfalse;
 }
 
 /*
@@ -606,7 +729,6 @@ static qboolean PM_CheckJump( void )
 						{
 							//start force jump
 							pm->ps->fd.forcePowersActive |= (1<<FP_LEVITATION);
-//							G_SoundOnEnt( pm->gent, CHAN_BODY, "sound/weapons/force/jump.wav" );
 							pm->ps->fd.forceJumpSound = 1;
 							//play flip
 							//FIXME: do this only when they stop the jump (below) or when they're just about to hit the peak of the jump
@@ -788,7 +910,7 @@ static qboolean PM_CheckJump( void )
 		{
 			VectorMA( pm->ps->velocity, JUMP_VELOCITY*2, forward, pm->ps->velocity );
 			//FIXME: kicking off wall anim?  At least check what anim we're in?
-			PM_SetAnim(SETANIM_LEGS,BOTH_SWIMFORWARDSTART,SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD|SETANIM_FLAG_RESTART, 150);
+			PM_SetAnim(SETANIM_LEGS,BOTH_FORCEJUMP1,SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD|SETANIM_FLAG_RESTART, 150);
 		}//else no surf close enough to push off of
 		pm->cmd.upmove = 0;
 	}
@@ -797,7 +919,7 @@ static qboolean PM_CheckJump( void )
 		!(pm->ps->pm_flags&PMF_JUMP_HELD) /*&&
 		WP_ForcePowerAvailable( pm->gent, FP_LEVITATION, 0 ) */ &&
 		pm->ps->weapon == WP_SABER &&
-		!BG_HasYsalimari(pm->gametype, pm->ps) &&
+		!BG_HasYsalamiri(pm->gametype, pm->ps) &&
 		BG_CanUseFPNow(pm->gametype, pm->ps, pm->cmd.serverTime, FP_LEVITATION)
 		 )
 	{
@@ -985,7 +1107,6 @@ static qboolean PM_CheckJump( void )
 					pm->ps->fd.forceJumpZStart = pm->ps->origin[2];//so we don't take damage if we land at same height
 					pm->ps->pm_flags |= PMF_JUMP_HELD;//PMF_JUMPING|PMF_SLOW_MO_FALL;
 					pm->cmd.upmove = 0;
-					//G_SoundOnEnt( pm->gent, CHAN_BODY, "sound/weapons/force/jump.wav" );
 					//WP_ForcePowerDrain( pm->gent, FP_LEVITATION, 0 );
 					pm->ps->fd.forceJumpSound = 1;
 				}
@@ -996,13 +1117,12 @@ static qboolean PM_CheckJump( void )
 			int legsAnim = (pm->ps->legsAnim&~ANIM_TOGGLEBIT);
 			if ( legsAnim == BOTH_WALL_RUN_LEFT || legsAnim == BOTH_WALL_RUN_RIGHT )
 			{//running on a wall
-				//FIXME: if already in a wall run, keep checking for a wall surf... maybe kick people?
 				vec3_t right, traceto, mins, maxs, fwdAngles;
 				trace_t	trace;
 				int		anim = -1;
 
-				VectorSet(mins, pm->mins[0],pm->mins[0],0);
-				VectorSet(maxs, pm->maxs[0],pm->maxs[0],24);
+				VectorSet(mins, pm->mins[0], pm->mins[0], 0);
+				VectorSet(maxs, pm->maxs[0], pm->maxs[0], 24);
 				VectorSet(fwdAngles, 0, pm->ps->viewangles[YAW], 0);
 
 				AngleVectors( fwdAngles, NULL, right, NULL );
@@ -1011,7 +1131,7 @@ static qboolean PM_CheckJump( void )
 				{
 					if ( pm->ps->legsTimer > 400 )
 					{//not at the end of the anim
-						float animLen = PM_AnimLength( 0, BOTH_WALL_RUN_LEFT );
+						float animLen = PM_AnimLength( 0, (animNumber_t)BOTH_WALL_RUN_LEFT );
 						if ( pm->ps->legsTimer < animLen - 400 )
 						{//not at start of anim
 							VectorMA( pm->ps->origin, -16, right, traceto );
@@ -1023,7 +1143,7 @@ static qboolean PM_CheckJump( void )
 				{
 					if ( pm->ps->legsTimer > 400 )
 					{//not at the end of the anim
-						float animLen = PM_AnimLength( 0, BOTH_WALL_RUN_RIGHT );
+						float animLen = PM_AnimLength( 0, (animNumber_t)BOTH_WALL_RUN_RIGHT );
 						if ( pm->ps->legsTimer < animLen - 400 )
 						{//not at start of anim
 							VectorMA( pm->ps->origin, 16, right, traceto );
@@ -1033,11 +1153,11 @@ static qboolean PM_CheckJump( void )
 				}
 				if ( anim != -1 )
 				{
-					int parts;
-
 					pm->trace( &trace, pm->ps->origin, mins, maxs, traceto, pm->ps->clientNum, CONTENTS_SOLID|CONTENTS_BODY );
 					if ( trace.fraction < 1.0f )
 					{//flip off wall
+						int parts = 0;
+
 						if ( anim == BOTH_WALL_RUN_LEFT_FLIP )
 						{
 							pm->ps->velocity[0] *= 0.5f;
@@ -1057,7 +1177,7 @@ static qboolean PM_CheckJump( void )
 						}
 						PM_SetAnim( parts, anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD, 0 );
 						//FIXME: do damage to traceEnt, like above?
-						pm->ps->pm_flags |= PMF_JUMP_HELD;//PMF_JUMPING|PMF_SLOW_MO_FALL;
+						//pm->ps->pm_flags |= PMF_JUMPING|PMF_SLOW_MO_FALL;
 						pm->cmd.upmove = 0;
 					}
 				}
@@ -1395,10 +1515,18 @@ static void PM_AirMove( void ) {
 	VectorNormalize (pml.forward);
 	VectorNormalize (pml.right);
 
-	for ( i = 0 ; i < 2 ; i++ ) {
-		wishvel[i] = pml.forward[i]*fmove + pml.right[i]*smove;
+	if ( gPMDoSlowFall )
+	{//no air-control
+		VectorClear( wishvel );
 	}
-	wishvel[2] = 0;
+	else
+	{
+		for ( i = 0 ; i < 2 ; i++ )
+		{
+			wishvel[i] = pml.forward[i]*fmove + pml.right[i]*smove;
+		}
+		wishvel[2] = 0;
+	}
 
 	VectorCopy (wishvel, wishdir);
 	wishspeed = VectorNormalize(wishdir);
@@ -1702,7 +1830,7 @@ static int PM_TryRoll( void )
 		return 0;
 	}
 
-	if (pm->ps->weapon != WP_SABER || BG_HasYsalimari(pm->gametype, pm->ps) ||
+	if (pm->ps->weapon != WP_SABER || BG_HasYsalamiri(pm->gametype, pm->ps) ||
 		!BG_CanUseFPNow(pm->gametype, pm->ps, pm->cmd.serverTime, FP_LEVITATION))
 	{
 		return 0;
@@ -1810,9 +1938,29 @@ static void PM_CrashLand( void ) {
 		}
 	}
 
+	/*
 	if (pm->ps->forceHandExtend == HANDEXTEND_NONE)
 	{
 		pm->ps->forceHandExtend = HANDEXTEND_WEAPONREADY;
+	}
+	*/
+	if (pm->ps->weapon != WP_SABER)
+	{ //saber handles its own anims
+		if (pm->ps->weapon == WP_DISRUPTOR && pm->ps->zoomMode == 1)
+		{
+			PM_StartTorsoAnim( TORSO_WEAPONREADY4 );
+		}
+		else
+		{
+			if (pm->ps->weapon == WP_EMPLACED_GUN)
+			{
+				PM_StartTorsoAnim( BOTH_GUNSIT1 );
+			}
+			else
+			{
+				PM_StartTorsoAnim( WeaponReadyAnim[pm->ps->weapon] );
+			}
+		}
 	}
 	//just a stupid hack to push us back into our "idle" stance
 
@@ -3058,7 +3206,8 @@ static void PM_Weapon( void ) {
 		{ //saber handles its own anims
 			if (pm->ps->weapon == WP_DISRUPTOR && pm->ps->zoomMode == 1)
 			{
-				PM_StartTorsoAnim( TORSO_WEAPONREADY4 );
+				//PM_StartTorsoAnim( TORSO_WEAPONREADY4 );
+				PM_StartTorsoAnim( TORSO_RAISEWEAP1);
 			}
 			else
 			{
@@ -3068,10 +3217,17 @@ static void PM_Weapon( void ) {
 				}
 				else
 				{
-					PM_StartTorsoAnim( WeaponReadyAnim[pm->ps->weapon] );
+					//PM_StartTorsoAnim( WeaponReadyAnim[pm->ps->weapon] );
+					PM_StartTorsoAnim( TORSO_RAISEWEAP1);
 				}
 			}
 		}
+
+		//we now go into a weapon raise anim after every force hand extend.
+		//this is so that my holster-view-weapon-when-hand-extend stuff works.
+		pm->ps->weaponstate = WEAPON_RAISING;
+		pm->ps->weaponTime += 250;
+
 		pm->ps->forceHandExtend = HANDEXTEND_NONE;
 	}
 	else if (pm->ps->forceHandExtend != HANDEXTEND_NONE)
@@ -3679,8 +3835,8 @@ void PM_AdjustAttackStates( pmove_t *pm )
 	// disruptor alt-fire should toggle the zoom mode, but only bother doing this for the player?
 	if ( pm->ps->weapon == WP_DISRUPTOR && pm->ps->weaponstate == WEAPON_READY )
 	{
-		if ( !(pm->ps->eFlags & EF_ALT_FIRING) && (pm->cmd.buttons & BUTTON_ALT_ATTACK) &&
-			pm->cmd.upmove <= 0 && !pm->cmd.forwardmove && !pm->cmd.rightmove)
+		if ( !(pm->ps->eFlags & EF_ALT_FIRING) && (pm->cmd.buttons & BUTTON_ALT_ATTACK) /*&&
+			pm->cmd.upmove <= 0 && !pm->cmd.forwardmove && !pm->cmd.rightmove*/)
 		{
 			// We just pressed the alt-fire key
 			if ( !pm->ps->zoomMode )
@@ -3722,12 +3878,15 @@ void PM_AdjustAttackStates( pmove_t *pm )
 				pm->ps->zoomLocked = qtrue;
 			}
 		}
+		//This seemed like a good idea, but apparently it confuses people. So disabled for now.
+		/*
 		else if (!(pm->ps->eFlags & EF_ALT_FIRING) && (pm->cmd.buttons & BUTTON_ALT_ATTACK) &&
 			(pm->cmd.upmove > 0 || pm->cmd.forwardmove || pm->cmd.rightmove))
 		{ //if you try to zoom while moving, just convert it into a primary attack
 			pm->cmd.buttons &= ~BUTTON_ALT_ATTACK;
 			pm->cmd.buttons |= BUTTON_ATTACK;
 		}
+		*/
 
 		if (pm->cmd.upmove > 0 || pm->cmd.forwardmove || pm->cmd.rightmove)
 		{
@@ -3754,6 +3913,19 @@ void PM_AdjustAttackStates( pmove_t *pm )
 		{
 			// alt-fire button pressing doesn't use any ammo
 			amount = 0;
+		}
+	}
+	else if (pm->ps->weapon == WP_DISRUPTOR) //still perform certain checks, even if the weapon is not ready
+	{
+		if (pm->cmd.upmove > 0 || pm->cmd.forwardmove || pm->cmd.rightmove)
+		{
+			if (pm->ps->zoomMode == 1 && pm->ps->zoomLockTime < pm->cmd.serverTime)
+			{ //check for == 1 so we can't turn binoculars off with disruptor alt fire
+				pm->ps->zoomMode = 0;
+				pm->ps->zoomTime = pm->ps->commandTime;
+				pm->ps->zoomLocked = qfalse;
+				PM_AddEvent(EV_DISRUPTOR_ZOOMSOUND);
+			}
 		}
 	}
 
@@ -3812,11 +3984,16 @@ void PM_AdjustAttackStates( pmove_t *pm )
 	// disruptor should convert a main fire to an alt-fire if the gun is currently zoomed
 	if ( pm->ps->weapon == WP_DISRUPTOR)
 	{
-		if ( pm->cmd.buttons & BUTTON_ATTACK && pm->ps->zoomMode == 1)
+		if ( pm->cmd.buttons & BUTTON_ATTACK && pm->ps->zoomMode == 1 && pm->ps->zoomLocked)
 		{
 			// converting the main fire to an alt-fire
 			pm->cmd.buttons |= BUTTON_ALT_ATTACK;
 			pm->ps->eFlags |= EF_ALT_FIRING;
+		}
+		else if ( pm->cmd.buttons & BUTTON_ALT_ATTACK && pm->ps->zoomMode == 1 && pm->ps->zoomLocked)
+		{
+			pm->cmd.buttons &= ~BUTTON_ALT_ATTACK;
+			pm->ps->eFlags &= ~EF_ALT_FIRING;
 		}
 	}
 }
@@ -4004,7 +4181,14 @@ void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 	if ( BG_InRoll( ps, ps->legsAnim ) && ps->speed > 200 )
 	{ //can't roll unless you're able to move normally
 		BG_CmdForRoll( ps->legsAnim, cmd );
-		ps->speed = ps->legsTimer/1.5;//450;
+		if ((ps->legsAnim&~ANIM_TOGGLEBIT) == BOTH_ROLL_B)
+		{ //backwards roll is pretty fast, should also be slower
+			ps->speed = ps->legsTimer/2.5;
+		}
+		else
+		{
+			ps->speed = ps->legsTimer/1.5;//450;
+		}
 		if (ps->speed > 600)
 		{
 			ps->speed = 600;
@@ -4023,6 +4207,8 @@ void trap_SnapVector( float *v );
 
 void PmoveSingle (pmove_t *pmove) {
 	pm = pmove;
+
+	gPMDoSlowFall = PM_DoSlowFall();
 
 	// this counter lets us debug movement problems with a journal
 	// by setting a conditional breakpoint fot the previous frame
@@ -4157,6 +4343,8 @@ void PmoveSingle (pmove_t *pmove) {
 
 	pml.frametime = pml.msec * 0.001;
 
+	PM_AdjustAngleForWallRun(pm->ps, &pm->cmd, qtrue);
+
 	// update the viewangles
 	PM_UpdateViewAngles( pm->ps, &pm->cmd );
 
@@ -4206,6 +4394,11 @@ void PmoveSingle (pmove_t *pmove) {
 
 	if ( pm->ps->pm_type == PM_INTERMISSION || pm->ps->pm_type == PM_SPINTERMISSION) {
 		return;		// no movement at all
+	}
+
+	if (gPMDoSlowFall)
+	{
+		pm->ps->gravity *= 0.5;
 	}
 
 	// set watertype, and waterlevel
@@ -4282,6 +4475,11 @@ void PmoveSingle (pmove_t *pmove) {
 
 	// snap some parts of playerstate to save network bandwidth
 	trap_SnapVector( pm->ps->velocity );
+
+	if (gPMDoSlowFall)
+	{
+		pm->ps->gravity *= 2;
+	}
 }
 
 

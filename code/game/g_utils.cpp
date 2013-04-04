@@ -263,6 +263,12 @@ void G_SpeechEvent( gentity_t *self, int event )
 	case EV_CHOKE3:
 		CG_TryPlayCustomSound( NULL, self->s.number, CHAN_VOICE, va("*choke%i.wav", event - EV_CHOKE1 + 1), CS_COMBAT );
 		break;
+	case EV_FFWARN:	//Warn ally to stop shooting you
+		CG_TryPlayCustomSound( NULL, self->s.number, CHAN_VOICE, "*ffwarn.wav", CS_COMBAT );
+		break;
+	case EV_FFTURN:	//Turn on ally after being shot by them
+		CG_TryPlayCustomSound( NULL, self->s.number, CHAN_VOICE, "*ffturn.wav", CS_COMBAT );
+		break;
 	//extra sounds for ST
 	case EV_CHASE1:
 	case EV_CHASE2:
@@ -807,6 +813,7 @@ void G_FreeEntity( gentity_t *ed ) {
 	//			This is really fucking stupid and has caused us no end of
 	//			trouble!!!  Change it to set the s.number to the proper index
 	//			(ed - g_entities) *OR* ENTITYNUM_NONE!!!
+	ed->s.number = ENTITYNUM_NONE;
 	ed->classname = "freed";
 	ed->freetime = level.time;
 	ed->inuse = qfalse;
@@ -1291,7 +1298,12 @@ void TryUse( gentity_t *ent )
 		GEntity_UseFunc( target, ent, ent );
 		return;
 	}
-	else if ( target->client && target->client->ps.pm_type < PM_DEAD && target->NPC!=NULL && target->client->playerTeam && target->client->playerTeam == ent->client->playerTeam && !(target->NPC->scriptFlags&SCF_NO_RESPONSE) )
+	else if ( target->client 
+		&& target->client->ps.pm_type < PM_DEAD 
+		&& target->NPC!=NULL 
+		&& target->client->playerTeam 
+		&& (target->client->playerTeam == ent->client->playerTeam || target->client->playerTeam == TEAM_NEUTRAL)
+		&& !(target->NPC->scriptFlags&SCF_NO_RESPONSE) )
 	{
 		NPC_UseResponse ( target, ent, qfalse );
 		return;
@@ -1304,12 +1316,17 @@ void TryUse( gentity_t *ent )
 	*/
 }
 
+extern int killPlayerTimer;
 void G_ChangeMap (const char *mapname, const char *spawntarget, qboolean hub)
 {
 //	gi.Printf("Loading...");
 	//ignore if player is dead
 	if (g_entities[0].client->ps.pm_type == PM_DEAD)
 		return;
+	if ( killPlayerTimer )
+	{//can't go to next map if your allies have turned on you
+		return;
+	}
 
 	if ( spawntarget == NULL ) {
 		spawntarget = "";	//prevent it from becoming "(null)"

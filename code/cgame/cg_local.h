@@ -256,7 +256,8 @@ typedef struct {
 #define	CG_OVERRIDE_3RD_PERSON_VOF	0x00000008
 #define	CG_OVERRIDE_3RD_PERSON_POF	0x00000010
 #define	CG_OVERRIDE_3RD_PERSON_CDP	0x00000020
-#define	CG_OVERRIDE_FOV				0x00000040
+#define	CG_OVERRIDE_3RD_PERSON_APH	0x00000040
+#define	CG_OVERRIDE_FOV				0x00000080
 
 typedef struct {
 	//NOTE: these probably get cleared in save/load!!!
@@ -267,6 +268,7 @@ typedef struct {
 	float			thirdPersonVertOffset;	//how high to be above them
 	float			thirdPersonPitchOffset;	//what offset pitch to apply the the camera view
 	float			thirdPersonCameraDamp;	//how tightly to move the camera pos behind the player
+	float			thirdPersonAlpha;	//how tightly to move the camera pos behind the player
 	float			fov;				//what fov to use
 	//NOTE: could put Alpha and HorzOffset and the target & camera damps, but no-one is trying to override those, so...
 } overrides_t;
@@ -349,7 +351,6 @@ typedef struct {
 
 	// information screen text during loading
 	char		infoScreenText[MAX_STRING_CHARS];
-	qboolean	showInformation;
 
 	// centerprinting
 	int			centerPrintTime;
@@ -413,8 +414,6 @@ typedef struct {
 	int			DataPadWeaponSelect;		// Current weapon item chosen on Data Pad
 	int			DataPadforcepowerSelect;	// Current force power chosen on Data Pad
 
-	int			dataPadLevelStartTime;		// Time until datapad won't pop up when level starts
-
 	qboolean	messageLitActive;			// Flag to show of message lite is active
 
 	int			weaponSelectTime;
@@ -444,7 +443,6 @@ typedef struct {
 
 	int			missionInfoFlashTime;
 	qboolean	missionStatusShow;
-	int			missionStatusShowTime;
 	int			missionStatusDeadTime;
 
 	int			HUDTickFlashTime;
@@ -484,8 +482,11 @@ Ghoul2 Insert End
 } cg_t;
 
 
-#define MAX_SHOWPOWERS 6
-extern int showPowers[8]; 
+#define MAX_SHOWPOWERS 7
+extern int showPowers[MAX_SHOWPOWERS]; 
+extern char *showPowersName[MAX_SHOWPOWERS];
+extern int force_icons[NUM_FORCE_POWERS];
+#define MAX_DPSHOWPOWERS 11
 
 //==============================================================================
 
@@ -545,6 +546,7 @@ extern	vmCvar_t		cg_crosshairX;
 extern	vmCvar_t		cg_crosshairY;
 extern	vmCvar_t		cg_crosshairSize;
 extern	vmCvar_t		cg_drawStatus;
+extern	vmCvar_t		cg_drawHUD;
 extern	vmCvar_t		cg_draw2D;
 extern	vmCvar_t		cg_animSpeed;
 extern	vmCvar_t		cg_debugAnim;
@@ -565,11 +567,14 @@ extern	vmCvar_t		cg_simpleItems;
 extern	vmCvar_t		cg_fov;
 extern	vmCvar_t		cg_missionstatusscreen;
 extern	vmCvar_t		cg_endcredits;
-extern	vmCvar_t		cg_updatedDataPadForcePower;
+extern	vmCvar_t		cg_updatedDataPadForcePower1;
+extern	vmCvar_t		cg_updatedDataPadForcePower2;
+extern	vmCvar_t		cg_updatedDataPadForcePower3;
 extern	vmCvar_t		cg_updatedDataPadObjective;
 
 extern	vmCvar_t		cg_thirdPerson;
 extern	vmCvar_t		cg_thirdPersonRange;
+extern	vmCvar_t		cg_thirdPersonMaxRange;
 extern	vmCvar_t		cg_thirdPersonAngle;
 extern	vmCvar_t		cg_thirdPersonPitchOffset;
 extern	vmCvar_t		cg_thirdPersonVertOffset;
@@ -602,7 +607,12 @@ extern	vmCvar_t		cg_debugBB;
 Ghoul2 Insert End
 */
 extern	vmCvar_t		cg_turnAnims;
+extern	vmCvar_t		cg_motionBoneComp;
+extern	vmCvar_t		cg_reliableAnimSounds;
+
 extern	vmCvar_t		cg_smoothPlayerPos;
+extern	vmCvar_t		cg_smoothPlayerPlat;
+extern	vmCvar_t		cg_smoothPlayerPlatAccel;
 
 void CG_NewClientinfo( int clientNum );
 //
@@ -858,6 +868,12 @@ void CG_ParseServerinfo( void );
 void CG_Respawn( void );
 void CG_TransitionPlayerState( playerState_t *ps, playerState_t *ops );
 
+// cg_credits.cpp
+//
+void CG_Credits_Init( const char *psStripReference, vec4_t *pv4Color);
+qboolean CG_Credits_Running( void );
+qboolean CG_Credits_Draw( void );
+
 
 //===============================================
 
@@ -1036,7 +1052,7 @@ int			cgi_GetCurrentCmdNumber( void );
 qboolean	cgi_GetUserCmd( int cmdNumber, usercmd_t *ucmd );
 
 // used for the weapon select and zoom
-void		cgi_SetUserCmdValue( int stateValue, float sensitivityScale );
+void		cgi_SetUserCmdValue( int stateValue, float sensitivityScale, float mPitchOverride, float mYawOverride );
 void		cgi_SetUserCmdAngles( float pitchOverride, float yawOverride, float rollOverride );
 
 void		cgi_S_UpdateAmbientSet( const char *name, vec3_t origin );
@@ -1145,10 +1161,6 @@ void	cgi_UI_MenuPaintAll(void);
 void	cgi_UI_String_Init(void);
 
 void	SetWeaponSelectTime(void);
-
-
-extern int force_icons[NUM_FORCE_POWERS];
-extern char *showPowersName[];
 
 
 #endif	//__CG_LOCAL_H__

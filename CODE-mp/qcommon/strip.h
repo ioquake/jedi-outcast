@@ -292,7 +292,7 @@ extern char		FlagList[FLAGLIST_MAX][FLAG_LENGTH];
 
 // Registration
 cStringPackageSingle	*SP_Register(const char *Package, unsigned char Registration);
-void					SP_RegisterServer(const char *Package);
+qboolean				SP_RegisterServer(const char *Package);
 void					SP_Unload(unsigned char Registration);
 
 // Direct string functions

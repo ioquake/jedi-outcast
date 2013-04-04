@@ -418,7 +418,7 @@ void CL_KeyMove( usercmd_t *cmd ) {
 		cmd->buttons &= ~BUTTON_WALKING;
 	} else {
 		cmd->buttons |= BUTTON_WALKING;
-		movespeed = 32;
+		movespeed = 46;
 	}
 
 	forward = 0;

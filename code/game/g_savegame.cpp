@@ -82,6 +82,7 @@ field_t savefields_gNPC[] =
 	{strNPCOFS(captureGoal),		F_GENTITY},
 	{strNPCOFS(defendEnt),			F_GENTITY},
 	{strNPCOFS(greetEnt),			F_GENTITY},
+	{strNPCOFS(group),				F_GROUP},
 
 	{NULL, 0, F_IGNORE}
 };
@@ -218,6 +219,35 @@ gentity_t *GetGEntityPtr(int iEntNum)
 
 
 
+static int GetGroupNumber(AIGroupInfo_t *pGroup)
+{
+	assert( pGroup != (AIGroupInfo_t *) 0xcdcdcdcd);
+
+	if (pGroup == NULL)
+	{
+		return -1;
+	}
+
+	int iReturnIndex = pGroup - level.groups;
+	if (iReturnIndex < 0 || iReturnIndex >= (sizeof(level.groups) / sizeof(level.groups[0])) )
+	{	
+		iReturnIndex = -1;	// will get a NULL ptr on reload
+	}
+	return iReturnIndex;
+}
+
+static AIGroupInfo_t *GetGroupPtr(int iGroupNum)
+{
+	if (iGroupNum == -1)
+	{
+		return NULL;
+	}
+	assert(iGroupNum >= 0);
+	assert(iGroupNum < (sizeof(level.groups) / sizeof(level.groups[0])));
+	return (level.groups + iGroupNum);
+}
+
+
 
 /////////// gclient_t * ////////
 //
@@ -297,6 +327,10 @@ void EnumerateField(field_t *pField, byte *pbBase)
 
 	case F_GENTITY:
 		*(int *)pv = GetGEntityNum(*(gentity_t **)pv);
+		break;
+
+	case F_GROUP:
+		*(int *)pv = GetGroupNumber(*(AIGroupInfo_t **)pv);
 		break;
 
 	case F_GCLIENT:
@@ -435,6 +469,10 @@ void EvaluateField(field_t *pField, byte *pbBase, byte *pbOriginalRefData/* may 
 
 	case F_GENTITY:
 		*(gentity_t **)pv = GetGEntityPtr(*(int *)pv);
+		break;
+
+	case F_GROUP:
+		*(AIGroupInfo_t **)pv = GetGroupPtr(*(int *)pv);
 		break;
 
 	case F_GCLIENT:
@@ -671,6 +709,10 @@ void WriteGEntities(qboolean qbAutosave)
 		static int iBlah = 1234;
 		gi.AppendToSaveGame('ICOK', &iBlah, sizeof(iBlah));
 	}
+	if (!qbAutosave )//really shouldn't need to write these bits at all, just restore them from the ents...
+	{
+		WriteInUseBits();	
+	}
 }
 
 void ReadGEntities(qboolean qbAutosave)
@@ -835,11 +877,14 @@ void ReadGEntities(qboolean qbAutosave)
 		//
 		if (pEnt->s.eType == ET_MOVER && pEnt->s.loopSound>0)
 		{
-			extern int BMS_MID;	// from g_mover
-			pEnt->s.loopSound = CAS_GetBModelSound( pEnt->soundSet, BMS_MID );
-			if (pEnt->s.loopSound == -1)
+			if ( VALIDSTRING( pEnt->soundSet ))
 			{
-				pEnt->s.loopSound = 0;
+				extern int BMS_MID;	// from g_mover
+				pEnt->s.loopSound = CAS_GetBModelSound( pEnt->soundSet, BMS_MID );
+				if (pEnt->s.loopSound == -1)
+				{
+					pEnt->s.loopSound = 0;
+				}
 			}
 		}
 
@@ -876,6 +921,10 @@ void ReadGEntities(qboolean qbAutosave)
 		static int iBlah = 1234;
 		gi.ReadFromSaveGame('ICOK', &iBlah, sizeof(iBlah));
 	}
+	if (!qbAutosave)
+	{
+		ReadInUseBits();//really shouldn't need to read these bits in at all, just restore them from the ents...
+	}
 }
 
 
@@ -888,20 +937,18 @@ void WriteLevel(qboolean qbAutosave)
 		assert(level.maxclients == 1);	// I'll need to know if this changes, otherwise I'll need to change the way ReadGame works
 		gclient_t client = level.clients[0];
 		EnumerateFields(savefields_gClient, (byte *)&client, 'GCLI', sizeof(client));	
+		WriteLevelLocals();	// level_locals_t level	
 	}
 
 	OBJ_SaveObjectiveData();
 
 	/////////////
-
-	WriteLevelLocals();	// level_locals_t level	
 	WriteGEntities(qbAutosave);
 	Q3_VariableSave();
 	G_LoadSave_WriteMiscData();
 
 	extern void CG_WriteTheEvilCGHackStuff(void);
 	CG_WriteTheEvilCGHackStuff();
-	WriteInUseBits();	
 
 	// (Do NOT put any write-code below this line)
 	//
@@ -933,6 +980,8 @@ void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition)
 		//Read & throw away objective info
 		objectives_t	junkObj[MAX_MISSION_OBJ];
 		gi.ReadFromSaveGame('OBJT', (void *) &junkObj, 0);
+
+		ReadLevelLocals();	// level_locals_t level	
 	}
 	else
 	{
@@ -943,6 +992,7 @@ void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition)
 			gclient_t GClient;
 			EvaluateFields(savefields_gClient, (byte *)&GClient, (byte *)&level.clients[0], 'GCLI', sizeof(*level.clients), qfalse);
 			level.clients[0] = GClient;	// struct copy
+			ReadLevelLocals();	// level_locals_t level	
 		}
 		
 		OBJ_LoadObjectiveData();//loads mission objectives AND tactical info
@@ -950,14 +1000,12 @@ void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition)
 
 	/////////////
 
-	ReadLevelLocals();	// level_locals_t level	
 	ReadGEntities(qbAutosave);
 	Q3_VariableLoad();
 	G_LoadSave_ReadMiscData();
 
 	extern void CG_ReadTheEvilCGHackStuff(void);
 	CG_ReadTheEvilCGHackStuff();
-	ReadInUseBits();
 
 	// (Do NOT put any read-code below this line)
 	//
@@ -967,10 +1015,10 @@ void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition)
 	gi.ReadFromSaveGame('DONE', &iDONE, sizeof(iDONE));
 }
 
-
+extern int killPlayerTimer;
 qboolean GameAllowedToSaveHere(void)
 {
-	return !in_camera;
+	return (!in_camera&&!killPlayerTimer);
 }
 
 //////////////////// eof /////////////////////

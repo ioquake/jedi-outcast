@@ -69,7 +69,7 @@ static qboolean GLW_StartDriverAndSetMode( int mode,
 {
 	rserr_t err;
 
-	err = GLW_SetMode( r_mode->integer, colorbits, cdsFullscreen );
+	err = GLW_SetMode( mode, colorbits, cdsFullscreen );
 
 	switch ( err )
 	{
@@ -890,12 +890,14 @@ static rserr_t GLW_SetMode( int mode,
 					ri.Printf( PRINT_ALL, "...restoring display settings\n" );
 					ChangeDisplaySettings( 0, 0 );
 					
+/*				jfm:  i took out the following code to allow fallback to mode 3, with this code it goes half windowed and just doesn't work.
 					glw_state.cdsFullscreen = qfalse;
 					glConfig.isFullscreen = qfalse;
 					if ( !GLW_CreateWindow( glConfig.vidWidth, glConfig.vidHeight, colorbits, qfalse) )
 					{
 						return RSERR_INVALID_MODE;
 					}
+*/
 					return RSERR_INVALID_FULLSCREEN;
 				}
 			}
@@ -956,6 +958,115 @@ bool GL_CheckForExtension(const char *ext)
 	return(false);
 }
 
+//--------------------------------------------
+static void GLW_InitTextureCompression( void )
+{
+	qboolean newer_tc, old_tc;
+
+	// Check for available tc methods.
+	newer_tc = ( strstr( glConfig.extensions_string, "ARB_texture_compression" )
+		&& strstr( glConfig.extensions_string, "EXT_texture_compression_s3tc" )) ? qtrue : qfalse;
+	old_tc = ( strstr( glConfig.extensions_string, "GL_S3_s3tc" )) ? qtrue : qfalse;
+
+	if ( old_tc )
+	{
+		ri.Printf( PRINT_ALL, "...GL_S3_s3tc available\n" );
+	}
+
+	if ( newer_tc )
+	{
+		ri.Printf( PRINT_ALL, "...GL_EXT_texture_compression_s3tc available\n" );
+	}
+
+	if ( !r_ext_compressed_textures->value )
+	{
+		// Compressed textures are off
+		glConfig.textureCompression = TC_NONE;
+		ri.Printf( PRINT_ALL, "...ignoring texture compression\n" );
+	}
+	else if ( !old_tc && !newer_tc )
+	{
+		// Requesting texture compression, but no method found
+		glConfig.textureCompression = TC_NONE;
+		ri.Printf( PRINT_ALL, "...no supported texture compression method found\n" );
+		ri.Printf( PRINT_ALL, ".....ignoring texture compression\n" );
+	}
+	else
+	{
+		// some form of supported texture compression is avaiable, so see if the user has a preference
+		if ( r_ext_preferred_tc_method->integer == TC_NONE )
+		{
+			// No preference, so pick the best
+			if ( newer_tc )
+			{
+				ri.Printf( PRINT_ALL, "...no tc preference specified\n" );
+				ri.Printf( PRINT_ALL, ".....using GL_EXT_texture_compression_s3tc\n" );
+				glConfig.textureCompression = TC_S3TC_DXT;
+			}
+			else
+			{
+				ri.Printf( PRINT_ALL, "...no tc preference specified\n" );
+				ri.Printf( PRINT_ALL, ".....using GL_S3_s3tc\n" );
+				glConfig.textureCompression = TC_S3TC;
+			}
+		}
+		else
+		{
+			// User has specified a preference, now see if this request can be honored
+			if ( old_tc && newer_tc )
+			{
+				// both are avaiable, so we can use the desired tc method
+				if ( r_ext_preferred_tc_method->integer == TC_S3TC )
+				{
+					ri.Printf( PRINT_ALL, "...using preferred tc method, GL_S3_s3tc\n" );
+					glConfig.textureCompression = TC_S3TC;
+				}
+				else
+				{
+					ri.Printf( PRINT_ALL, "...using preferred tc method, GL_EXT_texture_compression_s3tc\n" );
+					glConfig.textureCompression = TC_S3TC_DXT;
+				}
+			}
+			else
+			{
+				// Both methods are not available, so this gets trickier
+				if ( r_ext_preferred_tc_method->integer == TC_S3TC )
+				{
+					// Preferring to user older compression
+					if ( old_tc )
+					{
+						ri.Printf( PRINT_ALL, "...using GL_S3_s3tc\n" );
+						glConfig.textureCompression = TC_S3TC;
+					}
+					else
+					{
+						// Drat, preference can't be honored 
+						ri.Printf( PRINT_ALL, "...preferred tc method, GL_S3_s3tc not available\n" );
+						ri.Printf( PRINT_ALL, ".....falling back to GL_EXT_texture_compression_s3tc\n" );
+						glConfig.textureCompression = TC_S3TC_DXT;
+					}
+				}
+				else
+				{
+					// Preferring to user newer compression
+					if ( newer_tc )
+					{
+						ri.Printf( PRINT_ALL, "...using GL_EXT_texture_compression_s3tc\n" );
+						glConfig.textureCompression = TC_S3TC_DXT;
+					}
+					else
+					{
+						// Drat, preference can't be honored 
+						ri.Printf( PRINT_ALL, "...preferred tc method, GL_EXT_texture_compression_s3tc not available\n" );
+						ri.Printf( PRINT_ALL, ".....falling back to GL_S3_s3tc\n" );
+						glConfig.textureCompression = TC_S3TC;
+					}
+				}
+			}
+		}
+	}
+}
+
 /*
 ** GLW_InitExtensions
 */
@@ -968,6 +1079,9 @@ static void GLW_InitExtensions( void )
 	}
 
 	ri.Printf( PRINT_ALL, "Initializing OpenGL extensions\n" );
+
+	// Select our tc scheme
+	GLW_InitTextureCompression();
 
 	// GL_EXT_texture_env_add
 	glConfig.textureEnvAddAvailable = qfalse;
@@ -1287,56 +1401,83 @@ void GLimp_Init( void )
 	GLW_StartOpenGL();
 
 	// get our config strings
-	Q_strncpyz( glConfig.vendor_string, (const char *)qglGetString (GL_VENDOR), sizeof( glConfig.vendor_string ) );
-	Q_strncpyz( glConfig.renderer_string, (const char *)qglGetString (GL_RENDERER), sizeof( glConfig.renderer_string ) );
-	Q_strncpyz( glConfig.version_string, (const char *)qglGetString (GL_VERSION), sizeof( glConfig.version_string ) );
-	Q_strncpyz( glConfig.extensions_string, (const char *)qglGetString (GL_EXTENSIONS), sizeof( glConfig.extensions_string ) );
+	const char* glstring;
+	glstring = (const char *)qglGetString (GL_VENDOR);
+	if (!glstring) {
+		glstring = "invalid driver";
+	}
+	Q_strncpyz( glConfig.vendor_string, glstring, sizeof( glConfig.vendor_string ) );
+	glstring = (const char *)qglGetString (GL_RENDERER);
+	if (!glstring) {
+		glstring = "invalid driver";
+	}
+	Q_strncpyz( glConfig.renderer_string, glstring, sizeof( glConfig.renderer_string ) );
+	glstring = (const char *)qglGetString (GL_VERSION);
+	if (!glstring) {
+		glstring = "invalid driver";
+	}
+	Q_strncpyz( glConfig.version_string, glstring, sizeof( glConfig.version_string ) );
+	glstring = (const char *)qglGetString (GL_EXTENSIONS);
+	if (!glstring) {
+		glstring = "invalid driver";
+	}
+	Q_strncpyz( glConfig.extensions_string, glstring, sizeof( glConfig.extensions_string ) );
+
+	// OpenGL driver constants
+	qglGetIntegerv( GL_MAX_TEXTURE_SIZE, &glConfig.maxTextureSize );
+	// stubbed or broken drivers may have reported 0...
+	if ( glConfig.maxTextureSize <= 0 ) 
+	{
+		glConfig.maxTextureSize = 0;
+	}
+	GLW_InitExtensions();
 
 	//
 	// chipset specific configuration
 	//
 	Q_strncpyz( buf, glConfig.renderer_string, sizeof(buf) );
 	strlwr( buf );
-
+	
 	//
 	// NOTE: if changing cvars, do it within this block.  This allows them
 	// to be overridden when testing driver fixes, etc. but only sets
 	// them to their default state when the hardware is first installed/run.
 	//
+extern qboolean Sys_LowPhysicalMemory();
 	if ( Q_stricmp( lastValidRenderer->string, glConfig.renderer_string ) )
 	{
-		ri.Cvar_Set( "r_textureMode", "GL_LINEAR_MIPMAP_NEAREST" );
-
-		// VOODOO GRAPHICS w/ 2MB
-/*		if ( strstr( buf, "voodoo graphics/1 tmu/2 mb" ) )
+		if (Sys_LowPhysicalMemory())
 		{
-			ri.Cvar_Set( "r_picmip", "2" );
+			ri.Cvar_Set("s_khz", "11");// this will get called before S_Init
+		}
+		//reset to defaults
+		ri.Cvar_Set( "r_picmip", "1" );
+
+		// Savage3D and Savage4 should always have trilinear enabled
+		if ( strstr( buf, "savage3d" ) || strstr( buf, "s3 savage4" ) || strstr( buf, "geforce" ))
+		{
+			ri.Cvar_Set( "r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
 		}
 		else
-*/		{
-			ri.Cvar_Set( "r_picmip", "1" );
-
-/*			if ( strstr( buf, "rage 128" ) || strstr( buf, "rage128" ) )
-			{
-				ri.Cvar_Set( "r_finish", "0" );
-			}
-			// Savage3D and Savage4 should always have trilinear enabled
-			else 
-*/			if ( strstr( buf, "savage3d" ) || strstr( buf, "s3 savage4" ) )
-			{
-				ri.Cvar_Set( "r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
-			}
-			else if ( strstr( buf, "geforce" ) || strstr( buf, "quadro" ) ) 
-			{
-				ri.Cvar_Set( "r_picmip", "0" );
-				ri.Cvar_Set( "r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
-			}
+		{
+			ri.Cvar_Set( "r_textureMode", "GL_LINEAR_MIPMAP_NEAREST" );
+		}
+		
+		//this must be a really sucky card!
+		if ( (glConfig.textureCompression == TC_NONE) || (glConfig.maxActiveTextures < 2)  || (glConfig.maxTextureSize <= 512) )
+		{
+			ri.Cvar_Set( "r_picmip", "2");
+			ri.Cvar_Set( "r_lodbias", "2");			
+			ri.Cvar_Set( "r_detailtextures", "0");
+			ri.Cvar_Set( "r_colorbits", "16");
+			ri.Cvar_Set( "r_texturebits", "16");
+			ri.Cvar_Set( "cg_shadows", "0");
+			ri.Cvar_Set( "r_mode", "3");	//force 640
 		}
 	}
 	
 	ri.Cvar_Set( "r_lastValidRenderer", glConfig.renderer_string );
 
-	GLW_InitExtensions();
 	WG_CheckHardwareGamma();
 }
 

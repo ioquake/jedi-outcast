@@ -639,7 +639,11 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 		// clear some stuff that needs zeroing...
 		//
 		cm.floodvalid = 0;
-		cm.checkcount = 0;
+		//NO... don't reset this because the brush checkcounts are cached, 
+		//so when you load up, brush checkcounts equal the cm.checkcount 
+		//and the trace will be skipped (because everything loads and
+		//traces in the same exact order ever time you load the map)
+		cm.checkcount++;// = 0;
 		memset(cm.areas,		0, cm.numAreas * sizeof( *cm.areas ));
 		memset(cm.areaPortals,	0, cm.numAreas * cm.numAreas * sizeof( *cm.areaPortals ));		
 	}

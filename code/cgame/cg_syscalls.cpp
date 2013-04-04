@@ -148,6 +148,11 @@ int		cgi_CM_MarkFragments( int numPoints, const vec3_t *points,
 	return syscall( CG_CM_MARKFRAGMENTS, numPoints, points, projection, maxPoints, pointBuffer, maxFragments, fragmentBuffer );
 }
 
+void cgi_CM_SnapPVS(vec3_t origin,byte *buffer)
+{
+	syscall(CG_CM_SNAPPVS,origin,buffer);
+}
+
 void	cgi_S_StartSound( vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfx ) {
 	syscall( CG_S_STARTSOUND, origin, entityNum, entchannel, sfx );
 }
@@ -233,7 +238,9 @@ qhandle_t cgi_R_RegisterSkin( const char *name ) {
 }
 
 qhandle_t cgi_R_RegisterShader( const char *name ) {
-	return syscall( CG_R_REGISTERSHADER, name );
+	qhandle_t hShader = syscall( CG_R_REGISTERSHADER, name );
+	assert (hShader);
+	return  hShader;
 }
 
 qhandle_t cgi_R_RegisterShaderNoMip( const char *name ) {
@@ -366,8 +373,8 @@ qboolean	cgi_GetUserCmd( int cmdNumber, usercmd_t *ucmd ) {
 	return syscall( CG_GETUSERCMD, cmdNumber, ucmd );
 }
 
-void		cgi_SetUserCmdValue( int stateValue, float sensitivityScale  ) {
-	syscall( CG_SETUSERCMDVALUE, stateValue, PASSFLOAT(sensitivityScale) );
+void		cgi_SetUserCmdValue( int stateValue, float sensitivityScale, float mPitchOverride, float mYawOverride ) {
+	syscall( CG_SETUSERCMDVALUE, stateValue, PASSFLOAT(sensitivityScale), PASSFLOAT(mPitchOverride), PASSFLOAT(mYawOverride) );
 }
 
 void		cgi_SetUserCmdAngles( float pitchOverride, float yawOverride, float rollOverride ) {
@@ -526,5 +533,7 @@ int cgi_SP_GetStringText(int ID, char *buffer, int bufferLength)
 
 int cgi_EndGame(void)
 {
-	return syscall( CG_SENDCONSOLECOMMAND, "disconnect" );
+//extern void CMD_CGCam_Disable( void );
+	//CMD_CGCam_Disable();	//can't do it here because it will draw the hud when we're out of camera
+	return syscall( CG_SENDCONSOLECOMMAND, "cam_disable; set nextmap disconnect; cinematic outcast\n" );
 }

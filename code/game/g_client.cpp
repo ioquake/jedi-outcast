@@ -12,6 +12,7 @@ extern void Q3_DebugPrint( int level, const char *format, ... );
 extern void WP_SaberInitBladeData( gentity_t *ent );
 extern void G_CreateG2AttachedWeaponModel( gentity_t *ent, const char *weaponModel );
 extern qboolean	CheatsOk( gentity_t *ent );
+extern vmCvar_t	cg_thirdPersonAlpha;
 
 // g_client.c -- client functions that don't happen every frame
 
@@ -493,7 +494,6 @@ char *ClientConnect( int clientNum, qboolean firstTime, SavedGameJustLoaded_e eS
 	char		userinfo[MAX_INFO_STRING];
 	gentity_t	*ent;
 	clientSession_t		savedSess;
-	clientTourSession_t		savedTourSess;
 
 	ent = &g_entities[ clientNum ];
 	gi.GetUserinfo( clientNum, userinfo, sizeof( userinfo ) );
@@ -507,11 +507,8 @@ char *ClientConnect( int clientNum, qboolean firstTime, SavedGameJustLoaded_e eS
 	if (eSavedGameJustLoaded != eFULL)
 	{
 		savedSess = client->sess;	// 
-		savedTourSess = client->tourSess;	
 		memset( client, 0, sizeof(*client) );
 		client->sess = savedSess; 
-		client->tourSess = savedTourSess; 
-
 	}
 
 	client->pers.connected = CON_CONNECTING;
@@ -582,12 +579,15 @@ void ClientBegin( int clientNum, usercmd_t *cmd, SavedGameJustLoaded_e eSavedGam
 
 		memset( &client->ps, 0, sizeof( client->ps ) );
 		memset( &client->sess.missionStats, 0, sizeof( client->sess.missionStats ) );
-
+		client->sess.missionStats.totalSecrets = gi.Cvar_VariableIntegerValue("newTotalSecrets");
+		
 		// locate ent at a spawn point
 		if ( ClientSpawn( ent, eSavedGameJustLoaded) )	// SavedGameJustLoaded_e
 		{
 			// send teleport event
 		}
+		client->ps.inventory[INV_GOODIE_KEY] = 0;
+		client->ps.inventory[INV_SECURITY_KEY] = 0;
 	}
 }
 
@@ -630,7 +630,7 @@ extern gitem_t	*FindItemForInventory( int inv );
 
 		for ( i = 1 ; i < 16 ; i++ ) 
 		{
-			if ( bits & ( 1 << i ) ) 
+			if ( ibits & ( 1 << i ) ) 
 			{
 				RegisterItem( FindItemForInventory( i-1 ));
 			}
@@ -655,21 +655,29 @@ void Player_RestoreFromPrevLevel(gentity_t *ent)
 	if (client)	// though I can't see it not being true...
 	{
 		char	s[MAX_STRING_CHARS];
+		const char	*var;
 						
 		gi.Cvar_VariableStringBuffer( sCVARNAME_PLAYERSAVE, s, sizeof(s) );
 
 		if (strlen(s))	// actually this would be safe anyway because of the way sscanf() works, but this is clearer
 		{
-			sscanf( s, "%i %i %i %i %i %i %f %f %f", 
+			sscanf( s, "%i %i %i %i %i %i %i %f %f %f %i %i %i %i %i %i", 
 								&client->ps.stats[STAT_HEALTH],
 								&client->ps.stats[STAT_ARMOR],
 								&client->ps.stats[STAT_WEAPONS],
 								&client->ps.stats[STAT_ITEMS],
 								&client->ps.weapon,
 								&client->ps.weaponstate,
+								&client->ps.batteryCharge,
 								&client->ps.viewangles[0],
 								&client->ps.viewangles[1],
-								&client->ps.viewangles[2]
+								&client->ps.viewangles[2],
+								&client->ps.forcePowersKnown,
+								&client->ps.forcePower,
+								&client->ps.saberActive,
+								&client->ps.saberAnimLevel,
+								&client->ps.saberLockEnemy,
+								&client->ps.saberLockTime
 					);
 			ent->health = client->ps.stats[STAT_HEALTH];
 
@@ -680,43 +688,46 @@ void Player_RestoreFromPrevLevel(gentity_t *ent)
 //
 //			SetClientViewAngle( ent, ent->client->ps.viewangles);
 
-			for ( i = 0; i < AMMO_MAX; i++ )
+			//ammo
+			gi.Cvar_VariableStringBuffer( "playerammo", s, sizeof(s) );
+			i=0;
+			var = strtok( s, " " );
+			while( var != NULL )
 			{
-				gi.Cvar_VariableStringBuffer( va("playerammo%d",i), s, sizeof(s) );
-				sscanf( s,"%i",&client->ps.ammo[i]);
+			  /* While there are tokens in "s" */
+			  client->ps.ammo[i++] = atoi(var);
+			  /* Get next token: */
+			  var = strtok( NULL, " " );
 			}
+			assert (i==AMMO_MAX);
 
-			for ( i = 0; i < INV_MAX; i++ )
+			//inventory
+			gi.Cvar_VariableStringBuffer( "playerinv", s, sizeof(s) );
+			i=0;
+			var = strtok( s, " " );
+			while( var != NULL )
 			{
-				gi.Cvar_VariableStringBuffer( va("playerinv%d",i), s, sizeof(s) );
-				sscanf( s,"%i",&client->ps.inventory[i]);
+			  /* While there are tokens in "s" */
+			  client->ps.inventory[i++] = atoi(var);
+			  /* Get next token: */
+			  var = strtok( NULL, " " );
 			}
+			assert (i==INV_MAX);
+
 
 			// the new JK2 stuff - force powers, etc...
 			//
-			for ( i=0; i<NUM_FORCE_POWERS;i++ )
+			gi.Cvar_VariableStringBuffer( "playerfplvl", s, sizeof(s) );
+			i=0;
+			var = strtok( s, " " );
+			while( var != NULL )
 			{
-				gi.Cvar_VariableStringBuffer( va("playerfplvl%d",i), s, sizeof(s) );
-				sscanf( s, "%i",&client->ps.forcePowerLevel[i]);
+			  /* While there are tokens in "s" */
+			  client->ps.forcePowerLevel[i++] = atoi(var);
+			  /* Get next token: */
+			  var = strtok( NULL, " " );
 			}
-
-			gi.Cvar_VariableStringBuffer( "playerfpknown", s, sizeof(s) );
-			sscanf( s, "%i", &client->ps.forcePowersKnown);
-
-			gi.Cvar_VariableStringBuffer( "playerfp", s, sizeof(s) );
-			sscanf( s, "%i", &client->ps.forcePower);
-
-			gi.Cvar_VariableStringBuffer( "plsa", s, sizeof(s) );
-			sscanf( s, "%i", &client->ps.saberActive);
-
-			gi.Cvar_VariableStringBuffer( "plcs", s, sizeof(s) );
-			sscanf( s, "%i", &client->ps.saberAnimLevel);
-
-			gi.Cvar_VariableStringBuffer( "plle", s, sizeof(s) );
-			sscanf( s, "%i", &client->ps.saberLockEnemy);
-
-			gi.Cvar_VariableStringBuffer( "pllt", s, sizeof(s) );
-			sscanf( s, "%i", &client->ps.saberLockTime);
+			assert (i==NUM_FORCE_POWERS);
 
 			client->ps.forcePowerMax = FORCE_POWER_MAX;
 			client->ps.forceGripEntityNum = ENTITYNUM_NONE;
@@ -752,35 +763,39 @@ void G_SetSkin( gentity_t *ent, const char *modelName, const char *customSkin )
 
 qboolean G_StandardHumanoid( const char *modelName )
 {
-	if ( !Q_strncmp( "gran", modelName, 4 ) ||
-		!Q_strncmp( "reborn", modelName, 6 ) ||
-		!Q_strncmp( "imp", modelName, 3 ) ||
-		!Q_strncmp( "rodian", modelName, 6 ) ||
+	if ( !modelName )
+	{
+		return qfalse;
+	}
+	if ( !Q_stricmp( "kyle", modelName ) ||
 		!Q_strncmp( "st", modelName, 2 ) ||
-		!Q_stricmp( "swamptrooper", modelName ) ||
+		!Q_strncmp( "imp", modelName, 3 ) ||
+		!Q_strncmp( "gran", modelName, 4 ) ||
+		!Q_strncmp( "rodian", modelName, 6 ) ||
+		!Q_strncmp( "weequay", modelName, 7 ) ||
+		!Q_strncmp( "reborn", modelName, 6 ) ||
+		!Q_strncmp( "shadowtrooper", modelName, 13 ) ||
+		!Q_strncmp( "swamptrooper", modelName, 12 ) ||
 		!Q_stricmp( "rockettrooper", modelName ) ||
-		!Q_stricmp( "shadowtrooper", modelName ) ||
 		!Q_stricmp( "bespin_cop", modelName ) ||
-		!Q_stricmp( "shadowtrooper", modelName ) ||
+		!Q_strncmp( "bespincop", modelName, 9 ) ||
+		!Q_strncmp( "rebel", modelName, 5 ) ||
+		!Q_strncmp( "ugnaught", modelName, 8 ) ||
+		!Q_strncmp( "morgan", modelName,6 ) ||
+		!Q_strncmp( "protocol", modelName, 8 ) ||
+		!Q_strncmp( "jedi", modelName, 4 ) ||
+		!Q_strncmp( "prisoner", modelName, 8 ) ||
 		!Q_stricmp( "tavion", modelName ) ||
 		!Q_stricmp( "desann", modelName ) ||
-		!Q_stricmp( "weequay", modelName ) ||
 		!Q_stricmp( "trandoshan", modelName ) ||
-		!Q_stricmp( "kyle", modelName ) ||
 		!Q_stricmp( "jan", modelName ) ||
 		!Q_stricmp( "luke", modelName ) ||
 		!Q_stricmp( "lando", modelName ) ||
-		!Q_stricmp( "rebel", modelName ) ||
 		!Q_stricmp( "reelo", modelName ) ||
 		!Q_stricmp( "bartender", modelName ) ||
-		!Q_stricmp( "ugnaught", modelName ) ||
 		!Q_stricmp( "monmothma", modelName ) ||
 		!Q_stricmp( "chiss", modelName ) ||
-		!Q_strncmp( "morgan", modelName,6 ) ||
-		!Q_strncmp( "protocol", modelName,8 ) ||
-		!Q_stricmp( "galak", modelName ) ||
-		!Q_strncmp( "jedi", modelName, 4 ) ||
-		!Q_strncmp( "prisoner", modelName, 8 ) )
+		!Q_stricmp( "galak", modelName ) )
 	{
 		return qtrue;
 	}
@@ -876,13 +891,15 @@ qboolean G_SetG2PlayerModelInfo( gentity_t *ent, const char *modelName, const ch
 			}
 			else if (!Q_strncmp( "probe",modelName, 5))
 			{
-				ent->headBolt = -1;				
+				ent->headBolt = gi.G2API_AddBolt(&ent->ghoul2[ent->playerModel], "cranium");		// head pivot point
 				ent->genericBolt1 = gi.G2API_AddBolt(&ent->ghoul2[ent->playerModel], "*flash");		// Gun 1
 			}
+			/*
 			else if (!Q_strncmp( "protocol",modelName, 8))
 			{
 				ent->headBolt = -1;				
 			}
+			*/
 			else if (!Q_stricmp( "sentry",modelName))
 			{
 				ent->headBolt = -1;				
@@ -988,9 +1005,11 @@ qboolean G_SetG2PlayerModelInfo( gentity_t *ent, const char *modelName, const ch
 				gi.G2API_SetBoneAnglesIndex( &ent->ghoul2[ent->playerModel], ent->thoracicBone, angles, BONE_ANGLES_POSTMULT, POSITIVE_X, NEGATIVE_Y, NEGATIVE_Z, NULL ); 
 			}
 		}
+		/*
 		else if (!Q_strncmp( "protocol",modelName,8))
 		{
 		}
+		*/
 		else if (!Q_stricmp( "interrogator", modelName ))
 		{
 			ent->genericBone1 = gi.G2API_GetBoneIndex( &ent->ghoul2[ent->playerModel], "left_arm", qtrue );
@@ -1284,8 +1303,8 @@ void G_PilotXWing( gentity_t *ent )
 		ent->svFlags &= ~SVF_CUSTOM_GRAVITY;
 		ent->client->ps.stats[STAT_ARMOR] = 0;//HACK
 		//ent->mass = 10;
-		gi.cvar_set( "m_pitchOverride", "0" );
-		gi.cvar_set( "m_yawOverride", "0" );
+		//gi.cvar_set( "m_pitchOverride", "0" );
+		//gi.cvar_set( "m_yawOverride", "0" );
 		if ( ent->client->ps.weapon != WP_SABER )
 		{
 			gi.cvar_set( "cg_thirdperson", "0" );
@@ -1311,8 +1330,8 @@ void G_PilotXWing( gentity_t *ent )
 		ent->client->ps.stats[STAT_ARMOR] = 200;//FIXME: define?
 		//ent->mass = 300;
 		ent->client->ps.speed = 0;
-		gi.cvar_set( "m_pitchOverride", "0.01" );//ignore inverse mouse look
-		gi.cvar_set( "m_yawOverride", "0.0075" );
+		//gi.cvar_set( "m_pitchOverride", "0.01" );//ignore inverse mouse look
+		//gi.cvar_set( "m_yawOverride", "0.0075" );
 		gi.cvar_set( "cg_thirdperson", "1" );
 		cg.overrides.active |= (CG_OVERRIDE_3RD_PERSON_RNG|CG_OVERRIDE_FOV);
 		cg.overrides.thirdPersonRange = 240;
@@ -1324,9 +1343,6 @@ void G_PilotXWing( gentity_t *ent )
 //HACK FOR ATST
 void G_DrivableATSTDie( gentity_t *self )
 {
-	//restore mouse control
-	gi.cvar_set( "m_pitchOverride", "0" );
-	gi.cvar_set( "m_yawOverride", "0" );
 }
 
 void G_DriveATST( gentity_t *ent, gentity_t *atst )
@@ -1334,7 +1350,7 @@ void G_DriveATST( gentity_t *ent, gentity_t *atst )
 	if ( ent->NPC_type && ent->client && (ent->client->NPC_class == CLASS_ATST) )
 	{//already an atst, switch back
 		//open hatch
-		if ( ent->playerModel != -1 )
+		if ( ent->playerModel >= 0 )
 		{
 			gi.G2API_RemoveGhoul2Model( ent->ghoul2, ent->playerModel );
 		}
@@ -1353,16 +1369,14 @@ void G_DriveATST( gentity_t *ent, gentity_t *atst )
 		ent->client->ps.ammo[weaponData[WP_ATST_MAIN].ammoIndex] = 0;
 		ent->client->ps.ammo[weaponData[WP_ATST_SIDE].ammoIndex] = 0;
 		CG_ChangeWeapon( WP_BRYAR_PISTOL );
-		//mouse control
-		gi.cvar_set( "m_pitchOverride", "0" );
-		gi.cvar_set( "m_yawOverride", "0" );
 		//camera
 		//if ( ent->client->ps.weapon != WP_SABER )
 		{
 			gi.cvar_set( "cg_thirdperson", "0" );
 		}
-		cg.overrides.active &= ~(CG_OVERRIDE_3RD_PERSON_RNG|CG_OVERRIDE_3RD_PERSON_VOF|CG_OVERRIDE_3RD_PERSON_POF);
+		cg.overrides.active &= ~(CG_OVERRIDE_3RD_PERSON_RNG|CG_OVERRIDE_3RD_PERSON_VOF|CG_OVERRIDE_3RD_PERSON_POF|CG_OVERRIDE_3RD_PERSON_APH);
 		cg.overrides.thirdPersonRange = cg.overrides.thirdPersonVertOffset = cg.overrides.thirdPersonPitchOffset = 0;
+		cg.overrides.thirdPersonAlpha = cg_thirdPersonAlpha.value;
 		ent->client->ps.viewheight = ent->maxs[2] + STANDARD_VIEWHEIGHT_OFFSET;
 		//ent->mass = 10;
 	}
@@ -1377,12 +1391,12 @@ void G_DriveATST( gentity_t *ent, gentity_t *atst )
 		VectorSet( ent->maxs, ATST_MAXS0, ATST_MAXS1, ATST_MAXS2 );
 		ent->client->crouchheight = ATST_MAXS2;
 		ent->client->standheight = ATST_MAXS2;
-		if ( ent->playerModel != -1 )
+		if ( ent->playerModel >= 0 )
 		{
 			gi.G2API_RemoveGhoul2Model( ent->ghoul2, ent->playerModel );
 			ent->playerModel = -1;
 		}
-		if ( ent->weaponModel != -1 )
+		if ( ent->weaponModel >= 0 )
 		{
 			gi.G2API_RemoveGhoul2Model( ent->ghoul2, ent->weaponModel );
 			ent->weaponModel = -1;
@@ -1399,6 +1413,7 @@ void G_DriveATST( gentity_t *ent, gentity_t *atst )
 			G_SetG2PlayerModelInfo( ent, "atst", NULL, NULL, NULL );
 			//turn off hatch underside
 			gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "head_hatchcover_off", 0x00000002/*G2SURFACEFLAG_OFF*/ );
+			G_Sound( ent, G_SoundIndex( "sound/chars/atst/atst_hatch_close" ));
 		}
 		ent->s.radius = 320;
 		//weapon
@@ -1423,10 +1438,7 @@ void G_DriveATST( gentity_t *ent, gentity_t *atst )
 		CG_RegisterItemSounds( (item-bg_itemlist) );
 		CG_RegisterItemVisuals( (item-bg_itemlist) );
 		//HACKHACKHACKTEMP
-		//mouse control
 		//FIXME: these get lost in load/save!  Must use variables that are set every frame or saved/loaded
-		gi.cvar_set( "m_pitchOverride", "0.01" );//ignore inverse mouse look
-		gi.cvar_set( "m_yawOverride", "0.0075" );
 		//camera
 		gi.cvar_set( "cg_thirdperson", "1" );
 		cg.overrides.active |= CG_OVERRIDE_3RD_PERSON_RNG;
@@ -1464,7 +1476,6 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 	int		i;
 	clientPersistant_t	saved;
 	clientSession_t		savedSess;
-	clientTourSession_t	savedTourSess;
 	clientInfo_t		savedCi;
 	int		persistant[MAX_PERSISTANT];
 	usercmd_t	ucmd;
@@ -1525,7 +1536,6 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 		// clear everything but the persistant data
 		saved = client->pers;
 		savedSess = client->sess;
-		savedTourSess = client->tourSess;
 		for ( i = 0 ; i < MAX_PERSISTANT ; i++ ) 
 		{
 			persistant[i] = client->ps.persistant[i];
@@ -1539,7 +1549,6 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 
 		client->pers = saved;
 		client->sess = savedSess;
-		client->tourSess = savedTourSess;
 		for ( i = 0 ; i < MAX_PERSISTANT ; i++ ) 
 		{
 			client->ps.persistant[i] = persistant[i];
@@ -1614,13 +1623,13 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 		//
 		
 		ent->health = client->ps.stats[STAT_HEALTH] = client->ps.stats[STAT_MAX_HEALTH];
-		ent->client->dismemberProbHead = 1;
+		ent->client->dismemberProbHead = 0;
 		ent->client->dismemberProbArms = 5;
 		ent->client->dismemberProbHands = 20;
-		ent->client->dismemberProbWaist = 1;
-		ent->client->dismemberProbLegs = 1;
+		ent->client->dismemberProbWaist = 0;
+		ent->client->dismemberProbLegs = 0;
 
-		ent->client->ps.batteryCharge = 200; // starts out with a small battery charge
+		ent->client->ps.batteryCharge = 2500;
 
 		VectorCopy( spawn_origin, client->ps.origin );
 		VectorCopy( spawn_origin, ent->currentOrigin );
@@ -1749,6 +1758,11 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 	client->pers.enterTime = level.time;//needed mainly to stop the weapon switch to WP_NONE that happens on loads
 	ent->max_health = client->ps.stats[STAT_MAX_HEALTH];
 
+	if ( eSavedGameJustLoaded == eNO )
+	{//on map transitions, Ghoul2 frame gets reset to zero, restart our anim
+		NPC_SetAnim( ent, SETANIM_LEGS, ent->client->ps.legsAnim, SETANIM_FLAG_NORMAL|SETANIM_FLAG_RESTART );
+		NPC_SetAnim( ent, SETANIM_TORSO, ent->client->ps.torsoAnim, SETANIM_FLAG_NORMAL|SETANIM_FLAG_RESTART );
+	}
 	return beamInEffect;
 }
 

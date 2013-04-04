@@ -556,10 +556,6 @@ const netField_t	entityStateFields[] =
 { NETF(torsoAnimTimer), 8 },
 { NETF(scale), 8 },
 
-{ NETF(pushVec[0]), 0 },
-{ NETF(pushVec[1]), 0 },
-{ NETF(pushVec[2]), 0 },
-
 { NETF(saberInFlight), 4 },
 { NETF(saberActive), 4 },
 { NETF(vehicleModel), 32 },
@@ -924,8 +920,8 @@ static const netField_t	playerStateFields[] =
 { PSF(eventSequence), 16 },
 { PSF(events[0]), 8 },
 { PSF(events[1]), 8 },
-{ PSF(eventParms[0]), 8 },
-{ PSF(eventParms[1]), 8 },
+{ PSF(eventParms[0]), -9 },
+{ PSF(eventParms[1]), -9 },
 { PSF(externalEvent), 8 },
 { PSF(externalEventParm), 8 },
 { PSF(clientNum), 32 },
@@ -948,6 +944,9 @@ static const netField_t	playerStateFields[] =
 { PSF(saberInFlight), 8 },
 { PSF(vehicleModel), 32 },
 { PSF(viewEntity), 32 },
+{ PSF(serverViewOrg[0]), 0 },
+{ PSF(serverViewOrg[1]), 0 },
+{ PSF(serverViewOrg[2]), 0 },
 };
 
 /*

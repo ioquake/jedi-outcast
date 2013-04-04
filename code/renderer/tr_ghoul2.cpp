@@ -114,12 +114,9 @@ public:
 	int				mCurrentTouch;
 
 	// for render smoothing
-	int				mLastTouch; 
-	int				mLastLastTouch;
 	bool			mSmoothingActive;
 	bool			mUnsquash;
 	float			mSmoothFactor;
-	int				mLastTime;
 	int				mWraithID; // this is just used for debug prints, can use it for any int of interest in JK2
 
 	CBoneCache(const model_t *amod,const mdxaHeader_t *aheader) :
@@ -149,9 +146,6 @@ public:
 			mFinalBones[i].parent=skel->parent;
 		}
 		mCurrentTouch=3;
-		mLastTouch=2;
-		mLastLastTouch=1;
-		mLastTime=0;
 	}
 	SBoneCalc &Root()
 	{
@@ -503,6 +497,7 @@ static int G2_GetBonePoolIndex(	const mdxaHeader_t *pMDXAHeader, int iFrame, int
 
 
 #define DEBUG_G2_TIMING (0)
+#define DEBUG_G2_TIMING_RENDER_ONLY (1)
 
 void G2_TimingModel(boneInfo_t &bone,int currentTime,int numFramesInFile,int &currentFrame,int &newFrame,float &lerp)
 {
@@ -535,7 +530,7 @@ void G2_TimingModel(boneInfo_t &bone,int currentTime,int numFramesInFile,int &cu
 	{
 		// did we run off the end?
 		if (((animSpeed > 0.0f) && (newFrame_g > endFrame - 1)) || 
-			((animSpeed < 0.0f) && (newFrame_g < endFrame + 1)))
+			((animSpeed < 0.0f) && (newFrame_g < endFrame+1)))
 		{
 			// yep - decide what to do
 			if (bone.flags & BONE_ANIM_OVERRIDE_LOOP)
@@ -547,31 +542,31 @@ void G2_TimingModel(boneInfo_t &bone,int currentTime,int numFramesInFile,int &cu
 					// if we do, let me know, I need to insure the mod works
 
 					// should we be creating a virtual frame?
-					if ((newFrame_g < endFrame + 1) && (newFrame_g > endFrame))
+					if ((newFrame_g < endFrame+1) && (newFrame_g >= endFrame))
 					{
 						// now figure out what we are lerping between
 						// delta is the fraction between this frame and the next, since the new anim is always at a .0f;
-						lerp = (newFrame_g - (int)newFrame_g);
+						lerp = float(endFrame+1)-newFrame_g;
 						// frames are easy to calculate
-						currentFrame = (int)newFrame_g;
+						currentFrame = endFrame;
 						assert(currentFrame>=0&&currentFrame<numFramesInFile);
 						newFrame = bone.startFrame;
 						assert(newFrame>=0&&newFrame<numFramesInFile);
 					}
 					else
 					{
-						if (newFrame_g <= endFrame)
+						if (newFrame_g <= endFrame+1)
 						{
 							newFrame_g=endFrame+fmod(newFrame_g-endFrame,animSize)-animSize;
 						}
 						// now figure out what we are lerping between
 						// delta is the fraction between this frame and the next, since the new anim is always at a .0f;
-						lerp = (newFrame_g - (int)newFrame_g);
+						lerp = (ceil(newFrame_g)-newFrame_g);
 						// frames are easy to calculate
-						currentFrame = (int)newFrame_g;
+						currentFrame = ceil(newFrame_g);
 						assert(currentFrame>=0&&currentFrame<numFramesInFile);
 						// should we be creating a virtual frame?
-						if (newFrame_g <= endFrame + 1)
+						if (currentFrame <= endFrame+1 )
 						{
 							newFrame = bone.startFrame;
 							assert(newFrame>=0&&newFrame<numFramesInFile);
@@ -627,8 +622,7 @@ void G2_TimingModel(boneInfo_t &bone,int currentTime,int numFramesInFile,int &cu
 			}
 			else
 			{
-				if (((bone.flags & (BONE_ANIM_OVERRIDE_DEFAULT)) == (BONE_ANIM_OVERRIDE_DEFAULT))||
-					((bone.flags & (BONE_ANIM_OVERRIDE_FREEZE)) == (BONE_ANIM_OVERRIDE_FREEZE)))
+				if (((bone.flags & (BONE_ANIM_OVERRIDE_FREEZE)) == (BONE_ANIM_OVERRIDE_FREEZE)))
 				{
 					// if we are supposed to reset the default anim, then do so
 					if (animSpeed > 0.0f)
@@ -638,7 +632,7 @@ void G2_TimingModel(boneInfo_t &bone,int currentTime,int numFramesInFile,int &cu
 					}
 					else
 					{
-						currentFrame = bone.endFrame + 1;
+						currentFrame = bone.endFrame+1;
 						assert(currentFrame>=0&&currentFrame<numFramesInFile);
 					}
 
@@ -646,25 +640,27 @@ void G2_TimingModel(boneInfo_t &bone,int currentTime,int numFramesInFile,int &cu
 					assert(newFrame>=0&&newFrame<numFramesInFile);
 					lerp = 0;
 				}
+				else
+				{
+					bone.flags &= ~(BONE_ANIM_TOTAL);
+				}
 
-				// nope, just stop processing this bone. And do nothing	- let the bone take the parents anim info
 			}
 		}
 		else
 		{
-			// frames are easy to calculate
-			currentFrame = (int)newFrame_g;
-
-			// figure out the difference between the two frames	- we have to decide what frame and what percentage of that
-			// frame we want to display
-			lerp = (newFrame_g - currentFrame);
-
-			assert(currentFrame>=0&&currentFrame<numFramesInFile);
-
 			if (animSpeed> 0.0)
 			{
-				newFrame = currentFrame + 1;
+				// frames are easy to calculate
+				currentFrame = (int)newFrame_g;
 
+				// figure out the difference between the two frames	- we have to decide what frame and what percentage of that
+				// frame we want to display
+				lerp = (newFrame_g - currentFrame);
+
+				assert(currentFrame>=0&&currentFrame<numFramesInFile);
+
+				newFrame = currentFrame + 1;
 				// are we now on the end frame?
 				assert((int)endFrame<=numFramesInFile);
 				if (newFrame >= (int)endFrame)
@@ -686,34 +682,50 @@ void G2_TimingModel(boneInfo_t &bone,int currentTime,int numFramesInFile,int &cu
 			}
 			else
 			{
-				currentFrame++;
-				assert(currentFrame>=0&&currentFrame<numFramesInFile);
-				newFrame = currentFrame - 1;
-
-				lerp = 1-lerp;
-				// are we now on the end frame?
-				if (newFrame < endFrame)
+				lerp = (ceil(newFrame_g)-newFrame_g);
+				// frames are easy to calculate
+				currentFrame = ceil(newFrame_g);
+				if (currentFrame>bone.startFrame)
 				{
-					// we only want to lerp with the first frame of the anim if we are looping 
-					if (bone.flags & BONE_ANIM_OVERRIDE_LOOP)
+					currentFrame=bone.startFrame;
+					newFrame = currentFrame;
+					lerp=0.0f;
+				}
+				else
+				{
+					newFrame=currentFrame-1;
+					// are we now on the end frame?
+					if (newFrame < endFrame+1)
 					{
-					  	newFrame = bone.startFrame;
-						assert(newFrame>=0&&newFrame<numFramesInFile);
-					}
-					// if we intend to end this anim or freeze after this, then just keep on the last frame
-					else
-					{
-						newFrame = bone.endFrame+1;
-						assert(newFrame>=0&&newFrame<numFramesInFile);
+						// we only want to lerp with the first frame of the anim if we are looping 
+						if (bone.flags & BONE_ANIM_OVERRIDE_LOOP)
+						{
+					  		newFrame = bone.startFrame;
+							assert(newFrame>=0&&newFrame<numFramesInFile);
+						}
+						// if we intend to end this anim or freeze after this, then just keep on the last frame
+						else
+						{
+							newFrame = bone.endFrame+1;
+							assert(newFrame>=0&&newFrame<numFramesInFile);
+						}
 					}
 				}
+				assert(currentFrame>=0&&currentFrame<numFramesInFile);
 				assert(newFrame>=0&&newFrame<numFramesInFile);
 			}
 		}
 	}
 	else
 	{
-		currentFrame = bone.endFrame-1;
+		if (animSpeed<0.0)
+		{
+			currentFrame = bone.endFrame+1;
+		}
+		else
+		{
+			currentFrame = bone.endFrame-1;
+		}
 		if (currentFrame<0)
 		{
 			currentFrame=0;
@@ -765,7 +777,7 @@ void G2_TransformBone (int child,CBoneCache &BC)
 		{
 			float blendTime = BC.incomingTime - boneList[boneListIndex].blendStart;
 			// only set up the blend anim if we actually have some blend time left on this bone anim - otherwise we might corrupt some blend higher up the hiearchy
-			if (blendTime>0.0f&&blendTime < boneList[boneListIndex].blendTime)
+			if (blendTime>=0.0f&&blendTime < boneList[boneListIndex].blendTime)
 			{
 				TB.blendFrame	 = boneList[boneListIndex].blendFrame;
 				TB.blendOldFrame = boneList[boneListIndex].blendLerpFrame;
@@ -823,18 +835,55 @@ void G2_TransformBone (int child,CBoneCache &BC)
 		TB.blendOldFrame=0;
 	}
 #if DEBUG_G2_TIMING
+
+#if DEBUG_G2_TIMING_RENDER_ONLY
+	if (!HackadelicOnClient)
+	{
+		printTiming=false;
+	}
+#endif
 	if (printTiming)
 	{
 		char mess[1000];
 		if (TB.blendMode)
 		{
-			sprintf(mess,"b %2d %5d   %4d %4d %4d %4d  %f %f\n",BC.mWraithID,BC.incomingTime,(int)TB.newFrame,(int)TB.currentFrame,(int)TB.blendFrame,(int)TB.blendOldFrame,TB.backlerp,TB.blendLerp);
+			sprintf(mess,"b %2d %5d   %4d %4d %4d %4d  %f %f\n",boneListIndex,BC.incomingTime,(int)TB.newFrame,(int)TB.currentFrame,(int)TB.blendFrame,(int)TB.blendOldFrame,TB.backlerp,TB.blendLerp);
 		}
 		else
 		{
-			sprintf(mess,"a %2d %5d   %4d %4d            %f\n",BC.mWraithID,BC.incomingTime,TB.newFrame,TB.currentFrame,TB.backlerp);
+			sprintf(mess,"a %2d %5d   %4d %4d            %f\n",boneListIndex,BC.incomingTime,TB.newFrame,TB.currentFrame,TB.backlerp);
 		}
 		OutputDebugString(mess);
+		const boneInfo_t &bone=boneList[boneListIndex];
+		if (bone.flags&BONE_ANIM_BLEND)
+		{
+			sprintf(mess,"                                                                    bfb[%2d] %5d  %5d  (%5d-%5d) %4.2f %4x   bt(%5d-%5d) %7.2f %5d\n",
+				boneListIndex,
+				BC.incomingTime,
+				bone.startTime,
+				bone.startFrame,
+				bone.endFrame,
+				bone.animSpeed,
+				bone.flags,
+				bone.blendStart,
+				bone.blendStart+bone.blendTime,
+				bone.blendFrame,
+				bone.blendLerpFrame
+				);
+		}
+		else
+		{
+			sprintf(mess,"                                                                    bfa[%2d] %5d  %5d  (%5d-%5d) %4.2f %4x\n",
+				boneListIndex,
+				BC.incomingTime,
+				bone.startTime,
+				bone.startFrame,
+				bone.endFrame,
+				bone.animSpeed,
+				bone.flags
+				);
+		}
+//		OutputDebugString(mess);
 	}
 #endif
 //	boldFrame = (mdxaFrame_t *)((byte *)BC.header + BC.header->ofsFrames + TB.blendOldFrame * BC.frameSize );
@@ -929,7 +978,7 @@ void G2_TransformBone (int child,CBoneCache &BC)
 
 	int parent=BC.mFinalBones[child].parent;
 	assert((parent==-1&&child==0)||(parent>=0&&parent<BC.mBones.size()));
-	if (angleOverride & (BONE_ANGLES_REPLACE | BONE_ANGLES_REPLACE_TO_ANIM))
+	if (angleOverride & BONE_ANGLES_REPLACE)
 	{
 		mdxaBone_t temp, firstPass;
 		mdxaBone_t &bone = BC.mFinalBones[child].boneMatrix;
@@ -938,7 +987,7 @@ void G2_TransformBone (int child,CBoneCache &BC)
 		Multiply_3x4Matrix(&firstPass, &BC.mFinalBones[parent].boneMatrix, &tbone[2]);
 
 		// are we attempting to blend with the base animation? and still within blend time?
-		if (boneOverride.boneBlendTime && (((boneOverride.boneBlendTime + boneOverride.boneBlendStart) < BC.incomingTime) || (angleOverride & BONE_ANGLES_REPLACE_TO_ANIM)))
+		if (boneOverride.boneBlendTime && (((boneOverride.boneBlendTime + boneOverride.boneBlendStart) < BC.incomingTime)))
 		{
 			// ok, we are supposed to be blending. Work out lerp
 			float blendTime = BC.incomingTime - boneList[boneListIndex].boneBlendStart;
@@ -946,12 +995,6 @@ void G2_TransformBone (int child,CBoneCache &BC)
 
 			if (blendLerp <= 1)
 			{
-				// if we are going *to* the anim then reverse the lerp
-				if (angleOverride & BONE_ANGLES_REPLACE_TO_ANIM)
-				{
-					blendLerp = 1.0 - blendLerp;
-				}
-
 				if (blendLerp < 0)
 				{
 					assert(0);
@@ -1138,7 +1181,6 @@ void G2_TransformGhoulBones(boneInfo_v &rootBoneList,mdxaBone_t &rootMatrix, CGh
 
 	ghoul2.mBoneCache->mSmoothingActive=false;
 	ghoul2.mBoneCache->mUnsquash=false;
-	ghoul2.mBoneCache->mLastTouch=ghoul2.mBoneCache->mLastLastTouch;
 
 	// master smoothing control
 	float val=r_Ghoul2AnimSmooth->value;
@@ -1150,15 +1192,12 @@ void G2_TransformGhoulBones(boneInfo_v &rootBoneList,mdxaBone_t &rootMatrix, CGh
 		{
 			ghoul2.mBoneCache->mUnsquash=true;
 		}
-		ghoul2.mBoneCache->mLastTime=time;
 	}
 	else
 	{
 		ghoul2.mBoneCache->mSmoothFactor=1.0f;
-		ghoul2.mBoneCache->mLastTime=0;
 	}
 	ghoul2.mBoneCache->mCurrentTouch++;
-	ghoul2.mBoneCache->mLastLastTouch=ghoul2.mBoneCache->mCurrentTouch;
 	ghoul2.mBoneCache->mWraithID=0;
 	ghoul2.mBoneCache->frameSize = 0;// can be deleted in new G2 format	//(int)( &((mdxaFrame_t *)0)->boneIndexes[ ghoul2.aHeader->numBones ] );   
 
@@ -1167,8 +1206,8 @@ void G2_TransformGhoulBones(boneInfo_v &rootBoneList,mdxaBone_t &rootMatrix, CGh
 	ghoul2.mBoneCache->incomingTime=time;
 
 	SBoneCalc &TB=ghoul2.mBoneCache->Root();
-	TB.newFrame=ghoul2.mAnimFrameDefault;
-	TB.currentFrame=ghoul2.mAnimFrameDefault;
+	TB.newFrame=0;
+	TB.currentFrame=0;
 	TB.backlerp=0.0f;
 	TB.blendFrame=0;
 	TB.blendOldFrame=0;
@@ -1228,11 +1267,12 @@ void G2_ProcessSurfaceBolt2(CBoneCache &boneCache, const mdxmSurface_t *surface,
 		
 		// now go and transform just the points we need from the surface that was hit originally
 //		w = vert0->weights;
+		float fTotalWeight = 0.0f;
 		int iNumWeights = G2_GetVertWeights( vert0 );
  		for ( k = 0 ; k < iNumWeights ; k++ ) 
  		{
 			int		iBoneIndex	= G2_GetVertBoneIndex( vert0, k );
-			float	fBoneWeight	= G2_GetVertBoneWeight( vert0, k );
+			float	fBoneWeight	= G2_GetVertBoneWeight( vert0, k, fTotalWeight, iNumWeights );
 
 			const mdxaBone_t &bone=boneCache.Eval(piBoneReferences[iBoneIndex]);
 
@@ -1242,11 +1282,12 @@ void G2_ProcessSurfaceBolt2(CBoneCache &boneCache, const mdxmSurface_t *surface,
 		}
 
 //		w = vert1->weights;
+		fTotalWeight = 0.0f;
 		iNumWeights = G2_GetVertWeights( vert1 );
  		for ( k = 0 ; k < iNumWeights ; k++) 
  		{
 			int		iBoneIndex	= G2_GetVertBoneIndex( vert1, k );
-			float	fBoneWeight	= G2_GetVertBoneWeight( vert1, k );
+			float	fBoneWeight	= G2_GetVertBoneWeight( vert1, k, fTotalWeight, iNumWeights );
 
 			const mdxaBone_t &bone=boneCache.Eval(piBoneReferences[iBoneIndex]);
 
@@ -1256,11 +1297,12 @@ void G2_ProcessSurfaceBolt2(CBoneCache &boneCache, const mdxmSurface_t *surface,
 		}
 
 //		w = vert2->weights;
+		fTotalWeight = 0.0f;
 		iNumWeights = G2_GetVertWeights( vert2 );
  		for ( k = 0 ; k < iNumWeights ; k++) 
  		{
 			int		iBoneIndex	= G2_GetVertBoneIndex( vert2, k );
-			float	fBoneWeight	= G2_GetVertBoneWeight( vert2, k );
+			float	fBoneWeight	= G2_GetVertBoneWeight( vert2, k, fTotalWeight, iNumWeights );
 
 			const mdxaBone_t &bone=boneCache.Eval(piBoneReferences[iBoneIndex]);
 
@@ -1332,10 +1374,11 @@ void G2_ProcessSurfaceBolt2(CBoneCache &boneCache, const mdxmSurface_t *surface,
 
 			const int iNumWeights = G2_GetVertWeights( v );
 
+			float fTotalWeight = 0.0f;
  			for ( k = 0 ; k < iNumWeights ; k++) 
  			{
 				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
-				float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k, fTotalWeight, iNumWeights );
 
 				const mdxaBone_t &bone=boneCache.Eval(piBoneReferences[iBoneIndex]);
 
@@ -1506,6 +1549,7 @@ void RenderSurfaces(CRenderSurface &RS)
 		if ( !RS.personalModel
 			&& r_shadows->integer == 2 
 			&& RS.fogNum == 0
+			&& (RS.renderfx & RF_SHADOW_PLANE )
 			&& !(RS.renderfx & ( RF_NOSHADOW | RF_DEPTHHACK ) ) 
 			&& shader->sort == SS_OPAQUE ) 
 		{		// set the surface info to point at the where the transformed bone list is going to be for when the surface gets rendered out
@@ -1906,10 +1950,11 @@ void RB_SurfaceGhoul( CRenderableSurface *surf ) {
 
 		VectorClear( tess.xyz[baseVert]);
 		VectorClear( tess.normal[baseVert]);
+		float fTotalWeight = 0.0f;
 		for (k = 0 ; k < iNumWeights ; k++) 
 		{
 			int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
-			float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
+			float	fBoneWeight	= G2_GetVertBoneWeight( v, k, fTotalWeight, iNumWeights );
 
 			bone = &bones->Eval(piBoneReferences[iBoneIndex]);
 

@@ -71,7 +71,7 @@ void CM_LoadShaderFiles( void )
 {
 	char	**shaderFiles1;
 	int		numShaders1;
-#ifndef _FINAL
+#ifndef FINAL_BUILD
 	char	**shaderFiles2;
 	int		numShaders2;
 #endif
@@ -82,7 +82,7 @@ void CM_LoadShaderFiles( void )
 
 	// scan for shader files
 	shaderFiles1 = FS_ListFiles( "shaders", ".shader", &numShaders1 );
-#ifndef _FINAL
+#ifndef FINAL_BUILD
 	shaderFiles2 = FS_ListFiles( "shaders/test", ".shader", &numShaders2 );
 #endif
 
@@ -92,7 +92,7 @@ void CM_LoadShaderFiles( void )
 		return;
 	}
 
-#ifndef _FINAL
+#ifndef FINAL_BUILD
 	numShaders = numShaders1 + numShaders2;
 #else
 	numShaders = numShaders1;
@@ -115,7 +115,7 @@ void CM_LoadShaderFiles( void )
 			Com_Error( ERR_DROP, "Couldn't load %s", filename );
 		}
 	}
-#ifndef _FINAL
+#ifndef FINAL_BUILD
 	for ( ; i < numShaders; i++ )
 	{
 		char filename[MAX_QPATH];
@@ -143,7 +143,7 @@ void CM_LoadShaderFiles( void )
 
 	// free up memory
 	FS_FreeFileList( shaderFiles1 );
-#ifndef _FINAL
+#ifndef FINAL_BUILD
 	FS_FreeFileList( shaderFiles2 );
 #endif
 }
@@ -191,7 +191,7 @@ CM_LoadShaderText
 ==================
 */
 
-void CM_LoadShaderText(bool forceReload)
+void CM_LoadShaderText(qboolean forceReload)
 {
 	if(forceReload)
 	{
@@ -311,7 +311,7 @@ void SV_ParseMaterial( CCMShader *shader, const char **text )
 ParseVector
 ===============
 */
-qboolean CM_ParseVector( CCMShader *shader, const char **text, int count, float *v ) 
+static qboolean CM_ParseVector( CCMShader *shader, const char **text, int count, float *v ) 
 {
 	char	*token;
 	int		i;
@@ -356,7 +356,7 @@ It is designed to *NOT* load any image files and not require any of the renderer
 be initialised.
 =================
 */
-void CM_ParseShader( CCMShader *shader, const char **text )
+static void CM_ParseShader( CCMShader *shader, const char **text )
 {
 	char	*token;
 

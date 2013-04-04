@@ -14,7 +14,7 @@
 #define MAX_MENUDEFFILE				4096
 #define MAX_MENUFILE				32768
 #define MAX_MENUS					64
-#define MAX_MENUITEMS				128
+#define MAX_MENUITEMS				256
 #define MAX_COLOR_RANGES			10
 #define MAX_OPEN_MENUS				16
 #define	MAX_TEXTSCROLL_LINES		256
@@ -78,8 +78,8 @@
 #define ASSET_SCROLLBAR_ARROWLEFT   "gfx/menus/scrollbar_arrow_left.tga"
 #define ASSET_SCROLLBAR_ARROWRIGHT  "gfx/menus/scrollbar_arrow_right.tga"
 #define ASSET_SCROLL_THUMB          "gfx/menus/scrollbar_thumb.tga"
-#define ASSET_SLIDER_BAR			"ui/assets/slider2.tga"
-#define ASSET_SLIDER_THUMB			"ui/assets/sliderbutt_1.tga"
+#define ASSET_SLIDER_BAR			"menu/new/slider"
+#define ASSET_SLIDER_THUMB			"menu/new/sliderthumb"
 #define SCROLLBAR_SIZE 16.0
 #define SLIDER_WIDTH 96.0
 #define SLIDER_HEIGHT 16.0
@@ -316,7 +316,6 @@ typedef struct {
   vec4_t shadowColor;
   float shadowFadeClamp;
   qboolean fontRegistered;
-	char		stripedFile[MAX_STRING_CHARS];
 
   // player settings
 	qhandle_t fxBasePic;
@@ -325,9 +324,10 @@ typedef struct {
 
 } cachedAssets_t;
 
-typedef struct {
-  const char *name;
-  void (*handler) (itemDef_t *item, char** args);
+typedef struct 
+{
+	const char *name;
+	qboolean (*handler) (itemDef_t *item, char** args);
 } commandDef_t;
 
 typedef struct {
@@ -359,6 +359,7 @@ typedef struct {
 	float (*getValue) (int ownerDraw);
 	qboolean (*ownerDrawVisible) (int flags);
   void (*runScript)(char **p);
+  qboolean (*deferScript)(char **p);
   void (*getTeamColor)(vec4_t *color);
   void (*getCVarString)(const char *cvar, char *buffer, int bufsize);
   float (*getCVarValue)(const char *cvar);
@@ -371,7 +372,7 @@ typedef struct {
   int (*feederCount)(float feederID);
   const char *(*feederItemText)(float feederID, int index, int column, qhandle_t *handle);
   qhandle_t (*feederItemImage)(float feederID, int index);
-  void (*feederSelection)(float feederID, int index);
+  qboolean (*feederSelection)(float feederID, int index);
 	void (*keynumToStringBuf)( int keynum, char *buf, int buflen );
 	void (*getBindingBuf)( int keynum, char *buf, int buflen );
 	void (*setBinding)( int keynum, const char *binding );
@@ -461,7 +462,6 @@ qboolean UI_OutOfMemory();
 
 void Controls_GetConfig( void );
 void Controls_SetConfig(qboolean restart);
-void Controls_SetDefaults( void );
 
 int			trap_PC_AddGlobalDefine			( char *define );
 int			trap_PC_LoadSource				( const char *filename );
@@ -471,8 +471,7 @@ int			trap_PC_SourceFileAndLine		( int handle, char *filename, int *line );
 int			trap_PC_LoadGlobalDefines		( const char* filename );
 void		trap_PC_RemoveAllGlobalDefines	( void );
 
-void		trap_SP_RegisterServer( const char *package );
-void		trap_SP_Register(char *file );
-void		Menu_currentStipEdFile(char *stripEdFile);
+qboolean	trap_SP_RegisterServer( const char *package );
+qboolean	trap_SP_Register(char *file );
 int trap_SP_GetStringTextString(const char *text, char *buffer, int bufferLength);
 #endif

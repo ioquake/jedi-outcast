@@ -102,6 +102,18 @@ LPCSTR SG_GetChidText(unsigned long chid)
 }
 
 
+static const char *GetString_FailedToOpenSaveGame(const char *psFilename, qboolean bOpen)
+{
+	static char sTemp[256];
+
+	strcpy(sTemp,S_COLOR_RED);
+	
+	const char *psReference = bOpen ? "MENUS3_FAILED_TO_OPEN_SAVEGAME" : "MENUS3_FAILED_TO_CREATE_SAVEGAME";
+	Q_strncpyz(sTemp + strlen(sTemp), va( SP_GetStringTextString(psReference), psFilename),sizeof(sTemp));
+	strcat(sTemp,"\n");
+	return sTemp;
+}
+
 // (copes with up to 8 ptr returns at once)
 //
 static LPCSTR SG_AddSavePath( LPCSTR psPathlessBaseName )
@@ -150,7 +162,7 @@ static qboolean SG_Create( LPCSTR psPathlessBaseName )
 
 	if(!fhSaveGame)
 	{
-		Com_Printf(S_COLOR_RED "Failed to create new savegame file \"%s\"\n", psLocalFilename );
+		Com_Printf(GetString_FailedToOpenSaveGame(psLocalFilename,qfalse));//S_COLOR_RED "Failed to create new savegame file \"%s\"\n", psLocalFilename );
 		return qfalse;
 	}
 
@@ -177,6 +189,11 @@ void SG_Shutdown()
 
 	eSavedGameJustLoaded = eNO;	// important to do this if we ERR_DROP during loading, else next map you load after
 								//	a bad save-file you'll arrive at dead :-)
+
+	// and this bit stops people messing up the laoder by repeatedly stabbing at the load key during loads...
+	//
+	extern qboolean gbAlreadyDoingLoad;
+					gbAlreadyDoingLoad = qfalse;
 }
 
 qboolean SG_Close()
@@ -225,7 +242,7 @@ qboolean SG_Open( LPCSTR psPathlessBaseName )
 	if (!fhSaveGame)
 	{
 //		Com_Printf(S_COLOR_RED "Failed to open savegame file %s\n", psLocalFilename);
-		Com_DPrintf("Failed to open savegame file %s\n", psLocalFilename);
+		Com_DPrintf(GetString_FailedToOpenSaveGame(psLocalFilename, qtrue));
 
 		return qfalse;
 	}
@@ -290,8 +307,15 @@ qboolean SV_TryLoadTransition( const char *mapname )
 	return qtrue;
 }
 
+qboolean gbAlreadyDoingLoad = qfalse;
 void SV_LoadGame_f(void)
 {
+	if (gbAlreadyDoingLoad)
+	{
+		Com_DPrintf ("( Already loading, ignoring extra 'load' commands... )\n");
+		return;
+	}
+
 //	// check server is running
 //	//
 //	if ( !com_sv_running->integer )
@@ -366,11 +390,19 @@ void SV_LoadGame_f(void)
 		}
 		//default will continue to load auto
 	}
-
+		
 	Com_Printf (S_COLOR_CYAN "Loading game \"%s\"...\n", psFilename);
-		SG_ReadSavegame(psFilename);
-	Com_Printf (S_COLOR_CYAN "Done.\n");	
+
+	gbAlreadyDoingLoad = qtrue;
+	if (!SG_ReadSavegame(psFilename)) {
+		gbAlreadyDoingLoad = qfalse; //	do NOT do this here now, need to wait until client spawn, unless the load failed.
+	} else
+	{
+		Com_Printf (S_COLOR_CYAN "Done.\n");	
+	}
 }
+
+qboolean SG_GameAllowedToSaveHere(qboolean inCamera);
 
 void SV_SaveGame_f(void)
 {
@@ -420,6 +452,15 @@ void SV_SaveGame_f(void)
 		return;
 	}
 
+	if (strstr (psFilename, "..") || strstr (psFilename, "/") || strstr (psFilename, "\\") )
+	{
+		Com_Printf (S_COLOR_RED "Bad savegame name.\n");
+		return;
+	}
+
+	if (!SG_GameAllowedToSaveHere(qfalse))	//full check
+		return;	// this prevents people saving via quick-save now during cinematics, and skips the screenshot below!
+
 	if (!stricmp (psFilename, "quik*") || !stricmp (psFilename, "auto*") )
 	{
 extern void	SCR_PrecacheScreenshot();  //scr_scrn.cpp
@@ -430,15 +471,15 @@ extern void	SCR_PrecacheScreenshot();  //scr_scrn.cpp
 		SG_StoreSaveGameComment("");	// clear previous comment/description, which will force time/date comment.
 	}
 
-	if (strstr (psFilename, "..") || strstr (psFilename, "/") || strstr (psFilename, "\\") )
-	{
-		Com_Printf (S_COLOR_RED "Bad savegame name.\n");
-		return;
-	}
-
 	Com_Printf (S_COLOR_CYAN "Saving game \"%s\"...\n", psFilename);
-	SG_WriteSavegame(psFilename, qfalse);
-	Com_Printf (S_COLOR_CYAN "Done.\n");	
+	if (SG_WriteSavegame(psFilename, qfalse))
+	{
+		Com_Printf (S_COLOR_CYAN "Done.\n");
+	}
+	else
+	{
+		Com_Printf (S_COLOR_RED "Failed.\n");
+	}
 }
 
 
@@ -465,48 +506,21 @@ static void WriteGame(qboolean autosave)
 
 		// write ammo...
 		//
-		for ( int i=0; i<AMMO_MAX; i++)
-		{
-			memset(s,0,sizeof(s));
-			Cvar_VariableStringBuffer( va("playerammo%d",i), s, sizeof(s) );
-			SG_Append('AMMO', &s, sizeof(s));
-		}
+		memset(s,0,sizeof(s));
+		Cvar_VariableStringBuffer( "playerammo", s, sizeof(s) );
+		SG_Append('AMMO', &s, sizeof(s));
 
 		// write inventory...
 		//
-		for ( i=0; i<INV_MAX; i++)
-		{
-			memset(s,0,sizeof(s));
-			Cvar_VariableStringBuffer( va("playerinv%d",i), s, sizeof(s) );
-			SG_Append('IVTY', &s, sizeof(s));
-		}
+		memset(s,0,sizeof(s));
+		Cvar_VariableStringBuffer( "playerinv", s, sizeof(s) );
+		SG_Append('IVTY', &s, sizeof(s));
 		
 		// the new JK2 stuff - force powers, etc...
 		//
-		for ( i=0; i<NUM_FORCE_POWERS; i++ )
-		{
-			memset(s,0,sizeof(s));
-			Cvar_VariableStringBuffer( va("playerfplvl%d",i), s, sizeof(s) );
-			SG_Append('FPLV', &s, sizeof(s));
-		}
-
-		Cvar_VariableStringBuffer( "playerfpknown", s, sizeof(s) );
-		SG_Append('FPKN', &s, sizeof(s));
-
-		Cvar_VariableStringBuffer( "playerfp", s, sizeof(s) );
-		SG_Append('PLFP', &s, sizeof(s));
-
-		Cvar_VariableStringBuffer( "plsa", s, sizeof(s) );
-		SG_Append('PLSA', &s, sizeof(s));
-
-		Cvar_VariableStringBuffer( "plcs", s, sizeof(s) );
-		SG_Append('PLCS', &s, sizeof(s));
-
-		Cvar_VariableStringBuffer( "plle", s, sizeof(s) );
-		SG_Append('PLLE', &s, sizeof(s));
-
-		Cvar_VariableStringBuffer( "pllt", s, sizeof(s) );
-		SG_Append('PLLT', &s, sizeof(s));
+		memset(s,0,sizeof(s));
+		Cvar_VariableStringBuffer( "playerfplvl", s, sizeof(s) );
+		SG_Append('FPLV', &s, sizeof(s));
 	}
 }
 
@@ -527,46 +541,21 @@ static qboolean ReadGame (void)
 
 		// read ammo...
 		//
-		for ( int i=0; i<AMMO_MAX; i++)
-		{
-			memset(s,0,sizeof(s));			
-			SG_Read('AMMO', (void *)&s, sizeof(s));
-			Cvar_Set( va("playerammo%d",i), s);
-		}
+		memset(s,0,sizeof(s));			
+		SG_Read('AMMO', (void *)&s, sizeof(s));
+		Cvar_Set( "playerammo", s);
 
 		// read inventory...
 		//
-		for ( i=0; i<INV_MAX; i++)
-		{
-			memset(s,0,sizeof(s));			
-			SG_Read('IVTY', (void *)&s, sizeof(s));
-			Cvar_Set( va("playerinv%d",i), s);
-		}
+		memset(s,0,sizeof(s));			
+		SG_Read('IVTY', (void *)&s, sizeof(s));
+		Cvar_Set( "playerinv", s);
 
-		for ( i=0; i<NUM_FORCE_POWERS; i++ )
-		{
-			memset(s,0,sizeof(s));
-			SG_Read('FPLV', (void *)&s, sizeof(s));
-			Cvar_Set( va("playerfplvl%d",i), s );
-		}
-
-		SG_Read('FPKN', (void *)&s, sizeof(s));
-		Cvar_Set( "playerfpknown", s );
-		
-		SG_Read('PLFP', (void *)&s, sizeof(s));
-		Cvar_Set( "playerfp", s );
-
-		SG_Read('PLSA', (void *)&s, sizeof(s));
-		Cvar_Set( "plsa", s );
-
-		SG_Read('PLCS', (void *)&s, sizeof(s));
-		Cvar_Set( "plcs", s );
-
-		SG_Read('PLLE', (void *)&s, sizeof(s));
-		Cvar_Set( "plle", s );
-
-		SG_Read('PLLT', (void *)&s, sizeof(s));
-		Cvar_Set( "pllt", s );
+		// read force powers...
+		//
+		memset(s,0,sizeof(s));
+		SG_Read('FPLV', (void *)&s, sizeof(s));
+		Cvar_Set( "playerfplvl", s );
 	}
 
 	return qbAutoSave;
@@ -906,6 +895,11 @@ qboolean SG_GameAllowedToSaveHere(qboolean inCamera)
 			return qfalse;	//		Com_Printf( S_COLOR_RED "Server is not running\n" );		
 		}
 		
+		if (CL_IsRunningInGameCinematic())
+		{
+			return qfalse;	//nope, not during a video
+		}
+
 		if (sv.state != SS_GAME)
 		{
 			return qfalse;	//		Com_Printf (S_COLOR_RED "You must be in a game to save.\n");
@@ -928,20 +922,20 @@ qboolean SG_GameAllowedToSaveHere(qboolean inCamera)
 	return ge->GameAllowedToSaveHere();
 }
 
-void SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
+qboolean SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
 {	
 	if (!qbAutosave && !SG_GameAllowedToSaveHere(qfalse))	//full check
-		return;	// this prevents people saving via quick-save now during cinematics
+		return qfalse;	// this prevents people saving via quick-save now during cinematics
 
 	float fPrevTestSave = sv_testsave->value;
 	sv_testsave->value = 0;
 
 	if(!SG_Create( "current" ))
 	{
-		Com_Printf (S_COLOR_RED "Failed to create savegame\n");
+		Com_Printf (GetString_FailedToOpenSaveGame("current",qfalse));//S_COLOR_RED "Failed to create savegame\n");
 		SG_WipeSavegame( "current" );
 		sv_testsave->value = fPrevTestSave;
-		return;
+		return qfalse;
 	}
 
 	// Write out server data...
@@ -974,15 +968,16 @@ void SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
 	SG_Close();
 	if (gbSGWriteFailed)
 	{
-		Com_Printf (S_COLOR_RED "Failed to write savegame!\n");
+		Com_Printf (GetString_FailedToOpenSaveGame("current",qfalse));//S_COLOR_RED "Failed to write savegame!\n");
 		SG_WipeSavegame( "current" );
 		sv_testsave->value = fPrevTestSave;
-		return;
+		return qfalse;
 	}
 
 	SG_Copy( "current", psPathlessBaseName );
 
 	sv_testsave->value = fPrevTestSave;
+	return qtrue;
 }
 
 qboolean SG_ReadSavegame(const char *psPathlessBaseName)
@@ -998,7 +993,7 @@ qboolean SG_ReadSavegame(const char *psPathlessBaseName)
 
 	if (!SG_Open( psPathlessBaseName ))
 	{
-		Com_Printf (S_COLOR_RED "Failed to open savegame \"%s\"\n", psPathlessBaseName);
+		Com_Printf (GetString_FailedToOpenSaveGame(psPathlessBaseName, qtrue));//S_COLOR_RED "Failed to open savegame \"%s\"\n", psPathlessBaseName);
 		sv_testsave->value = fPrevTestSave;
 		return qfalse;
 	}
@@ -1039,7 +1034,7 @@ qboolean SG_ReadSavegame(const char *psPathlessBaseName)
 
 	if(!SG_Close())
 	{
-		Com_Printf (S_COLOR_RED "Failed to close savegame\n");
+		Com_Printf (GetString_FailedToOpenSaveGame(psPathlessBaseName,qfalse));//S_COLOR_RED "Failed to close savegame\n");
 		sv_testsave->value = fPrevTestSave;
 		return qfalse;
 	}
@@ -1165,7 +1160,7 @@ static void CompressMem_FreeScratchBuffer(void)
 
 static byte *CompressMem_AllocScratchBuffer(int iSize)
 {
-	// only alloc new buffer is we need more than the existing one...
+	// only alloc new buffer if we need more than the existing one...
 	//
 	if (giCompBlockSize < iSize)
 	{			

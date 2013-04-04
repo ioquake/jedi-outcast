@@ -16,6 +16,7 @@
 extern vec3_t playerMins;
 extern vec3_t playerMaxs;
 //extern void PM_SetAnimFinal(int *torsoAnim,int *legsAnim,int type,int anim,int priority,int *torsoAnimTimer,int *legsAnimTimer,gentity_t *gent);
+extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
 extern void PM_SetTorsoAnimTimer( gentity_t *ent, int *torsoAnimTimer, int time );
 extern void PM_SetLegsAnimTimer( gentity_t *ent, int *legsAnimTimer, int time );
 extern void NPC_BSNoClip ( void );
@@ -31,9 +32,10 @@ extern void Mark1_dying( gentity_t *self );
 extern void NPC_BSCinematic( void );
 extern int GetTime ( int lastTime );
 extern void NPC_BSGM_Default( void );
+extern void NPC_CheckCharmed( void );
 
 extern cvar_t	*g_dismemberment;
-extern cvar_t	*g_realisticSaberDamage;
+extern cvar_t	*g_saberRealisticCombat;
 
 //Local Variables
 // ai debug cvars
@@ -48,6 +50,7 @@ cvar_t		*d_JediAI;
 cvar_t		*d_noGroupAI;
 cvar_t		*d_asynchronousGroupAI;
 cvar_t		*d_altRoutes;
+cvar_t		*d_patched;
 cvar_t		*d_slowmodeath;
 
 extern int eventClearTime;
@@ -69,13 +72,13 @@ void CorpsePhysics( gentity_t *self )
 	memset( &ucmd, 0, sizeof( ucmd ) );
 	ClientThink( self->s.number, &ucmd );
 	VectorCopy( self->s.origin, self->s.origin2 );
-
+	
 	if ( self->client->NPC_class == CLASS_GALAKMECH )
 	{
 		GM_Dying( self );
 	}
 	//FIXME: match my pitch and roll for the slope of my groundPlane
-	if ( self->client->ps.groundEntityNum != ENTITYNUM_NONE && !(self->flags|FL_DISINTEGRATED) )
+	if ( self->client->ps.groundEntityNum != ENTITYNUM_NONE && !(self->flags&FL_DISINTEGRATED) )
 	{//on the ground
 		//FIXME: check 4 corners
 		pitch_roll_for_slope( self, NULL );
@@ -91,9 +94,12 @@ void CorpsePhysics( gentity_t *self )
 
 	if ( level.time - self->s.time > 3000 )
 	{//been dead for 3 seconds
-		if ( g_dismemberment->integer < 4 && !g_realisticSaberDamage->integer )
+		if ( g_dismemberment->integer < 11381138 && !g_saberRealisticCombat->integer )
 		{//can't be dismembered once dead
-			self->client->dismembered = qtrue;
+			if ( self->client->NPC_class != CLASS_PROTOCOL )
+			{
+				self->client->dismembered = qtrue;
+			}
 		}
 	}
 
@@ -125,7 +131,17 @@ Determines when it's ok to ditch the corpse
 void NPC_RemoveBody( gentity_t *self )
 {
 	CorpsePhysics( self );
+
 	self->nextthink = level.time + FRAMETIME;
+
+	if ( self->NPC->nextBStateThink <= level.time )
+	{
+		if( self->taskManager && !stop_icarus )
+		{
+			self->taskManager->Update( );
+		}
+	}
+	self->NPC->nextBStateThink = level.time + FRAMETIME;
 
 	if ( self->message )
 	{//I still have a key
@@ -140,9 +156,17 @@ void NPC_RemoveBody( gentity_t *self )
 	}
 
 	// Since these blow up, remove the bounding box.
-	if (( self->client->NPC_class == CLASS_REMOTE ) || ( self->client->NPC_class == CLASS_SENTRY ) || ( self->client->NPC_class == CLASS_PROBE ))
+	if ( self->client->NPC_class == CLASS_REMOTE 
+		|| self->client->NPC_class == CLASS_SENTRY
+		|| self->client->NPC_class == CLASS_PROBE
+		|| self->client->NPC_class == CLASS_INTERROGATOR
+		|| self->client->NPC_class == CLASS_PROBE
+		|| self->client->NPC_class == CLASS_MARK2 )
 	{
-		G_FreeEntity( self );
+		if ( !self->taskManager || !self->taskManager->IsRunning() )
+		{
+			G_FreeEntity( self );
+		}
 		return;
 	}
 
@@ -190,15 +214,18 @@ void NPC_RemoveBody( gentity_t *self )
 		//			placed in the map as a corpse
 		if ( self->enemy )
 		{
-			if ( self->client && self->client->ps.saberEntityNum > 0 && self->client->ps.saberEntityNum < ENTITYNUM_WORLD )
+			if ( !self->taskManager || !self->taskManager->IsRunning() )
 			{
-				gentity_t *saberent = &g_entities[self->client->ps.saberEntityNum];
-				if ( saberent )
+				if ( self->client && self->client->ps.saberEntityNum > 0 && self->client->ps.saberEntityNum < ENTITYNUM_WORLD )
 				{
-					G_FreeEntity( saberent );
+					gentity_t *saberent = &g_entities[self->client->ps.saberEntityNum];
+					if ( saberent )
+					{
+						G_FreeEntity( saberent );
+					}
 				}
+				G_FreeEntity( self );
 			}
-			G_FreeEntity( self );
 		}
 	}
 }
@@ -769,8 +796,11 @@ static void DeadThink ( void )
 		{
 			if ( NPC->client->ps.eFlags & EF_NODRAW )
 			{
-				NPC->e_ThinkFunc = thinkF_G_FreeEntity;
-				NPC->nextthink = level.time + FRAMETIME;
+				if ( !NPC->taskManager || !NPC->taskManager->IsRunning() )
+				{
+					NPC->e_ThinkFunc = thinkF_G_FreeEntity;
+					NPC->nextthink = level.time + FRAMETIME;
+				}
 			}
 			else
 			{
@@ -890,9 +920,15 @@ void NPC_ShowDebugInfo (void)
 
 void NPC_ApplyScriptFlags (void)
 {
-	if(NPCInfo->scriptFlags & SCF_CROUCHED)
+	if ( NPCInfo->scriptFlags & SCF_CROUCHED )
 	{
-		ucmd.upmove = -127;
+		if ( NPCInfo->charmedTime > level.time && (ucmd.forwardmove || ucmd.rightmove) )
+		{//ugh, if charmed and moving, ignore the crouched command
+		}
+		else
+		{
+			ucmd.upmove = -127;
+		}
 	}
 
 	if(NPCInfo->scriptFlags & SCF_RUNNING)
@@ -901,7 +937,13 @@ void NPC_ApplyScriptFlags (void)
 	}
 	else if(NPCInfo->scriptFlags & SCF_WALKING)
 	{
-		ucmd.buttons |= BUTTON_WALKING;
+		if ( NPCInfo->charmedTime > level.time && (ucmd.forwardmove || ucmd.rightmove) )
+		{//ugh, if charmed and moving, ignore the walking command
+		}
+		else
+		{
+			ucmd.buttons |= BUTTON_WALKING;
+		}
 	}
 /*
 	if(NPCInfo->scriptFlags & SCF_CAREFUL)
@@ -954,6 +996,7 @@ void NPC_HandleAIFlags (void)
 	}
 
 	//MRJ Request:
+	/*
 	if ( NPCInfo->aiFlags & NPCAI_GREET_ALLIES && !NPC->enemy )//what if "enemy" is the greetEnt?
 	{//If no enemy, look for teammates to greet
 		//FIXME: don't say hi to the same guy over and over again.
@@ -1001,6 +1044,13 @@ void NPC_HandleAIFlags (void)
 			}
 		}
 	}
+	*/
+	//been told to play a victory sound after a delay
+	if ( NPCInfo->greetingDebounceTime && NPCInfo->greetingDebounceTime < level.time )
+	{
+		G_AddVoiceEvent( NPC, Q_irand(EV_VICTORY1, EV_VICTORY3), Q_irand( 2000, 4000 ) );
+		NPCInfo->greetingDebounceTime = 0;
+	}
 
 	if ( NPCInfo->ffireCount > 0 )
 	{
@@ -1011,7 +1061,13 @@ void NPC_HandleAIFlags (void)
 			NPCInfo->ffireFadeDebounce = level.time + 3000;
 		}
 	}
-
+	if ( d_patched->integer )
+	{//use patch-style navigation
+		if ( NPCInfo->consecutiveBlockedMoves > 20 )
+		{//been stuck for a while, try again?
+			NPCInfo->consecutiveBlockedMoves = 0;
+		}
+	}
 }
 
 void NPC_AvoidWallsAndCliffs (void)
@@ -1173,6 +1229,37 @@ void NPC_KeepCurrentFacing(void)
 	}
 }
 
+/*
+-------------------------
+NPC_BehaviorSet_Charmed
+-------------------------
+*/
+
+void NPC_BehaviorSet_Charmed( int bState )
+{
+	switch( bState )
+	{
+	case BS_FOLLOW_LEADER://# 40: Follow your leader and shoot any enemies you come across
+		NPC_BSFollowLeader();
+		break;
+	case BS_REMOVE:
+		NPC_BSRemove();
+		break;
+	case BS_SEARCH:			//# 43: Using current waypoint as a base, search the immediate branches of waypoints for enemies
+		NPC_BSSearch();
+		break;
+	case BS_WANDER:			//# 46: Wander down random waypoint paths
+		NPC_BSWander();
+		break;
+	case BS_FLEE:
+		NPC_BSFlee();
+		break;
+	default:
+	case BS_DEFAULT://whatever
+		NPC_BSDefault();
+		break;
+	}
+}
 /*
 -------------------------
 NPC_BehaviorSet_Default
@@ -1592,19 +1679,7 @@ void NPC_RunBehavior( int team, int bState )
 	else if ( NPC->client->ps.weapon == WP_EMPLACED_GUN )
 	{
 		NPC_BSEmplaced();
-		if ( NPC->client->playerTeam == TEAM_PLAYER && NPCInfo->charmedTime && NPCInfo->charmedTime < level.time && NPC->client )
-		{//we were charmed, set us back!
-			//NOTE: presumptions here...
-			team_t	savTeam = NPC->client->enemyTeam;
-			NPC->client->enemyTeam = NPC->client->playerTeam;
-			NPC->client->playerTeam = savTeam;
-			NPC->client->leader = NULL;
-			if ( NPCInfo->tempBehavior == BS_FOLLOW_LEADER )
-			{
-				NPCInfo->tempBehavior = BS_DEFAULT;
-			}
-			G_ClearEnemy( NPC );
-		}
+		NPC_CheckCharmed();
 		return;
 	}
 	else if ( NPC->client->ps.weapon == WP_SABER )
@@ -1719,21 +1794,16 @@ void NPC_RunBehavior( int team, int bState )
 			}
 			else
 			{
-				NPC_BehaviorSet_Default( bState );
-				dontSetAim = qtrue;
-				if ( NPCInfo->charmedTime && NPCInfo->charmedTime < level.time && NPC->client )
-				{//we were charmed, set us back!
-					//NOTE: presumptions here...
-					team_t	saveTeam = NPC->client->enemyTeam;
-					NPC->client->enemyTeam = NPC->client->playerTeam;
-					NPC->client->playerTeam = saveTeam;
-					NPC->client->leader = NULL;
-					if ( NPCInfo->tempBehavior == BS_FOLLOW_LEADER )
-					{
-						NPCInfo->tempBehavior = BS_DEFAULT;
-					}
-					G_ClearEnemy( NPC );
+				if ( NPCInfo->charmedTime > level.time )
+				{
+					NPC_BehaviorSet_Charmed( bState );
 				}
+				else
+				{
+					NPC_BehaviorSet_Default( bState );
+				}
+				NPC_CheckCharmed();
+				dontSetAim = qtrue;
 			}
 			break;
 		}
@@ -1885,7 +1955,7 @@ void NPC_ExecuteBState ( gentity_t *self)//, int msec )
 	// run the bot through the server like it was a real client
 //=== Save the ucmd for the second no-think Pmove ============================
 	ucmd.serverTime = level.time - 50;
-	NPCInfo->last_ucmd = ucmd;
+	memcpy( &NPCInfo->last_ucmd, &ucmd, sizeof( usercmd_t ) );
 	if ( !NPCInfo->attackHoldTime )
 	{
 		NPCInfo->last_ucmd.buttons &= ~(BUTTON_ATTACK|BUTTON_ALT_ATTACK);//so we don't fire twice in one think
@@ -2023,29 +2093,29 @@ void NPC_Think ( gentity_t *self)//, int msec )
 				switch( self->client->NPC_class )
 				{
 				case CLASS_R2D2:				// droid
-					G_Sound(self, G_SoundIndex(va("sound/chars/r2d2/misc/r2d2talk0%d.wav",Q_irand(1, 3))));
+					G_SoundOnEnt(self, CHAN_AUTO, va("sound/chars/r2d2/misc/r2d2talk0%d.wav",Q_irand(1, 3)) );
 					break;
 				case CLASS_R5D2:				// droid
-					G_Sound(self, G_SoundIndex(va("sound/chars/r5d2/misc/r5talk%d.wav",Q_irand(1, 4))));
+					G_SoundOnEnt(self, CHAN_AUTO, va("sound/chars/r5d2/misc/r5talk%d.wav",Q_irand(1, 4)) );
 					break;
 				case CLASS_PROBE:				// droid
-					G_Sound(self, G_SoundIndex(va("sound/chars/probe/misc/probetalk%d.wav",Q_irand(1, 3))));
+					G_SoundOnEnt(self, CHAN_AUTO, va("sound/chars/probe/misc/probetalk%d.wav",Q_irand(1, 3)) );
 					break;
 				case CLASS_MOUSE:				// droid
-					G_Sound(self, G_SoundIndex(va("sound/chars/mouse/misc/mousego%d.wav",Q_irand(1, 3))));
+					G_SoundOnEnt(self, CHAN_AUTO, va("sound/chars/mouse/misc/mousego%d.wav",Q_irand(1, 3)) );
 					break;
 				case CLASS_GONK:				// droid
-					G_Sound(self, G_SoundIndex(va("sound/chars/gonk/misc/gonktalk%d.wav",Q_irand(1, 2))));
+					G_SoundOnEnt(self, CHAN_AUTO, va("sound/chars/gonk/misc/gonktalk%d.wav",Q_irand(1, 2)) );
 					break;
 				}
 				TIMER_Set( self, "patrolNoise", Q_irand( 2000, 4000 ) );
 			}
 		}
 		//FIXME: might want to at least make sounds or something?
-		NPC_UpdateAngles(qtrue, qtrue);
+		//NPC_UpdateAngles(qtrue, qtrue);
 		//Which ucmd should we send?  Does it matter, since it gets overridden anyway?
 		NPCInfo->last_ucmd.serverTime = level.time - 50;
-		ClientThink(NPC->s.number, &NPCInfo->last_ucmd);
+		ClientThink( NPC->s.number, &ucmd );
 		VectorCopy(self->s.origin, self->s.origin2 );
 		return;
 	}
@@ -2090,7 +2160,8 @@ void NPC_Think ( gentity_t *self)//, int msec )
 		{//If we were following a roff, we don't do normal pmoves.
 			//FIXME: firing angles (no aim offset) or regular angles?
 			NPC_UpdateAngles(qtrue, qtrue);
-			ClientThink(NPC->s.number, &NPCInfo->last_ucmd);
+			memcpy( &ucmd, &NPCInfo->last_ucmd, sizeof( usercmd_t ) );
+			ClientThink(NPC->s.number, &ucmd);
 		}
 		else
 		{
@@ -2117,6 +2188,7 @@ void NPC_InitAI ( void )
 	d_noGroupAI = gi.cvar ( "d_noGroupAI", "0", CVAR_CHEAT );
 	d_asynchronousGroupAI = gi.cvar ( "d_asynchronousGroupAI", "1", CVAR_CHEAT );
 	d_altRoutes = gi.cvar ( "d_altRoutes", "1", CVAR_CHEAT );
+	d_patched = gi.cvar ( "d_patched", "0", CVAR_CHEAT );
 
 	//0 = never (BORING)
 	//1 = kyle only

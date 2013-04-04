@@ -409,9 +409,9 @@ void	trap_R_RemapShader( const char *oldShader, const char *newShader, const cha
 	syscall( UI_R_REMAP_SHADER, oldShader, newShader, timeOffset );
 }
 
-void trap_SP_Register(char *file ) 
+qboolean trap_SP_Register(char *file ) 
 {
-	syscall( UI_SP_REGISTER,file );
+	return syscall( UI_SP_REGISTER,file );
 }
 
 int trap_SP_GetStringTextString(const char *text, char *buffer, int bufferLength)

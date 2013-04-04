@@ -1580,21 +1580,36 @@ qboolean R_FogParmsMatch( int fog1, int fog2 )
 
 void R_SetViewFogIndex (void)
 {
-	fog_t *fog;
-	for ( tr.refdef.fogIndex = 1 ; tr.refdef.fogIndex < tr.world->numfogs ; tr.refdef.fogIndex++ ) 
-	{
-		fog = &tr.world->fogs[tr.refdef.fogIndex]; 
-		if ( tr.refdef.vieworg[0] >= fog->bounds[0][0]
-			&& tr.refdef.vieworg[1] >= fog->bounds[0][1]
-			&& tr.refdef.vieworg[2] >= fog->bounds[0][2]
-			&& tr.refdef.vieworg[0] <= fog->bounds[1][0]
-			&& tr.refdef.vieworg[1] <= fog->bounds[1][1]
-			&& tr.refdef.vieworg[2] <= fog->bounds[1][2] ) 
+	if ( tr.world->numfogs > 1 )
+	{//more than just the LA goggles
+		fog_t *fog;
+		int contents = SV_PointContents( tr.refdef.vieworg, 0 );
+		if ( (contents&CONTENTS_FOG) )
+		{//only take a tr.refdef.fogIndex if the tr.refdef.vieworg is actually *in* that fog brush (assumption: checks pointcontents for any CONTENTS_FOG, not that particular brush...)
+			for ( tr.refdef.fogIndex = 1 ; tr.refdef.fogIndex < tr.world->numfogs ; tr.refdef.fogIndex++ ) 
+			{
+				fog = &tr.world->fogs[tr.refdef.fogIndex]; 
+				if ( tr.refdef.vieworg[0] >= fog->bounds[0][0]
+					&& tr.refdef.vieworg[1] >= fog->bounds[0][1]
+					&& tr.refdef.vieworg[2] >= fog->bounds[0][2]
+					&& tr.refdef.vieworg[0] <= fog->bounds[1][0]
+					&& tr.refdef.vieworg[1] <= fog->bounds[1][1]
+					&& tr.refdef.vieworg[2] <= fog->bounds[1][2] ) 
+				{
+					break;
+				}
+			}
+			if ( tr.refdef.fogIndex == tr.world->numfogs ) 
+			{
+				tr.refdef.fogIndex = 0;
+			}
+		}
+		else
 		{
-			break;
+			tr.refdef.fogIndex = 0;
 		}
 	}
-	if ( tr.refdef.fogIndex == tr.world->numfogs ) 
+	else
 	{
 		tr.refdef.fogIndex = 0;
 	}

@@ -5,8 +5,13 @@
 #include "g_local.h"
 #include "g_functions.h"
 
-int G_FindConfigstringIndex( const char *name, int start, int max, qboolean create );
+extern int	G_FindConfigstringIndex( const char *name, int start, int max, qboolean create );
+
 #define FX_ENT_RADIUS 32
+
+extern int	BMS_START;
+extern int	BMS_MID;
+extern int	BMS_END;
 
 //----------------------------------------------------------
 
@@ -24,7 +29,7 @@ Runs the specified effect, can also be targeted at an info_notnull to orient the
 	"random" - random amount of time to add to delay, ( default 0, 200 = 0ms to 200ms )
 	"splashRadius" - only works when damage is checked ( default 16 )
 	"splashDamage" - only works when damage is checked ( default 5 )
-
+	"soundset"	- bmodel set to use, plays start sound when toggled on, loop sound while on ( doesn't play on a oneshot), and a stop sound when turned off
 */
 #define FX_RUNNER_RESERVED 0x800000
 
@@ -55,6 +60,20 @@ void fx_runner_think( gentity_t *ent )
 		// let our target know that we have spawned an effect
 		G_UseTargets2( ent, ent, ent->target2 );
 	}
+
+	if ( !(ent->spawnflags & 2 ) && !ent->s.loopSound ) // NOT ONESHOT...this is an assy thing to do
+	{
+		if ( VALIDSTRING( ent->soundSet ) == true )
+		{
+			ent->s.loopSound = CAS_GetBModelSound( ent->soundSet, BMS_MID );
+
+			if ( ent->s.loopSound < 0 )
+			{
+				ent->s.loopSound = 0;
+			}
+		}
+	}
+
 }
 
 //----------------------------------------------------------
@@ -72,6 +91,11 @@ void fx_runner_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 			// let our target know that we have spawned an effect
 			G_UseTargets2( self, self, self->target2 );
 		}
+
+		if ( VALIDSTRING( self->soundSet ) == true )
+		{
+			G_AddEvent( self, EV_BMODEL_SOUND, CAS_GetBModelSound( self->soundSet, BMS_START ));
+		}
 	}
 	else
 	{
@@ -84,11 +108,28 @@ void fx_runner_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 			// NOTE: we fire the effect immediately on use, the fx_runner_think func will set
 			//	up the nextthink time.
 			fx_runner_think( self );
+
+			if ( VALIDSTRING( self->soundSet ) == true )
+			{
+				G_AddEvent( self, EV_BMODEL_SOUND, CAS_GetBModelSound( self->soundSet, BMS_START ));
+				self->s.loopSound = CAS_GetBModelSound( self->soundSet, BMS_MID );
+
+				if ( self->s.loopSound < 0 )
+				{
+					self->s.loopSound = 0;
+				}
+			}
 		}
 		else
 		{
 			// turn off for now
 			self->nextthink = -1;
+
+			if ( VALIDSTRING( self->soundSet ) == true )
+			{
+				G_AddEvent( self, EV_BMODEL_SOUND, CAS_GetBModelSound( self->soundSet, BMS_END ));
+				self->s.loopSound = 0;
+			}
 		}
 	}
 }
@@ -143,9 +184,25 @@ void fx_runner_link( gentity_t *ent )
 	}
 	else
 	{
+		if ( VALIDSTRING( ent->soundSet ) == true )
+		{
+			ent->s.loopSound = CAS_GetBModelSound( ent->soundSet, BMS_MID );
+
+			if ( ent->s.loopSound < 0 )
+			{
+				ent->s.loopSound = 0;
+			}
+		}
+
 		// Let's get to work right now!
 		ent->e_ThinkFunc = thinkF_fx_runner_think;
-		ent->nextthink = level.time + 100; // wait a small bit, then start working
+		ent->nextthink = level.time + 200; // wait a small bit, then start working
+	}
+
+	// make us useable if we can be targeted
+	if ( ent->targetname )
+	{
+		ent->e_UseFunc = useF_fx_runner_use;
 	}
 }
 
@@ -164,12 +221,6 @@ void SP_fx_runner( gentity_t *ent )
 		VectorSet( ent->s.angles, -90, 0, 0 );
 	}
 
-	// make us useable if we can be targeted
-	if ( ent->targetname )
-	{
-		ent->e_UseFunc = useF_fx_runner_use;
-	}
-
 	if ( !ent->fxFile )
 	{
 		gi.Printf( S_COLOR_RED"ERROR: fx_runner %s at %s has no fxFile specified\n", ent->targetname, vtos(ent->s.origin) );
@@ -181,9 +232,11 @@ void SP_fx_runner( gentity_t *ent )
 	//	until the CGAME trys to register it...
 	ent->fxID = G_EffectIndex( ent->fxFile );
 
+	ent->s.eType = ET_MOVER;
+
 	// Give us a bit of time to spawn in the other entities, since we may have to target one of 'em
 	ent->e_ThinkFunc = thinkF_fx_runner_link; 
-	ent->nextthink = level.time + 300;
+	ent->nextthink = level.time + 400;
 
 	// Save our position and link us up!
 	G_SetOrigin( ent, ent->s.origin );
@@ -207,11 +260,16 @@ void SP_CreateSnow( gentity_t *ent )
 
 	G_SpawnInt( "count", "1000", &ent->count );
 
-	sprintf( temp, "snow init %i", ent->count );
+	cvar_t *r_weatherScale = gi.cvar( "r_weatherScale", "1", CVAR_ARCHIVE );
 
-	G_FindConfigstringIndex( temp, CS_WORLD_FX, MAX_WORLD_FX, qtrue );
+	if ( r_weatherScale->value > 0.0f )
+	{
+		sprintf( temp, "snow init %i", (int)( ent->count * r_weatherScale->value ));
 
-	level.worldFlags |= WF_SNOWING;
+		G_FindConfigstringIndex( temp, CS_WORLD_FX, MAX_WORLD_FX, qtrue );
+
+		level.worldFlags |= WF_SNOWING;
+	}
 }
 
 /*QUAKED fx_rain (1 0 0) (-16 -16 -16) (16 16 16)
@@ -226,11 +284,16 @@ void SP_CreateRain( gentity_t *ent )
 
 	G_SpawnInt( "count", "500", &ent->count );
 
-	sprintf( temp, "rain init %i", ent->count );
+	cvar_t *r_weatherScale = gi.cvar( "r_weatherScale", "1", CVAR_ARCHIVE );
 
-	G_FindConfigstringIndex( temp, CS_WORLD_FX, MAX_WORLD_FX, qtrue );
+	if ( r_weatherScale->value > 0.0f )
+	{
+		sprintf( temp, "rain init %i", (int)( ent->count * r_weatherScale->value ));
 
-	level.worldFlags |= WF_RAINING;
+		G_FindConfigstringIndex( temp, CS_WORLD_FX, MAX_WORLD_FX, qtrue );
+
+		level.worldFlags |= WF_RAINING;
+	}
 }
 
 
@@ -275,6 +338,11 @@ void fx_explosion_trail_think( gentity_t *ent )
 			G_PlayEffect( ent->fullName, tr.endpos, tr.plane.normal );
 		}
 
+		if ( VALIDSTRING( ent->soundSet ) == true )
+		{
+			G_AddEvent( ent, EV_BMODEL_SOUND, CAS_GetBModelSound( ent->soundSet, BMS_END ));
+		}
+
 		G_FreeEntity( ent );
 		return;
 	}
@@ -301,7 +369,7 @@ void fx_explosion_trail_use( gentity_t *self, gentity_t *other, gentity_t *activ
 		missile->nextthink = level.time + 50;
 		missile->e_ThinkFunc = thinkF_fx_explosion_trail_think;
 
-		missile->s.eType = ET_GENERAL;
+		missile->s.eType = ET_MOVER;
 
 		missile->owner = self;
 
@@ -333,6 +401,18 @@ void fx_explosion_trail_use( gentity_t *self, gentity_t *other, gentity_t *activ
 		missile->clipmask = MASK_SHOT;
 
 		gi.linkentity( missile );
+
+		if ( VALIDSTRING( self->soundSet ) == true )
+		{
+			G_AddEvent( self, EV_BMODEL_SOUND, CAS_GetBModelSound( self->soundSet, BMS_START ));
+			missile->s.loopSound = CAS_GetBModelSound( self->soundSet, BMS_MID );
+			missile->soundSet = self->soundSet;
+
+			if ( missile->s.loopSound < 0 )
+			{
+				missile->s.loopSound = 0;
+			}
+		}
 	}
 }
 
@@ -341,6 +421,9 @@ void fx_explosion_trail_link( gentity_t *ent )
 {
 	vec3_t		dir;
 	gentity_t	*target = NULL;
+
+	// we ony activate when used
+	ent->e_UseFunc = useF_fx_explosion_trail_use;
 
 	if ( ent->target )
 	{
@@ -387,6 +470,7 @@ Can also be used for something like a meteor, just add an impact effect ( fxFile
   "damage" - radius damage ( default 128 )
   "splashDamage" - damage when thing impacts ( default 0 )
   "splashRadius" - damage radius on impact ( default 0 )
+  "soundset" - soundset to use, start sound plays when explosion trail starts, loop sound plays on explosion trail, end sound plays when it impacts
 
 */
 //----------------------------------------------------------
@@ -421,10 +505,7 @@ void SP_fx_explosion_trail( gentity_t *ent )
 
 	// Give us a bit of time to spawn in the other entities, since we may have to target one of 'em
 	ent->e_ThinkFunc = thinkF_fx_explosion_trail_link; 
-	ent->nextthink = level.time + 200;
-
-	// we ony activate when used
-	ent->e_UseFunc = useF_fx_explosion_trail_use;
+	ent->nextthink = level.time + 500;
 
 	// Save our position and link us up!
 	G_SetOrigin( ent, ent->s.origin );

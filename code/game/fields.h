@@ -59,6 +59,7 @@ typedef enum
 	F_DIE_F,
 	F_RESPAWN_F,
 */
+	F_GROUP,
 	F_IGNORE
 } fieldtypeSAVE_t;
 

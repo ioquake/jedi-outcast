@@ -826,8 +826,12 @@ void SP_target_scriptrunner( gentity_t *self )
 		self->wait = 1;//default wait of 1 sec
 	}
 	*/
+	// FIXME: this is a hack... because delay is read in as an int, so I'm bypassing that because it's too late in the project to change it and I want to be able to set less than a second delays
+	// no one should be setting a radius on a scriptrunner, if they are this would be bad, take this out for the next project
+	self->radius = 0.0f;
+	G_SpawnFloat( "delay", "0", &self->radius );
+	self->delay = self->radius * 1000;//sec to ms
 	self->wait *= 1000;//sec to ms
-	self->delay *= 1000;//sec to ms
 
 	G_SetOrigin( self, self->s.origin );
 	self->e_UseFunc = useF_target_scriptrunner_use;
@@ -1022,8 +1026,11 @@ extern	cvar_t	*com_buildScript;
 void target_autosave_use(gentity_t *self, gentity_t *other, gentity_t *activator)
 {
 	G_ActivateBehavior(self,BSET_USE);
+	//gi.SendServerCommand( NULL, "cp @INGAME_CHECKPOINT" );
+	CG_CenterPrint( "@INGAME_CHECKPOINT", SCREEN_HEIGHT * 0.25 );	//jump the network
+
 //	if (self->spawnflags & 1)
-		gi.SendConsoleCommand( "save auto*\n" );
+		gi.SendConsoleCommand( "wait 2;save auto*\n" );
 }
 
 /*QUAKED target_autosave (1 0 0) (-4 -4 -4) (4 4 4)
@@ -1041,22 +1048,30 @@ void target_secret_use(gentity_t *self, gentity_t *other, gentity_t *activator)
 	//we'll assume that the activator is the player
 	gclient_t* const client = &level.clients[0];
 	client->sess.missionStats.secretsFound++;
-	G_Sound( self, self->noise_index );
-	gi.SendServerCommand( NULL, "cp \"Secret Area!\"" );
+	if ( activator )
+	{
+		G_Sound( activator, self->noise_index );
+	}
+	else
+	{
+		G_Sound( self, self->noise_index );
+	}
+	gi.SendServerCommand( NULL, "cp @INGAME_SECRET_AREA" );
+	assert(client->sess.missionStats.totalSecrets);
 }
 
 /*QUAKED target_secret (1 0 1) (-4 -4 -4) (4 4 4)
 You found a Secret!
-"count" - how many secrets on this level
+"count" - how many secrets on this level,
+          if more than one on a level, be sure they all have the same count!
 */
 void SP_target_secret( gentity_t *self ) 
 {
 	G_SetOrigin( self, self->s.origin );
 	self->e_UseFunc = useF_target_secret_use;
-	self->noise_index = G_SoundIndex("sound/movers/switches/switch4");
+	self->noise_index = G_SoundIndex("sound/interface/secret_area");
 	if (self->count)
 	{
-		gclient_t* const client = &level.clients[0];
-		client->sess.missionStats.totalSecrets = self->count;
+		gi.cvar_set("newTotalSecrets", va("%i",self->count));
 	}
 }

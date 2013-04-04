@@ -248,10 +248,11 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 
 			const int iNumWeights = G2_GetVertWeights( v );
 
+			float fTotalWeight = 0.0f;
 			for ( k = 0 ; k < iNumWeights ; k++ ) 
 			{
 				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
-				float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k, fTotalWeight, iNumWeights );
 
 				const mdxaBone_t &bone=EvalBoneCache(piBoneReferences[iBoneIndex],boneCache);
 
@@ -290,10 +291,11 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 
 			const int iNumWeights = G2_GetVertWeights( v );
 
+			float fTotalWeight = 0.0f;
 			for ( k = 0 ; k < iNumWeights ; k++ ) 
 			{
 				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
-				float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k, fTotalWeight, iNumWeights );
 
 				const mdxaBone_t &bone=EvalBoneCache(piBoneReferences[iBoneIndex],boneCache);
 

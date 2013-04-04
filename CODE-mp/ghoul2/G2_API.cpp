@@ -15,8 +15,56 @@
 #endif
 #include "G2_local.h"
 
+#include <set>
+
 extern mdxaBone_t		worldMatrix;
 extern mdxaBone_t		worldMatrixInv;
+
+set<CGhoul2Info_v *>	OkLetsFixTheLeaksTheEasyWay[2];
+
+bool RicksCrazyOnServer=true;
+
+void FixGhoul2InfoLeaks(bool clearClient,bool clearServer)
+{
+	if (clearClient&&OkLetsFixTheLeaksTheEasyWay[0].size())
+	{
+#if _DEBUG
+		OutputDebugString(va("Fixing Ghoul2 Client Leaks %d leaked.\n",OkLetsFixTheLeaksTheEasyWay[0].size()));
+#endif
+		set<CGhoul2Info_v *>::iterator i;
+		for (i=OkLetsFixTheLeaksTheEasyWay[0].begin();i!=OkLetsFixTheLeaksTheEasyWay[0].end();i++)
+		{
+			delete *i;
+		}
+		OkLetsFixTheLeaksTheEasyWay[0].clear();
+	}
+
+	if (clearServer&&OkLetsFixTheLeaksTheEasyWay[1].size())
+	{
+#if _DEBUG
+		OutputDebugString(va("Fixing Ghoul2 Server Leaks %d leaked.\n",OkLetsFixTheLeaksTheEasyWay[1].size()));
+#endif
+		set<CGhoul2Info_v *>::iterator i;
+		for (i=OkLetsFixTheLeaksTheEasyWay[1].begin();i!=OkLetsFixTheLeaksTheEasyWay[1].end();i++)
+		{
+			delete *i;
+		}
+		OkLetsFixTheLeaksTheEasyWay[1].clear();
+	}
+}
+
+
+class EasyCleaner
+{
+public:
+	~EasyCleaner()
+	{
+		FixGhoul2InfoLeaks(true,true);
+	}
+};
+
+static EasyCleaner TheEasyCleaner;
+
 
 // this is the ONLY function to read entity states directly
 void G2API_CleanGhoul2Models(CGhoul2Info_v **ghoul2Ptr)
@@ -24,7 +72,16 @@ void G2API_CleanGhoul2Models(CGhoul2Info_v **ghoul2Ptr)
 
 	if (*ghoul2Ptr)
 	{
-		delete *ghoul2Ptr;
+		if (OkLetsFixTheLeaksTheEasyWay[0].find(*ghoul2Ptr)!=OkLetsFixTheLeaksTheEasyWay[0].end())
+		{
+			OkLetsFixTheLeaksTheEasyWay[0].erase(*ghoul2Ptr);
+			delete *ghoul2Ptr;
+		}
+		else if (OkLetsFixTheLeaksTheEasyWay[1].find(*ghoul2Ptr)!=OkLetsFixTheLeaksTheEasyWay[1].end())
+		{
+			OkLetsFixTheLeaksTheEasyWay[1].erase(*ghoul2Ptr);
+			delete *ghoul2Ptr;
+		}
 		*ghoul2Ptr = NULL;
 	}	
 }
@@ -54,6 +111,14 @@ int G2API_InitGhoul2Model(CGhoul2Info_v **ghoul2Ptr, const char *fileName, int m
 	if (!(*ghoul2Ptr))
 	{
 		*ghoul2Ptr = new CGhoul2Info_v;
+		if (RicksCrazyOnServer)
+		{
+			OkLetsFixTheLeaksTheEasyWay[1].insert(*ghoul2Ptr);
+		}
+		else
+		{
+			OkLetsFixTheLeaksTheEasyWay[0].insert(*ghoul2Ptr);
+		}
 	}
 
 	CGhoul2Info_v &ghoul2 = *(*ghoul2Ptr);
@@ -107,6 +172,7 @@ int G2API_InitGhoul2Model(CGhoul2Info_v **ghoul2Ptr, const char *fileName, int m
 	{
 		if (ghoul2.size() == 0)//very first model created
 		{//you can't have an empty vector, so let's not give it one
+			G2API_CleanGhoul2Models(ghoul2Ptr);
 			delete *ghoul2Ptr;
 			*ghoul2Ptr = 0;
 		}
@@ -305,8 +371,41 @@ qboolean G2API_RemoveGhoul2Model(CGhoul2Info_v **ghlRemove, const int modelIndex
 	return qtrue;
 }
 
-qboolean G2API_SetBoneAnimIndex(CGhoul2Info *ghlInfo, const int index, const int startFrame, const int endFrame, const int flags, const float animSpeed, const int currentTime, const float setFrame, const int blendTime)
+qboolean G2API_SetBoneAnimIndex(CGhoul2Info *ghlInfo, const int index, const int AstartFrame, const int AendFrame, const int flags, const float animSpeed, const int currentTime, const float AsetFrame, const int blendTime)
 {
+	int endFrame=AendFrame;
+	int startFrame=AstartFrame;
+	float setFrame=AsetFrame;
+	assert(endFrame>0);
+	assert(startFrame>=0);
+	assert(endFrame<100000);
+	assert(startFrame<100000);
+	assert(setFrame>=0.0f||setFrame==-1.0f);
+	assert(setFrame<=100000.0f);
+	if (endFrame<=0)
+	{
+		endFrame=1;
+	}
+	if (endFrame>=100000)
+	{
+		endFrame=1;
+	}
+	if (startFrame<0)
+	{
+		startFrame=0;
+	}
+	if (startFrame>=100000)
+	{
+		startFrame=0;
+	}
+	if (setFrame<0.0f&&setFrame!=-1.0f)
+	{
+		setFrame=0.0f;
+	}
+	if (setFrame>100000.0f)
+	{
+		setFrame=0.0f;
+	}
 	if (ghlInfo)
 	{
 		// ensure we flush the cache
@@ -316,8 +415,41 @@ qboolean G2API_SetBoneAnimIndex(CGhoul2Info *ghlInfo, const int index, const int
 	return qfalse;
 }
 
-qboolean G2API_SetBoneAnim(CGhoul2Info_v &ghoul2, const int modelIndex, const char *boneName, const int startFrame, const int endFrame, const int flags, const float animSpeed, const int currentTime, const float setFrame, const int blendTime)
+qboolean G2API_SetBoneAnim(CGhoul2Info_v &ghoul2, const int modelIndex, const char *boneName, const int AstartFrame, const int AendFrame, const int flags, const float animSpeed, const int currentTime, const float AsetFrame, const int blendTime)
 {
+	int endFrame=AendFrame;
+	int startFrame=AstartFrame;
+	float setFrame=AsetFrame;
+	assert(endFrame>0);
+	assert(startFrame>=0);
+	assert(endFrame<100000);
+	assert(startFrame<100000);
+	assert(setFrame>=0.0f||setFrame==-1.0f);
+	assert(setFrame<=100000.0f);
+	if (endFrame<=0)
+	{
+		endFrame=1;
+	}
+	if (endFrame>=100000)
+	{
+		endFrame=1;
+	}
+	if (startFrame<0)
+	{
+		startFrame=0;
+	}
+	if (startFrame>=100000)
+	{
+		startFrame=0;
+	}
+	if (setFrame<0.0f&&setFrame!=-1.0f)
+	{
+		setFrame=0.0f;
+	}
+	if (setFrame>100000.0f)
+	{
+		setFrame=0.0f;
+	}
 	if ((int)&ghoul2 && ghoul2.size()>modelIndex)
 	{
 		CGhoul2Info *ghlInfo = &ghoul2[modelIndex];
@@ -334,19 +466,76 @@ qboolean G2API_SetBoneAnim(CGhoul2Info_v &ghoul2, const int modelIndex, const ch
 qboolean G2API_GetBoneAnim(CGhoul2Info *ghlInfo, const char *boneName, const int currentTime, float *currentFrame,
 						   int *startFrame, int *endFrame, int *flags, float *animSpeed, int *modelList)
 {
+	assert(startFrame!=endFrame); //this is bad
+	assert(startFrame!=flags); //this is bad
+	assert(endFrame!=flags); //this is bad
+	assert(currentFrame!=animSpeed); //this is bad
 	if (ghlInfo)
 	{
- 		return G2_Get_Bone_Anim(ghlInfo->mFileName, ghlInfo->mBlist, boneName, currentTime, currentFrame,
+ 		qboolean ret=G2_Get_Bone_Anim(ghlInfo->mFileName, ghlInfo->mBlist, boneName, currentTime, currentFrame,
 			startFrame, endFrame, flags, animSpeed, modelList, ghlInfo->mModelindex);
+		assert(*endFrame>0);
+		assert(*endFrame<100000);
+		assert(*startFrame>=0);
+		assert(*startFrame<100000);
+		assert(*currentFrame>=0.0f);
+		assert(*currentFrame<100000.0f);
+		if (*endFrame<1)
+		{
+			*endFrame=1;
+		}
+		if (*endFrame>100000)
+		{
+			*endFrame=1;
+		}
+		if (*startFrame<0)
+		{
+			*startFrame=0;
+		}
+		if (*startFrame>100000)
+		{
+			*startFrame=1;
+		}
+		if (*currentFrame<0.0f)
+		{
+			*currentFrame=0.0f;
+		}
+		if (*currentFrame>100000)
+		{
+			*currentFrame=1;
+		}
+		return ret;
 	}
 	return qfalse;
 }
 
 qboolean G2API_GetAnimRange(CGhoul2Info *ghlInfo, const char *boneName,	int *startFrame, int *endFrame)
 {
+	assert(startFrame!=endFrame); //this is bad
 	if (ghlInfo)
 	{
- 		return G2_Get_Bone_Anim_Range(ghlInfo->mFileName, ghlInfo->mBlist, boneName, startFrame, endFrame);
+ 		qboolean ret=G2_Get_Bone_Anim_Range(ghlInfo->mFileName, ghlInfo->mBlist, boneName, startFrame, endFrame);
+		assert(*endFrame>0);
+		assert(*endFrame<100000);
+		assert(*startFrame>=0);
+		assert(*startFrame<100000);
+		if (*endFrame<1)
+		{
+			*endFrame=1;
+		}
+		if (*endFrame>100000)
+		{
+			*endFrame=1;
+		}
+		if (*startFrame<0)
+		{
+			*startFrame=0;
+		}
+		if (*startFrame>100000)
+		{
+			*startFrame=1;
+		}
+		return ret;
 	}
 	return qfalse;
 }
@@ -697,7 +886,7 @@ qboolean G2API_HaveWeGhoul2Models(CGhoul2Info_v &ghoul2)
 void G2API_SetGhoul2ModelIndexes(CGhoul2Info_v &ghoul2, qhandle_t *modelList, qhandle_t *skinList)
 {
 	return;
-
+#if 0
 	int i;
 	if ((int)&ghoul2)
 	{
@@ -715,6 +904,7 @@ void G2API_SetGhoul2ModelIndexes(CGhoul2Info_v &ghoul2, qhandle_t *modelList, qh
 			}
 		}
 	}
+#endif
 }
 
 
@@ -961,6 +1151,14 @@ void G2API_DuplicateGhoul2Instance(CGhoul2Info_v &g2From, CGhoul2Info_v **g2To)
 	}
 
 	*g2To = new CGhoul2Info_v;
+	if (RicksCrazyOnServer)
+	{
+		OkLetsFixTheLeaksTheEasyWay[1].insert(*g2To);
+	}
+	else
+	{
+		OkLetsFixTheLeaksTheEasyWay[0].insert(*g2To);
+	}
 	CGhoul2Info_v &ghoul2 = *(*g2To);
 
 	ignore = G2API_CopyGhoul2Instance(g2From, ghoul2, -1);

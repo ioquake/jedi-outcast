@@ -32,6 +32,7 @@ vec3_t	vfwd_n;
 vec3_t	vright_n;
 vec3_t	vup_n;
 int		infoStringCount;
+
 //===============================================================
 
 
@@ -262,21 +263,37 @@ static void CG_DrawForcePower(centity_t *cent,int x,int y)
 {
 	int			i;
 	vec4_t		calcColor;
-	float		value,inc,percent;
+	float		value,extra=0,inc,percent;
 
+	if ( !cent->gent->client->ps.forcePowersKnown )
+	{
+		return;
+	}
 	inc = (float)  cent->gent->client->ps.forcePowerMax / MAX_TICS;
 	value = cent->gent->client->ps.forcePower;
+	if ( value > cent->gent->client->ps.forcePowerMax )
+	{//supercharged with force
+		extra = value - cent->gent->client->ps.forcePowerMax;
+		value = cent->gent->client->ps.forcePowerMax;
+	}
 
 	for (i=MAX_TICS-1;i>=0;i--)
 	{
-
-		if (value <= 0)	// partial tic
+		if ( extra )
+		{//supercharged
+			memcpy(calcColor, colorTable[CT_WHITE], sizeof(vec4_t));
+			percent = 0.75f + (sin( cg.time * 0.005f )*((extra/cent->gent->client->ps.forcePowerMax)*0.25f));
+			calcColor[0] *= percent;
+			calcColor[1] *= percent;
+			calcColor[2] *= percent;
+		}
+		else if ( value <= 0 )	// partial tic
 		{
 			memcpy(calcColor, colorTable[CT_BLACK], sizeof(vec4_t));
 		}
 		else if (value < inc)	// partial tic
 		{
-			memcpy(calcColor, colorTable[CT_WHITE], sizeof(vec4_t));
+			memcpy(calcColor, colorTable[CT_LTGREY], sizeof(vec4_t));
 			percent = value / inc;
 			calcColor[0] *= percent;
 			calcColor[1] *= percent;
@@ -284,7 +301,7 @@ static void CG_DrawForcePower(centity_t *cent,int x,int y)
 		}
 		else
 		{
-			memcpy(calcColor, colorTable[CT_WHITE], sizeof(vec4_t));
+			memcpy(calcColor, colorTable[CT_LTGREY], sizeof(vec4_t));
 		}
 
 		cgi_R_SetColor( calcColor);
@@ -327,17 +344,23 @@ static void CG_DrawAmmo(centity_t	*cent,int x,int y)
 	{
 		cgi_R_SetColor( colorTable[CT_WHITE] );
 
+		if ( !cg.saberAnimLevelPending && cent->gent->client )
+		{//uninitialized after a loadgame, cheat across and get it
+			cg.saberAnimLevelPending = cent->gent->client->ps.saberAnimLevel;
+		}
 		// don't need to draw ammo, but we will draw the current saber style in this window
 		switch ( cg.saberAnimLevelPending )
 		{
 		case 1://FORCE_LEVEL_1:
-			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyle1 );
+		case 5://FORCE_LEVEL_5://Tavion
+			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyleFast );
 			break;
 		case 2://FORCE_LEVEL_2:
-			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyle2 );
+			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyleMed );
 			break;
 		case 3://FORCE_LEVEL_3:
-			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyle3 );
+		case 4://FORCE_LEVEL_4://Desann
+			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyleStrong );
 			break;
 		}
 		return;
@@ -585,7 +608,16 @@ static qboolean CG_DrawCustomHealthHud( centity_t *cent )
 		// NOTE: this looks ugly
 		if ( cent->gent && cent->gent->owner )
 		{
-			health = cent->gent->owner->health / (float)cent->gent->owner->max_health;
+			if (( cent->gent->owner->flags & FL_GODMODE ))
+			{
+				// chair is in godmode, so render the health of the player instead
+				health = cent->gent->health / (float)cent->gent->max_health;
+			}
+			else
+			{
+				// render the chair health
+				health = cent->gent->owner->health / (float)cent->gent->owner->max_health;
+			}
 		}
 
 		color[0] = 1.0f;
@@ -736,6 +768,25 @@ static void CG_DrawHUD( centity_t *cent )
 		CG_DrawHUDRightFrame2(x,y);
 	}
 }
+
+/*
+================
+CG_ClearDataPadCvars
+================
+*/
+void CG_ClearDataPadCvars( void )
+{
+	cg_updatedDataPadForcePower1.integer = 0; //don't wait for the cvar-refresh.
+	cg_updatedDataPadForcePower2.integer = 0; //don't wait for the cvar-refresh.
+	cg_updatedDataPadForcePower3.integer = 0; //don't wait for the cvar-refresh.
+	cgi_Cvar_Set( "cg_updatedDataPadForcePower1", "0" );
+	cgi_Cvar_Set( "cg_updatedDataPadForcePower2", "0" );
+	cgi_Cvar_Set( "cg_updatedDataPadForcePower3", "0" );
+
+	cg_updatedDataPadObjective.integer = 0; //don't wait for the cvar-refresh.
+	cgi_Cvar_Set( "cg_updatedDataPadObjective", "0" );
+}
+
 /*
 ================
 CG_DrawDataPadHUD
@@ -754,7 +805,7 @@ void CG_DrawDataPadHUD( centity_t *cent )
 
 	x = 526;
 
-	if ((cg_updatedDataPadForcePower.integer) || (cg_updatedDataPadObjective.integer))
+	if ((missionInfo_Updated) && ((cg_updatedDataPadForcePower1.integer) || (cg_updatedDataPadObjective.integer)))
 	{
 		// Stop flashing light
 		cg.missionInfoFlashTime = 0;
@@ -763,21 +814,19 @@ void CG_DrawDataPadHUD( centity_t *cent )
 		// Set which force power to show.
 		// cg_updatedDataPadForcePower is set from Q3_Interface, because force powers would only be given 
 		// from a script.
-		cg.DataPadforcepowerSelect = cg_updatedDataPadForcePower.integer - 1; // Not pretty, I know
-		if (cg.DataPadforcepowerSelect > MAX_SHOWPOWERS)
-		{	//duh
-			cg.DataPadforcepowerSelect = MAX_SHOWPOWERS;
-		}
-		else if (cg.DataPadforcepowerSelect<0)
+		if (cg_updatedDataPadForcePower1.integer)
 		{
-			cg.DataPadforcepowerSelect=0;
+			cg.DataPadforcepowerSelect = cg_updatedDataPadForcePower1.integer - 1; // Not pretty, I know
+			if (cg.DataPadforcepowerSelect >= MAX_DPSHOWPOWERS)
+			{	//duh
+				cg.DataPadforcepowerSelect = MAX_DPSHOWPOWERS-1;
+			}
+			else if (cg.DataPadforcepowerSelect<0)
+			{
+				cg.DataPadforcepowerSelect=0;
+			}
 		}
-
-		cgi_Cvar_Set( "cg_updatedDataPadForcePower", "0" );
-		cg_updatedDataPadForcePower.integer = 0; //don't wait for the cvar-refresh.
-
-		cgi_Cvar_Set( "cg_updatedDataPadObjective", "0" );
-		cg_updatedDataPadObjective.integer = 0; //don't wait for the cvar-refresh.
+//		CG_ClearDataPadCvars();
 	}
 
 	CG_DrawHUDRightFrame1(x,y);
@@ -1046,7 +1095,7 @@ static void CG_DrawZoomMask( void )
 			cgi_R_SetColor( colorTable[CT_WHITE] );
 
 			// draw the charge level
-			max = ( cg.time - cg_entities[0].gent->client->ps.weaponChargeTime ) / ( 50.0f * 30.0f ); // bad hardcodedness 50 is disruptor charge unit and 30 is max charge units allowed.
+			max = ( cg.time - cg_entities[0].gent->client->ps.weaponChargeTime ) / ( 150.0f * 10.0f ); // bad hardcodedness 150 is disruptor charge unit and 10 is max charge units allowed.
 
 			if ( max > 1.0f )
 			{
@@ -1071,6 +1120,12 @@ static void CG_DrawZoomMask( void )
 			CG_DrawPic( 570, 140, 12, 160, cgs.media.laGogglesSideBit );
 			
 			float light = (128-cent->gent->lightLevel) * 0.5f;
+
+			if ( light < -81 ) // saber can really jack up local light levels....?magic number??
+			{
+				light = -81;
+			}
+
 			float pos1 = 220 + light;
 			float pos2 = 220 + cos( cg.time * 0.0004f + light * 0.05f ) * 40 + sin( cg.time * 0.0013f + 1 ) * 20 + sin( cg.time * 0.0021f ) * 5;
 
@@ -1087,7 +1142,7 @@ static void CG_DrawZoomMask( void )
 
 		// Black out the area behind the battery display
 		cgi_R_SetColor( colorTable[CT_DKGREY]);
-		CG_DrawPic( 236, 357, 163, 16, cgs.media.whiteShader );
+		CG_DrawPic( 236, 357, 164, 16, cgs.media.whiteShader );
 
 		if ( power )
 		{
@@ -1154,7 +1209,7 @@ static void CG_DrawStats( void )
 		drawHud = CG_DrawCustomHealthHud( cent );
 	}
 
-	if ( drawHud )
+	if (( drawHud ) && ( cg_drawHUD.integer ))
 	{
 		CG_DrawHUD( cent );	
 	}
@@ -1173,22 +1228,23 @@ static void CG_DrawPickupItem( void ) {
 	float	*fadeColor;
 
 	value = cg.itemPickup;
-	if ( value ) {
+	if ( value && cg_items[ value ].icon != -1 ) 
+	{
 		fadeColor = CG_FadeColor( cg.itemPickupTime, 3000 );
-		if ( fadeColor ) {
+		if ( fadeColor ) 
+		{
 			CG_RegisterItemVisuals( value );
-//			cgi_R_SetColor( fadeColor );
-//			CG_DrawPic( 8, 380, ICON_SIZE, ICON_SIZE, cg_items[ value ].icon );
-//			CG_DrawBigString( ICON_SIZE + 16, 398, bg_itemlist[ value ].pickup_name, fadeColor[0] );
-//			CG_DrawProportionalString( ICON_SIZE + 16, 398, 
-//				bg_itemlist[ value ].pickup_name, CG_SMALLFONT,fadeColor );
-//			cgi_R_SetColor( NULL );
+			cgi_R_SetColor( fadeColor );
+			CG_DrawPic( 573, 340, ICON_SIZE, ICON_SIZE, cg_items[ value ].icon );
+			//CG_DrawBigString( ICON_SIZE + 16, 398, bg_itemlist[ value ].classname, fadeColor[0] );
+			//CG_DrawProportionalString( ICON_SIZE + 16, 398, 
+			//	bg_itemlist[ value ].classname, CG_SMALLFONT,fadeColor );
+			cgi_R_SetColor( NULL );
 		}
 	}
 }
 
-int cgi_EndGame(void);
-void CMD_CGCam_Disable( void );
+extern int cgi_EndGame(void);
 
 /*
 ===================
@@ -1199,25 +1255,23 @@ void CG_DrawCredits(void)
 {
 	if (!cg.creditsStart)
 	{
+		//
 		cg.creditsStart = qtrue;
-		cgi_SP_Register("CREDITS", qfalse);	//do not keep around after level
-		CG_ScrollText( "CREDITS_RAVEN", SCREEN_WIDTH - 16 ) ;
-		extern vec4_t textcolor_scroll;
-		memcpy(textcolor_scroll,colorTable[CT_LTGOLD1], sizeof(textcolor_scroll));
+		cgi_SP_Register("CREDITS", qfalse);	// do not keep around after level
+		CG_Credits_Init("CREDITS_RAVEN", &colorTable[CT_ICON_BLUE]);
+		if ( cg_skippingcin.integer )
+		{//Were skipping a cinematic and it's over now
+			gi.cvar_set("timescale", "1");
+			gi.cvar_set("skippingCinematic", "0");
+		}
 	}
 
-	
-/*	const char *psTempString = "JEDI KNIGHT II   CREDITS";
-	int w = cgi_R_Font_StrLenPixels(psTempString, cgs.media.qhFontMedium, 1.0f);	
-	cgi_R_Font_DrawString(320 - w/2, 240, psTempString, colorTable[CT_LTGOLD1], cgs.media.qhFontMedium, -1, 1.0f);
-*/
 
 	if (cg.creditsStart)
 	{
-		if ( !cg.scrollTextTime ) 
+		if ( !CG_Credits_Running() ) 
 		{
 			cgi_Cvar_Set( "cg_endcredits", "0" );
-			CMD_CGCam_Disable();
 			cgi_EndGame();
 		}
 	}
@@ -1264,20 +1318,10 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 	}
 	else if ( cg_forceCrosshair && cg_crosshairForceHint.integer )
 	{
-		if ( cg_crosshairForceHint.integer == 1 )
-		{
-			// force-affectable targets are blue..do subtle for level 1 hint
-			ecolor[0] = 0.4f;
-			ecolor[1] = 0.7f;
-			ecolor[2] = 1.0f;
-		}
-		else
-		{
-			// level 2 hint or higher, make it more obvious blue
-			ecolor[0] = 0.2f;
-			ecolor[1] = 0.5f;
-			ecolor[2] = 1.0f;
-		}
+		ecolor[0] = 0.2f;
+		ecolor[1] = 0.5f;
+		ecolor[2] = 1.0f;
+
 		corona = qtrue;
 	}
 	else if ( cg_crosshairIdentifyTarget.integer )
@@ -1365,11 +1409,11 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 		// both of these calcs will fade the corona in one direction
 		if ( cg.forceCrosshairEndTime )
 		{
-			ecolor[3] = (cg.time - cg.forceCrosshairEndTime) / 1000.0f;
+			ecolor[3] = (cg.time - cg.forceCrosshairEndTime) / 500.0f;
 		}
 		else
 		{
-			ecolor[3] = (cg.time - cg.forceCrosshairStartTime) / 1000.0f;
+			ecolor[3] = (cg.time - cg.forceCrosshairStartTime) / 300.0f;
 		}
 
 		// clamp 
@@ -1400,7 +1444,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 		if ( cg.forceCrosshairEndTime )
 		{
 			// must have just gone over a force thing again...and we were in the process of fading out.  Set fade in level to the level where the fade left off
-			cg.forceCrosshairStartTime = cg.time - ( 1.0f - ecolor[3] ) * 1000.0f;
+			cg.forceCrosshairStartTime = cg.time - ( 1.0f - ecolor[3] ) * 300.0f;
 			cg.forceCrosshairEndTime = 0;
 		}
 	}
@@ -1409,9 +1453,9 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 		if ( cg.forceCrosshairStartTime && !cg.forceCrosshairEndTime ) // were currently fading in
 		{
 			// must fade back out, but we will have to set the fadeout time to be equal to the current level of faded-in-edness
-			cg.forceCrosshairEndTime = cg.time - ecolor[3] * 1000.0f;
+			cg.forceCrosshairEndTime = cg.time - ecolor[3] * 500.0f;
 		}
-		if ( cg.forceCrosshairEndTime && cg.time - cg.forceCrosshairEndTime > 1000.0f ) // not pointing at anything and fade out is totally done
+		if ( cg.forceCrosshairEndTime && cg.time - cg.forceCrosshairEndTime > 500.0f ) // not pointing at anything and fade out is totally done
 		{
 			// reset everything
 			cg.forceCrosshairStartTime = 0;
@@ -1464,15 +1508,15 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 			w, h, 0, 0, 1, 1, hShader );	
 	}
 
-	if ( cg.forceCrosshairStartTime && cg_crosshairForceHint.integer > 1 ) // drawing extra bits
+	if ( cg.forceCrosshairStartTime && cg_crosshairForceHint.integer ) // drawing extra bits
 	{
-		ecolor[0] = ecolor[1] = ecolor[2] = 1.0f;
-		ecolor[3] = (1 - ecolor[3]) * ( sin( cg.time * 0.001f ) * 0.05f + 0.2f );
+		ecolor[0] = ecolor[1] = ecolor[2] = (1 - ecolor[3]) * ( sin( cg.time * 0.001f ) * 0.08f + 0.35f ); // don't draw full color
+		ecolor[3] = 1.0f;
 
 		cgi_R_SetColor( ecolor );
 
-		w *= 2.5f;
-		h *= 1.6f;
+		w *= 2.0f;
+		h *= 2.0f;
 
 		cgi_R_DrawStretchPic( x + cg.refdef.x + 0.5f * ( 640 - w ), y + cg.refdef.y + 0.5f * ( 480 - h ), 
 								w, h, 
@@ -1539,7 +1583,8 @@ static void CG_ScanForRocketLock( void )
 
 	traceEnt = &g_entities[g_crosshairEntNum];
 
-	if ( !traceEnt || g_crosshairEntNum <= 0 || g_crosshairEntNum >= ENTITYNUM_WORLD || (!traceEnt->client && traceEnt->s.weapon != WP_TURRET ) || !traceEnt->health )
+	if ( !traceEnt || g_crosshairEntNum <= 0 || g_crosshairEntNum >= ENTITYNUM_WORLD || (!traceEnt->client && traceEnt->s.weapon != WP_TURRET ) || !traceEnt->health 
+			|| ( traceEnt && traceEnt->client && traceEnt->client->ps.powerups[PW_CLOAKED] ))
 	{
 		// see how much locking we have
 		int dif = ( cg.time - g_rocketLockTime ) / ( 1200.0f / 8.0f );
@@ -1765,6 +1810,14 @@ static void CG_ScanForCrosshairEntity( qboolean scanAll )
 			cg.snap->ps.clientNum, MASK_PLAYERSOLID|CONTENTS_CORPSE|CONTENTS_ITEM );
 		*/
 		//FIXME: pick up corpses
+		if ( trace.startsolid || trace.allsolid )
+		{
+			// trace should not be allowed to pick up anything if it started solid.  I tried actually moving the trace start back, which also worked, 
+			//	but the dynamic cursor drawing caused it to render around the clip of the gun when I pushed the blaster all the way into a wall.
+			//	It looked quite horrible...but, if this is bad for some reason that I don't know
+			trace.entityNum = ENTITYNUM_NONE;
+		}
+
 		traceEnt = &g_entities[trace.entityNum];
 	}
 	
@@ -2184,7 +2237,7 @@ extern void CG_SaberClashFlare( void );
 static void CG_Draw2D( void ) 
 {
 	char	text[1024]={0};
-	int		w;
+	int		w,y_pos;
 	centity_t *cent;
 
 	cent = &cg_entities[cg.snap->ps.clientNum];
@@ -2206,6 +2259,14 @@ static void CG_Draw2D( void )
 		return;
 	}
 
+	if (cg_endcredits.integer)
+	{
+		if (!CG_Credits_Draw())
+		{
+			CG_DrawCredits();	// will probably get rid of this soon
+		}
+	}
+
 	CGCam_DrawWideScreen();
 
 	CG_DrawBatteryCharge();
@@ -2217,19 +2278,14 @@ static void CG_Draw2D( void )
 	}
 
 	CG_DrawScrollText();
-
-	CG_DrawCaptionText();
- 
+	CG_DrawCaptionText(); 
 	CG_DrawGameText();
 
-	if (cg_endcredits.integer)
-	{
-		CG_DrawCredits();
+	if ( in_camera )
+	{//still draw the saber clash flare, but nothing else
+		CG_SaberClashFlare();
 		return;
 	}
-
-	if ( in_camera )
-		return;
 
 	if ( CG_RenderingFromMiscCamera())
 	{
@@ -2272,8 +2328,8 @@ static void CG_Draw2D( void )
 		CG_DrawForceSelect();
 
 		CG_DrawPickupItem();
-		CG_SaberClashFlare();
 	}
+	CG_SaberClashFlare();
 
 	float y = 0;
 	if (cg_drawSnapshot.integer) {
@@ -2302,17 +2358,20 @@ static void CG_Draw2D( void )
 		if (cg.predicted_player_state.pm_type != PM_DEAD)
 		{
 			// Was a objective given?
-			if ((cg_updatedDataPadForcePower.integer) || (cg_updatedDataPadObjective.integer))
+/*			if ((cg_updatedDataPadForcePower.integer) || (cg_updatedDataPadObjective.integer))
 			{
 				// How long has the game been running? If within 15 seconds of starting, throw up the datapad.
 				if (cg.dataPadLevelStartTime>cg.time)
 				{
 					// Make it pop up
-					cgi_SendConsoleCommand( "datapad" );
-					cg.dataPadLevelStartTime=cg.time;	//and don't do it again this level!
+					if (!in_camera)
+					{
+						cgi_SendConsoleCommand( "datapad" );
+						cg.dataPadLevelStartTime=cg.time;	//and don't do it again this level!
+					}
 				}
 			}
-
+*/
 			if (!cg.missionInfoFlashTime)
 			{
 				cg.missionInfoFlashTime	= cg.time + cg_missionInfoFlashTime.integer;
@@ -2322,12 +2381,31 @@ static void CG_Draw2D( void )
 			{
 				cg.missionInfoFlashTime = 0;
 				missionInfo_Updated = qfalse;
+
+				CG_ClearDataPadCvars();
 			}
 
 			cgi_SP_GetStringTextString( "INGAME_DATAPAD_UPDATED", text, sizeof(text) );
 
-			w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontMedium, 1.0f);
-			cgi_R_Font_DrawString((SCREEN_WIDTH/2)-(w/2), (SCREEN_HEIGHT/2)+40, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
+			y_pos = (SCREEN_HEIGHT/2)+80;
+			w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontSmall, 1.0f);
+			cgi_R_Font_DrawString((SCREEN_WIDTH/2)-(w/2), y_pos, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
+
+			if (cg_updatedDataPadForcePower1.integer) 
+			{
+				y_pos += 25;
+				cgi_SP_GetStringTextString("INGAME_NEW_FORCE_POWER_INFO", text, sizeof(text) );
+				w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontSmall, 1.0f);
+				cgi_R_Font_DrawString((SCREEN_WIDTH/2)-(w/2), y_pos, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
+			}
+
+			if (cg_updatedDataPadObjective.integer) 
+			{
+				y_pos += 25;
+				cgi_SP_GetStringTextString( "INGAME_NEW_OBJECTIVE_INFO", text, sizeof(text) );
+				w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontSmall, 1.0f);
+				cgi_R_Font_DrawString((SCREEN_WIDTH/2)-(w/2), y_pos, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
+			}
 
 	//		if (cent->gent->client->sess.missionObjectivesShown<3)
 	//		{

@@ -236,6 +236,8 @@ struct gentity_s {
 	int			bolt_Waist;
 	int			bolt_Motion;
 
+	qboolean	isSaberEntity;
+
 	int			damageRedirect; //if entity takes damage, redirect to..
 	int			damageRedirectTo; //this entity number
 
@@ -582,6 +584,8 @@ void	G_Sound( gentity_t *ent, int channel, int soundIndex );
 void	G_SoundAtLoc( vec3_t loc, int channel, int soundIndex );
 void	G_EntitySound( gentity_t *ent, int channel, int soundIndex );
 void	TryUse( gentity_t *ent );
+void	G_SendG2KillQueue(void);
+void	G_KillG2Queue(int entNum);
 void	G_FreeEntity( gentity_t *e );
 qboolean	G_EntitiesFree( void );
 
@@ -597,8 +601,6 @@ extern void G_RunObject			( gentity_t *ent );
 
 float	*tv (float x, float y, float z);
 char	*vtos( const vec3_t v );
-
-float vectoyaw( const vec3_t vec );
 
 void G_AddPredictableEvent( gentity_t *ent, int event, int eventParm );
 void G_AddEvent( gentity_t *ent, int event, int eventParm );
@@ -784,7 +786,7 @@ const char *G_GetStripEdString(char *refSection, char *refName);
 char *ClientConnect( int clientNum, qboolean firstTime, qboolean isBot );
 void ClientUserinfoChanged( int clientNum );
 void ClientDisconnect( int clientNum );
-void ClientBegin( int clientNum );
+void ClientBegin( int clientNum, qboolean allowTeamReset );
 void ClientCommand( int clientNum );
 
 //
@@ -839,7 +841,8 @@ void BotInterbreedEndMatch( void );
 qboolean G_DoesMapSupportGametype(const char *mapname, int gametype);
 const char *G_RefreshNextMap(int gametype, qboolean forced);
 
-// w_saber.c
+// w_force.c / w_saber.c
+void G_PreDefSound(vec3_t org, int pdSound);
 qboolean HasSetSaberOnly(void);
 void WP_ForcePowerStop( gentity_t *self, forcePowers_t forcePower );
 void WP_SaberPositionUpdate( gentity_t *self, usercmd_t *ucmd );
@@ -931,6 +934,7 @@ extern	vmCvar_t	g_forceRegenTime;
 extern	vmCvar_t	g_spawnInvulnerability;
 extern	vmCvar_t	g_forcePowerDisable;
 extern	vmCvar_t	g_weaponDisable;
+extern	vmCvar_t	g_duelWeaponDisable;
 extern	vmCvar_t	g_fraglimit;
 extern	vmCvar_t	g_duel_fraglimit;
 extern	vmCvar_t	g_timelimit;
@@ -1188,8 +1192,8 @@ int		trap_GeneticParentsAndChildSelection(int numranks, float *ranks, int *paren
 
 void	trap_SnapVector( float *v );
 
-void	trap_SP_RegisterServer( const char *package );
-void	trap_SP_Register(char *file );
+qboolean trap_SP_RegisterServer( const char *package );
+qboolean trap_SP_Register(char *file );
 int trap_SP_GetStringTextString(const char *text, char *buffer, int bufferLength);
 
 qboolean	trap_ROFF_Clean( void );

@@ -18,6 +18,7 @@ void CGCam_TrackDisable( void );
 void CGCam_Distance( float distance, qboolean initLerp );
 void CGCam_DistanceDisable( void );
 extern int CG_CalcFOVFromX( float fov_x );
+extern void WP_SaberCatch( gentity_t *self, gentity_t *saber, qboolean switchToSaber );
 
 /*
 TODO:
@@ -85,6 +86,15 @@ void CGCam_Enable( void )
 			cg.zoomMode = 0;
 		}
 
+		if ( g_entities[0].client->ps.saberInFlight && g_entities[0].client->ps.saberActive )
+		{//saber is out
+			gentity_t *saberent = &g_entities[g_entities[0].client->ps.saberEntityNum];
+			if ( saberent )
+			{
+				WP_SaberCatch( &g_entities[0], saberent, qfalse );
+			}
+		}
+
 		for ( int i = 0; i < NUM_FORCE_POWERS; i++ )
 		{//deactivate any active force powers
 			g_entities[0].client->ps.forcePowerDuration[i] = 0;
@@ -124,6 +134,11 @@ void CGCam_Disable( void )
 
 	gi.SendServerCommand( NULL, "cts");
 
+	if ( cg_skippingcin.integer )
+	{//We're skipping the cinematic and it's over now
+		gi.cvar_set("timescale", "1");
+		gi.cvar_set("skippingCinematic", "0");
+	}
 }
 
 /*
@@ -414,6 +429,11 @@ void CGCam_Follow( const char *cameraGroup, float speed, float initLerp )
 		return;
 	}
 	
+	if ( Q_stricmp("NULL", (char *)cameraGroup) == 0 )
+	{//Turn off all aiming
+		return;
+	}
+
 	//NOTE: if this interrupts a pan before it's done, need to copy the cg.refdef.viewAngles to the camera.angles!
 	client_camera.info_state |= CAMERA_FOLLOWING;
 	client_camera.info_state &= ~CAMERA_PANNING;
@@ -669,7 +689,14 @@ void CGCam_FollowUpdate ( void )
 				if ( from->s.pos.trType != TR_STATIONARY )
 //				if ( from->s.pos.trType == TR_INTERPOLATE )
 				{//use interpolated origin?
-					VectorCopy(fromCent->lerpOrigin, focus[num_subjects]);
+					if ( !VectorCompare( vec3_origin, fromCent->lerpOrigin ) )
+					{//hunh?  Somehow we've never seen this gentity on the client, so there is no lerpOrigin, so cheat over to the game and use the currentOrigin
+						VectorCopy( from->currentOrigin, focus[num_subjects] );
+					}
+					else
+					{
+						VectorCopy( fromCent->lerpOrigin, focus[num_subjects] );
+					}
 				}
 				else
 				{
@@ -716,6 +743,12 @@ void CGCam_FollowUpdate ( void )
 	VectorSubtract( client_camera.subjectPos, center, vec );
 	client_camera.subjectSpeed = VectorLengthSquared( vec ) * 100.0f / cg.frametime;
 
+	/*
+	if ( !cg_skippingcin.integer )
+	{
+		Com_Printf( S_COLOR_RED"org: %s\n", vtos(center) );
+	}
+	*/
 	VectorCopy( center, client_camera.subjectPos );
 
 	VectorSubtract( center, cg.refdef.vieworg, dir );//can't use client_camera.origin because it's not updated until the end of the move.
@@ -732,7 +765,7 @@ void CGCam_FollowUpdate ( void )
 			cameraAngles[i] = AngleNormalize180( client_camera.angles[i] + frac * AngleNormalize180(cameraAngles[i] - client_camera.angles[i]) );
 			cameraAngles[i] = AngleNormalize180( cameraAngles[i] );
 		}
-#ifdef _DEBUG
+#if 0
 		Com_Printf( "%s\n", vtos(cameraAngles) );
 #endif
 	}
@@ -740,12 +773,22 @@ void CGCam_FollowUpdate ( void )
 	{//Snapping, should do this first time if follow_lerp_to_start_duration is zero
 		//will lerp from this point on
 		client_camera.followInitLerp = qtrue;
+		for( i = 0; i < 3; i++ )
+		{//normalize so that when we start lerping, it doesn't freak out
+			cameraAngles[i] = AngleNormalize180( cameraAngles[i] );
+		}
 		//So tracker doesn't move right away thinking the first angle change
 		//is the subject moving... FIXME: shouldn't set this until lerp done OR snapped?
 		client_camera.subjectSpeed = 0;
 	}
 
 	//Point camera to lerp angles
+	/*
+	if ( !cg_skippingcin.integer )
+	{
+		Com_Printf( "ang: %s\n", vtos(cameraAngles) );
+	}
+	*/
 	VectorCopy( cameraAngles, client_camera.angles );
 }
 

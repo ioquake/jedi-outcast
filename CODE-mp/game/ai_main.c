@@ -552,6 +552,14 @@ void BotInputToUserCommand(bot_input_t *bi, usercmd_t *ucmd, int delta_angles[3]
 	if (bi->actionflags & ACTION_FOLLOWME) ucmd->buttons |= BUTTON_FOLLOWME;
 #endif //0
 
+	if (bi->weapon == WP_NONE)
+	{
+#ifdef _DEBUG
+//		Com_Printf("WARNING: Bot tried to use WP_NONE!\n");
+#endif
+		bi->weapon = WP_BRYAR_PISTOL;
+	}
+
 	//
 	ucmd->weapon = bi->weapon;
 	//set the view angles
@@ -1276,8 +1284,12 @@ void WPConstantRoutine(bot_state_t *bs)
 
 		if (heightDif > 40 && (bs->cur_ps.fd.forcePowersKnown & (1 << FP_LEVITATION)) && (bs->cur_ps.fd.forceJumpCharge < (forceJumpStrength[bs->cur_ps.fd.forcePowerLevel[FP_LEVITATION]]-100) || bs->cur_ps.groundEntityNum == ENTITYNUM_NONE))
 		{
-			bs->forceJumpChargeTime = level.time + 300;
-			bs->beStill = level.time + 100;
+			bs->forceJumpChargeTime = level.time + 1000;
+			if (bs->cur_ps.groundEntityNum != ENTITYNUM_NONE && bs->jumpPrep < (level.time-300))
+			{
+				bs->jumpPrep = level.time + 700;
+			}
+			bs->beStill = level.time + 300;
 			bs->jumpTime = 0;
 
 			if (bs->wpSeenTime < (level.time + 600))
@@ -1541,7 +1553,7 @@ int BotTrace_Jump(bot_state_t *bs, vec3_t traceto)
 
 	mins[0] = -15;
 	mins[1] = -15;
-	mins[2] = -15;
+	mins[2] = -18;
 	maxs[0] = 15;
 	maxs[1] = 15;
 	maxs[2] = 32;
@@ -1724,6 +1736,25 @@ int PassStandardEnemyChecks(bot_state_t *bs, gentity_t *en)
 	if (bs->cur_ps.duelInProgress && en->s.number != bs->cur_ps.duelIndex)
 	{
 		return 0;
+	}
+
+	if (g_gametype.integer == GT_JEDIMASTER && !en->client->ps.isJediMaster && !bs->cur_ps.isJediMaster)
+	{ //rules for attacking non-JM in JM mode
+		vec3_t vs;
+		float vLen = 0;
+
+		if (!g_friendlyFire.integer)
+		{ //can't harm non-JM in JM mode if FF is off
+			return 0;
+		}
+
+		VectorSubtract(bs->origin, en->client->ps.origin, vs);
+		vLen = VectorLength(vs);
+
+		if (vLen > 350)
+		{
+			return 0;
+		}
 	}
 
 	/*
@@ -1992,6 +2023,8 @@ int PassLovedOneCheck(bot_state_t *bs, gentity_t *ent)
 	return 1;
 }
 
+qboolean G_ThereIsAMaster(void);
+
 int ScanForEnemies(bot_state_t *bs)
 {
 	vec3_t a;
@@ -2000,6 +2033,7 @@ int ScanForEnemies(bot_state_t *bs)
 	int bestindex;
 	int i;
 	float hasEnemyDist = 0;
+	qboolean noAttackNonJM = qfalse;
 
 	closest = 999999;
 	i = 0;
@@ -2014,6 +2048,21 @@ int ScanForEnemies(bot_state_t *bs)
 		bs->currentEnemy->client->ps.isJediMaster)
 	{ //The Jedi Master must die.
 		return -1;
+	}
+
+	if (g_gametype.integer == GT_JEDIMASTER)
+	{
+		if (G_ThereIsAMaster() && !bs->cur_ps.isJediMaster)
+		{
+			if (!g_friendlyFire.integer)
+			{
+				noAttackNonJM = qtrue;
+			}
+			else
+			{
+				closest = 128; //only get mad at people if they get close enough to you to anger you, or hurt you
+			}
+		}
 	}
 
 	while (i <= MAX_CLIENTS)
@@ -2037,8 +2086,11 @@ int ScanForEnemies(bot_state_t *bs)
 					{
 						if (!hasEnemyDist || distcheck < (hasEnemyDist - 128))
 						{ //if we have an enemy, only switch to closer if he is 128+ closer to avoid flipping out
-							closest = distcheck;
-							bestindex = i;
+							if (!noAttackNonJM || g_entities[i].client->ps.isJediMaster)
+							{
+								closest = distcheck;
+								bestindex = i;
+							}
 						}
 					}
 				}
@@ -2046,8 +2098,11 @@ int ScanForEnemies(bot_state_t *bs)
 				{
 					if (!hasEnemyDist || distcheck < (hasEnemyDist - 128))
 					{ //if we have an enemy, only switch to closer if he is 128+ closer to avoid flipping out
-						closest = distcheck;
-						bestindex = i;
+						if (!noAttackNonJM || g_entities[i].client->ps.isJediMaster)
+						{
+							closest = distcheck;
+							bestindex = i;
+						}
 					}
 				}
 			}
@@ -2136,6 +2191,11 @@ int BotGetWeaponRange(bot_state_t *bs)
 int BotIsAChickenWuss(bot_state_t *bs)
 {
 	int bWRange;
+
+	if (gLevelFlags & LEVELFLAG_IMUSTNTRUNAWAY)
+	{
+		return 0;
+	}
 
 	if (g_gametype.integer == GT_JEDIMASTER && !bs->cur_ps.isJediMaster)
 	{ //Then you may know no fear.
@@ -4839,6 +4899,17 @@ int BotTryAnotherWeapon(bot_state_t *bs)
 	return 0;
 }
 
+qboolean BotWeaponSelectable(bot_state_t *bs, int weapon)
+{
+	if (bs->cur_ps.ammo[weaponData[weapon].ammoIndex] >= weaponData[weapon].energyPerShot &&
+		(bs->cur_ps.stats[STAT_WEAPONS] & (1 << weapon)))
+	{
+		return qtrue;
+	}
+	
+	return qfalse;
+}
+
 int BotSelectIdealWeapon(bot_state_t *bs)
 {
 	int i;
@@ -4871,12 +4942,48 @@ int BotSelectIdealWeapon(bot_state_t *bs)
 		i++;
 	}
 
-	if ( bs->currentEnemy && bs->frame_Enemy_Len < 512 &&
+	if ( bs->currentEnemy && bs->frame_Enemy_Len < 300 &&
 		(bestweapon == WP_BRYAR_PISTOL || bestweapon == WP_BLASTER || bestweapon == WP_BOWCASTER) &&
 		(bs->cur_ps.stats[STAT_WEAPONS] & (1 << WP_SABER)) )
 	{
 		bestweapon = WP_SABER;
 		bestweight = 1;
+	}
+
+	if ( bs->currentEnemy && bs->frame_Enemy_Len > 300 &&
+		bs->currentEnemy->client && bs->currentEnemy->client->ps.weapon != WP_SABER &&
+		(bestweapon == WP_SABER) )
+	{ //if the enemy is far away, and we have our saber selected, see if we have any good distance weapons instead
+		if (BotWeaponSelectable(bs, WP_DISRUPTOR))
+		{
+			bestweapon = WP_DISRUPTOR;
+			bestweight = 1;
+		}
+		else if (BotWeaponSelectable(bs, WP_ROCKET_LAUNCHER))
+		{
+			bestweapon = WP_ROCKET_LAUNCHER;
+			bestweight = 1;
+		}
+		else if (BotWeaponSelectable(bs, WP_BOWCASTER))
+		{
+			bestweapon = WP_BOWCASTER;
+			bestweight = 1;
+		}
+		else if (BotWeaponSelectable(bs, WP_BLASTER))
+		{
+			bestweapon = WP_BLASTER;
+			bestweight = 1;
+		}
+		else if (BotWeaponSelectable(bs, WP_REPEATER))
+		{
+			bestweapon = WP_REPEATER;
+			bestweight = 1;
+		}
+		else if (BotWeaponSelectable(bs, WP_DEMP2))
+		{
+			bestweapon = WP_DEMP2;
+			bestweight = 1;
+		}
 	}
 
 	if (bestweight != -1 && bs->cur_ps.weapon != bestweapon && bs->virtualWeapon != bestweapon)
@@ -5937,6 +6044,7 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 		}
 	}
 
+	/*
 	if (bs->currentEnemy && bs->currentEnemy->client &&
 		bs->cur_ps.weapon == WP_SABER &&
 		g_privateDuel.integer &&
@@ -5971,6 +6079,9 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 			bs->beStill = level.time + 100;
 		}
 	}
+	*/
+	//Apparently this "allows you to cheese" when fighting against bots. I'm not sure why you'd want to con bots
+	//into an easy kill, since they're bots and all. But whatever.
 
 	if (!bs->wpCurrent)
 	{
@@ -6605,6 +6716,11 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 	}
 #endif
 
+	if (bs->jumpPrep > level.time)
+	{
+		bs->forceJumpChargeTime = 0;
+	}
+
 	if (bs->forceJumpChargeTime > level.time)
 	{
 		bs->jumpHoldTime = ((bs->forceJumpChargeTime - level.time)/2) + level.time;
@@ -6621,7 +6737,17 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 		if (bs->jumpHoldTime > level.time)
 		{
 			trap_EA_Jump(bs->client);
-			trap_EA_MoveForward(bs->client);
+			if (bs->wpCurrent)
+			{
+				if ((bs->wpCurrent->origin[2] - bs->origin[2]) < 64)
+				{
+					trap_EA_MoveForward(bs->client);
+				}
+			}
+			else
+			{
+				trap_EA_MoveForward(bs->client);
+			}
 			if (g_entities[bs->client].client->ps.groundEntityNum == ENTITYNUM_NONE)
 			{
 				g_entities[bs->client].client->ps.pm_flags |= PMF_JUMP_HELD;
@@ -6788,7 +6914,7 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 		else
 		{
 #endif
-			if (bot_forcepowers.integer)
+			if (bot_forcepowers.integer && !g_forcePowerDisable.integer)
 			{
 				trap_EA_ForcePower(bs->client);
 			}

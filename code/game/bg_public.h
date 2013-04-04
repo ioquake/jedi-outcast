@@ -234,7 +234,7 @@ typedef enum {
 	PW_NUM_POWERUPS
 } powerup_t;
 
-
+#define PW_REMOVE_AT_DEATH ((1<<PW_QUAD)|(1<<PW_BATTLESUIT)|(1<<PW_HASTE)|(1<<PW_CLOAKED)|(1<<PW_UNCLOAKING)|(1<<PW_UNCLOAKING)|(1<<PW_GALAK_SHIELD)|(1<<PW_DISINT_2)|(1<<PW_INVINCIBLE)|(1<<PW_SEEKER))
 // entityState_t->event values
 // entity events are for effects that take place relative
 // to an existing entities origin.  Very network efficient.
@@ -337,6 +337,9 @@ typedef enum {
 	EV_CHOKE1,		//Say when choking
 	EV_CHOKE2,
 	EV_CHOKE3,
+
+	EV_FFWARN,		//ffire founds
+	EV_FFTURN,
 	//extra sounds for ST
 	EV_CHASE1,
 	EV_CHASE2,
@@ -351,18 +354,18 @@ typedef enum {
 	EV_DETECTED3,
 	EV_DETECTED4,
 	EV_DETECTED5,
-	EV_GIVEUP1,
-	EV_GIVEUP2,
-	EV_GIVEUP3,
-	EV_GIVEUP4,
-	EV_LOOK1,
-	EV_LOOK2,
 	EV_LOST1,
 	EV_OUTFLANK1,
 	EV_OUTFLANK2,
 	EV_ESCAPING1,
 	EV_ESCAPING2,
 	EV_ESCAPING3,
+	EV_GIVEUP1,
+	EV_GIVEUP2,
+	EV_GIVEUP3,
+	EV_GIVEUP4,
+	EV_LOOK1,
+	EV_LOOK2,
 	EV_SIGHT1,
 	EV_SIGHT2,
 	EV_SIGHT3,

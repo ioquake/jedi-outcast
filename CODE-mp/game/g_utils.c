@@ -405,29 +405,6 @@ void G_SetMovedir( vec3_t angles, vec3_t movedir ) {
 	VectorClear( angles );
 }
 
-
-float vectoyaw( const vec3_t vec ) {
-	float	yaw;
-	
-	if (vec[YAW] == 0 && vec[PITCH] == 0) {
-		yaw = 0;
-	} else {
-		if (vec[PITCH]) {
-			yaw = ( atan2( vec[YAW], vec[PITCH]) * 180 / M_PI );
-		} else if (vec[YAW] > 0) {
-			yaw = 90;
-		} else {
-			yaw = 270;
-		}
-		if (yaw < 0) {
-			yaw += 360;
-		}
-	}
-
-	return yaw;
-}
-
-
 void G_InitGentity( gentity_t *e ) {
 	e->inuse = qtrue;
 	e->classname = "noclass";
@@ -518,6 +495,50 @@ qboolean G_EntitiesFree( void ) {
 	return qfalse;
 }
 
+#define MAX_G2_KILL_QUEUE 64
+
+int gG2KillIndex[MAX_G2_KILL_QUEUE];
+int gG2KillNum = 0;
+
+void G_SendG2KillQueue(void)
+{
+	char g2KillString[1024];
+	int i = 0;
+	
+	if (!gG2KillNum)
+	{
+		return;
+	}
+
+	Com_sprintf(g2KillString, 1024, "kg2");
+
+	while (i < gG2KillNum)
+	{
+		Q_strcat(g2KillString, 1024, va(" %i", gG2KillIndex[i]));
+		i++;
+	}
+
+	trap_SendServerCommand(-1, g2KillString);
+
+	//Clear the count because we just sent off the whole queue
+	gG2KillNum = 0;
+}
+
+void G_KillG2Queue(int entNum)
+{
+	if (gG2KillNum >= MAX_G2_KILL_QUEUE)
+	{ //This would be considered a Bad Thing.
+#ifdef _DEBUG
+		Com_Printf("WARNING: Exceeded the MAX_G2_KILL_QUEUE count for this frame!\n");
+#endif
+		//Since we're out of queue slots, just send it now as a seperate command (eats more bandwidth, but we have no choice)
+		trap_SendServerCommand(-1, va("kg2 %i", entNum));
+		return;
+	}
+
+	gG2KillIndex[gG2KillNum] = entNum;
+	gG2KillNum++;
+}
 
 /*
 =================
@@ -527,7 +548,15 @@ Marks the entity as free
 =================
 */
 void G_FreeEntity( gentity_t *ed ) {
-	gentity_t *te;
+	//gentity_t *te;
+
+	if (ed->isSaberEntity)
+	{
+#ifdef _DEBUG
+		Com_Printf("Tried to remove JM saber!\n");
+#endif
+		return;
+	}
 
 	trap_UnlinkEntity (ed);		// unlink from world
 
@@ -541,9 +570,13 @@ void G_FreeEntity( gentity_t *ed ) {
 	//now-removed entity
 	if (ed->s.modelGhoul2)
 	{ //force all clients to accept an event to destroy this instance, right now
+		/*
 		te = G_TempEntity( vec3_origin, EV_DESTROY_GHOUL2_INSTANCE );
 		te->r.svFlags |= SVF_BROADCAST;
 		te->s.eventParm = ed->s.number;
+		*/
+		//Or not. Events can be dropped, so that would be a bad thing.
+		G_KillG2Queue(ed->s.number);
 	}
 
 	if (ed->s.eFlags & EF_SOUNDTRACKER)

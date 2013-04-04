@@ -767,7 +767,7 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, int clientID, int delay
 
 	// If depth hack ISN'T already on, then turn it on.  Otherwise, we treat a pre-existing depth_hack flag as NOT being depth_hack.
 	//	This is done because muzzle flash fx files are shared amongst all shooters, but for the player we need to do depth hack in first person....
-	if ( !( fx->mFlags & FX_DEPTH_HACK ))
+	if ( !( fx->mFlags & FX_DEPTH_HACK ) && !cg.renderingThirdPerson ) // hack!
 	{
 		flags = fx->mFlags | FX_RELATIVE | FX_DEPTH_HACK;
 	}
@@ -822,7 +822,7 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, int clientID, int delay
 	case Sound:
 	//---------
 
-		// bolted sounds actually play on the client....completely assumes weapon channel!!!
+		// bolted sounds actually play on the client....
 		theFxHelper.PlaySound( NULL, clientID, CHAN_WEAPON, fx->mMediaHandles.GetHandle() );
 		break;
 

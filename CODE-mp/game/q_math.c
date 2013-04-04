@@ -595,6 +595,7 @@ float	AngleSubtract( float a1, float a2 ) {
 	float	a;
 
 	a = a1 - a2;
+	assert(fabs(a) < 3600);
 	while ( a > 180 ) {
 		a -= 360;
 	}

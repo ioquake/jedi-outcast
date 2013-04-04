@@ -384,6 +384,21 @@ void CG_ProcessSnapshots( void ) {
 		CG_TransitionSnapshot();
 	} while ( 1 );
 
+	if ( cg.snap->serverTime > cg.time ) 
+	{
+		cg.time=cg.snap->serverTime;
+#if _DEBUG
+		Com_Printf("CG_ProcessSnapshots: cg.snap->serverTime > cg.time");
+#endif
+
+	}
+	if ( cg.nextSnap != NULL && cg.nextSnap->serverTime <= cg.time ) 
+	{
+		cg.time=cg.nextSnap->serverTime-1;
+#if _DEBUG
+		Com_Printf("CG_ProcessSnapshots: cg.nextSnap->serverTime <= cg.time");
+#endif
+	}
 	// assert our valid conditions upon exiting
 	if ( cg.snap == NULL ) {
 		CG_Error( "CG_ProcessSnapshots: cg.snap == NULL" );

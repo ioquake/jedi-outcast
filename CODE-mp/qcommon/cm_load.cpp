@@ -91,7 +91,6 @@ void CMod_LoadShaders( lump_t *l )
 		out->contentFlags = LittleLong( in->contentFlags );
 		out->surfaceFlags = LittleLong( in->surfaceFlags );
 	}
-	CM_SetupShaderProperties();
 }
 
 
@@ -610,8 +609,7 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 	}
 
 	// free old stuff
-	Com_Memset( &cm, 0, sizeof( cm ) );
-	CM_ClearLevelPatches();
+	CM_ClearMap();
 
 	if ( !name[0] ) {
 		cm.numLeafs = 1;
@@ -675,9 +673,6 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 		, name, header.version, BSP_VERSION );
 	}
 
-	// Load in the shader text - return instantly if already loaded
-	CM_LoadShaderText(false);
-
 	cmod_base = (byte *)buf;
 
 	// load into heap
@@ -701,7 +696,7 @@ static void CM_LoadMap_Actual( const char *name, qboolean clientload, int *check
 	//	map data will have been Little-Long'd, but some hasn't).
 	//
 	if (Sys_LowPhysicalMemory() 
-		|| com_dedicated->integer	// no need to check for dedicated in single-player codebase
+		|| com_dedicated->integer
 //		|| we're on a big-endian machine
 		)
 	{
@@ -746,8 +741,8 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 CM_ClearMap
 ==================
 */
-void CM_ClearMap( void ) {
-
+void CM_ClearMap( void ) 
+{
 	Com_Memset( &cm, 0, sizeof( cm ) );
 	CM_ClearLevelPatches();
 }

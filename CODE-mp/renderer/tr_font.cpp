@@ -485,9 +485,11 @@ int RE_Font_StrLenPixels(const char *psText, const int iFontHandle, const float 
 	}
 	while(*constParseText)
 	{
-		x += curfont->GetLetterHorizAdvance( AnyLanguage_ReadCharFromString( &constParseText ));
+		int a = curfont->GetLetterHorizAdvance( AnyLanguage_ReadCharFromString( &constParseText ));
+
+		x += Round ( a * fScale );
 	}
-	x = Round(x * fScale);
+
 	return(x);
 }
 

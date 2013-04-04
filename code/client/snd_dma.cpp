@@ -104,6 +104,7 @@ static qboolean		bMusic_IsDynamic					= qfalse;
 static MusicState_e	eMusic_StateActual					= eBGRNDTRACK_EXPLORE;	// actual state, can be any enum
 static MusicState_e	eMusic_StateRequest					= eBGRNDTRACK_EXPLORE;	// requested state, can only be explore, action, boss, or silence
 static char			sMusic_BackgroundLoop[MAX_QPATH]	= {0};	// only valid for non-dynamic music
+static char			sInfoOnly_CurrentDynamicMusicSet[64];	// any old reasonable size, only has to fit stuff like "kejim_post"
 //
 //////////////////////////
 
@@ -149,6 +150,7 @@ cvar_t		*s_volume;
 cvar_t		*s_volumeVoice;
 cvar_t		*s_testsound;
 cvar_t		*s_khz;
+cvar_t		*s_allowDynamicMusic;
 cvar_t		*s_show;
 cvar_t		*s_mixahead;
 cvar_t		*s_mixPreStep;
@@ -315,9 +317,14 @@ void S_SoundInfo_f(void) {
 		if (bMusic_IsDynamic)
 		{		
 			DynamicMusicInfoPrint();
+			Com_Printf("( Dynamic music set name: \"%s\" )\n",sInfoOnly_CurrentDynamicMusicSet);
 		}
 		else
 		{
+			if (!s_allowDynamicMusic->integer)
+			{
+				Com_Printf("( Dynamic music inhibited (s_allowDynamicMusic == 0) )\n", sMusic_BackgroundLoop );
+			}
 			if ( tMusic_Info[eBGRNDTRACK_NONDYNAMIC].s_backgroundFile )
 			{
 				Com_Printf("Background file: %s\n", sMusic_BackgroundLoop );
@@ -354,9 +361,10 @@ void S_Init( void ) {
 
 	s_volume = Cvar_Get ("s_volume", "0.5", CVAR_ARCHIVE);
 	s_volumeVoice= Cvar_Get ("s_volumeVoice", "1.0", CVAR_ARCHIVE);
-	s_musicVolume = Cvar_Get ("s_musicvolume", "0.5", CVAR_ARCHIVE);
+	s_musicVolume = Cvar_Get ("s_musicvolume", "0.25", CVAR_ARCHIVE);
 	s_separation = Cvar_Get ("s_separation", "0.5", CVAR_ARCHIVE);
 	s_khz = Cvar_Get ("s_khz", "22", CVAR_ARCHIVE|CVAR_LATCH);
+	s_allowDynamicMusic = Cvar_Get ("s_allowDynamicMusic", "1", CVAR_ARCHIVE);
 	s_mixahead = Cvar_Get ("s_mixahead", "0.2", CVAR_ARCHIVE);
 
 	s_mixPreStep = Cvar_Get ("s_mixPreStep", "0.05", CVAR_ARCHIVE);
@@ -382,8 +390,9 @@ void S_Init( void ) {
 #endif
 #endif
 
-	cv = Cvar_Get ("s_initsound", "1", 0);
+	cv = Cvar_Get ("s_initsound", "1", CVAR_ROM);
 	if ( !cv->integer ) {
+		s_soundStarted = 0;	// needed in case you set s_initsound to 0 midgame then snd_restart (div0 err otherwise later)
 		Com_Printf ("not initializing.\n");
 		Com_Printf("------------------------------------\n");
 		return;
@@ -539,14 +548,17 @@ void S_Init( void ) {
 //
 void S_ReloadAllUsedSounds(void)
 {
-	// new bit, reload all soundsthat are used on the current level...
-	//
-	for (int i=1 ; i < s_numSfx ; i++)	// start @ 1 to skip freeing default sound
+	if (s_soundStarted && !s_soundMuted )
 	{
-		sfx_t *sfx = &s_knownSfx[i];
+		// new bit, reload all soundsthat are used on the current level...
+		//
+		for (int i=1 ; i < s_numSfx ; i++)	// start @ 1 to skip freeing default sound
+		{
+			sfx_t *sfx = &s_knownSfx[i];
 
-		if (!sfx->bInMemory && !sfx->bDefaultSound && sfx->iLastLevelUsedOn == RE_RegisterMedia_GetLevel()){
-			S_memoryLoad(sfx);
+			if (!sfx->bInMemory && !sfx->bDefaultSound && sfx->iLastLevelUsedOn == RE_RegisterMedia_GetLevel()){
+				S_memoryLoad(sfx);
+			}
 		}
 	}
 }
@@ -851,7 +863,7 @@ void EALFileInit(char *level)
 
 	// Try and load an EAL file for the new level
 	COM_StripExtension(level, name);
-	Com_sprintf(szEALFilename, MAX_QPATH, "%s.eal", name);
+	Com_sprintf(szEALFilename, MAX_QPATH, "eagle/%s.eal", name);
 
 	s_bEALFileLoaded = LoadEALFile(szEALFilename);
 
@@ -1050,6 +1062,7 @@ channel_t *S_OpenALPickChannel(int entnum, int entchannel)
     int			ch_idx;
 	channel_t	*ch, *ch_firstToDie;
 	bool	foundChan = false;
+	float	source_pos[3];
 
 	if ( entchannel < 0 ) 
 	{
@@ -1096,36 +1109,80 @@ channel_t *S_OpenALPickChannel(int entnum, int entchannel)
 
 		if (ch->fixed_origin)
 		{
-			longestDist = ((listener_pos[0] - ch->origin[0]) * (listener_pos[0] - ch->origin[0])) +
-					      ((listener_pos[1] - ch->origin[1]) * (listener_pos[1] - ch->origin[1])) +
-						  ((listener_pos[2] - ch->origin[2]) * (listener_pos[2] - ch->origin[2]));
+			// Convert to Open AL co-ordinates
+			source_pos[0] = ch->origin[0];
+			source_pos[1] = ch->origin[2];
+			source_pos[2] = -ch->origin[1];
+
+			longestDist = ((listener_pos[0] - source_pos[0]) * (listener_pos[0] - source_pos[0])) +
+						  ((listener_pos[1] - source_pos[1]) * (listener_pos[1] - source_pos[1])) +
+						  ((listener_pos[2] - source_pos[2]) * (listener_pos[2] - source_pos[2]));
 		}
 		else
 		{
 			if (ch->entnum == listener_number)
 				longestDist = 0;
 			else
-				longestDist = ((listener_pos[0] - loopSounds[ch->entnum].origin[0]) * (listener_pos[0] - loopSounds[ch->entnum].origin[0])) +
-							  ((listener_pos[1] - loopSounds[ch->entnum].origin[1]) * (listener_pos[1] - loopSounds[ch->entnum].origin[1])) +
-							  ((listener_pos[2] - loopSounds[ch->entnum].origin[2]) * (listener_pos[2] - loopSounds[ch->entnum].origin[2]));
+			{
+				if (ch->bLooping)
+				{
+					// Convert to Open AL co-ordinates
+					source_pos[0] = loopSounds[ch->entnum].origin[0];
+					source_pos[1] = loopSounds[ch->entnum].origin[2];
+					source_pos[2] = -loopSounds[ch->entnum].origin[1];
+				}
+				else
+				{
+					// Convert to Open AL co-ordinates
+					source_pos[0] = s_entityPosition[ch->entnum][0];
+					source_pos[1] = s_entityPosition[ch->entnum][2];
+					source_pos[2] = -s_entityPosition[ch->entnum][1];
+				}
+
+				longestDist = ((listener_pos[0] - source_pos[0]) * (listener_pos[0] - source_pos[0])) +
+							  ((listener_pos[1] - source_pos[1]) * (listener_pos[1] - source_pos[1])) +
+							  ((listener_pos[2] - source_pos[2]) * (listener_pos[2] - source_pos[2]));
+			}
 		}
 
 		for (ch_idx = 2, ch = s_channels + ch_idx; ch_idx < s_numChannels; ch_idx++, ch++)
 		{
 			if (ch->fixed_origin)
 			{
-				dist = ((listener_pos[0] - ch->origin[0]) * (listener_pos[0] - ch->origin[0])) +
-					   ((listener_pos[1] - ch->origin[1]) * (listener_pos[1] - ch->origin[1])) +
-					   ((listener_pos[2] - ch->origin[2]) * (listener_pos[2] - ch->origin[2]));
+				// Convert to Open AL co-ordinates
+				source_pos[0] = ch->origin[0];
+				source_pos[1] = ch->origin[2];
+				source_pos[2] = -ch->origin[1];
+			
+				dist = ((listener_pos[0] - source_pos[0]) * (listener_pos[0] - source_pos[0])) +
+					   ((listener_pos[1] - source_pos[1]) * (listener_pos[1] - source_pos[1])) +
+					   ((listener_pos[2] - source_pos[2]) * (listener_pos[2] - source_pos[2]));
 			}
 			else
 			{
 				if (ch->entnum == listener_number)
 					dist = 0;
 				else
-					dist = ((listener_pos[0] - loopSounds[ch->entnum].origin[0]) * (listener_pos[0] - loopSounds[ch->entnum].origin[0])) +
-					       ((listener_pos[1] - loopSounds[ch->entnum].origin[1]) * (listener_pos[1] - loopSounds[ch->entnum].origin[1])) +
-						   ((listener_pos[2] - loopSounds[ch->entnum].origin[2]) * (listener_pos[2] - loopSounds[ch->entnum].origin[2]));
+				{
+					if (ch->bLooping)
+					{
+						// Convert to Open AL co-ordinates
+						source_pos[0] = loopSounds[ch->entnum].origin[0];
+						source_pos[1] = loopSounds[ch->entnum].origin[2];
+						source_pos[2] = -loopSounds[ch->entnum].origin[1];
+					}
+					else
+					{
+						// Convert to Open AL co-ordinates
+						source_pos[0] = s_entityPosition[ch->entnum][0];
+						source_pos[1] = s_entityPosition[ch->entnum][2];
+						source_pos[2] = -s_entityPosition[ch->entnum][1];
+					}
+
+					dist = ((listener_pos[0] - source_pos[0]) * (listener_pos[0] - source_pos[0])) +
+					       ((listener_pos[1] - source_pos[1]) * (listener_pos[1] - source_pos[1])) +
+						   ((listener_pos[2] - source_pos[2]) * (listener_pos[2] - source_pos[2]));
+				}
 			}
 
 			if (dist > longestDist)
@@ -1179,6 +1236,7 @@ void S_SpatializeOrigin (const vec3_t origin, float master_vol, int *left_vol, i
 	if ( channel == CHAN_VOICE )
 	{
 		dist -= SOUND_FULLVOLUME * 3.0f;
+//		dist_mult = VOICE_ATTENUATE;	// tweak added (this fixes an NPC dialogue "in your ears" bug, but we're not sure if it'll make a bunch of others fade too early. Too close to shipping...)
 	}
 	else if ( channel == CHAN_LESS_ATTEN )
 	{
@@ -1509,12 +1567,19 @@ void S_CIN_StopSound(sfxHandle_t sfxHandle)
 
 	sfx_t *sfx = &s_knownSfx[ sfxHandle ];
 	channel_t *ch = s_channels;
-	
-	for (int i = 0; i < s_numChannels; i++, ch++)
+	int i;
+
+	for ( i = 0; i < MAX_CHANNELS ; i++, ch++ ) 
 	{
+		if ( !ch->thesfx || (ch->leftvol<0.25 && ch->rightvol<0.25 )) {
+			continue;
+		}
 		if (ch->thesfx == sfx)
 		{
-			alSourceStop(s_channels[i].alSource);
+			if (s_UseOpenAL)
+			{
+				alSourceStop(s_channels[i].alSource);
+			}
 			SND_FreeSFXMem(ch->thesfx);	// heh, may as well...
 			ch->thesfx = NULL;
 			memset(&ch->MP3StreamHeader, 0, sizeof(MP3STREAM));
@@ -2524,9 +2589,18 @@ void S_Update_(void) {
 				else
 				{
 					// Get position of Entity
-					pos[0] = loopSounds[ ch->entnum ].origin[0];
-					pos[1] = loopSounds[ ch->entnum ].origin[2];
-					pos[2] = -loopSounds[ ch->entnum ].origin[1];
+					if (ch->bLooping)
+					{
+						pos[0] = loopSounds[ ch->entnum ].origin[0];
+						pos[1] = loopSounds[ ch->entnum ].origin[2];
+						pos[2] = -loopSounds[ ch->entnum ].origin[1];
+					}
+					else
+					{
+						pos[0] = s_entityPosition[ch->entnum][0];
+						pos[1] = s_entityPosition[ch->entnum][2];
+						pos[2] = -s_entityPosition[ch->entnum][1];
+					}
 					alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, AL_FALSE);
 				}
 			}
@@ -3525,6 +3599,9 @@ void S_SoundList_f( void ) {
 			}
 		}
 	}
+	Com_Printf(" Slot   Smpls Type  In? Lev  Name\n");
+
+
 	Com_Printf ("Total resident samples: %i %s ( not mem usage, see 'meminfo' ).\n", total, bWavOnly?"(WAV only)":"");
 	Com_Printf ("%d out of %d sfx_t slots used\n", s_numSfx, MAX_SFX);
 	Com_Printf ("%.2fMB bytes used when counting sfx_t->pSoundData + MP3 headers (if any)\n", (float)iTotalBytes / 1024.0f / 1024.0f);
@@ -4144,9 +4221,9 @@ void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCall
 
 	COM_DefaultExtension( sName, sizeof( sName ), ".mp3" );
 
-	// if low physical memory, then just stream the explore music instead of playing dynamic...
+	// if dynamic music not allowed, then just stream the explore music instead of playing dynamic...
 	//
-	if (Sys_LowPhysicalMemory() && Music_DynamicDataAvailable(intro))	// "intro", NOT "sName" (i.e. don't use version with ".mp3" extension)
+	if (!s_allowDynamicMusic->integer && Music_DynamicDataAvailable(intro))	// "intro", NOT "sName" (i.e. don't use version with ".mp3" extension)
 	{
 		LPCSTR psMusicName = Music_GetFileNameForState( eBGRNDTRACK_DATABEGIN );
 		if (psMusicName && S_FileExists( psMusicName ))
@@ -4160,12 +4237,14 @@ void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCall
 	if ( (strstr(sName,"/") && S_FileExists( sName )) )	// strstr() check avoids extra file-exists check at runtime if reverting from streamed music to dynamic since literal files all need at least one slash in their name (eg "music/blah")
 	{
 		Com_DPrintf("S_StartBackgroundTrack: Found/using non-dynamic music track '%s'\n", sName);
-		S_StartBackgroundTrack_Actual( &tMusic_Info[eBGRNDTRACK_NONDYNAMIC], bMusic_IsDynamic, sName, loop );
+		S_StartBackgroundTrack_Actual( &tMusic_Info[eBGRNDTRACK_NONDYNAMIC], bMusic_IsDynamic, sName, sName );
 	}
 	else
 	{
 		if (Music_DynamicDataAvailable(intro))	// "intro", NOT "sName" (i.e. don't use version with ".mp3" extension)
 		{
+			extern const char *Music_GetLevelSetName(void);
+			Q_strncpyz(sInfoOnly_CurrentDynamicMusicSet, Music_GetLevelSetName(), sizeof(sInfoOnly_CurrentDynamicMusicSet));
 			for (int i = eBGRNDTRACK_DATABEGIN; i != eBGRNDTRACK_DATAEND; i++)
 			{
 				qboolean bOk = qfalse;
@@ -4252,7 +4331,7 @@ void S_StopBackgroundTrack( void )
 
 // qboolean return is true only if we're changing from a streamed intro to a dynamic loop...
 //
-static qboolean S_UpdateBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean bFirstOrOnlyMusicTrack) 
+static qboolean S_UpdateBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean bFirstOrOnlyMusicTrack, float fDefaultVolume) 
 {
 	int		bufferSamples;
 	int		fileSamples;
@@ -4260,7 +4339,7 @@ static qboolean S_UpdateBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolea
 	int		fileBytes;
 	int		r;
 
-	float fMasterVol = s_musicVolume->value;
+	float fMasterVol = fDefaultVolume; // s_musicVolume->value;
 
 	if (bMusic_IsDynamic)
 	{
@@ -4297,6 +4376,7 @@ static qboolean S_UpdateBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolea
 	}	
 
 	pMusicInfo->fSmoothedOutVolume = (pMusicInfo->fSmoothedOutVolume + fMasterVol)/2.0f;
+//	OutputDebugString(va("%f\n",pMusicInfo->fSmoothedOutVolume));
 
 	// don't bother playing anything if musicvolume is 0
 	if ( pMusicInfo->fSmoothedOutVolume <= 0 ) {
@@ -4423,6 +4503,21 @@ static qboolean S_UpdateBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolea
 }
 
 
+// used to be just for dynamic, but now even non-dynamic music has to know whether it should be silent or not...
+//
+static LPCSTR S_Music_GetRequestedState(void)
+{
+	int iStringOffset = cl.gameState.stringOffsets[CS_DYNAMIC_MUSIC_STATE];
+	if (iStringOffset)
+	{
+		LPCSTR psCommand = cl.gameState.stringData+iStringOffset; 
+
+		return psCommand;
+	}
+	
+	return NULL;
+}
+
 
 // scan the configstring to see if there's been a state-change requested...
 // (note that even if the state doesn't change it still gets here, so do a same-state check for applying)
@@ -4431,11 +4526,10 @@ static qboolean S_UpdateBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolea
 //
 static void S_CheckDynamicMusicState(void)
 {
-	int iStringOffset = cl.gameState.stringOffsets[CS_DYNAMIC_MUSIC_STATE];
-	if (iStringOffset)
-	{
-		LPCSTR psCommand = cl.gameState.stringData+iStringOffset; 
+	LPCSTR psCommand = S_Music_GetRequestedState();
 
+	if (psCommand)
+	{
 		MusicState_e eNewState;
 
 		if ( !Q_stricmpn( psCommand, "silence", 7) )
@@ -4508,7 +4602,7 @@ static void S_UpdateBackgroundTrack( void )
 			if ( pMusicInfoCurrent->s_backgroundFile == -1)
 			{
 				int iRawEnd = s_rawend;
-				S_UpdateBackgroundTrack_Actual( pMusicInfoCurrent, qtrue );
+				S_UpdateBackgroundTrack_Actual( pMusicInfoCurrent, qtrue, s_musicVolume->value );
 
 	/*			static int iPrevFrontVol = 0;
 				if (iPrevFrontVol != pMusicInfoCurrent->iXFadeVolume)
@@ -4520,7 +4614,7 @@ static void S_UpdateBackgroundTrack( void )
 				if (pMusicInfoFadeOut->bActive)
 				{
 					s_rawend = iRawEnd;
-					S_UpdateBackgroundTrack_Actual( pMusicInfoFadeOut, qfalse );	// inactive-checked internally
+					S_UpdateBackgroundTrack_Actual( pMusicInfoFadeOut, qfalse, s_musicVolume->value );	// inactive-checked internally
 	/*
 					static int iPrevFadeVol = 0;
 					if (iPrevFadeVol != pMusicInfoFadeOut->iXFadeVolume)
@@ -4580,7 +4674,7 @@ static void S_UpdateBackgroundTrack( void )
 			MusicInfo_t *pMusicInfoFadeOut = &tMusic_Info[ eBGRNDTRACK_FADE ];
 			if (pMusicInfoFadeOut->bActive)
 			{
-				S_UpdateBackgroundTrack_Actual( pMusicInfoFadeOut, qtrue );
+				S_UpdateBackgroundTrack_Actual( pMusicInfoFadeOut, qtrue, s_musicVolume->value );
 				if (pMusicInfoFadeOut->iXFadeVolume == 0)
 				{
 					pMusicInfoFadeOut->bActive = qfalse;
@@ -4592,7 +4686,13 @@ static void S_UpdateBackgroundTrack( void )
 	{
 		// standard / non-dynamic one-track music...
 		//
-		qboolean bNewTrackDesired = S_UpdateBackgroundTrack_Actual(&tMusic_Info[eBGRNDTRACK_NONDYNAMIC], qtrue );
+		LPCSTR psCommand = S_Music_GetRequestedState();	// special check just for "silence" case...
+		qboolean bShouldBeSilent = (psCommand && !stricmp(psCommand,"silence"));
+		float fDesiredVolume = bShouldBeSilent ? 0.0f : s_musicVolume->value;
+		//
+		// internal to this code is a volume-smoother...
+		//
+		qboolean bNewTrackDesired = S_UpdateBackgroundTrack_Actual(&tMusic_Info[eBGRNDTRACK_NONDYNAMIC], qtrue, fDesiredVolume);
 
 		if (bNewTrackDesired)
 		{
@@ -5093,6 +5193,7 @@ void UpdateEAXBuffer(channel_t *ch)
 	// Convert Source co-ordinate to left-handed system
 	if (ch->fixed_origin)
 	{
+		// Converting from Quake -> DS3D (for EAGLE) ... swap Y and Z
 		EMSourcePoint.fX = ch->origin[0];
 		EMSourcePoint.fY = ch->origin[2];
 		EMSourcePoint.fZ = ch->origin[1];
@@ -5103,17 +5204,27 @@ void UpdateEAXBuffer(channel_t *ch)
 		{
 			// Source at same position as listener
 			// Probably won't be any Occlusion / Obstruction effect -- unless the listener is underwater
+			// Converting from Open AL -> DS3D (for EAGLE) ... invert Z
 			EMSourcePoint.fX = listener_pos[0];
-			EMSourcePoint.fY = listener_pos[2];
-			EMSourcePoint.fZ = listener_pos[1];
+			EMSourcePoint.fY = listener_pos[1];
+			EMSourcePoint.fZ = -listener_pos[2];
 		}
 		else
 		{
 			// Get position of Entity
-			EMSourcePoint.fX = loopSounds[ ch->entnum ].origin[0];
-			EMSourcePoint.fY = loopSounds[ ch->entnum ].origin[2];
-			EMSourcePoint.fZ = loopSounds[ ch->entnum ].origin[1];
-
+			// Converting from Quake -> DS3D (for EAGLE) ... swap Y and Z
+			if (ch->bLooping)
+			{
+				EMSourcePoint.fX = loopSounds[ ch->entnum ].origin[0];
+				EMSourcePoint.fY = loopSounds[ ch->entnum ].origin[2];
+				EMSourcePoint.fZ = loopSounds[ ch->entnum ].origin[1];
+			}
+			else
+			{
+				EMSourcePoint.fX = s_entityPosition[ch->entnum][0];
+				EMSourcePoint.fY = s_entityPosition[ch->entnum][2];
+				EMSourcePoint.fZ = s_entityPosition[ch->entnum][1];
+			}
 		}
 	}
 

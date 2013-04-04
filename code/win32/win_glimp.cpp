@@ -76,7 +76,7 @@ static qboolean GLW_StartDriverAndSetMode( int mode,
 {
 	rserr_t err;
 
-	err = GLW_SetMode( r_mode->integer, colorbits, cdsFullscreen );
+	err = GLW_SetMode( mode, colorbits, cdsFullscreen );
 
 	switch ( err )
 	{
@@ -896,12 +896,14 @@ static rserr_t GLW_SetMode( int mode,
 					ri.Printf( PRINT_ALL, "...restoring display settings\n" );
 					ChangeDisplaySettings( 0, 0 );
 					
+/*				jfm:  i took out the following code to allow fallback to mode 3, with this code it goes half windowed and just doesn't work.
 					glw_state.cdsFullscreen = qfalse;
 					glConfig.isFullscreen = qfalse;
 					if ( !GLW_CreateWindow( glConfig.vidWidth, glConfig.vidHeight, colorbits, qfalse) )
 					{
 						return RSERR_INVALID_MODE;
 					}
+*/
 					return RSERR_INVALID_FULLSCREEN;
 				}
 			}
@@ -1417,6 +1419,14 @@ void GLimp_Init( void )
 		ri.Error( ERR_FATAL, "GLimp_Init() - Invalid GL Driver\n" );
 	}
 
+	// OpenGL driver constants
+	qglGetIntegerv( GL_MAX_TEXTURE_SIZE, &glConfig.maxTextureSize );
+	// stubbed or broken drivers may have reported 0...
+	if ( glConfig.maxTextureSize <= 0 ) 
+	{
+		glConfig.maxTextureSize = 0;
+	}
+
 	//
 	// chipset specific configuration
 	//
@@ -1428,39 +1438,42 @@ void GLimp_Init( void )
 	// to be overridden when testing driver fixes, etc. but only sets
 	// them to their default state when the hardware is first installed/run.
 	//
+extern qboolean Sys_LowPhysicalMemory();
 	if ( Q_stricmp( lastValidRenderer->string, glConfig.renderer_string ) )
 	{
-		ri.Cvar_Set( "r_textureMode", "GL_LINEAR_MIPMAP_NEAREST" );
-
-		// VOODOO GRAPHICS w/ 2MB
-/*		if ( strstr( buf, "voodoo graphics/1 tmu/2 mb" ) )
+		if (Sys_LowPhysicalMemory())
 		{
-			ri.Cvar_Set( "r_picmip", "2" );
+			ri.Cvar_Set("s_khz", "11");// this will get called before S_Init
+			ri.Cvar_Set("cg_VariantSoundCap", "2");
+			ri.Cvar_Set("s_allowDynamicMusic","0");
+		}
+		//reset to defaults
+		ri.Cvar_Set( "r_picmip", "1" );
+		
+		if ( strstr( buf, "matrox" )) {
+            ri.Cvar_Set( "r_allowExtensions", "0");			
 		}
 		else
-*/		{
-			ri.Cvar_Set( "r_picmip", "1" );
+		// Savage3D and Savage4 should always have trilinear enabled
+		if ( strstr( buf, "savage3d" ) || strstr( buf, "s3 savage4" ) || strstr( buf, "geforce" ))
+		{
+			ri.Cvar_Set( "r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
+		}
+		else
+		{
+			ri.Cvar_Set( "r_textureMode", "GL_LINEAR_MIPMAP_NEAREST" );
+		}
 
-/*			if ( strstr( buf, "rage 128" ) || strstr( buf, "rage128" ) )
-			{
-				ri.Cvar_Set( "r_finish", "0" );
-			}
-			// Savage3D and Savage4 should always have trilinear enabled
-			else 
-*/			if ( strstr( buf, "savage3d" ) || strstr( buf, "s3 savage4" ) )
-			{
-				ri.Cvar_Set( "r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
-			}
-			else if ( strstr( buf, "geforce" ) || strstr( buf, "quadro" ) ) 
-			{
-				ri.Cvar_Set( "r_picmip", "0" );
-				ri.Cvar_Set( "r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
-			}
-/*			else if ( strstr( buf, "rage pro" ) ||  strstr( buf, "riva 128" ) ) 
-			{
-				ri.Cvar_Set( "r_detailtextures", "0");
-			}
-*/
+		GLW_InitExtensions();
+		
+		//this must be a really sucky card!
+		if ( (glConfig.textureCompression == TC_NONE) || (glConfig.maxActiveTextures < 2)  || (glConfig.maxTextureSize <= 512) )
+		{
+			ri.Cvar_Set( "r_picmip", "2");
+			ri.Cvar_Set( "r_colorbits", "16");
+			ri.Cvar_Set( "r_texturebits", "16");
+			ri.Cvar_Set( "r_mode", "3");	//force 640
+			Cmd_ExecuteString ("exec low.cfg\n");	//get the rest which can be pulled in after init
 		}
 	}
 	

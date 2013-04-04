@@ -200,9 +200,9 @@ qboolean trap_EntityContactCapsule( const vec3_t mins, const vec3_t maxs, const 
 	return syscall( G_ENTITY_CONTACTCAPSULE, mins, maxs, ent );
 }
 
-void trap_SP_RegisterServer( const char *package ) 
+qboolean trap_SP_RegisterServer( const char *package ) 
 {
-	syscall( SP_REGISTER_SERVER_CMD, package );
+	return syscall( SP_REGISTER_SERVER_CMD, package );
 }
 
 int trap_SP_GetStringTextString(const char *text, char *buffer, int bufferLength)

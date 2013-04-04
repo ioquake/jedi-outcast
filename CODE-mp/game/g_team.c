@@ -114,7 +114,21 @@ void PrintCTFMessage(int plIndex, int teamIndex, int ctfMessage)
 	te->r.svFlags |= SVF_BROADCAST;
 	te->s.eventParm = ctfMessage;
 	te->s.trickedentindex = plIndex;
-	te->s.trickedentindex2 = teamIndex;
+	if (ctfMessage == CTFMESSAGE_PLAYER_CAPTURED_FLAG)
+	{
+		if (teamIndex == TEAM_RED)
+		{
+			te->s.trickedentindex2 = TEAM_BLUE;
+		}
+		else
+		{
+			te->s.trickedentindex2 = TEAM_RED;
+		}
+	}
+	else
+	{
+		te->s.trickedentindex2 = teamIndex;
+	}
 }
 
 /*

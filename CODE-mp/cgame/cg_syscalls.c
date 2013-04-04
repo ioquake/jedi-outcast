@@ -553,9 +553,9 @@ qboolean trap_FX_FreeSystem( void )
 	return syscall( CG_FX_FREE_SYSTEM );
 }
 
-void trap_FX_AdjustTime( int time )
+void trap_FX_AdjustTime( int time, vec3_t vieworg, vec3_t viewaxis[3] )
 {
-	syscall( CG_FX_ADJUST_TIME, time );
+	syscall( CG_FX_ADJUST_TIME, time, vieworg, viewaxis );
 }
 
 void trap_FX_AddPoly( addpolyArgStruct_t *p )
@@ -588,9 +588,9 @@ int trap_SP_GetStringTextString(const char *text, char *buffer, int bufferLength
 	return syscall( CG_SP_GETSTRINGTEXTSTRING, text, buffer, bufferLength );
 }
 
-void trap_SP_Register(char *file ) 
+qboolean trap_SP_Register(char *file ) 
 {
-	syscall( CG_SP_REGISTER,file );
+	return syscall( CG_SP_REGISTER,file );
 }
 
 qboolean trap_ROFF_Clean( void ) 

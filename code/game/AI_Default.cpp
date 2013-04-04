@@ -742,7 +742,7 @@ void NPC_BSDefault( void )
 		if ( !(NPCInfo->scriptFlags&SCF_IGNORE_ALERTS) )
 		{//check for alert events
 			//FIXME: Check Alert events, see if we should investigate or just look at it
-			int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, AEL_DISCOVERED );
+			int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, -1, qtrue, AEL_DISCOVERED );
 
 			//There is an event to look at
 			if ( alertEvent >= 0 && level.alertEvents[alertEvent].ID != NPCInfo->lastAlertID )
@@ -766,7 +766,13 @@ void NPC_BSDefault( void )
 	{
 		// just use the stormtrooper attack AI...
 		NPC_CheckGetNewWeapon();
-		NPC_BSST_Attack();
+		if ( NPC->client->leader 
+			&& NPCInfo->goalEntity == NPC->client->leader 
+			&& !Q3_TaskIDPending( NPC, TID_MOVE_NAV ) )
+		{
+			NPC_ClearGoal();
+		}
+			NPC_BSST_Attack();
 		return;
 /*
 		//have an enemy
@@ -874,58 +880,68 @@ void NPC_BSDefault( void )
 
 	if ( UpdateGoal() )
 	{//have a goal
-		//set angles
-		if ( (NPCInfo->scriptFlags & SCF_FACE_MOVE_DIR) || NPCInfo->goalEntity != NPC->enemy )
-		{//face direction of movement, NOTE: default behavior when not chasing enemy
-			NPCInfo->combatMove = qfalse;
+		if ( !NPC->enemy 
+			&& NPC->client->leader 
+			&& NPCInfo->goalEntity == NPC->client->leader 
+			&& !Q3_TaskIDPending( NPC, TID_MOVE_NAV ) )
+		{
+			NPC_BSFollowLeader();
 		}
 		else
-		{//face goal.. FIXME: what if have a navgoal but want to face enemy while moving?  Will this do that?
-			vec3_t	dir, angles;
+		{
+			//set angles
+			if ( (NPCInfo->scriptFlags & SCF_FACE_MOVE_DIR) || NPCInfo->goalEntity != NPC->enemy )
+			{//face direction of movement, NOTE: default behavior when not chasing enemy
+				NPCInfo->combatMove = qfalse;
+			}
+			else
+			{//face goal.. FIXME: what if have a navgoal but want to face enemy while moving?  Will this do that?
+				vec3_t	dir, angles;
 
-			NPCInfo->combatMove = qfalse;
+				NPCInfo->combatMove = qfalse;
 
-			VectorSubtract( NPCInfo->goalEntity->currentOrigin, NPC->currentOrigin, dir );
-			vectoangles( dir, angles );
-			NPCInfo->desiredYaw = angles[YAW];
-			if ( NPCInfo->goalEntity == NPC->enemy )
+				VectorSubtract( NPCInfo->goalEntity->currentOrigin, NPC->currentOrigin, dir );
+				vectoangles( dir, angles );
+				NPCInfo->desiredYaw = angles[YAW];
+				if ( NPCInfo->goalEntity == NPC->enemy )
+				{
+					NPCInfo->desiredPitch = angles[PITCH];
+				}
+			}
+
+			//set movement
+			//override default walk/run behavior
+			//NOTE: redundant, done in NPC_ApplyScriptFlags
+			if ( NPCInfo->scriptFlags & SCF_RUNNING )
 			{
-				NPCInfo->desiredPitch = angles[PITCH];
+				ucmd.buttons &= ~BUTTON_WALKING;
 			}
-		}
-
-		//set movement
-		//override default walk/run behavior
-		//NOTE: redundant, done in NPC_ApplyScriptFlags
-		if ( NPCInfo->scriptFlags & SCF_RUNNING )
-		{
-			ucmd.buttons &= ~BUTTON_WALKING;
-		}
-		else if ( NPCInfo->scriptFlags & SCF_WALKING )
-		{
-			ucmd.buttons |= BUTTON_WALKING;
-		}
-		else if ( NPCInfo->goalEntity == NPC->enemy )
-		{
-			ucmd.buttons &= ~BUTTON_WALKING;
-		}
-		else
-		{
-			ucmd.buttons |= BUTTON_WALKING;
-		}
-
-		if ( NPCInfo->scriptFlags & SCF_FORCED_MARCH )
-		{//being forced to walk
-			if ( g_crosshairEntNum != NPC->s.number )
-			{//don't walk if player isn't aiming at me
-				move = qfalse;
+			else if ( NPCInfo->scriptFlags & SCF_WALKING )
+			{
+				ucmd.buttons |= BUTTON_WALKING;
 			}
-		}
+			else if ( NPCInfo->goalEntity == NPC->enemy )
+			{
+				ucmd.buttons &= ~BUTTON_WALKING;
+			}
+			else
+			{
+				ucmd.buttons |= BUTTON_WALKING;
+			}
 
-		if ( move )
-		{
-			//move toward goal
-			NPC_MoveToGoal( qtrue );
+			if ( NPCInfo->scriptFlags & SCF_FORCED_MARCH )
+			{//being forced to walk
+				if ( g_crosshairEntNum != NPC->s.number )
+				{//don't walk if player isn't aiming at me
+					move = qfalse;
+				}
+			}
+
+			if ( move )
+			{
+				//move toward goal
+				NPC_MoveToGoal( qtrue );
+			}
 		}
 	}
 	else if ( !NPC->enemy && NPC->client->leader )

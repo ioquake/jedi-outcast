@@ -1,4 +1,6 @@
+#if defined (_MSC_VER) && (_MSC_VER >= 1020)
 #pragma once
+#endif
 #if !defined(GHOUL2_SHARED_H_INC)
 #define GHOUL2_SHARED_H_INC
 
@@ -142,7 +144,7 @@ struct SSkinGoreData
 typedef vector <surfaceInfo_t> surfaceInfo_v;
 typedef vector <boneInfo_t> boneInfo_v;
 typedef vector <boltInfo_t> boltInfo_v;
-typedef vector <mdxaBone_t> mdxaBone_v;
+typedef vector <pair<int,mdxaBone_t> > mdxaBone_v;
 
 // defines for stuff to go into the mflags
 #define		GHOUL2_NOCOLLIDE 0x001
@@ -199,14 +201,6 @@ public:
 	mNewOrigin(-1)
 	{
 		mFileName[0] = 0;
-	}
-
-	~CGhoul2Info(void)
-	{
-		mSlist.~surfaceInfo_v();
-		mBltlist.~boltInfo_v();
-		mBlist.~boneInfo_v();
-		mTempBoneList.~mdxaBone_v();
 	}
 }; 
 

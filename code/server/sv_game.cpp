@@ -332,8 +332,9 @@ void SV_InitGameProgs (void) {
 		SV_ShutdownGameProgs ();
 	}
 
-	if ( !Cvar_VariableValue("fs_restrict") && !Sys_CheckCD() ) {
-		Com_Error( ERR_NEED_CD, "Game CD not in drive" );
+	if ( !Cvar_VariableIntegerValue("fs_restrict") && !Sys_CheckCD() ) 
+	{
+		Com_Error( ERR_NEED_CD, SP_GetStringTextString("CON_TEXT_NEED_CD") ); //"Game CD not in drive" );		
 	}
 
 	// load a new game dll
@@ -400,7 +401,6 @@ Ghoul2 Insert Start
 */
 
 	import.G2API_AddBolt = G2API_AddBolt;
-	import.G2API_AnimateG2Models = G2API_AnimateG2Models;
 	import.G2API_AttachEnt = G2API_AttachEnt;
 	import.G2API_AttachG2Model = G2API_AttachG2Model;
 	import.G2API_CollisionDetect = G2API_CollisionDetect;
