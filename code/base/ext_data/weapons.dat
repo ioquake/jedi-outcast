@@ -92,6 +92,7 @@ weaponclass      weapon_stun_baton
 weaponmodel      models/weapons2/stun_baton/baton.md3
 weaponIcon       gfx/hud/w_icon_stunbaton
 firingsound		 sound/weapons/baton/idle.wav
+firingforce      fffx/weapons/baton/idle
 barrelcount      3
 ammotype         1
 ammolowcount     5
@@ -141,7 +142,9 @@ altrange         8192
 muzzleEffect	bryar/muzzle_flash
 altmuzzleEffect	bryar/altmuzzle_flash
 altchargesound	sound/weapons/bryar/altcharge.wav
-selectSound			sound/weapons/bryar/select.wav
+altchargeforce  	fffx/weapons/bryar/altcharge
+selectSound		sound/weapons/bryar/select.wav
+selectforce     	fffx/weapons/bryar/select
 }
 
 // WP_BLASTER
@@ -163,6 +166,7 @@ altmissileFuncName	blaster_alt_func
 muzzleEffect		blaster/muzzle_flash
 altmuzzleEffect		blaster/altmuzzle_flash
 selectSound			sound/weapons/blaster/select.wav
+selectforce         fffx/weapons/blaster/select
 }
 
 // WP_DISRUPTOR
@@ -183,7 +187,9 @@ altrange         8192
 muzzleEffect		disruptor/muzzle_flash
 altmuzzleEffect		disruptor/altmuzzle_flash
 selectSound			sound/weapons/disruptor/select.wav
+selectforce      fffx/weapons/disruptor/select
 altchargesound	sound/weapons/disruptor/altCharge.wav
+altchargeforce   fffx/weapons/disruptor/altcharge
 }
 
 // WP_BOWCASTER
@@ -193,6 +199,7 @@ weaponclass      weapon_bowcaster
 weaponmodel      models/weapons2/bowcaster/bowcaster.md3
 weaponIcon       gfx/hud/w_icon_bowcaster
 altchargesound	sound/weapons/bowcaster/altcharge.wav
+altchargeforce  fffx/weapons/bowcaster/altcharge
 ammotype         3
 ammolowcount     15
 energypershot    5
@@ -206,7 +213,9 @@ altmissileFuncName	bowcaster_func
 muzzleEffect		bowcaster/muzzle_flash
 altmuzzleEffect		bowcaster/altmuzzle_flash
 selectSound			sound/weapons/bowcaster/select.wav
+selectforce      fffx/weapons/bowcaster/select
 chargesound	sound/weapons/bowcaster/altcharge.wav
+chargeforce      fffx/weapons/bowcaster/altcharge
 }
 
 // WP_REPEATER
@@ -229,6 +238,7 @@ altmissileFuncName	repeater_alt_func
 muzzleEffect		repeater/muzzle_flash
 altmuzzleEffect		repeater/altmuzzle_flash
 selectSound			sound/weapons/repeater/select.wav
+selectforce			fffx/weapons/repeater/select
 }
 
 // WP_DEMP2
@@ -250,7 +260,9 @@ muzzleEffect		demp2/muzzle_flash
 altmissileFuncName	demp2_alt_func
 altmuzzleEffect		demp2/altmuzzle_flash
 selectSound			sound/weapons/demp2/select.wav
+selectforce	fffx/weapons/demp2/select
 altchargesound	sound/weapons/demp2/altCharge.wav
+altchargeforce	fffx/weapons/demp2/altcharge
 }
 
 
@@ -276,6 +288,7 @@ muzzleEffect	flechette/muzzle_flash
 altmuzzleEffect	flechette/altmuzzle_flash
 altmissileModel  models/weapons2/golan_arms/projectile.md3
 selectSound			sound/weapons/flechette/select.wav
+selectforce			fffx/weapons/flechette/select
 }
 
 // WP_ROCKET_LAUNCHER
@@ -306,6 +319,7 @@ altmissileModel  models/weapons2/merr_sonn/projectile.md3
 missilesound	sound/weapons/rocket/missleloop.wav
 altmissilesound	sound/weapons/rocket/missleloop.wav
 selectSound			sound/weapons/rocket/select.wav
+selectforce			fffx/weapons/rocket/select
 }
 
 
@@ -327,8 +341,11 @@ missileModel	 models/weapons2/thermal/thermal_proj.md3
 altmissileModel  models/weapons2/thermal/thermal_proj.md3
 barrelcount      0
 chargesound		sound/weapons/thermal/charge.wav
+chargeforce		fffx/weapons/thermal/charge
 altchargesound	sound/weapons/thermal/charge.wav
+altchargeforce	fffx/weapons/thermal/charge
 selectSound			sound/weapons/thermal/select.wav
+selectforce		fffx/weapons/thermal/select
 muzzleEffect		thermal/muzzle_flash
 }
 
@@ -349,6 +366,7 @@ altrange         8192
 missileModel	 models/weapons2/laser_trap/laser_trap_w.glm
 altmissileModel  models/weapons2/laser_trap/laser_trap_w.glm
 selectSound			sound/weapons/detpack/select.wav
+selectforce			fffx/weapons/detpack/select
 muzzleEffect		tripmine/muzzle_flash
 
 }
@@ -369,6 +387,7 @@ altfiretime      400
 altrange         8192
 missileModel	 models/weapons2/detpack/det_pack_proj.glm
 selectSound			sound/weapons/detpack/select.wav
+selectforce			fffx/weapons/detpack/select
 muzzleEffect		detpack/muzzle_flash
 }
 

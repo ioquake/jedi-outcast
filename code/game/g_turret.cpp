@@ -126,7 +126,7 @@ static void turret_fire ( gentity_t *ent, vec3_t start, vec3_t dir )
 	bolt->splashDamage = 0;
 	bolt->splashRadius = 0;
 	bolt->methodOfDeath = MOD_ENERGY;
-	bolt->clipmask = MASK_SHOT;
+	bolt->clipmask = MASK_SHOT | CONTENTS_LIGHTSABER;
 	bolt->trigger_formation = qfalse;		// don't draw tail on first frame	
 
 	VectorSet( bolt->maxs, 1.5, 1.5, 1.5 );
@@ -1036,7 +1036,7 @@ void pas_fire( gentity_t *ent )
 	bolt->splashDamage = 0;
 	bolt->splashRadius = 0;
 	bolt->methodOfDeath = MOD_ENERGY;
-	bolt->clipmask = MASK_SHOT;
+	bolt->clipmask = MASK_SHOT | CONTENTS_LIGHTSABER;
 
 	VectorSet( bolt->maxs, 1, 1, 1 );
 	VectorScale( bolt->maxs, -1, bolt->mins );
@@ -1996,6 +1996,10 @@ void panel_turret_think( gentity_t *self )
 
 			cg.overrides.active &= ~CG_OVERRIDE_FOV;
 			cg.overrides.fov = 0; 
+			if ( ucmd->upmove > 0 )
+			{//stop player from doing anything for a half second after
+				player->aimDebounceTime = level.time + 500;
+			}
 
 			// can be drawn
 //			self->s.eFlags &= ~EF_NODRAW;

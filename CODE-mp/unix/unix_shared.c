@@ -303,7 +303,7 @@ char *Sys_DefaultHomePath(void)
 #ifdef MACOS_X
 		Q_strcat(homePath, sizeof(homePath), "/Library/Application Support/Quake3");
 #else
-		Q_strcat(homePath, sizeof(homePath), "/.q3a");
+		Q_strcat(homePath, sizeof(homePath), "/.jkii");
 #endif
 		if (mkdir(homePath, 0777)) {
 			if (errno != EEXIST) 

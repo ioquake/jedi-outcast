@@ -112,7 +112,7 @@ stringID_table_t WPTable[] =
 	"NULL",WP_NONE,
 	ENUM2STRING(WP_NONE),
 	// Player weapons
-	ENUM2STRING(WP_SABER),
+	ENUM2STRING(WP_SABER),				 // NOTE: lots of code assumes this is the first weapon (... which is crap) so be careful -Ste.
 	ENUM2STRING(WP_BRYAR_PISTOL),
 	ENUM2STRING(WP_BLASTER),
 	ENUM2STRING(WP_DISRUPTOR),
@@ -125,15 +125,17 @@ stringID_table_t WPTable[] =
 	ENUM2STRING(WP_TRIP_MINE),
 	ENUM2STRING(WP_DET_PACK),
 	ENUM2STRING(WP_STUN_BATON),
-	// NPC enemy weapons
-	ENUM2STRING(WP_BOT_LASER),		// Probe droid	- Laser blast
+	//NOTE: player can only have up to 16 weapons), anything after that is enemy only
 	ENUM2STRING(WP_MELEE),			// Any ol' melee attack
-	ENUM2STRING(WP_TURRET),			// turret guns
+	// NPC enemy weapons
 	ENUM2STRING(WP_EMPLACED_GUN),
+	ENUM2STRING(WP_BOT_LASER),		// Probe droid	- Laser blast
+	ENUM2STRING(WP_TURRET),			// turret guns 
 	ENUM2STRING(WP_ATST_MAIN),
 	ENUM2STRING(WP_ATST_SIDE),
 	ENUM2STRING(WP_TIE_FIGHTER),
 	ENUM2STRING(WP_RAPID_FIRE_CONC),
+	ENUM2STRING(WP_BLASTER_PISTOL),	// apparently some enemy only version of the blaster
 	"", NULL
 };
 
@@ -753,17 +755,16 @@ static void Q3_SetObjective(const char *ObjEnum, int status)
 Q3_SetMissionFailed
 -------------------------
 */
+extern void G_PlayerGuiltDeath( void );
 static void	Q3_SetMissionFailed(const char *TextEnum)
 {
 	gentity_t	*ent = &g_entities[0];
 
-	ent->health = 0;
-	if ( ent->playerModel >= 0 && ent->ghoul2.size() )
-	{// don't let 'em animate
-		gi.G2API_PauseBoneAnimIndex( &ent->ghoul2[ent->playerModel], ent->rootBone, cg.time );
-		gi.G2API_PauseBoneAnimIndex( &ent->ghoul2[ent->playerModel], ent->motionBone, cg.time );
-		gi.G2API_PauseBoneAnimIndex( &ent->ghoul2[ent->playerModel], ent->lowerLumbarBone, cg.time );
+	if ( ent->health >= 0 )
+	{
+		G_PlayerGuiltDeath();
 	}
+	ent->health = 0;
 	//FIXME: what about other NPCs?  Scripts?
 
 	// statusTextIndex is looked at on the client side. 
@@ -3197,7 +3198,14 @@ void Q3_SetLoopSound(int entID, const char *name)
 		return;
 	}
 
-	index = G_SoundIndex( name );
+	if ( self->s.eType == ET_MOVER )
+	{
+		index = cgi_S_RegisterSound( name );
+	}
+	else
+	{
+		index = G_SoundIndex( name );
+	}
 
 	if (index)
 	{

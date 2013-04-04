@@ -90,7 +90,6 @@ field_t savefields_gNPC[] =
 field_t savefields_LevelLocals[] =
 {
 	{strLLOFS(locationHead),	F_GENTITY},	
-//	{strLLOFS(bodyQue),			F_BODYQUEUE}, - MCG
 	{strLLOFS(alertEvents),		F_ALERTEVENT},
 	{strLLOFS(groups),			F_AIGROUPS},	
 	{NULL, 0, F_IGNORE}
@@ -1015,10 +1014,10 @@ void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition)
 	gi.ReadFromSaveGame('DONE', &iDONE, sizeof(iDONE));
 }
 
-
+extern int killPlayerTimer;
 qboolean GameAllowedToSaveHere(void)
 {
-	return !in_camera;
+	return (!in_camera&&!killPlayerTimer);
 }
 
 //////////////////// eof /////////////////////

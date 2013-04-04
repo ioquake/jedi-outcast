@@ -486,7 +486,7 @@ void CL_CmdButtons( usercmd_t *cmd ) {
 
 	// allow the game to know if any key at all is
 	// currently pressed, even if it isn't bound to anything
-	if ( anykeydown && !cls.keyCatchers ) {
+	if ( kg.anykeydown && !cls.keyCatchers ) {
 		cmd->buttons |= BUTTON_ANY;
 	}
 }

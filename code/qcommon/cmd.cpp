@@ -362,7 +362,7 @@ will point into this temporary buffer.
 ============
 */
 void Cmd_TokenizeString( const char *text_in ) {
-	const char	*text;
+	const unsigned char	*text;
 	char	*textOut;
 
 	// clear previous args
@@ -372,7 +372,7 @@ void Cmd_TokenizeString( const char *text_in ) {
 		return;
 	}
 
-	text = text_in;
+	text = (const unsigned char	*)text_in;
 	textOut = cmd_tokenized;
 
 	while ( 1 ) {

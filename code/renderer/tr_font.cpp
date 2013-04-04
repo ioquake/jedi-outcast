@@ -222,7 +222,7 @@ static int Japanese_CollapseShiftJISCode( unsigned int uiCode )
 
 		if ( ((uiCode>>8)&0xFF) >= (SHIFTJIS_HIBYTE_START1)-SHIFTJIS_HIBYTE_START0)
 		{
-			uiCode -= ((SHIFTJIS_HIBYTE_START1)-SHIFTJIS_HIBYTE_STOP0)-1;
+			uiCode -= (((SHIFTJIS_HIBYTE_START1)-SHIFTJIS_HIBYTE_STOP0)-1) << 8;
 		}
 
 		uiCode = ((uiCode >> 8) * SHIFTJIS_CODES_PER_ROW) + (uiCode & 0xFF);
@@ -336,6 +336,11 @@ unsigned int AnyLanguage_ReadCharFromString( const char **ppsText, qboolean *pbI
 qboolean Language_IsAsian(void)
 {
 	return (Language_IsKorean() || Language_IsTaiwanese() || Language_IsJapanese());
+}
+
+qboolean Language_UsesSpaces(void)
+{
+	return !(Language_IsTaiwanese() || Language_IsJapanese());
 }
 
 
@@ -496,7 +501,7 @@ void CFontInfo::UpdateAsianIfNeeded( bool bForceReEval /* = false */ )
 				//
 				m_AsianGlyph.width			= iCappedHeight;	// square Asian chars same size as height of western set
 				m_AsianGlyph.height			= iCappedHeight;	// ""
-				m_AsianGlyph.horizAdvance	= iCappedHeight + (bTaiwanese?3:-1);	// Asian chars contain a small amount of space in the glyph
+				m_AsianGlyph.horizAdvance	= iCappedHeight + ((bTaiwanese||bJapanese)?3:-1);	// Asian chars contain a small amount of space in the glyph
 				m_AsianGlyph.horizOffset	= 0;				// ""
 				// .. or you can use the mKoreanHack value (which is the same number as the calc below)
 				m_AsianGlyph.baseline		= mAscender + ((iCappedHeight - mHeight) >> 1);
@@ -707,6 +712,13 @@ int RE_Font_StrLenPixels(const char *psText, const int iFontHandle, const float 
 	{
 		return(0);
 	}
+
+	float fScaleA = fScale;
+	if (Language_IsAsian() && fScale > 0.7f )
+	{
+		fScaleA = fScale * 0.75f;
+	}
+
 	while(*psText)
 	{
 		unsigned int uiLetter = AnyLanguage_ReadCharFromString( &psText );
@@ -718,7 +730,7 @@ int RE_Font_StrLenPixels(const char *psText, const int iFontHandle, const float 
 		{
 			int iPixelAdvance = curfont->GetLetterHorizAdvance( uiLetter );
 	
-			iThisWidth += Round(iPixelAdvance * fScale);
+			iThisWidth += Round(iPixelAdvance * ((uiLetter > 255) ? fScaleA : fScale));
 			if (iThisWidth > iMaxWidth)
 			{
 				iMaxWidth = iThisWidth;
@@ -769,9 +781,12 @@ int RE_Font_HeightPixels(const int iFontHandle, const float fScale)
 //
 void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, const int iFontHandle, int iMaxPixelWidth, const float fScale)
 {
+	static qboolean gbInShadow = qfalse;	// MUST default to this
 	int					x, y, colour, offset;
 	const glyphInfo_t	*pLetter;
 	qhandle_t			hShader;
+
+	assert (psText);
 
 	if(iFontHandle & STYLE_BLINK)
 	{
@@ -805,12 +820,23 @@ void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, c
 	{
 		return;
 	}
+
+	float fScaleA = fScale;
+	int iAsianYAdjust = 0;
+	if (Language_IsAsian() && fScale > 0.7f)
+	{
+		fScaleA = fScale * 0.75f;
+		iAsianYAdjust = /*Round*/((((float)curfont->GetPointSize() * fScale) - ((float)curfont->GetPointSize() * fScaleA))/2);
+	}
+
 	// Draw a dropshadow if required
 	if(iFontHandle & STYLE_DROPSHADOW)
 	{
 		offset = Round(curfont->GetPointSize() * fScale * 0.075f);
 
+		gbInShadow = qtrue;
 		RE_Font_DrawString(ox + offset, oy + offset, psText, colorTable[CT_DKGREY2], iFontHandle & SET_MASK, iMaxPixelWidth, fScale);
+		gbInShadow = qfalse;
 	}
 		
 	RE_SetColor( rgba );
@@ -825,14 +851,19 @@ void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, c
 		switch( uiLetter )
 		{
 		case '^':
-			{
 			colour = ColorIndex(*psText++);
-			RE_SetColor( g_color_table[colour] );
+			if (!gbInShadow)
+			{
+				RE_SetColor( g_color_table[colour] );
 			}
 			break;
 		case 10:						//linefeed
 			x = ox;
 			oy += Round(curfont->GetPointSize() * fScale);
+			if (Language_IsAsian())
+			{
+				oy += 4;	// this only comes into effect when playing in asian for "A long time ago in a galaxy" etc, all other text is line-broken in feeder functions
+			}
 			break;
 		case 13:						// Return
 			break;
@@ -849,18 +880,19 @@ void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, c
 				pLetter = curfont->GetLetter('.');
 			}
 
-			int iAdvancePixels = Round(pLetter->horizAdvance * fScale);
+			float fThisScale = uiLetter > 255 ? fScaleA : fScale;
+			int iAdvancePixels = Round(pLetter->horizAdvance * fThisScale);
 			bNextTextWouldOverflow = ( iMaxPixelWidth != -1 && (((x+iAdvancePixels)-ox)>iMaxPixelWidth) );
 			if (!bNextTextWouldOverflow)
 			{
 				// this 'mbRoundCalcs' stuff is crap, but the only way to make the font code work. Sigh...
-				//
-				y = oy - (curfont->mbRoundCalcs ? Round(pLetter->baseline * fScale) : pLetter->baseline * fScale);
+				//				
+				y = oy - (curfont->mbRoundCalcs ? Round(pLetter->baseline * fThisScale) : pLetter->baseline * fThisScale);
 
 				RE_StretchPic ( x + Round(pLetter->horizOffset * fScale), // float x
-								y,								// float y
-								curfont->mbRoundCalcs ? Round(pLetter->width * fScale) : pLetter->width * fScale,	// float w
-								curfont->mbRoundCalcs ? Round(pLetter->height * fScale) : pLetter->height * fScale, // float h
+								(uiLetter > 255) ? y - iAsianYAdjust : y,	// float y
+								curfont->mbRoundCalcs ? Round(pLetter->width * fThisScale) : pLetter->width * fThisScale,	// float w
+								curfont->mbRoundCalcs ? Round(pLetter->height * fThisScale) : pLetter->height * fThisScale, // float h
 								pLetter->s,						// float s1
 								pLetter->t,						// float t1
 								pLetter->s2,					// float s2

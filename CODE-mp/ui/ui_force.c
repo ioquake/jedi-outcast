@@ -13,15 +13,39 @@ FORCE INTERFACE
 #include "ui_force.h"
 
 int uiForceSide = FORCE_LIGHTSIDE;
+int uiJediNonJedi = -1;
 int uiForceRank = FORCE_MASTERY_JEDI_KNIGHT;
 int uiMaxRank = MAX_FORCE_RANK;
 int uiMaxPoints = 20;
 int	uiForceUsed = 0;
 int uiForceAvailable=0;
 
+extern const char *UI_TeamName(int team);
+
 qboolean gTouchedForce = qfalse;
 vmCvar_t	ui_freeSaber, ui_forcePowerDisable;
 void Menu_ShowItemByName(menuDef_t *menu, const char *p, qboolean bShow);
+
+qboolean uiForcePowersDisabled[NUM_FORCE_POWERS] = {
+	qfalse,//FP_HEAL,//instant
+	qfalse,//FP_LEVITATION,//hold/duration
+	qfalse,//FP_SPEED,//duration
+	qfalse,//FP_PUSH,//hold/duration
+	qfalse,//FP_PULL,//hold/duration
+	qfalse,//FP_TELEPATHY,//instant
+	qfalse,//FP_GRIP,//hold/duration
+	qfalse,//FP_LIGHTNING,//hold/duration
+	qfalse,//FP_RAGE,//duration
+	qfalse,//FP_PROTECT,
+	qfalse,//FP_ABSORB,
+	qfalse,//FP_TEAM_HEAL,
+	qfalse,//FP_TEAM_FORCE,
+	qfalse,//FP_DRAIN,
+	qfalse,//FP_SEE,
+	qfalse,//FP_SABERATTACK,
+	qfalse,//FP_SABERDEFEND,
+	qfalse//FP_SABERTHROW,
+};
 
 int uiForcePowersRank[NUM_FORCE_POWERS] = {
 	0,//FP_HEAL = 0,//instant
@@ -118,6 +142,12 @@ void UI_DrawForceStars(rectDef_t *rect, float scale, vec4_t color, int textStyle
 		{
 			starcolor = bgForcePowerCost[forceindex][i];
 
+			if (uiForcePowersDisabled[forceindex])
+			{
+				vec4_t grColor = {0.2f, 0.2f, 0.2f, 1.0f};
+				trap_R_SetColor(grColor);
+			}
+
 			if (val >= i)
 			{	// Draw a star.
 				UI_DrawHandlePic( xPos, rect->y+6, width, width, uiForceStarShaders[starcolor][1] );
@@ -126,6 +156,12 @@ void UI_DrawForceStars(rectDef_t *rect, float scale, vec4_t color, int textStyle
 			{	// Draw a circle.
 				UI_DrawHandlePic( xPos, rect->y+6, width, width, uiForceStarShaders[starcolor][0] );
 			}
+
+			if (uiForcePowersDisabled[forceindex])
+			{
+				trap_R_SetColor(NULL);
+			}
+
 			xPos += width + pad;
 		}
 	}
@@ -245,8 +281,9 @@ void UI_SaveForceTemplate()
 	}
 }
 
-// 
 
+// 
+extern qboolean UI_TrueJediEnabled( void );
 void UpdateForceUsed()
 {
 	int curpower, currank;
@@ -263,7 +300,69 @@ void UpdateForceUsed()
 	{
 		uiForcePowersRank[FP_LEVITATION]=1;
 	}
-	
+
+	if ( UI_TrueJediEnabled() )
+	{//true jedi mode is set
+		if ( uiJediNonJedi == -1 )
+		{
+			int x = 0;
+			qboolean clear = qfalse, update = qfalse;
+			uiJediNonJedi = FORCE_NONJEDI;
+			while ( x < NUM_FORCE_POWERS )
+			{//if any force power is set, we must be a jedi
+				if ( x == FP_LEVITATION || x == FP_SABERATTACK )
+				{
+					if ( uiForcePowersRank[x] > 1 )
+					{
+						uiJediNonJedi = FORCE_JEDI;
+						break;
+					}
+					else if ( uiForcePowersRank[x] > 0 )
+					{
+						clear = qtrue;
+					}
+				}
+				else if ( uiForcePowersRank[x] > 0 )
+				{
+					uiJediNonJedi = FORCE_JEDI;
+					break;
+				}
+				x++;
+			}
+			if ( uiJediNonJedi == FORCE_JEDI )
+			{
+				if ( uiForcePowersRank[FP_SABERATTACK] < 1 )
+				{
+					uiForcePowersRank[FP_SABERATTACK]=1;
+					update = qtrue;
+				}
+			}
+			else if ( clear )
+			{
+				x = 0;
+				while ( x < NUM_FORCE_POWERS )
+				{//clear all force
+					uiForcePowersRank[x] = 0;
+					x++;
+				}
+				update = qtrue;
+			}
+			if ( update )
+			{
+				int myTeam;
+				myTeam = (int)(trap_Cvar_VariableValue("ui_myteam"));
+				if ( myTeam != TEAM_SPECTATOR )
+				{
+					UI_UpdateClientForcePowers(UI_TeamName(myTeam));//will cause him to respawn, if it's been 5 seconds since last one
+				}
+				else
+				{
+					UI_UpdateClientForcePowers(NULL);//just update powers
+				}
+			}
+		}
+	}
+
 	menu = Menus_FindByName("ingame_playerforce");
 	// Set the cost of the saberattack according to whether its free.
 	if (ui_freeSaber.integer)
@@ -658,11 +757,11 @@ extern int	uiSkinColor;
 
 qboolean UI_SkinColor_HandleKey(int flags, float *special, int key, int num, int min, int max, int type) 
 {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) 
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) 
   {
   	int i = num;
 
-	if (key == K_MOUSE2)
+	if (key == A_MOUSE2)
 	{
 	    i--;
 	}
@@ -714,7 +813,7 @@ qboolean UI_ForceSide_HandleKey(int flags, float *special, int key, int num, int
 		}
 	}
 
-	if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) 
+	if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) 
 	{
 		int i = num;
 		int x = 0;
@@ -722,7 +821,7 @@ qboolean UI_ForceSide_HandleKey(int flags, float *special, int key, int num, int
 		//update the feeder item selection, it might be different depending on side
 		Menu_SetFeederSelection(NULL, FEEDER_FORCECFG, 0, NULL);
 
-		if (key == K_MOUSE2)
+		if (key == A_MOUSE2)
 		{
 			i--;
 		}
@@ -762,14 +861,90 @@ qboolean UI_ForceSide_HandleKey(int flags, float *special, int key, int num, int
 	return qfalse;
 }
 
+qboolean UI_JediNonJedi_HandleKey(int flags, float *special, int key, int num, int min, int max, int type) 
+{
+	char info[MAX_INFO_VALUE];
+
+	info[0] = '\0';
+	trap_GetConfigString(CS_SERVERINFO, info, sizeof(info));
+
+	if ( !UI_TrueJediEnabled() )
+	{//true jedi mode is not set
+		return qfalse;
+	}
+
+	if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) 
+	{
+		int i = num;
+		int x = 0;
+
+		if (key == A_MOUSE2)
+		{
+			i--;
+		}
+		else
+		{
+			i++;
+		}
+
+		if (i < min)
+		{
+			i = max;
+		}
+		else if (i > max)
+		{
+			i = min;
+		}
+
+		num = i;
+
+		uiJediNonJedi = num;
+
+		// Resetting power ranks based on if light or dark side is chosen
+		if ( !num )
+		{//not a jedi?
+			int myTeam = (int)(trap_Cvar_VariableValue("ui_myteam"));
+			while ( x < NUM_FORCE_POWERS )
+			{//clear all force powers
+				uiForcePowersRank[x] = 0;
+				x++;
+			}
+			if ( myTeam != TEAM_SPECTATOR )
+			{
+				UI_UpdateClientForcePowers(UI_TeamName(myTeam));//will cause him to respawn, if it's been 5 seconds since last one
+			}
+			else
+			{
+				UI_UpdateClientForcePowers(NULL);//just update powers
+			}
+		}
+		else if ( num )
+		{//a jedi, set the minimums, hopefuly they know to set the rest!
+			if ( uiForcePowersRank[FP_LEVITATION] < FORCE_LEVEL_1 )
+			{//force jump 1 minimum
+				uiForcePowersRank[FP_LEVITATION] = FORCE_LEVEL_1;
+			}
+			if ( uiForcePowersRank[FP_SABERATTACK] < FORCE_LEVEL_1 )
+			{//saber attack 1, minimum
+				uiForcePowersRank[FP_SABERATTACK] = FORCE_LEVEL_1;
+			}
+		}
+
+		UpdateForceUsed();
+
+		gTouchedForce = qtrue;
+		return qtrue;
+	}
+	return qfalse;
+}
 
 qboolean UI_ForceMaxRank_HandleKey(int flags, float *special, int key, int num, int min, int max, int type) 
 {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) 
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) 
   {
   	int i = num;
 
-	if (key == K_MOUSE2)
+	if (key == A_MOUSE2)
 	{
 	    i--;
 	}
@@ -809,13 +984,19 @@ qboolean UI_ForcePowerRank_HandleKey(int flags, float *special, int key, int num
 {
 	qboolean raising;
 
-	if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) 
+	if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) 
 	{
 		int forcepower, rank;
 
 		//this will give us the index as long as UI_FORCE_RANK is always one below the first force rank index
 		forcepower = (type-UI_FORCE_RANK)-1;
-				
+		
+		//the power is disabled on the server
+		if (uiForcePowersDisabled[forcepower])
+		{
+			return qtrue;
+		}
+
 		// If we are not on the same side as a power, or if we are not of any rank at all.
 		if (uiForcePowerDarkLight[forcepower] && uiForceSide != uiForcePowerDarkLight[forcepower])
 		{
@@ -842,7 +1023,7 @@ qboolean UI_ForcePowerRank_HandleKey(int flags, float *special, int key, int num
 			min += 1;
 		}
 
-		if (key == K_MOUSE2)
+		if (key == A_MOUSE2)
 		{	// Lower a point.
 			if (uiForcePowersRank[forcepower]<=min)
 			{

@@ -95,6 +95,12 @@ extern uiimport_t	ui;
 
 
 #define MAX_MOVIES 256
+#define MAX_MODS 64
+
+typedef struct {
+	const char *modName;
+	const char *modDescr;
+} modInfo_t;
 
 typedef struct {
 	displayContextDef_t uiDC;
@@ -107,6 +113,7 @@ typedef struct {
 	int effectsColor;
 	int currentCrosshair;
 
+	modInfo_t modList[MAX_MODS];
 	int modIndex;
 
 	qboolean teamLeader;
@@ -158,6 +165,10 @@ void			trap_R_AddRefEntityToScene( const refEntity_t *re );
 void			trap_R_RenderScene( const refdef_t *fd );
 sfxHandle_t		trap_S_RegisterSound( const char *sample, qboolean compressed );
 void			trap_S_StartLocalSound( sfxHandle_t sfx, int channelNum );
+#ifdef _IMMERSION
+ffHandle_t		trap_FF_Register( const char *name, int channel = FF_CHANNEL_MENU );
+void			trap_FF_Start( ffHandle_t ff );
+#endif // _IMMERSION
 int				PASSFLOAT( float x );
 
 

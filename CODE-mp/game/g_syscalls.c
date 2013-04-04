@@ -841,6 +841,12 @@ qboolean trap_G2API_GetBoltMatrix_NoReconstruct(void *ghoul2, const int modelInd
 	return (qboolean)(syscall(G_G2_GETBOLT_NOREC, ghoul2, modelIndex, boltIndex, matrix, angles, position, frameNum, modelList, scale));
 }
 
+qboolean trap_G2API_GetBoltMatrix_NoRecNoRot(void *ghoul2, const int modelIndex, const int boltIndex, mdxaBone_t *matrix,
+								const vec3_t angles, const vec3_t position, const int frameNum, qhandle_t *modelList, vec3_t scale)
+{ //Same as above but force it to not reconstruct the skeleton before getting the bolt position
+	return (qboolean)(syscall(G_G2_GETBOLT_NOREC_NOROT, ghoul2, modelIndex, boltIndex, matrix, angles, position, frameNum, modelList, scale));
+}
+
 int trap_G2API_InitGhoul2Model(void **ghoul2Ptr, const char *fileName, int modelIndex, qhandle_t customSkin,
 						  qhandle_t customShader, int modelFlags, int lodBias)
 {
@@ -903,6 +909,24 @@ qboolean trap_G2API_RemoveGhoul2Model(void *ghlInfo, int modelIndex)
 void trap_G2API_CleanGhoul2Models(void **ghoul2Ptr)
 {
 	syscall(G_G2_CLEANMODELS, ghoul2Ptr);
+}
+
+void trap_G2API_CollisionDetect ( 
+	CollisionRecord_t *collRecMap, 
+	void* ghoul2, 
+	const vec3_t angles, 
+	const vec3_t position,
+	int frameNumber, 
+	int entNum, 
+	vec3_t rayStart, 
+	vec3_t rayEnd, 
+	vec3_t scale, 
+	int traceFlags, 
+	int useLod,
+	float fRadius
+	)
+{
+	syscall ( G_G2_COLLISIONDETECT, collRecMap, ghoul2, angles, position, frameNumber, entNum, rayStart, rayEnd, scale, traceFlags, useLod, PASSFLOAT(fRadius) );
 }
 
 /*

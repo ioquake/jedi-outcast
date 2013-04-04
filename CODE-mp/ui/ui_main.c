@@ -16,100 +16,12 @@ USER INTERFACE MAIN
 #include "../qcommon/game_version.h"
 #include "ui_force.h"
 
-menuDef_t *Menus_FindByName(const char *p);
-void Menu_ShowItemByName(menuDef_t *menu, const char *p, qboolean bShow);
-void UpdateForceUsed();
-
-char holdSPString[1024]={0};
-
-uiInfo_t uiInfo;
-
-static const char *MonthAbbrev[] = {
-	"Jan","Feb","Mar",
-	"Apr","May","Jun",
-	"Jul","Aug","Sep",
-	"Oct","Nov","Dec"
-};
-
-
-static const char *skillLevels[] = {
-  "SKILL1",//"I Can Win",
-  "SKILL2",//"Bring It On",
-  "SKILL3",//"Hurt Me Plenty",
-  "SKILL4",//"Hardcore",
-  "SKILL5"//"Nightmare"
-};
-
-static const int numSkillLevels = sizeof(skillLevels) / sizeof(const char*);
-
-
-static const char *netSources[] = {
-	"Local",
-	"Internet",
-	"Favorites"
-//	"Mplayer"
-};
-static const int numNetSources = sizeof(netSources) / sizeof(const char*);
-
-static const serverFilter_t serverFilters[] = {
-	{"All", "" },
-	{"Jedi Knight 2", "" },
-};
-
-static const char *teamArenaGameTypes[] = {
-	"FFA",
-	"HOLOCRON",
-	"JEDIMASTER",
-	"DUEL",
-	"SP",
-	"TEAM FFA",
-	"N/A",
-	"CTF",
-	"CTY",
-	"TEAMTOURNAMENT"
-};
-
-static int const numTeamArenaGameTypes = sizeof(teamArenaGameTypes) / sizeof(const char*);
-
-
-static const int numServerFilters = sizeof(serverFilters) / sizeof(serverFilter_t);
-
-
-static char* netnames[] = {
-	"???",
-	"UDP",
-	"IPX",
-	NULL
-};
-
-static int gamecodetoui[] = {4,2,3,0,5,1,6};
-static int uitogamecode[] = {4,6,2,3,1,5,7};
-
-
-static void UI_StartServerRefresh(qboolean full);
-static void UI_StopServerRefresh( void );
-static void UI_DoServerRefresh( void );
-static void UI_BuildServerDisplayList(qboolean force);
-static void UI_BuildServerStatus(qboolean force);
-static void UI_BuildFindPlayerList(qboolean force);
-static int QDECL UI_ServersQsortCompare( const void *arg1, const void *arg2 );
-static int UI_MapCountByGameType(qboolean singlePlayer);
-static int UI_HeadCountByTeam( void );
-static int UI_HeadCountByColor( void );
-static void UI_ParseGameInfo(const char *teamFile);
-static const char *UI_SelectedMap(int index, int *actual);
-static const char *UI_SelectedHead(int index, int *actual);
-static int UI_GetIndexFromSelection(int actual);
-
-int ProcessNewUI( int command, int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6 );
-int	uiSkinColor=TEAM_FREE;
-
 /*
 ================
 vmMain
 
 This is the only way control passes into the module.
-This must be the very first function compiled into the .qvm file
+!!! This MUST BE THE VERY FIRST FUNCTION compiled into the .qvm file !!!
 ================
 */
 vmCvar_t  ui_debug;
@@ -166,6 +78,145 @@ int vmMain( int command, int arg0, int arg1, int arg2, int arg3, int arg4, int a
 
 	return -1;
 }
+
+menuDef_t *Menus_FindByName(const char *p);
+void Menu_ShowItemByName(menuDef_t *menu, const char *p, qboolean bShow);
+void UpdateForceUsed();
+
+char holdSPString[1024]={0};
+
+uiInfo_t uiInfo;
+
+static void UI_StartServerRefresh(qboolean full);
+static void UI_StopServerRefresh( void );
+static void UI_DoServerRefresh( void );
+static void UI_BuildServerDisplayList(qboolean force);
+static void UI_BuildServerStatus(qboolean force);
+static void UI_BuildFindPlayerList(qboolean force);
+static int QDECL UI_ServersQsortCompare( const void *arg1, const void *arg2 );
+static int UI_MapCountByGameType(qboolean singlePlayer);
+static int UI_HeadCountByTeam( void );
+static int UI_HeadCountByColor( void );
+static void UI_ParseGameInfo(const char *teamFile);
+static const char *UI_SelectedMap(int index, int *actual);
+static const char *UI_SelectedHead(int index, int *actual);
+static int UI_GetIndexFromSelection(int actual);
+
+int ProcessNewUI( int command, int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6 );
+int	uiSkinColor=TEAM_FREE;
+
+static const serverFilter_t serverFilters[] = {
+	{"All", "" },
+	{"Jedi Knight 2", "" },
+};
+static const int numServerFilters = sizeof(serverFilters) / sizeof(serverFilter_t);
+
+
+
+
+static const char *skillLevels[] = {
+  "SKILL1",//"I Can Win",
+  "SKILL2",//"Bring It On",
+  "SKILL3",//"Hurt Me Plenty",
+  "SKILL4",//"Hardcore",
+  "SKILL5"//"Nightmare"
+};
+static const int numSkillLevels = sizeof(skillLevels) / sizeof(const char*);
+
+
+
+static const char *teamArenaGameTypes[] = {
+	"FFA",
+	"HOLOCRON",
+	"JEDIMASTER",
+	"DUEL",
+	"SP",
+	"TEAM FFA",
+	"N/A",
+	"CTF",
+	"CTY",
+	"TEAMTOURNAMENT"
+};
+static int const numTeamArenaGameTypes = sizeof(teamArenaGameTypes) / sizeof(const char*);
+
+
+
+static char* netnames[] = {
+	"???",
+	"UDP",
+	"IPX",
+	NULL
+};
+
+static int gamecodetoui[] = {4,2,3,0,5,1,6};
+static int uitogamecode[] = {4,6,2,3,1,5,7};
+
+const char *UI_GetStripEdString(const char *refSection, const char *refName);
+
+const char *UI_TeamName(int team)  {
+	if (team==TEAM_RED)
+		return "RED";
+	else if (team==TEAM_BLUE)
+		return "BLUE";
+	else if (team==TEAM_SPECTATOR)
+		return "SPECTATOR";
+	return "FREE";
+}
+
+// returns either string or NULL for OOR...
+//
+static const char *GetCRDelineatedString( const char *psStripFileRef, const char *psStripStringRef, int iIndex)
+{
+	static char sTemp[256];
+	const char *psList = UI_GetStripEdString(psStripFileRef, psStripStringRef);
+	char *p;
+
+	while (iIndex--)
+	{
+		psList = strchr(psList,'\n');
+		if (!psList){
+			return NULL;	// OOR
+		}
+		psList++;
+	}
+
+	strcpy(sTemp,psList);
+	p = strchr(sTemp,'\n');
+	if (p) {
+		*p = '\0';
+	}
+
+	return sTemp;
+}
+
+
+static const char *GetMonthAbbrevString( int iMonth )
+{
+	const char *p = GetCRDelineatedString("INGAMETEXT","MONTHS", iMonth);
+	
+	return p ? p : "Jan";	// sanity
+}
+
+
+
+
+/*
+static const char *netSources[] = {
+	"Local",
+	"Internet",
+	"Favorites"
+//	"Mplayer"
+};
+static const int numNetSources = sizeof(netSources) / sizeof(const char*);
+*/
+static const int numNetSources = 3;	// now hard-entered in StripEd file
+static const char *GetNetSourceString(int iSource)
+{
+	const char *p = GetCRDelineatedString("INGAMETEXT","NET_SOURCES", iSource);
+
+	return p ? p : "??";
+}
+
 
 
 
@@ -335,9 +386,12 @@ static void Text_Paint_Limit(float *maxX, float x, float y, float scale, vec4_t 
 			   && psOut < &sTemp[sizeof(sTemp)-1]	// sanity
 				)
 		{
+			int iAdvanceCount;
 			psOutLastGood = psOut;
 			
-			uiLetter = trap_AnyLanguage_ReadCharFromString(&psText);
+			uiLetter = trap_AnyLanguage_ReadCharFromString(psText, &iAdvanceCount, NULL);
+			psText += iAdvanceCount;
+
 			if (uiLetter > 255)
 			{
 				*psOut++ = uiLetter>>8;
@@ -392,7 +446,7 @@ char parsedFPMessage[1024];
 extern int FPMessageTime;
 void Text_PaintCenter(float x, float y, float scale, vec4_t color, const char *text, float adjust, int iMenuFont);
 
-const char *UI_GetStripEdString(char *refSection, char *refName)
+const char *UI_GetStripEdString(const char *refSection, const char *refName)
 {
 	static char text[1024]={0};
 
@@ -926,8 +980,9 @@ void UI_Load() {
 	UI_ParseGameInfo("demogameinfo.txt");
 #else
 	UI_ParseGameInfo("ui/jk2mp/gameinfo.txt");
-	UI_LoadArenas();
 #endif
+	UI_LoadArenas();
+	UI_LoadBots();
 
 	UI_LoadMenus(menuSet, qtrue);
 	Menus_CloseAll();
@@ -1195,7 +1250,7 @@ static void UI_DrawForceSide(rectDef_t *rect, float scale, vec4_t color, int tex
 
 	if (val == FORCE_LIGHTSIDE)
 	{
-		Com_sprintf(s, sizeof(s), "Light\0");
+		trap_SP_GetStringTextString("MENUS3_FORCEDESC_LIGHT",s, sizeof(s));
 		menu = Menus_FindByName("forcealloc");
 		if (menu)
 		{
@@ -1218,8 +1273,7 @@ static void UI_DrawForceSide(rectDef_t *rect, float scale, vec4_t color, int tex
 	}
 	else
 	{
-		Com_sprintf(s, sizeof(s), "Dark\0");
-
+		trap_SP_GetStringTextString("MENUS3_FORCEDESC_DARK",s, sizeof(s));
 		menu = Menus_FindByName("forcealloc");
 		if (menu)
 		{
@@ -1243,6 +1297,128 @@ static void UI_DrawForceSide(rectDef_t *rect, float scale, vec4_t color, int tex
 	Text_Paint(rect->x, rect->y, scale, color, s,0, 0, textStyle, iMenuFont);
 }
 
+qboolean UI_HasSetSaberOnly( void )
+{
+	char	info[MAX_INFO_STRING];
+	int i = 0;
+	int wDisable = 0;
+	int	gametype = 0;
+
+	gametype = atoi(Info_ValueForKey(info, "g_gametype"));
+
+	if ( gametype == GT_JEDIMASTER )
+	{ //set to 0 
+		return qfalse;
+	}
+
+	trap_GetConfigString( CS_SERVERINFO, info, sizeof(info) );
+
+	if (gametype == GT_TOURNAMENT)
+	{
+		wDisable = atoi(Info_ValueForKey(info, "g_duelWeaponDisable"));
+	}
+	else
+	{
+		wDisable = atoi(Info_ValueForKey(info, "g_weaponDisable"));
+	}
+
+	while (i < WP_NUM_WEAPONS)
+	{
+		if (!(wDisable & (1 << i)) &&
+			i != WP_SABER && i != WP_NONE)
+		{
+			return qfalse;
+		}
+
+		i++;
+	}
+
+	return qtrue;
+}
+
+static qboolean UI_AllForceDisabled(int force)
+{
+	int i;
+
+	if (force)
+	{
+		for (i=0;i<NUM_FORCE_POWERS;i++)
+		{
+			if (!(force & (1<<i)))
+			{
+				return qfalse;
+			}
+		}
+
+		return qtrue;
+	}
+
+	return qfalse;
+}
+
+qboolean UI_TrueJediEnabled( void )
+{
+	char	info[MAX_INFO_STRING];
+	int		gametype = 0, disabledForce = 0, trueJedi = 0;
+	qboolean saberOnly = qfalse, allForceDisabled = qfalse;
+
+	trap_GetConfigString( CS_SERVERINFO, info, sizeof(info) );
+
+	//already have serverinfo at this point for stuff below. Don't bother trying to use ui_forcePowerDisable.
+	//if (ui_forcePowerDisable.integer)
+	//if (atoi(Info_ValueForKey(info, "g_forcePowerDisable")))
+	disabledForce = atoi(Info_ValueForKey(info, "g_forcePowerDisable"));
+	allForceDisabled = UI_AllForceDisabled(disabledForce);
+	gametype = atoi(Info_ValueForKey(info, "g_gametype"));
+	saberOnly = UI_HasSetSaberOnly();
+
+	if ( gametype == GT_HOLOCRON 
+		|| gametype == GT_JEDIMASTER 
+		|| saberOnly 
+		|| allForceDisabled )
+	{
+		trueJedi = 0;
+	}
+	else
+	{
+		trueJedi = atoi( Info_ValueForKey( info, "g_jediVmerc" ) );
+	}
+	return (trueJedi != 0);
+}
+
+static void UI_DrawJediNonJedi(rectDef_t *rect, float scale, vec4_t color, int textStyle, int val, int min, int max, int iMenuFont)
+{
+	int i;
+	char s[256];
+	//menuDef_t *menu;
+	
+	char info[MAX_INFO_VALUE];
+
+	i = val;
+	if (i < min || i > max) 
+	{
+		i = min;
+	}
+
+	info[0] = '\0';
+	trap_GetConfigString(CS_SERVERINFO, info, sizeof(info));
+
+	if ( !UI_TrueJediEnabled() )
+	{//true jedi mode is not on, do not draw this button type
+		return;
+	}
+
+	if ( val == FORCE_NONJEDI )
+	{
+		trap_SP_GetStringTextString("MENUS0_NO",s, sizeof(s));
+	}
+	else
+	{
+		trap_SP_GetStringTextString("MENUS0_YES",s, sizeof(s));
+	}
+
+	Text_Paint(rect->x, rect->y, scale, color, s,0, 0, textStyle, iMenuFont);
+}
 
 static void UI_DrawTeamName(rectDef_t *rect, float scale, vec4_t color, qboolean blue, int textStyle, int iMenuFont) {
   int i;
@@ -1287,11 +1463,13 @@ static void UI_DrawTeamMember(rectDef_t *rect, float scale, vec4_t color, qboole
 	if (value <= 1) {
 		if (value == -1)
 		{
-			text = "Closed";
+			//text = "Closed";
+			text = UI_GetStripEdString("MENUS3", "CLOSED");
 		}
 		else
 		{
-			text = "Human";
+			//text = "Human";
+			text = UI_GetStripEdString("MENUS3", "HUMAN");
 		}
 	} else {
 		value -= 2;
@@ -1389,6 +1567,52 @@ static void UI_DrawMapCinematic(rectDef_t *rect, float scale, vec4_t color, qboo
 	}
 }
 
+static void UI_SetForceDisabled(int force)
+{
+	int i = 0;
+
+	if (force)
+	{
+		while (i < NUM_FORCE_POWERS)
+		{
+			if (force & (1 << i))
+			{
+				uiForcePowersDisabled[i] = qtrue;
+
+				if (i != FP_LEVITATION && i != FP_SABERATTACK && i != FP_SABERDEFEND)
+				{
+					uiForcePowersRank[i] = 0;
+				}
+				else
+				{
+					if (i == FP_LEVITATION)
+					{
+						uiForcePowersRank[i] = 1;
+					}
+					else
+					{
+						uiForcePowersRank[i] = 3;
+					}
+				}
+			}
+			else
+			{
+				uiForcePowersDisabled[i] = qfalse;
+			}
+			i++;
+		}
+	}
+	else
+	{
+		i = 0;
+
+		while (i < NUM_FORCE_POWERS)
+		{
+			uiForcePowersDisabled[i] = qfalse;
+			i++;
+		}
+	}
+}
 
 void UpdateForceStatus()
 {
@@ -1412,23 +1636,27 @@ void UpdateForceStatus()
 	if (menu)
 	{
 		char	info[MAX_INFO_STRING];
+		int		disabledForce = 0;
+		qboolean trueJedi = qfalse, allForceDisabled = qfalse;
 
-		if (uiForcePowersRank[FP_SABERATTACK] > 0)
-		{	// Show lightsaber stuff.
-			Menu_ShowItemByName(menu, "nosaber", qfalse);
-			Menu_ShowItemByName(menu, "yessaber", qtrue);
-		}
-		else
-		{
-			Menu_ShowItemByName(menu, "nosaber", qtrue);
-			Menu_ShowItemByName(menu, "yessaber", qfalse);
-		}
-	
 		trap_GetConfigString( CS_SERVERINFO, info, sizeof(info) );
 
 		//already have serverinfo at this point for stuff below. Don't bother trying to use ui_forcePowerDisable.
 		//if (ui_forcePowerDisable.integer)
-		if (atoi(Info_ValueForKey(info, "g_forcePowerDisable")))
+		//if (atoi(Info_ValueForKey(info, "g_forcePowerDisable")))
+		disabledForce = atoi(Info_ValueForKey(info, "g_forcePowerDisable"));
+		allForceDisabled = UI_AllForceDisabled(disabledForce);
+		trueJedi = UI_TrueJediEnabled();
+
+		if ( !trueJedi || allForceDisabled )
+		{
+			Menu_ShowItemByName(menu, "jedinonjedi", qfalse);
+		}
+		else
+		{
+			Menu_ShowItemByName(menu, "jedinonjedi", qtrue);
+		}
+		if ( allForceDisabled == qtrue || (trueJedi && uiJediNonJedi == FORCE_NONJEDI) )
 		{	// No force stuff
 			Menu_ShowItemByName(menu, "noforce", qtrue);
 			Menu_ShowItemByName(menu, "yesforce", qfalse);
@@ -1437,8 +1665,21 @@ void UpdateForceStatus()
 		}
 		else
 		{
+			UI_SetForceDisabled(disabledForce);
 			Menu_ShowItemByName(menu, "noforce", qfalse);
 			Menu_ShowItemByName(menu, "yesforce", qtrue);
+		}
+
+		//Moved this to happen after it's done with force power disabling stuff
+		if (uiForcePowersRank[FP_SABERATTACK] > 0 || ui_freeSaber.integer)
+		{	// Show lightsaber stuff.
+			Menu_ShowItemByName(menu, "nosaber", qfalse);
+			Menu_ShowItemByName(menu, "yessaber", qtrue);
+		}
+		else
+		{
+			Menu_ShowItemByName(menu, "nosaber", qtrue);
+			Menu_ShowItemByName(menu, "yessaber", qfalse);
 		}
 
 		// The leftmost button should be "apply" unless you are in spectator, where you can join any team.
@@ -1569,7 +1810,7 @@ static void UI_DrawNetSource(rectDef_t *rect, float scale, vec4_t color, int tex
 
 	trap_SP_GetStringTextString("MENUS3_SOURCE", holdSPString, sizeof(holdSPString) );
 	Text_Paint(rect->x, rect->y, scale, color, va("%s %s",holdSPString,
-		 netSources[ui_netSource.integer]), 0, 0, textStyle, iMenuFont);
+		 GetNetSourceString(ui_netSource.integer)), 0, 0, textStyle, iMenuFont);
 }
 
 static void UI_DrawNetMapPreview(rectDef_t *rect, float scale, vec4_t color) {
@@ -1871,11 +2112,31 @@ static int UI_OwnerDrawWidth(int ownerDraw, float scale) {
 
 		if (i == FORCE_LIGHTSIDE)
 		{
-			s = "Light";
+//			s = "Light";
+			s = (char *)UI_GetStripEdString("MENUS3", "FORCEDESC_LIGHT");
 		}
 		else
 		{
-			s = "Dark";
+//			s = "Dark";
+			s = (char *)UI_GetStripEdString("MENUS3", "FORCEDESC_DARK");
+		}
+		break;
+    case UI_JEDI_NONJEDI:
+		i = uiJediNonJedi;
+		if (i < 0 || i > 1)
+		{
+			i = 0;
+		}
+
+		if (i == FORCE_NONJEDI)
+		{
+//			s = "Non-Jedi";
+			s = (char *)UI_GetStripEdString("MENUS0", "NO");
+		}
+		else
+		{
+//			s = "Jedi";
+			s = (char *)UI_GetStripEdString("MENUS0", "YES");
 		}
 		break;
     case UI_FORCE_RANK:
@@ -2003,7 +2264,7 @@ static int UI_OwnerDrawWidth(int ownerDraw, float scale) {
 				ui_netSource.integer = 0;
 			}
 			trap_SP_GetStringTextString("MENUS3_SOURCE", holdSPString, sizeof(holdSPString));
-			s = va("%s %s", holdSPString, netSources[ui_netSource.integer]);
+			s = va("%s %s", holdSPString, GetNetSourceString(ui_netSource.integer));
 			break;
 		case UI_NETFILTER:
 			if (ui_serverFilterType.integer < 0 || ui_serverFilterType.integer > numServerFilters) {
@@ -2345,6 +2606,9 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
       break;
 	case UI_FORCE_SIDE:
       UI_DrawForceSide(&rect, scale, color, textStyle, uiForceSide, 1, 2, iMenuFont);
+      break;
+	case UI_JEDI_NONJEDI:
+      UI_DrawJediNonJedi(&rect, scale, color, textStyle, uiJediNonJedi, 0, 1, iMenuFont);
       break;
     case UI_FORCE_POINTS:
       UI_DrawGenericNum(&rect, scale, color, textStyle, uiForceAvailable, 1, forceMasteryPoints[MAX_FORCE_RANK], ownerDraw,iMenuFont);
@@ -2705,10 +2969,10 @@ static qboolean UI_OwnerDrawVisible(int flags) {
 }
 
 static qboolean UI_Handicap_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
     int h;
     h = Com_Clamp( 5, 100, trap_Cvar_VariableValue("handicap") );
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 	    h -= 5;
 		} else {
 	    h += 5;
@@ -2725,7 +2989,7 @@ static qboolean UI_Handicap_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_Effects_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 
 	  int team = (int)(trap_Cvar_VariableValue("ui_myteam"));
 
@@ -2735,7 +2999,7 @@ static qboolean UI_Effects_HandleKey(int flags, float *special, int key) {
 	  }
 
 
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 	    uiInfo.effectsColor--;
 		} else {
 	    uiInfo.effectsColor++;
@@ -2754,14 +3018,14 @@ static qboolean UI_Effects_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_ClanName_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
     int i;
     i = UI_TeamIndexFromName(UI_Cvar_VariableString("ui_teamName"));
 		if (uiInfo.teamList[i].cinematic >= 0) {
 		  trap_CIN_StopCinematic(uiInfo.teamList[i].cinematic);
 			uiInfo.teamList[i].cinematic = -1;
 		}
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 	    i--;
 		} else {
 	    i++;
@@ -2781,11 +3045,11 @@ static qboolean UI_ClanName_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_GameType_HandleKey(int flags, float *special, int key, qboolean resetMap) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 		int oldCount = UI_MapCountByGameType(qtrue);
 
 		// hard coded mess here
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 			ui_gameType.integer--;
 			if (ui_gameType.integer == 2) {
 				ui_gameType.integer = 1;
@@ -2820,9 +3084,9 @@ static qboolean UI_GameType_HandleKey(int flags, float *special, int key, qboole
 }
 
 static qboolean UI_NetGameType_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 			ui_netGameType.integer--;
 		} else {
 			ui_netGameType.integer++;
@@ -2845,10 +3109,10 @@ static qboolean UI_NetGameType_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_AutoSwitch_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 	 int switchVal = trap_Cvar_VariableValue("cg_autoswitch");
 
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 			switchVal--;
 		} else {
 			switchVal++;
@@ -2870,9 +3134,9 @@ static qboolean UI_AutoSwitch_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_JoinGameType_HandleKey(int flags, float *special, int key) {
-	if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+	if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 			ui_joinGameType.integer--;
 		} else {
 			ui_joinGameType.integer++;
@@ -2894,10 +3158,10 @@ static qboolean UI_JoinGameType_HandleKey(int flags, float *special, int key) {
 
 
 static qboolean UI_Skill_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
   	int i = trap_Cvar_VariableValue( "g_spSkill" );
 
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 	    i--;
 		} else {
 	    i++;
@@ -2917,11 +3181,11 @@ static qboolean UI_Skill_HandleKey(int flags, float *special, int key) {
 
 
 static qboolean UI_TeamName_HandleKey(int flags, float *special, int key, qboolean blue) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
     int i;
     i = UI_TeamIndexFromName(UI_Cvar_VariableString((blue) ? "ui_blueTeam" : "ui_redTeam"));
 
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 	    i--;
 		} else {
 	    i++;
@@ -2941,7 +3205,7 @@ static qboolean UI_TeamName_HandleKey(int flags, float *special, int key, qboole
 }
 
 static qboolean UI_TeamMember_HandleKey(int flags, float *special, int key, qboolean blue, int num) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 		// 0 - None
 		// 1 - Human
 		// 2..NumCharacters - Bot
@@ -2967,7 +3231,7 @@ static qboolean UI_TeamMember_HandleKey(int flags, float *special, int key, qboo
 			value = 1;
 		}
 
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 			value--;
 		} else {
 			value++;
@@ -2994,9 +3258,9 @@ static qboolean UI_TeamMember_HandleKey(int flags, float *special, int key, qboo
 }
 
 static qboolean UI_NetSource_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 		
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 			ui_netSource.integer--;
 		} else {
 			ui_netSource.integer++;
@@ -3019,9 +3283,9 @@ static qboolean UI_NetSource_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_NetFilter_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 			ui_serverFilterType.integer--;
 		} else {
 			ui_serverFilterType.integer++;
@@ -3039,8 +3303,8 @@ static qboolean UI_NetFilter_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_OpponentName_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
-		if (key == K_MOUSE2) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
+		if (key == A_MOUSE2) {
 			UI_PriorOpponent();
 		} else {
 			UI_NextOpponent();
@@ -3051,11 +3315,11 @@ static qboolean UI_OpponentName_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_BotName_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 //		int game = trap_Cvar_VariableValue("g_gametype");
 		int value = uiInfo.botIndex;
 
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 			value--;
 		} else {
 			value++;
@@ -3083,8 +3347,8 @@ static qboolean UI_BotName_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_BotSkill_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
-		if (key == K_MOUSE2) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
+		if (key == A_MOUSE2) {
 			uiInfo.skillIndex--;
 		} else {
 			uiInfo.skillIndex++;
@@ -3100,7 +3364,7 @@ static qboolean UI_BotSkill_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_RedBlue_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 		uiInfo.redBlue ^= 1;
 		return qtrue;
 	}
@@ -3108,8 +3372,8 @@ static qboolean UI_RedBlue_HandleKey(int flags, float *special, int key) {
 }
 
 static qboolean UI_Crosshair_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
-		if (key == K_MOUSE2) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
+		if (key == A_MOUSE2) {
 			uiInfo.currentCrosshair--;
 		} else {
 			uiInfo.currentCrosshair++;
@@ -3129,7 +3393,7 @@ static qboolean UI_Crosshair_HandleKey(int flags, float *special, int key) {
 
 
 static qboolean UI_SelectedPlayer_HandleKey(int flags, float *special, int key) {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) {
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) {
 		int selected;
 
 		UI_BuildPlayerList();
@@ -3138,7 +3402,7 @@ static qboolean UI_SelectedPlayer_HandleKey(int flags, float *special, int key) 
 		}
 		selected = trap_Cvar_VariableValue("cg_selectedPlayer");
 		
-		if (key == K_MOUSE2) {
+		if (key == A_MOUSE2) {
 			selected--;
 		} else {
 			selected++;
@@ -3173,6 +3437,9 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float *special, 
       break;
     case UI_FORCE_SIDE:
       return UI_ForceSide_HandleKey(flags, special, key, uiForceSide, 1, 2, ownerDraw);
+      break;
+    case UI_JEDI_NONJEDI:
+      return UI_JediNonJedi_HandleKey(flags, special, key, uiJediNonJedi, 0, 1, ownerDraw);
       break;
 	case UI_FORCE_MASTERY_SET:
       return UI_ForceMaxRank_HandleKey(flags, special, key, uiForceRank, 1, MAX_FORCE_RANK, ownerDraw);
@@ -3494,7 +3761,7 @@ static void UI_StartSkirmish(qboolean next) {
 		UI_SelectedMap(index, &actual);
 		if (UI_SetNextMap(actual, index)) {
 		} else {
-			UI_GameType_HandleKey(0, 0, K_MOUSE1, qfalse);
+			UI_GameType_HandleKey(0, 0, A_MOUSE1, qfalse);
 			UI_MapCountByGameType(qtrue);
 			Menu_SetFeederSelection(NULL, FEEDER_MAPS, 0, "skirmish");
 		}
@@ -3966,14 +4233,13 @@ static void UI_RunMenuScript(char **args)
 			ui_mapIndex.integer = UI_GetIndexFromSelection(ui_currentMap.integer);
 			trap_Cvar_Set("ui_mapIndex", va("%d", ui_mapIndex.integer));
 			Menu_SetFeederSelection(NULL, FEEDER_MAPS, ui_mapIndex.integer, "skirmish");
-			UI_GameType_HandleKey(0, 0, K_MOUSE1, qfalse);
-			UI_GameType_HandleKey(0, 0, K_MOUSE2, qfalse);
+			UI_GameType_HandleKey(0, 0, A_MOUSE1, qfalse);
+			UI_GameType_HandleKey(0, 0, A_MOUSE2, qfalse);
 		} else if (Q_stricmp(name, "resetDefaults") == 0) {
-			trap_Cmd_ExecuteText( EXEC_APPEND, "exec mpdefault.cfg\n");
 			trap_Cmd_ExecuteText( EXEC_APPEND, "cvar_restart\n");
-			Controls_SetDefaults();
-			trap_Cvar_Set("com_introPlayed", "1" );
+			trap_Cmd_ExecuteText( EXEC_APPEND, "exec mpdefault.cfg\n");
 			trap_Cmd_ExecuteText( EXEC_APPEND, "vid_restart\n" );
+			trap_Cvar_Set("com_introPlayed", "1" );
 #ifdef USE_CD_KEY
 		} else if (Q_stricmp(name, "getCDKey") == 0) {
 			char out[17];
@@ -4316,7 +4582,26 @@ static void UI_RunMenuScript(char **args)
 
 			if (String_Parse(args, &teamArg))
 			{
-				UI_UpdateClientForcePowers(teamArg);
+				if ( Q_stricmp( "none", teamArg ) == 0 )
+				{
+					UI_UpdateClientForcePowers(NULL);
+				}
+				else if ( Q_stricmp( "same", teamArg ) == 0 )
+				{//stay on current team
+					int myTeam = (int)(trap_Cvar_VariableValue("ui_myteam"));
+					if ( myTeam != TEAM_SPECTATOR )
+					{
+						UI_UpdateClientForcePowers(UI_TeamName(myTeam));//will cause him to respawn, if it's been 5 seconds since last one
+					}
+					else
+					{
+						UI_UpdateClientForcePowers(NULL);//just update powers
+					}
+				}
+				else
+				{
+					UI_UpdateClientForcePowers(teamArg);
+				}
 			}
 			else
 			{
@@ -4343,10 +4628,6 @@ static void UI_RunMenuScript(char **args)
 				{
 					forcePowerDisable |= (1<<i);
 				}
-
-				forcePowerDisable &= ~(1<<FP_SABERATTACK);
-				forcePowerDisable &= ~(1<<FP_SABERDEFEND);
-				forcePowerDisable &= ~(1<<FP_SABERTHROW);
 
 				trap_Cvar_Set("g_forcePowerDisable", va("%i",forcePowerDisable));
 			}
@@ -5255,13 +5536,15 @@ static void UI_UpdatePendingPings() {
 
 }
 
-static const char *UI_FeederItemText(float feederID, int index, int column, qhandle_t *handle) {
+static const char *UI_FeederItemText(float feederID, int index, int column, 
+									 qhandle_t *handle1, qhandle_t *handle2, qhandle_t *handle3) {
 	static char info[MAX_STRING_CHARS];
 	static char hostname[1024];
 	static char clientBuff[32];
+	static char needPass[32];
 	static int lastColumn = -1;
 	static int lastTime = 0;
-	*handle = -1;
+	*handle1 = *handle2 = *handle3 = -1;
 	if (feederID == FEEDER_HEADS) {
 		int actual;
 		return UI_SelectedHead(index, &actual);
@@ -5333,6 +5616,60 @@ static const char *UI_FeederItemText(float feederID, int index, int column, qhan
 					if (ping <= 0) {
 						return Info_ValueForKey(info, "addr");
 					} else {
+						int gametype = 0;
+						//check for password
+						if ( atoi(Info_ValueForKey(info, "needpass")) )
+						{
+							*handle3 = trap_R_RegisterShaderNoMip( "gfx/menus/needpass" );
+						}
+						//check for saberonly and restricted force powers
+						gametype = atoi(Info_ValueForKey(info, "gametype"));
+						if ( gametype != GT_JEDIMASTER )
+						{
+							qboolean saberOnly = qtrue;
+							qboolean restrictedForce = qfalse;
+							qboolean allForceDisabled = qfalse;
+							int wDisable, i = 0;
+
+							//check force
+							restrictedForce = atoi(Info_ValueForKey(info, "fdisable"));
+							if ( UI_AllForceDisabled( restrictedForce ) )
+							{//all force powers are disabled
+								allForceDisabled = qtrue;
+								*handle2 = trap_R_RegisterShaderNoMip( "gfx/menus/noforce" );
+							}
+							else if ( restrictedForce )
+							{//at least one force power is disabled
+								*handle2 = trap_R_RegisterShaderNoMip( "gfx/menus/forcerestrict" );
+							}
+							
+							//check weaps
+							wDisable = atoi(Info_ValueForKey(info, "wdisable"));
+
+							while ( i < WP_NUM_WEAPONS )
+							{
+								if ( !(wDisable & (1 << i)) && i != WP_SABER && i != WP_NONE )
+								{
+									saberOnly = qfalse;
+								}
+
+								i++;
+							}
+							if ( saberOnly )
+							{
+								*handle1 = trap_R_RegisterShaderNoMip( "gfx/menus/saberonly" );
+							}
+							else if ( atoi(Info_ValueForKey(info, "truejedi")) != 0 )
+							{
+								if ( gametype != GT_HOLOCRON 
+									&& gametype != GT_JEDIMASTER 
+									&& !saberOnly 
+									&& !allForceDisabled )
+								{//truejedi is on and allowed in this mode
+									*handle1 = trap_R_RegisterShaderNoMip( "gfx/menus/truejedi" );
+								}
+							}
+						}
 						if ( ui_netSource.integer == AS_LOCAL ) {
 							Com_sprintf( hostname, sizeof(hostname), "%s [%s]",
 											Info_ValueForKey(info, "hostname"),
@@ -5350,17 +5687,24 @@ static const char *UI_FeederItemText(float feederID, int index, int column, qhan
 							return hostname;
 						}
 					}
-				case SORT_MAP : return Info_ValueForKey(info, "mapname");
+				case SORT_MAP : 
+					return Info_ValueForKey(info, "mapname");
 				case SORT_CLIENTS : 
 					Com_sprintf( clientBuff, sizeof(clientBuff), "%s (%s)", Info_ValueForKey(info, "clients"), Info_ValueForKey(info, "sv_maxclients"));
 					return clientBuff;
 				case SORT_GAME : 
 					game = atoi(Info_ValueForKey(info, "gametype"));
 					if (game >= 0 && game < numTeamArenaGameTypes) {
-						return teamArenaGameTypes[game];
+						strcpy(needPass,teamArenaGameTypes[game]);
 					} else {
-						return "Unknown";
+						if (ping <= 0)
+						{
+							strcpy(needPass,"Inactive");
+						}
+						strcpy(needPass,"Unknown");
 					}
+
+					return needPass;
 				case SORT_PING : 
 					if (ping <= 0) {
 						return "...";
@@ -6107,6 +6451,8 @@ void _UI_Init( qboolean inGameLoad ) {
 	uiInfo.uiDC.Font_StrLenChars = trap_R_Font_StrLenChars;
 	uiInfo.uiDC.Font_HeightPixels = trap_R_Font_HeightPixels;
 	uiInfo.uiDC.Font_DrawString = trap_R_Font_DrawString;
+	uiInfo.uiDC.Language_IsAsian = trap_Language_IsAsian;
+	uiInfo.uiDC.Language_UsesSpaces = trap_Language_UsesSpaces;
 	uiInfo.uiDC.AnyLanguage_ReadCharFromString = trap_AnyLanguage_ReadCharFromString;
 	uiInfo.uiDC.ownerDrawItem = &UI_OwnerDraw;
 	uiInfo.uiDC.getValue = &UI_GetValue;
@@ -6214,6 +6560,7 @@ void _UI_Init( qboolean inGameLoad ) {
 	uiInfo.previewMovie = -1;
 
 	trap_Cvar_Register(NULL, "debug_protocol", "", 0 );
+	trap_Cvar_Register(NULL, "ui_hidelang",	"0", CVAR_INTERNAL );
 
 	trap_Cvar_Set("ui_actualNetGameType", va("%d", ui_netGameType.integer));
 }
@@ -6229,7 +6576,7 @@ void _UI_KeyEvent( int key, qboolean down ) {
   if (Menu_Count() > 0) {
     menuDef_t *menu = Menu_GetFocused();
 		if (menu) {
-			if (key == K_ESCAPE && down && !Menus_AnyFullScreenVisible()) {
+			if (key == A_ESCAPE && down && !Menus_AnyFullScreenVisible()) {
 				Menus_CloseAll();
 			} else {
 				Menu_HandleKey(menu, key, down );
@@ -6414,11 +6761,11 @@ static void UI_PrintTime ( char *buf, int bufsize, int time ) {
 	time /= 1000;  // change to seconds
 
 	if (time > 3600) { // in the hours range
-		Com_sprintf( buf, bufsize, "%d hr %d min", time / 3600, (time % 3600) / 60 );
+		Com_sprintf( buf, bufsize, "%d hr %2d min", time / 3600, (time % 3600) / 60 );
 	} else if (time > 60) { // mins
-		Com_sprintf( buf, bufsize, "%d min %d sec", time / 60, time % 60 );
+		Com_sprintf( buf, bufsize, "%2d min %2d sec", time / 60, time % 60 );
 	} else  { // secs
-		Com_sprintf( buf, bufsize, "%d sec", time );
+		Com_sprintf( buf, bufsize, "%2d sec", time );
 	}
 }
 
@@ -6429,15 +6776,35 @@ void Text_PaintCenter(float x, float y, float scale, vec4_t color, const char *t
 
 
 static void UI_DisplayDownloadInfo( const char *downloadName, float centerPoint, float yStart, float scale, int iMenuFont) {
-	static char dlText[]	= "Downloading:";
-	static char etaText[]	= "Estimated time left:";
-	static char xferText[]	= "Transfer rate:";
-
+	char sDownLoading[256];
+	char sEstimatedTimeLeft[256];
+	char sTransferRate[256];
+	char sOf[20];
+	char sCopied[256];
+	char sSec[20];
+	//
 	int downloadSize, downloadCount, downloadTime;
 	char dlSizeBuf[64], totalSizeBuf[64], xferRateBuf[64], dlTimeBuf[64];
 	int xferRate;
 	int leftWidth;
 	const char *s;
+
+	vec4_t colorLtGreyAlpha = {0, 0, 0, .5};
+
+	UI_FillRect( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, colorLtGreyAlpha );
+
+	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 0);	// "Downloading:"
+	strcpy(sDownLoading,s?s:"");
+	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 1);	// "Estimated time left:"
+	strcpy(sEstimatedTimeLeft,s?s:"");
+	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 2);	// "Transfer rate:"
+	strcpy(sTransferRate,s?s:"");
+	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 3);	// "of"
+	strcpy(sOf,s?s:"");
+	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 4);	// "copied"
+	strcpy(sCopied,s?s:"");
+	s = GetCRDelineatedString("MENUS3","DOWNLOAD_STUFF", 5);	// "sec."
+	strcpy(sSec,s?s:"");
 
 	downloadSize = trap_Cvar_VariableValue( "cl_downloadSize" );
 	downloadCount = trap_Cvar_VariableValue( "cl_downloadCount" );
@@ -6446,9 +6813,10 @@ static void UI_DisplayDownloadInfo( const char *downloadName, float centerPoint,
 	leftWidth = 320;
 
 	UI_SetColor(colorWhite);
-	Text_PaintCenter(centerPoint, yStart + 112, scale, colorWhite, dlText, 0, iMenuFont);
-	Text_PaintCenter(centerPoint, yStart + 192, scale, colorWhite, etaText, 0, iMenuFont);
-	Text_PaintCenter(centerPoint, yStart + 248, scale, colorWhite, xferText, 0, iMenuFont);
+
+	Text_PaintCenter(centerPoint, yStart + 112, scale, colorWhite, sDownLoading, 0, iMenuFont);
+	Text_PaintCenter(centerPoint, yStart + 192, scale, colorWhite, sEstimatedTimeLeft, 0, iMenuFont);
+	Text_PaintCenter(centerPoint, yStart + 248, scale, colorWhite, sTransferRate, 0, iMenuFont);
 
 	if (downloadSize > 0) {
 		s = va( "%s (%d%%)", downloadName, downloadCount * 100 / downloadSize );
@@ -6463,7 +6831,7 @@ static void UI_DisplayDownloadInfo( const char *downloadName, float centerPoint,
 
 	if (downloadCount < 4096 || !downloadTime) {
 		Text_PaintCenter(leftWidth, yStart+216, scale, colorWhite, "estimating", 0, iMenuFont);
-		Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s of %s copied)", dlSizeBuf, totalSizeBuf), 0, iMenuFont);
+		Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s %s %s %s)", dlSizeBuf, sOf, totalSizeBuf, sCopied), 0, iMenuFont);
 	} else {
 		if ((uiInfo.uiDC.realTime - downloadTime) / 1000) {
 			xferRate = downloadCount / ((uiInfo.uiDC.realTime - downloadTime) / 1000);
@@ -6481,18 +6849,18 @@ static void UI_DisplayDownloadInfo( const char *downloadName, float centerPoint,
 				(n - (((downloadCount/1024) * n) / (downloadSize/1024))) * 1000);
 
 			Text_PaintCenter(leftWidth, yStart+216, scale, colorWhite, dlTimeBuf, 0, iMenuFont);
-			Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s of %s copied)", dlSizeBuf, totalSizeBuf), 0, iMenuFont);
+			Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s %s %s %s)", dlSizeBuf, sOf, totalSizeBuf, sCopied), 0, iMenuFont);
 		} else {
 			Text_PaintCenter(leftWidth, yStart+216, scale, colorWhite, "estimating", 0, iMenuFont);
 			if (downloadSize) {
-				Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s of %s copied)", dlSizeBuf, totalSizeBuf), 0, iMenuFont);
+				Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s %s %s %s)", dlSizeBuf, sOf, totalSizeBuf, sCopied), 0, iMenuFont);
 			} else {
-				Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s copied)", dlSizeBuf), 0, iMenuFont);
+				Text_PaintCenter(leftWidth, yStart+160, scale, colorWhite, va("(%s %s)", dlSizeBuf, sCopied), 0, iMenuFont);
 			}
 		}
 
 		if (xferRate) {
-			Text_PaintCenter(leftWidth, yStart+272, scale, colorWhite, va("%s/Sec", xferRateBuf), 0, iMenuFont);
+			Text_PaintCenter(leftWidth, yStart+272, scale, colorWhite, va("%s/%s", xferRateBuf,sSec), 0, iMenuFont);
 		}
 	}
 }
@@ -6744,7 +7112,6 @@ vmCvar_t	ui_realCaptureLimit;
 vmCvar_t	ui_realWarmUp;
 vmCvar_t	ui_serverStatusTimeOut;
 vmCvar_t	s_language;
-vmCvar_t	k_language;
 
 // bk001129 - made static to avoid aliasing
 static cvarTable_t		cvarTable[] = {
@@ -6874,7 +7241,6 @@ static cvarTable_t		cvarTable[] = {
 	{ &ui_realCaptureLimit, "capturelimit", "8", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART},
 	{ &ui_serverStatusTimeOut, "ui_serverStatusTimeOut", "7000", CVAR_ARCHIVE},
 	{ &s_language, "s_language", "english", CVAR_ARCHIVE | CVAR_NORESTART},
-	{ &k_language, "k_language", "english", CVAR_ARCHIVE | CVAR_NORESTART},	// any default ("" or "american") is fine, only foreign strings ("deutsch" etc) make a different keyboard table get looked at
 };
 
 // bk001129 - made static to avoid aliasing
@@ -6992,7 +7358,7 @@ static void UI_StartServerRefresh(qboolean full)
 
 	qtime_t q;
 	trap_RealTime(&q);
- 	trap_Cvar_Set( va("ui_lastServerRefresh_%i", ui_netSource.integer), va("%s-%i, %i at %i:%i", MonthAbbrev[q.tm_mon],q.tm_mday, 1900+q.tm_year,q.tm_hour,q.tm_min));
+ 	trap_Cvar_Set( va("ui_lastServerRefresh_%i", ui_netSource.integer), va("%s-%i, %i @ %i:%2i", GetMonthAbbrevString(q.tm_mon),q.tm_mday, 1900+q.tm_year,q.tm_hour,q.tm_min));
 
 	if (!full) {
 		UI_UpdatePendingPings();

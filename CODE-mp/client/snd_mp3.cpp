@@ -523,10 +523,18 @@ qboolean MP3_ReadSpecialTagInfo(byte *pbLoadedFile, int iLoadedFileLen,		// (in)
 #define FUZZY_AMOUNT (5*1024)	// so it has to be significantly over, not just break even, because of
 								// the xtra CPU time versus memory saving
 
+#define OPENAL_FUZZY_AMOUNT (100*1024)	// Speed up CPU time even more, at the cost of a bit more memory of course :)
+
 cvar_t* cv_MP3overhead = NULL;
 void MP3_InitCvars(void)
 {
 	cv_MP3overhead = Cvar_Get("s_mp3overhead", va("%d", sizeof(MP3STREAM) + FUZZY_AMOUNT), CVAR_ARCHIVE );
+
+	extern int s_UseOpenAL;
+	if (s_UseOpenAL)
+	{
+		cv_MP3overhead->value += OPENAL_FUZZY_AMOUNT;
+	}
 }
 
 

@@ -309,53 +309,58 @@ const char *CG_DisplayBoxedText(int iBoxX, int iBoxY, int iBoxWidth, int iBoxHei
 				Q_strcat(sLineForDisplay, sizeof(sLineForDisplay),va("%c",uiLetter & 0xFF));
 			}
 
-			// record last-good linebreak pos...  (ie if we've just concat'd a punctuation point (western or asian) or space)
-			//
-			if (bIsTrailingPunctuation || uiLetter == ' ')
-			{
-				psBestLineBreakSrcPos = psCurrentTextReadPos;
-			}
-
 			if (uiLetter == '\n')
 			{
 				// explicit new line...
 				//
 				sLineForDisplay[ strlen(sLineForDisplay)-1 ] = '\0';	// kill the CR
 				psReadPosAtLineStart = psCurrentTextReadPos;
+				psBestLineBreakSrcPos = psCurrentTextReadPos;
 				break;	// print this line
 			}
 			else 
-			if ( cgi_R_Font_StrLenPixels(sLineForDisplay, iFontHandle, fScale) >= (iBoxWidth - 16) )
-			{
+			if ( cgi_R_Font_StrLenPixels(sLineForDisplay, iFontHandle, fScale) >= iBoxWidth )
+			{					
 				// reached screen edge, so cap off string at bytepos after last good position...
 				//
-				if (psBestLineBreakSrcPos == psReadPosAtLineStart)
+				if (uiLetter > 255 && bIsTrailingPunctuation && !cgi_Language_UsesSpaces())
 				{
-					//  aarrrggh!!!!!   we'll only get here is someone has fed in a (probably) garbage string,
-					//		since it doesn't have a single space or punctuation mark right the way across one line
-					//		of the screen.  So far, this has only happened in testing when I hardwired a taiwanese 
-					//		string into this function while the game was running in english (which should NEVER happen 
-					//		normally).  On the other hand I suppose it'psCurrentTextReadPos entirely possible that some taiwanese string 
-					//		might have no punctuation at all, so...
+					// Special case, don't consider line breaking if you're on an asian punctuation char of
+					//	a language that doesn't use spaces...
 					//
-					psBestLineBreakSrcPos = psLastGood_s;	// force a break after last good letter
 				}
+				else
+				{
+					if (psBestLineBreakSrcPos == psReadPosAtLineStart)
+					{
+						//  aarrrggh!!!!!   we'll only get here is someone has fed in a (probably) garbage string,
+						//		since it doesn't have a single space or punctuation mark right the way across one line
+						//		of the screen.  So far, this has only happened in testing when I hardwired a taiwanese 
+						//		string into this function while the game was running in english (which should NEVER happen 
+						//		normally).  On the other hand I suppose it'psCurrentTextReadPos entirely possible that some taiwanese string 
+						//		might have no punctuation at all, so...
+						//
+						psBestLineBreakSrcPos = psLastGood_s;	// force a break after last good letter
+					}
 
-				sLineForDisplay[ psBestLineBreakSrcPos - psReadPosAtLineStart ] = '\0';
-				psReadPosAtLineStart = psCurrentTextReadPos = psBestLineBreakSrcPos;
-				break;	// print this line
+					sLineForDisplay[ psBestLineBreakSrcPos - psReadPosAtLineStart ] = '\0';
+					psReadPosAtLineStart = psCurrentTextReadPos = psBestLineBreakSrcPos;
+					break;	// print this line
+				}
+			}
+
+			// record last-good linebreak pos...  (ie if we've just concat'd a punctuation point (western or asian) or space)
+			//
+			if (bIsTrailingPunctuation || uiLetter == ' ' || (uiLetter > 255 && !cgi_Language_UsesSpaces()))
+			{
+				psBestLineBreakSrcPos = psCurrentTextReadPos;
 			}
 		}
 
 		// ... and print it...
 		//
-//		int iWidth = cgi_R_Font_StrLenPixels( sLineForDisplay, iFontHandle, iFontScale );
-//		if (iWidth)
-//		{
-//			int x = BoxX;	// ignore this for now ----->   (SCREEN_WIDTH-iWidth) / 2;
-			cgi_R_Font_DrawString(iBoxX, iYpos, sLineForDisplay, v4Color, iFontHandle, -1, fScale);
-			iYpos += iFontHeightAdvance;
-//		}
+		cgi_R_Font_DrawString(iBoxX, iYpos, sLineForDisplay, v4Color, iFontHandle, -1, fScale);
+		iYpos += iFontHeightAdvance;
 
 		// and echo to console in dev mode...
 		//
@@ -512,13 +517,6 @@ void CG_CaptionText( const char *str, int sound, int y )
 			Q_strcat(cg.captionText[i],sizeof(cg.captionText[i]),va("%c",uiLetter & 0xFF));
 		}
 
-		// record last-good linebreak pos...  (ie if we've just concat'd a punctuation point (western or asian) or space)
-		//
-		if (bIsTrailingPunctuation || uiLetter == ' ')
-		{
-			psBestLineBreakSrcPos = s;
-		}
-
 		if (uiLetter == '\n')
 		{
 			// explicit new line...
@@ -526,29 +524,46 @@ void CG_CaptionText( const char *str, int sound, int y )
 			cg.captionText[i][ strlen(cg.captionText[i])-1 ] = '\0';	// kill the CR
 			i++;
 			holds = s;
+			psBestLineBreakSrcPos = s;
 			cg.scrollTextLines++;
 		}
 		else 
-		if ( cgi_R_Font_StrLenPixels(cg.captionText[i], cgs.media.qhFontMedium, fFontScale) >= SCREEN_WIDTH - 16)
+		if ( cgi_R_Font_StrLenPixels(cg.captionText[i], cgs.media.qhFontMedium, fFontScale) >= SCREEN_WIDTH)
 		{
 			// reached screen edge, so cap off string at bytepos after last good position...
 			//
-			if (psBestLineBreakSrcPos == holds)
+			if (uiLetter > 255 && bIsTrailingPunctuation && !cgi_Language_UsesSpaces())
 			{
-				//  aarrrggh!!!!!   we'll only get here is someone has fed in a (probably) garbage string,
-				//		since it doesn't have a single space or punctuation mark right the way across one line
-				//		of the screen.  So far, this has only happened in testing when I hardwired a taiwanese 
-				//		string into this function while the game was running in english (which should NEVER happen 
-				//		normally).  On the other hand I suppose it's entirely possible that some taiwanese string 
-				//		might have no punctuation at all, so...
+				// Special case, don't consider line breaking if you're on an asian punctuation char of
+				//	a language that doesn't use spaces...
 				//
-				psBestLineBreakSrcPos = psLastGood_s;	// force a break after last good letter
 			}
+			else
+			{
+				if (psBestLineBreakSrcPos == holds)
+				{
+					//  aarrrggh!!!!!   we'll only get here is someone has fed in a (probably) garbage string,
+					//		since it doesn't have a single space or punctuation mark right the way across one line
+					//		of the screen.  So far, this has only happened in testing when I hardwired a taiwanese 
+					//		string into this function while the game was running in english (which should NEVER happen 
+					//		normally).  On the other hand I suppose it's entirely possible that some taiwanese string 
+					//		might have no punctuation at all, so...
+					//
+					psBestLineBreakSrcPos = psLastGood_s;	// force a break after last good letter
+				}
 
-			cg.captionText[i][ psBestLineBreakSrcPos - holds ] = '\0';
-			holds = s = psBestLineBreakSrcPos;
-			i++;
-			cg.scrollTextLines++;
+				cg.captionText[i][ psBestLineBreakSrcPos - holds ] = '\0';
+				holds = s = psBestLineBreakSrcPos;
+				i++;
+				cg.scrollTextLines++;
+			}
+		}
+
+		// record last-good linebreak pos...  (ie if we've just concat'd a punctuation point (western or asian) or space)
+		//
+		if (bIsTrailingPunctuation || uiLetter == ' ' || (uiLetter > 255 && !cgi_Language_UsesSpaces()))
+		{
+			psBestLineBreakSrcPos = s;
 		}
 	}
 

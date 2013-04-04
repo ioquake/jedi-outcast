@@ -951,6 +951,7 @@ Try and use an entity in the world, directly ahead of us
 
 #define USE_DISTANCE	64.0f
 
+extern void Touch_Button(gentity_t *ent, gentity_t *other, trace_t *trace );
 void TryUse( gentity_t *ent )
 {
 	gentity_t	*target;
@@ -986,8 +987,14 @@ void TryUse( gentity_t *ent )
 			NPC_SetAnim( ent, SETANIM_LEGS, BOTH_FORCEPUSH, SETANIM_FLAG_NORMAL|SETANIM_FLAG_HOLD );
 		}
 		*/
-
-		target->use(target, ent, ent);
+		if ( target->touch == Touch_Button )
+		{//pretend we touched it
+			target->touch(target, ent, NULL);
+		}
+		else
+		{
+			target->use(target, ent, ent);
+		}
 		return;
 	}
 }

@@ -47,7 +47,7 @@ void UI_SetActiveMenu( const char* menuname,const char *menuID )
 {
 	// this should be the ONLY way the menu system is brought up (besides the UI_ConsoleCommand below)
 
-	if (!ui.SG_GameAllowedToSaveHere(qtrue))	//don't check full sytem, only if incamera
+	if (cls.state != CA_DISCONNECTED && !ui.SG_GameAllowedToSaveHere(qtrue))	//don't check full sytem, only if incamera
 	{
 		return;
 	}
@@ -214,9 +214,6 @@ void UI_Init( int apiVersion, uiimport_t *uiimport )
 	ui.Cvar_Create( "cg_drawCrosshair", "1", CVAR_ARCHIVE );
 	ui.Cvar_Create( "cg_marks", "1", CVAR_ARCHIVE );
 	ui.Cvar_Create ("s_language", "english", CVAR_ARCHIVE | CVAR_NORESTART);
-	ui.Cvar_Create ("k_language", "", CVAR_ARCHIVE | CVAR_NORESTART);
-
-
 }
 
 // these are only here so the functions in q_shared.c can link

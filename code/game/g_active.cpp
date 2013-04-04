@@ -247,22 +247,27 @@ qboolean G_ValidateLookEnemy( gentity_t *self, gentity_t *enemy )
 			&& enemy->noDamageTeam != self->client->playerTeam
 			&& enemy->health > 0 )
 		{//a turret
-			return qtrue;
+			//return qtrue;
 		}
-		return qfalse;
-	}
-
-	if ( enemy->health <= 0 && ((level.time-enemy->s.time) > 3000||!InFront(enemy->currentOrigin,self->currentOrigin,self->client->ps.viewangles,0.2f)||DistanceHorizontal(enemy->currentOrigin,self->currentOrigin)>16384))//>128
-	{//corpse, been dead too long or too out of sight to be interesting
-		if ( !enemy->message )
+		else
 		{
 			return qfalse;
 		}
 	}
+	else 
+	{
+		if ( enemy->client->playerTeam == self->client->playerTeam )
+		{//on same team
+			return qfalse;
+		}
 
-	if ( enemy->client->playerTeam == self->client->playerTeam )
-	{//on same team
-		return qfalse;
+		if ( enemy->health <= 0 && ((level.time-enemy->s.time) > 3000||!InFront(enemy->currentOrigin,self->currentOrigin,self->client->ps.viewangles,0.2f)||DistanceHorizontal(enemy->currentOrigin,self->currentOrigin)>16384))//>128
+		{//corpse, been dead too long or too out of sight to be interesting
+			if ( !enemy->message )
+			{
+				return qfalse;
+			}
+		}
 	}
 
 	if ( (!InFront( enemy->currentOrigin, self->currentOrigin, self->client->ps.viewangles, 0.0f) || !G_ClearLOS( self, self->client->renderInfo.eyePoint, enemy ) ) 
@@ -1781,7 +1786,7 @@ extern void CG_ChangeWeapon( int num );
 
 void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd )
 {
-	if (( (*ucmd)->buttons & BUTTON_USE || (*ucmd)->forwardmove < 0 ) && ent->owner && ent->owner->delay + 500 < level.time )
+	if (( (*ucmd)->buttons & BUTTON_USE || (*ucmd)->forwardmove < 0 || (*ucmd)->upmove > 0 ) && ent->owner && ent->owner->delay + 500 < level.time )
 	{
 		ent->owner->s.loopSound = 0;
 
@@ -1789,6 +1794,9 @@ void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd )
 		(*ucmd)->buttons &= ~BUTTON_USE;
 
 		G_Sound( ent, G_SoundIndex( "sound/weapons/emplaced/emplaced_dismount.mp3" ));
+#ifdef _IMMERSION
+		G_Force( ent, G_ForceIndex( "fffx/weapons/emplaced/emplaced_dismount", FF_CHANNEL_TOUCH ) );
+#endif // _IMMERSION
 	}
 	else
 	{
@@ -1943,8 +1951,10 @@ void G_CheckMovingLoopingSounds( gentity_t *ent, usercmd_t *ucmd )
 			switch( ent->client->NPC_class )
 			{
 			case CLASS_R2D2:
-			case CLASS_R5D2:
 				ent->s.loopSound = G_SoundIndex( "sound/chars/r2d2/misc/r2_move_lp.wav" );
+				break;
+			case CLASS_R5D2:
+				ent->s.loopSound = G_SoundIndex( "sound/chars/r2d2/misc/r2_move_lp2.wav" );
 				break;
 			case CLASS_MARK2:
 				ent->s.loopSound = G_SoundIndex( "sound/chars/mark2/misc/mark2_move_lp" );
@@ -2127,6 +2137,9 @@ extern cvar_t	*g_skippingcin;
 			{
 				// already zooming, so must be wanting to turn it off
 				G_Sound( ent, G_SoundIndex( "sound/weapons/disruptor/zoomend.wav" ));
+#ifdef _IMMERSION
+				G_Force( ent, G_ForceIndex( "fffx/weapons/disruptor/zoomend", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 				cg.zoomMode = 0;
 				cg.zoomTime = cg.time;
 				cg.zoomLocked = qfalse;

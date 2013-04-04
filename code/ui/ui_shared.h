@@ -123,6 +123,12 @@ typedef struct {
 	sfxHandle_t menuExitSound;
 	sfxHandle_t menuBuzzSound;
 	sfxHandle_t itemFocusSound;
+#ifdef _IMMERSION
+	ffHandle_t	menuEnterForce;
+	ffHandle_t	menuExitForce;
+	ffHandle_t	menuBuzzForce;
+	ffHandle_t	itemFocusForce;
+#endif // _IMMERSION
 	float		fadeClamp;
 	int			fadeCycle;
 	float		fadeAmount;
@@ -183,6 +189,10 @@ typedef struct {
 	int			(*textWidth) (const char *text, float scale, int iFontIndex);
 	qhandle_t	(*feederItemImage) (float feederID, int index);
 	const char *(*feederItemText) (float feederID, int index, int column, qhandle_t *handle);
+#ifdef _IMMERSION
+	ffHandle_t	(*registerForce)(const char *name, int channel=FF_CHANNEL_MENU);
+	void		(*startForce)(ffHandle_t ff);
+#endif // _IMMERSION
 
 	float		yscale;
 	float		xscale;
@@ -326,6 +336,9 @@ typedef struct itemDef_s {
 	const char	*enableCvar;				// enable, disable, show, or hide based on value, this can contain a list
 	int			cvarFlags;					//	what type of action to take on cvarenables
 	sfxHandle_t focusSound;					//
+#ifdef _IMMERSION
+	ffHandle_t	focusForce;
+#endif // _IMMERSION
 	int			numColors;					// number of color ranges
 	colorRangeDef_t colorRanges[MAX_COLOR_RANGES];
 	float		special;					// used for feeder id's etc.. diff per type

@@ -107,6 +107,7 @@ typedef struct {
 	int		(*Font_StrLenChars) (const char *s);
 	void	(*Font_DrawString)(int x, int y, const char *s, const float *rgba, const int iFontHandle, int iMaxPixelWidth, const float scale = 1.0f);
 	qboolean (*Language_IsAsian) (void);
+	qboolean (*Language_UsesSpaces) (void);
 	unsigned int (*AnyLanguage_ReadCharFromString)( const char **ppsText, qboolean *pbIsTrailingPunctuation /* = NULL */);
 
 #ifdef _NPATCH

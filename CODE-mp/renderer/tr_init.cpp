@@ -10,11 +10,23 @@
 
 #include "tr_font.h"
 
+#ifdef G2_COLLISION_ENABLED
+#if !defined (MINIHEAP_H_INC)
+	#include "../qcommon/miniheap.h"
+#endif
+
+#include "../ghoul2/G2_local.h"
+#endif
+
 
 //#ifdef __USEA3D
 //// Defined in snd_a3dg_refcommon.c
 //void RE_A3D_RenderGeometry (void *pVoidA3D, void *pVoidGeom, void *pVoidMat, void *pVoidGeomStatus);
 //#endif
+
+#ifdef G2_COLLISION_ENABLED
+CMiniHeap *G2VertSpaceServer = NULL;
+#endif
 
 #ifndef DEDICATED
 glconfig_t	glConfig;
@@ -54,6 +66,8 @@ cvar_t	*r_dlightBacks;
 cvar_t	*r_lodbias;
 cvar_t	*r_lodscale;
 cvar_t	*r_autolodscalevalue;
+
+cvar_t	*r_newDLights;
 
 cvar_t	*r_norefresh;
 cvar_t	*r_drawentities;
@@ -160,7 +174,6 @@ Ghoul2 Insert Start
 */
 
 cvar_t	*r_noServerGhoul2;
-cvar_t	*r_noGhoul2;
 cvar_t	*r_Ghoul2AnimSmooth=0;
 cvar_t	*r_Ghoul2UnSqashAfterSmooth=0;
 //cvar_t	*r_Ghoul2UnSqash;
@@ -908,8 +921,8 @@ void R_Register( void )
 	r_debugSort = ri.Cvar_Get( "r_debugSort", "0", CVAR_CHEAT );
 	r_printShaders = ri.Cvar_Get( "r_printShaders", "0", 0 );
 
-	r_surfaceSprites = ri.Cvar_Get ("r_surfaceSprites", "1", CVAR_CHEAT);
-	r_surfaceWeather = ri.Cvar_Get ("r_surfaceWeather", "0", 0);
+	r_surfaceSprites = ri.Cvar_Get ("r_surfaceSprites", "1", CVAR_TEMP);
+	r_surfaceWeather = ri.Cvar_Get ("r_surfaceWeather", "0", CVAR_TEMP);
 
 	r_windSpeed = ri.Cvar_Get ("r_windSpeed", "0", 0);
 	r_windAngle = ri.Cvar_Get ("r_windAngle", "0", 0);
@@ -929,6 +942,8 @@ void R_Register( void )
 
 	r_showSmp = ri.Cvar_Get ("r_showSmp", "0", CVAR_CHEAT);
 	r_skipBackEnd = ri.Cvar_Get ("r_skipBackEnd", "0", CVAR_CHEAT);
+
+	r_newDLights = ri.Cvar_Get ("r_newDLights", "0", 0);
 
 	r_measureOverdraw = ri.Cvar_Get( "r_measureOverdraw", "0", CVAR_CHEAT );
 	r_lodscale = ri.Cvar_Get( "r_lodscale", "5", 0 );
@@ -960,7 +975,6 @@ void R_Register( void )
 Ghoul2 Insert Start
 */
 	r_noServerGhoul2 = ri.Cvar_Get( "r_noserverghoul2", "0", CVAR_CHEAT);
-	r_noGhoul2 = ri.Cvar_Get( "r_noghoul2", "0", CVAR_CHEAT);
 
 	r_Ghoul2AnimSmooth = ri.Cvar_Get( "r_ghoul2animsmooth", ".3", 0 );
 	r_Ghoul2UnSqashAfterSmooth = ri.Cvar_Get( "r_ghoul2unsqashaftersmooth", "1", 0 );
@@ -992,13 +1006,16 @@ extern qboolean Sys_LowPhysicalMemory();
 
 }
 
+#ifdef G2_COLLISION_ENABLED
+#define G2_VERT_SPACE_SERVER_SIZE 256
+#endif
+
 /*
 ===============
 R_Init
 ===============
 */
 void R_Init( void ) {	
-	int	err;
 	int i;
 	byte *ptr;
 
@@ -1090,7 +1107,15 @@ void R_Init( void ) {
 #endif
 	R_ModelInit();
 #ifndef DEDICATED
-	err = qglGetError();
+
+#ifdef G2_COLLISION_ENABLED
+	if (!G2VertSpaceServer)
+	{
+		G2VertSpaceServer = new CMiniHeap(G2_VERT_SPACE_SERVER_SIZE * 1024);
+	}
+#endif
+
+	int	err = qglGetError();
 	if ( err != GL_NO_ERROR )
 		ri.Printf (PRINT_ALL, "glGetError() = 0x%x\n", err);
 #endif
@@ -1136,6 +1161,14 @@ void RE_Shutdown( qboolean destroyWindow ) {
 #endif //!DEDICATED
 
 	tr.registered = qfalse;
+
+#ifdef G2_COLLISION_ENABLED
+	if (G2VertSpaceServer)
+	{
+		delete G2VertSpaceServer;
+		G2VertSpaceServer = 0;
+	}
+#endif
 }
 
 #ifndef DEDICATED
@@ -1241,6 +1274,8 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.Font_StrLenChars = RE_Font_StrLenChars;
 	re.Font_HeightPixels = RE_Font_HeightPixels;
 	re.Font_DrawString = RE_Font_DrawString;
+	re.Language_IsAsian = Language_IsAsian;
+	re.Language_UsesSpaces = Language_UsesSpaces;
 	re.AnyLanguage_ReadCharFromString = AnyLanguage_ReadCharFromString;
 
 	re.RemapShader = R_RemapShader;

@@ -822,7 +822,7 @@ void cStringsSingle::SetText(const char *newText)
 // fix problems caused by fucking morons entering clever "rich" chars in to new text files *after* the auto-stripper
 //	removed them all in the first place...
 //
-// ONLY DO THIS FOR ENGLISH, OR IT BREAKS ASIAN STRINGS!!!!!!!!!!!!!!!!!!!!!
+// ONLY DO THIS FOR EUROPEAN LANGUAGES, OR IT BREAKS ASIAN STRINGS!!!!!!!!!!!!!!!!!!!!!
 //
 static void FixIllegalChars(char *psText)
 {
@@ -898,7 +898,8 @@ bool cStringsSingle::UnderstandToken(int token, char *data)
 				{	// default to english in case there is no foreign
 					if (LanguagePair->Name == TK_TEXT_LANGUAGE1 ||
 						LanguagePair->Name == TK_TEXT_LANGUAGE2 ||
-						LanguagePair->Name == TK_TEXT_LANGUAGE3
+						LanguagePair->Name == TK_TEXT_LANGUAGE3 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE8
 						)
 					{
 						FixIllegalChars(data);
@@ -910,7 +911,8 @@ bool cStringsSingle::UnderstandToken(int token, char *data)
 				{
 					if (LanguagePair->Name == TK_TEXT_LANGUAGE1 ||
 						LanguagePair->Name == TK_TEXT_LANGUAGE2 ||
-						LanguagePair->Name == TK_TEXT_LANGUAGE3
+						LanguagePair->Name == TK_TEXT_LANGUAGE3 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE8
 						)
 					{
 						FixIllegalChars(data);
@@ -1597,7 +1599,7 @@ int SP_GetStringID(const char *inReference)
 	int													ID;
 	char Reference[MAX_QPATH];
 	Q_strncpyz(Reference, inReference, MAX_QPATH);
-	strupr(Reference);
+	Q_strupr(Reference);
 
 	for(i = SP_ListByID.begin(); i != SP_ListByID.end(); i++)
 	{
@@ -1714,11 +1716,19 @@ static void SP_UpdateLanguage(void)
 
 void SP_Init(void)
 {
-	sp_language = Cvar_Get("sp_language", va("%d", SP_LANGUAGE_ENGLISH), CVAR_ARCHIVE);
+	sp_language = Cvar_Get("sp_language", va("%d", SP_LANGUAGE_ENGLISH), CVAR_ARCHIVE | CVAR_NORESTART);
 	sp_show_strip = Cvar_Get ("sp_show_strip", "0", 0);
 
 	SP_UpdateLanguage();
 	sp_language->modified = qfalse;
+
+	// Register_StringPackets...
+	//	
+	SP_Register("con_text", SP_REGISTER_REQUIRED);	//reference is CON_TEXT
+	SP_Register("mp_ingame",SP_REGISTER_REQUIRED);	//reference is INGAMETEXT
+	SP_Register("mp_svgame",SP_REGISTER_REQUIRED);	//reference is SVINGAME
+	SP_Register("sp_ingame",SP_REGISTER_REQUIRED);	//reference is INGAME	, needed for item pickups
+	SP_Register("keynames", 0/*SP_REGISTER_REQUIRED*/);	//reference is KEYNAMES
 }
 
 // called in Com_Frame, so don't take up any time! (can also be called during dedicated)
@@ -1742,6 +1752,25 @@ int Language_GetIntegerValue(void)
 
 	return 0;
 }
+
+
+// query function from font code
+// 
+qboolean Language_IsKorean(void)
+{
+	return (sp_language && sp_language->integer == SP_LANGUAGE_KOREAN) ? qtrue : qfalse;
+}
+
+qboolean Language_IsTaiwanese(void)
+{
+	return (sp_language && sp_language->integer == SP_LANGUAGE_TAIWANESE) ? qtrue : qfalse;
+}
+
+qboolean Language_IsJapanese(void)
+{
+	return (sp_language && sp_language->integer == SP_LANGUAGE_JAPANESE) ? qtrue : qfalse;
+}
+
 
 #endif
 

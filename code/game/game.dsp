@@ -45,7 +45,7 @@ RSC=rc.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir "."
 # ADD BASE CPP /nologo /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
-# ADD CPP /nologo /G6 /W4 /GX /Zi /O2 /I "..\ICARUS" /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /Yu"g_headers.h" /FD /c
+# ADD CPP /nologo /G6 /W4 /GX /Zi /O2 /I "..\ICARUS" /D "NDEBUG" /D "WIN32" /D "_WINDOWS" /D "_IMMERSION" /Yu"g_headers.h" /FD /c
 # ADD BASE MTL /nologo /D "NDEBUG" /win32
 # ADD MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
@@ -69,10 +69,10 @@ LINK32=link.exe
 # PROP Use_Debug_Libraries 1
 # PROP Output_Dir "..\Debug"
 # PROP Intermediate_Dir "..\Debug\game"
-# PROP Ignore_Export_Lib 1
+# PROP Ignore_Export_Lib 0
 # PROP Target_Dir "."
 # ADD BASE CPP /nologo /MTd /W3 /Gm /GX /Zi /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /YX /c
-# ADD CPP /nologo /G6 /W4 /Gm /Gi /GX /ZI /Od /I "..\ICARUS" /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /FR /Yu"g_headers.h" /FD /c
+# ADD CPP /nologo /G6 /W4 /Gm /Gi /GX /ZI /Od /I "..\ICARUS" /D "_DEBUG" /D "WIN32" /D "_WINDOWS" /D "_IMMERSION" /FR /Yu"g_headers.h" /FD /c
 # ADD BASE MTL /nologo /D "_DEBUG" /win32
 # ADD MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
@@ -100,7 +100,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /G6 /W4 /GX /Zi /O2 /I "..\ICARUS" /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /FD /c
-# ADD CPP /nologo /G6 /W4 /GX /O2 /I "..\ICARUS" /D "_WINDOWS" /D "WIN32" /D "NDEBUG" /D "FINAL_BUILD" /Yu"g_headers.h" /FD /c
+# ADD CPP /nologo /G6 /W4 /GX /O2 /I "..\ICARUS" /D "NDEBUG" /D "FINAL_BUILD" /D "WIN32" /D "_WINDOWS" /D "_IMMERSION" /Yu"g_headers.h" /FD /c
 # ADD BASE MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
@@ -126,10 +126,10 @@ LINK32=link.exe
 # PROP Use_Debug_Libraries 1
 # PROP Output_Dir "..\SHDebug"
 # PROP Intermediate_Dir "..\SHDebug\game"
-# PROP Ignore_Export_Lib 1
+# PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /G6 /W4 /Gm /Gi /GX /ZI /Od /I "..\ICARUS" /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /FR /Yu"g_headers.h" /FD /c
-# ADD CPP /nologo /G6 /W4 /Gm /Gi /GX /ZI /Od /I "..\ICARUS" /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "MEM_DEBUG" /FR /Yu"g_headers.h" /FD /c
+# ADD CPP /nologo /G6 /W4 /Gm /Gi /GX /ZI /Od /I "..\ICARUS" /D "_DEBUG" /D "MEM_DEBUG" /D "WIN32" /D "_WINDOWS" /D "_IMMERSION" /FR /Yu"g_headers.h" /FD /c
 # ADD BASE MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
@@ -997,6 +997,14 @@ SOURCE=.\events.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\ff\ff.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\ff\ff_public.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\client\fffx.h
 # End Source File
 # Begin Source File
@@ -1090,6 +1098,10 @@ SOURCE=..\qcommon\sstring.h
 # Begin Source File
 
 SOURCE=.\statindex.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\qcommon\stripPublic.h
 # End Source File
 # Begin Source File
 

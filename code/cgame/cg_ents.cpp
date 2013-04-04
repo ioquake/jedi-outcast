@@ -1931,7 +1931,7 @@ extern cvar_t	*g_saberRealisticCombat;
 				}
 			}
 			if ( owner->client->NPC_class == CLASS_PROTOCOL 
-				|| g_dismemberment->integer > 3
+				|| g_dismemberment->integer >= 11381138
 				|| g_saberRealisticCombat->integer )
 			{
 				//wait 100ms before allowing owner to be dismembered again

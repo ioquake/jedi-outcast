@@ -197,18 +197,20 @@ equ trap_G2_HaveWeGhoul2Models				-585	; G_G2_HAVEWEGHOULMODELS
 equ trap_G2_SetGhoul2ModelIndexes			-586	; G_G2_SETMODELS 
 equ trap_G2API_GetBoltMatrix				-587	; G_G2_GETBOLT 
 equ trap_G2API_GetBoltMatrix_NoReconstruct	-588	; G_G2_GETBOLT_NOREC 
-equ trap_G2API_InitGhoul2Model				-589	; G_G2_INITGHOUL2MODEL 
-equ trap_G2API_AddBolt						-590	; G_G2_ADDBOLT 
-equ trap_G2API_SetBoltInfo					-591	; G_G2_SETBOLTINFO 
-equ trap_G2API_SetBoneAngles				-592	; G_G2_ANGLEOVERRIDE 
-equ trap_G2API_SetBoneAnim					-593	; G_G2_PLAYANIM 
-equ trap_G2API_GetGLAName					-594	; G_G2_GETGLANAME 
-equ trap_G2API_CopyGhoul2Instance			-595	; G_G2_COPYGHOUL2INSTANCE 
-equ trap_G2API_CopySpecificGhoul2Model		-596	; G_G2_COPYSPECIFICGHOUL2MODEL 
-equ trap_G2API_DuplicateGhoul2Instance		-597	; G_G2_DUPLICATEGHOUL2INSTANCE 
-equ trap_G2API_HasGhoul2ModelOnIndex		-598	; G_G2_HASGHOUL2MODELONINDEX 
-equ trap_G2API_RemoveGhoul2Model			-599	; G_G2_REMOVEGHOUL2MODEL 
-equ trap_G2API_CleanGhoul2Models			-600	; G_G2_CLEANMODELS 
+equ trap_G2API_GetBoltMatrix_NoRecNoRot		-589	; G_G2_GETBOLT_NOREC_NOROT 
+equ trap_G2API_InitGhoul2Model				-590	; G_G2_INITGHOUL2MODEL 
+equ trap_G2API_AddBolt						-591	; G_G2_ADDBOLT 
+equ trap_G2API_SetBoltInfo					-592	; G_G2_SETBOLTINFO 
+equ trap_G2API_SetBoneAngles				-593	; G_G2_ANGLEOVERRIDE 
+equ trap_G2API_SetBoneAnim					-594	; G_G2_PLAYANIM 
+equ trap_G2API_GetGLAName					-595	; G_G2_GETGLANAME 
+equ trap_G2API_CopyGhoul2Instance			-596	; G_G2_COPYGHOUL2INSTANCE 
+equ trap_G2API_CopySpecificGhoul2Model		-597	; G_G2_COPYSPECIFICGHOUL2MODEL 
+equ trap_G2API_DuplicateGhoul2Instance		-598	; G_G2_DUPLICATEGHOUL2INSTANCE 
+equ trap_G2API_HasGhoul2ModelOnIndex		-599	; G_G2_HASGHOUL2MODELONINDEX 
+equ trap_G2API_RemoveGhoul2Model			-600	; G_G2_REMOVEGHOUL2MODEL 
+equ trap_G2API_CleanGhoul2Models			-601	; G_G2_CLEANMODELS 
+equ trap_G2API_CollisionDetect				-602	; G_G2_COLLISIONDETECT 
 
 
 ; hardcoded functions

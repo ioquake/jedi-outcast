@@ -53,7 +53,7 @@ NPC_AngerAlert
 #define	ANGER_ALERT_RADIUS			512
 #define	ANGER_ALERT_SOUND_RADIUS	256
 
-static void G_AngerAlert( gentity_t *self )
+void G_AngerAlert( gentity_t *self )
 {
 	if ( self && self->NPC && (self->NPC->scriptFlags&SCF_NO_GROUPS) )
 	{//I'm not a team playa...
@@ -451,7 +451,10 @@ void G_SetEnemy( gentity_t *self, gentity_t *enemy )
 		//Alert anyone else in the area
 		if ( Q_stricmp( "desperado", self->NPC_type ) != 0 && Q_stricmp( "paladin", self->NPC_type ) != 0 )
 		{//special holodeck enemies exception
-			G_AngerAlert( self );
+			if ( !(self->client->ps.eFlags&EF_FORCE_GRIPPED) )
+			{//gripped people can't call for help
+				G_AngerAlert( self );
+			}
 		}
 
 		//Stormtroopers don't fire right away!
@@ -1348,6 +1351,9 @@ qboolean ValidEnemy(gentity_t *ent)
 	if ( ent == NULL )
 		return qfalse;
 
+	if ( ent == NPC )
+		return qfalse;
+
 	//if team_free, maybe everyone is an enemy?
 	if ( !NPC->client->enemyTeam )
 		return qfalse;
@@ -1577,7 +1583,7 @@ gentity_t *NPC_PickEnemy( gentity_t *closestTo, int enemyTeam, qboolean checkVis
 	{
 		newenemy = &g_entities[entNum];
 
-		if ( (newenemy->client || newenemy->svFlags & SVF_NONNPC_ENEMY) && !(newenemy->flags & FL_NOTARGET) && !(newenemy->s.eFlags & EF_NODRAW))
+		if ( newenemy != NPC && (newenemy->client || newenemy->svFlags & SVF_NONNPC_ENEMY) && !(newenemy->flags & FL_NOTARGET) && !(newenemy->s.eFlags & EF_NODRAW))
 		{
 			if ( newenemy->health > 0 )
 			{
@@ -2880,6 +2886,7 @@ gentity_t *NPC_SearchForWeapons( void )
 		
 		found=&g_entities[i];
 		
+		//FIXME: Also look for ammo_racks that have weapons on them?
 		if ( found->s.eType != ET_ITEM )
 		{
 			continue;

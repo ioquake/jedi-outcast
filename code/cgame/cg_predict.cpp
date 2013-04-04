@@ -105,7 +105,7 @@ void CG_ClipMoveToEntities ( const vec3_t start, const vec3_t mins, const vec3_t
 			bmins[2] = -zd;
 			bmaxs[2] = zu;
 
-			cmodel = cgi_CM_TempBoxModel( bmins, bmaxs );
+			cmodel = cgi_CM_TempBoxModel( bmins, bmaxs );//, cent->gent->contents );
 			VectorCopy( vec3_origin, angles );
 			VectorCopy( cent->lerpOrigin, origin );
 		}

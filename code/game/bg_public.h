@@ -297,6 +297,12 @@ typedef enum {
 	EV_GENERAL_SOUND,
 	EV_GLOBAL_SOUND,		// no attenuation
 
+#ifdef _IMMERSION
+	EV_ENTITY_FORCE,
+	EV_AREA_FORCE,
+	EV_GLOBAL_FORCE,
+	EV_FORCE_STOP,
+#endif // _IMMERSION
 	EV_PLAY_EFFECT,
 	EV_PLAY_MUZZLE_EFFECT,
 
@@ -524,6 +530,10 @@ typedef struct gitem_s {
 	char		*sounds;		// string of all sounds this item will use
 	vec3_t		mins;			// Bbox
 	vec3_t		maxs;			// Bbox
+#ifdef _IMMERSION
+	char		*pickup_force;
+	char		*forces;
+#endif // _IMMERSION
 } gitem_t;
 
 // included in both the game dll and the client

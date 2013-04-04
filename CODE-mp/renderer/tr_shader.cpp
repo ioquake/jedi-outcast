@@ -3131,6 +3131,22 @@ static shader_t *FinishShader( void ) {
 	// determine which stage iterator function is appropriate
 	ComputeStageIteratorFunc();
 
+	shader.lastNonDetailStage = 0;
+	for ( stage = 1; stage < shader.numUnfoggedPasses; stage++ )
+	{
+		// Make sure stage is non detail and active
+		if(stages[stage].isDetail || !stages[stage].active)
+		{
+			break;
+		}
+		// MT lightmaps are always in bundle 1
+		if(stages[stage].bundle[0].isLightmap)
+		{
+			continue;
+		}
+		shader.lastNonDetailStage = stage;
+	}
+
 	return GeneratePermanentShader();
 }
 

@@ -1417,50 +1417,36 @@ void CG_Weapon_f( void ) {
 
 	if (num >= WP_THERMAL)
 	{
-		int prenum = 0;
-		int loopback = 0;
+		int weap, i = 0;
 
 		if (cg.snap->ps.weapon >= WP_THERMAL &&
 			cg.snap->ps.weapon <= WP_DET_PACK)
 		{
-			num = cg.snap->ps.weapon;
-			prenum = num;
-			num++;
+			// already in cycle range so start with next cycle item
+			weap = cg.snap->ps.weapon + 1;
 		}
 		else
 		{
-			prenum = num;
+			// not in cycle range, so start with thermal detonator
+			weap = WP_THERMAL;
 		}
 
-		if (num > WP_DET_PACK)
+		// prevent an endless loop
+		while ( i <= 4 )
 		{
-			num = WP_THERMAL;
-		}
-
-		while (prenum != num || !loopback)
-		{
-			if (num > WP_DET_PACK)
+			if (weap > WP_DET_PACK)
 			{
-				num = WP_THERMAL;
-				loopback = 1;
+				weap = WP_THERMAL;
 			}
 
-			if (CG_WeaponSelectable(num))
+			if (CG_WeaponSelectable(weap))
 			{
+				num = weap;
 				break;
 			}
 
-			if (num == prenum)
-			{
-				break;
-			}
-
-			num++;
-		}
-
-		if (num > WP_DET_PACK)
-		{
-			num = WP_THERMAL;
+			weap++;
+			i++;
 		}
 	}
 

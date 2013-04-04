@@ -7,7 +7,12 @@
 	   		
 
 #include "client.h"
+#ifdef _IMMERSION
+#include "../ff/cl_ff.h"
+#include "../ff/ff.h"
+#else
 #include "fffx.h"
+#endif // _IMMERSION
 #include "vmachine.h"
 
 vm_t	cgvm;
@@ -432,7 +437,7 @@ int CL_CgameSystemCalls( int *args ) {
 	case CG_CM_INLINEMODEL:
 		return CM_InlineModel( args[1] );
 	case CG_CM_TEMPBOXMODEL:
-		return CM_TempBoxModel( (const float *) VMA(1), (const float *) VMA(2) );
+		return CM_TempBoxModel( (const float *) VMA(1), (const float *) VMA(2) );//, (int) VMA(3) );
 	case CG_CM_POINTCONTENTS:
 		return CM_PointContents( (float *)VMA(1), args[2] );
 	case CG_CM_TRANSFORMEDPOINTCONTENTS:
@@ -506,6 +511,25 @@ int CL_CgameSystemCalls( int *args ) {
 		return 0;
 	case CG_S_GETSAMPLELENGTH:
 		return S_GetSampleLengthInMilliSeconds(  args[1]);
+#ifdef _IMMERSION
+	case CG_FF_START:
+		CL_FF_Start( (ffHandle_t) args[1], (int) args[2] );
+		return 0;
+	case CG_FF_STOP:
+		CL_FF_Stop( (ffHandle_t) args[1], (int) args[2] );
+		return 0;
+	case CG_FF_STOPALL:
+		FF_StopAll();
+		return 0;
+	case CG_FF_SHAKE:
+		FF_Shake( (int) args[1], (int) args[2] );
+		return 0;
+	case CG_FF_REGISTER:
+		return FF_Register( (const char *) VMA(1), (int) args[2] );
+	case CG_FF_ADDLOOPINGFORCE:
+		CL_FF_AddLoopingForce( (ffHandle_t) args[1], (int) args[2] );
+		return 0;
+#else
 	case CG_FF_STARTFX:
 		FFFX_START( (ffFX_e) args[1] );
 		return 0;
@@ -518,6 +542,7 @@ int CL_CgameSystemCalls( int *args ) {
 	case CG_FF_STOPALLFX:
 		FFFX_STOPALL;
 		return 0;
+#endif // _IMMERSION
 	case CG_R_LOADWORLDMAP:
 		re.LoadWorld( (const char *) VMA(1) );
 		return 0; 
@@ -542,6 +567,8 @@ int CL_CgameSystemCalls( int *args ) {
 		return 0;
 	case CG_LANGUAGE_ISASIAN:
 		return re.Language_IsAsian();
+	case CG_LANGUAGE_USESSPACES:
+		return re.Language_UsesSpaces();
 	case CG_ANYLANGUAGE_READFROMSTRING:
 		return re.AnyLanguage_ReadCharFromString( (const char **) args[1], (qboolean *) VMA(2) );
 	case CG_R_CLEARSCENE:

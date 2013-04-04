@@ -581,6 +581,10 @@ void camera_aim( gentity_t *self )
 			G_ClearViewEntity( player );
 			G_Sound( player, self->soundPos2 );
 			self->painDebounceTime = level.time + (self->wait*1000);//FRAMETIME*5;//don't check for player buttons for 500 ms
+			if ( player->client->usercmd.upmove > 0 )
+			{//stop player from doing anything for a half second after
+				player->aimDebounceTime = level.time + 500;
+			}
 		}
 		else if ( self->painDebounceTime < level.time )
 		{//check for use button
@@ -832,7 +836,7 @@ void SP_object_cargo_barrel1(gentity_t *ent)
 //		ent->sounds = G_SoundIndex("sound/weapons/explosions/explode1.wav");
 	}
 
-	ent->contents = CONTENTS_SOLID;
+	ent->contents = CONTENTS_SOLID|CONTENTS_OPAQUE;
 	
 	if ( ent->spawnflags & 1 )
 	{
@@ -2360,7 +2364,7 @@ void SP_misc_exploding_crate( gentity_t *ent )
 	VectorSet( ent->mins, -24, -24, 0 );
 	VectorSet( ent->maxs, 24, 24, 64 );
 
-	ent->contents = CONTENTS_BODY|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;//CONTENTS_SOLID;
+	ent->contents = CONTENTS_SOLID|CONTENTS_OPAQUE|CONTENTS_BODY|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;//CONTENTS_SOLID;
 	ent->takedamage = qtrue;
 
 	G_SetOrigin( ent, ent->s.origin );
@@ -2506,7 +2510,7 @@ void SP_misc_crystal_crate( gentity_t *ent )
 	VectorSet( ent->maxs, 34, 34, 44 );
 	
 	//Blocks movement
-	ent->contents = CONTENTS_BODY|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;//Was CONTENTS_SOLID, but only architecture should be this
+	ent->contents = CONTENTS_SOLID|CONTENTS_OPAQUE|CONTENTS_BODY|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;//Was CONTENTS_SOLID, but only architecture should be this
 
 	if ( ent->spawnflags & 1 )  // non-solid
 	{	// Override earlier contents flag...
@@ -2675,7 +2679,7 @@ void misc_atst_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 		activator->activator = NULL;
 		self->s.eFlags &= ~EF_NODRAW;
 		self->svFlags &= ~SVF_NOCLIENT;
-		self->contents = CONTENTS_BODY|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;
+		self->contents = CONTENTS_SOLID|CONTENTS_BODY|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;
 		self->takedamage = qtrue;
 		//transfer armor
 		tempHealth = self->health;
@@ -2734,7 +2738,7 @@ void SP_misc_atst_drivable( gentity_t *ent )
 	VectorSet( ent->mins, ATST_MINS0, ATST_MINS1, ATST_MINS2 );
 	VectorSet( ent->maxs, ATST_MAXS0, ATST_MAXS1, ATST_MAXS2 );
 
-	ent->contents = CONTENTS_BODY|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;
+	ent->contents = CONTENTS_SOLID|CONTENTS_BODY|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;
 	ent->flags |= FL_SHIELDED;
 	ent->takedamage = qtrue;
 	if ( !ent->health )

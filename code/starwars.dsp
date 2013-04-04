@@ -45,7 +45,7 @@ RSC=rc.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
-# ADD CPP /nologo /G6 /MT /W4 /GX /Zi /O2 /D "NDEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /YX /FD /c
+# ADD CPP /nologo /G6 /MT /W4 /GX /Zi /O2 /I "ff/ifc" /D "NDEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /D "_IMMERSION" /D "_FF" /YX /FD /c
 # ADD BASE MTL /nologo /D "NDEBUG" /win32
 # ADD MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
@@ -55,7 +55,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:windows /machine:I386
-# ADD LINK32 ALut.lib OpenAL32.lib win32/FeelIt/ffc10.lib advapi32.lib winmm.lib kernel32.lib user32.lib gdi32.lib ole32.lib wsock32.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386 /out:".\Release/jk2sp.exe"
+# ADD LINK32 ALut.lib OpenAL32.lib advapi32.lib winmm.lib kernel32.lib user32.lib gdi32.lib ole32.lib wsock32.lib ff/ifc/ifc22.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386 /out:".\Release/jk2sp.exe"
 # SUBTRACT LINK32 /incremental:yes /nodefaultlib
 
 !ELSEIF  "$(CFG)" == "starwars - Win32 Debug"
@@ -72,7 +72,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /Gm /GX /Zi /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /YX /c
-# ADD CPP /nologo /G6 /MTd /W4 /Gm /Gi /GX /ZI /Od /D "_DEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /Fr /YX /FD /c
+# ADD CPP /nologo /G6 /MTd /W4 /Gm /Gi /GX /ZI /Od /I "ff/ifc" /D "_DEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /D "_IMMERSION" /D "_FF" /Fr /YX /FD /c
 # ADD BASE MTL /nologo /D "_DEBUG" /win32
 # ADD MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
@@ -82,7 +82,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo /o"Debug/starwars.bsc"
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:windows /debug /machine:I386
-# ADD LINK32 ALut.lib OpenAL32.lib win32/FeelIt/ffc10d.lib advapi32.lib winmm.lib kernel32.lib user32.lib gdi32.lib ole32.lib wsock32.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386 /out:".\Debug/jk2sp.exe"
+# ADD LINK32 ALut.lib OpenAL32.lib advapi32.lib winmm.lib kernel32.lib user32.lib gdi32.lib ole32.lib wsock32.lib ff/ifc/ifc22.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386 /out:".\Debug/jk2sp.exe"
 # SUBTRACT LINK32 /profile /incremental:no /nodefaultlib
 
 !ELSEIF  "$(CFG)" == "starwars - Win32 FinalBuild"
@@ -100,7 +100,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /G6 /MT /W4 /GX /Zi /O2 /D "NDEBUG" /D "WIN32" /D "_WINDOWS" /D "__USEA3D" /D "__A3D_GEOM" /YX /FD /c
-# ADD CPP /nologo /G6 /MT /W4 /GX /Zi /O2 /D "NDEBUG" /D "FINAL_BUILD" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /YX /FD /c
+# ADD CPP /nologo /G6 /MT /W4 /GX /Zi /O2 /I "ff/ifc" /D "NDEBUG" /D "FINAL_BUILD" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /D "_IMMERSION" /D "_FF" /YX /FD /c
 # ADD BASE MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD MTL /nologo /D "NDEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
@@ -111,7 +111,7 @@ BSC32=bscmake.exe
 LINK32=link.exe
 # ADD BASE LINK32 advapi32.lib winmm.lib kernel32.lib user32.lib gdi32.lib ole32.lib wsock32.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386
 # SUBTRACT BASE LINK32 /incremental:yes /nodefaultlib
-# ADD LINK32 ALut.lib OpenAL32.lib win32/FeelIt/ffc10.lib advapi32.lib winmm.lib kernel32.lib user32.lib gdi32.lib ole32.lib wsock32.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386 /out:".\FinalBuild/jk2sp.exe"
+# ADD LINK32 ALut.lib OpenAL32.lib advapi32.lib winmm.lib kernel32.lib user32.lib gdi32.lib ole32.lib wsock32.lib ff/ifc/ifc22.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386 /out:".\FinalBuild/jk2sp.exe"
 # SUBTRACT LINK32 /incremental:yes /nodefaultlib
 
 !ELSEIF  "$(CFG)" == "starwars - Win32 SHDebug"
@@ -129,7 +129,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /G6 /MTd /W4 /Gm /Gi /GX /ZI /Od /D "_NPATCH" /D "_DEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /Fr /YX /FD /c
-# ADD CPP /nologo /G6 /MTd /W4 /Gm /Gi /GX /ZI /Od /D "_DEBUG" /D "MEM_DEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /Fr /YX /FD /c
+# ADD CPP /nologo /G6 /MTd /W4 /Gm /Gi /GX /ZI /Od /I "ff/ifc" /D "_DEBUG" /D "MEM_DEBUG" /D "_JK2EXE" /D "WIN32" /D "_WINDOWS" /D "_IMMERSION" /D "_FF" /Fr /YX /FD /c
 # ADD BASE MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /fo"win32\winquake.res" /d "_DEBUG"
@@ -140,7 +140,7 @@ BSC32=bscmake.exe
 LINK32=link.exe
 # ADD BASE LINK32 ALut.lib OpenAL32.lib win32/FeelIt/ffc10d.lib advapi32.lib winmm.lib kernel32.lib user32.lib gdi32.lib ole32.lib wsock32.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386 /out:".\Debug/jk2sp.exe"
 # SUBTRACT BASE LINK32 /profile /incremental:no /nodefaultlib
-# ADD LINK32 ./shdebug/exe/smrtheap.obj ALut.lib OpenAL32.lib win32/FeelIt/ffc10d.lib advapi32.lib winmm.lib kernel32.lib user32.lib gdi32.lib ole32.lib wsock32.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386 /out:".\SHDebug/jk2sp.exe"
+# ADD LINK32 ./shdebug/exe/smrtheap.obj ALut.lib OpenAL32.lib advapi32.lib winmm.lib kernel32.lib user32.lib gdi32.lib ole32.lib wsock32.lib ff/ifc/ifc22.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386 /out:".\SHDebug/jk2sp.exe"
 # SUBTRACT LINK32 /profile /incremental:no /nodefaultlib
 
 !ENDIF 
@@ -1010,102 +1010,127 @@ SOURCE=.\mp3code\wavep.c
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelBaseTypes.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelBox.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelCompoundEffect.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelCondition.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelConstant.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelDamper.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelDevice.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelDXDevice.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelEffect.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelEllipse.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelEnclosure.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelFriction.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelGrid.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelInertia.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelitAPI.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FEELitIFR.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelMouse.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelPeriodic.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelProjects.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelRamp.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelSpring.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FeelTexture.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FFC.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FFCErrors.h
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\fffx_feel.h
+# PROP Exclude_From_Build 1
 # End Source File
 # End Group
 # Begin Group "ForceFeedback Binaries"
@@ -1114,29 +1139,33 @@ SOURCE=.\win32\FeelIt\fffx_feel.h
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FFC10.dll
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FFC10d.dll
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FFC10d.lib
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\FFC10.lib
+# PROP Exclude_From_Build 1
 # End Source File
 # End Group
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\fffx.cpp
-# SUBTRACT CPP /YX
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
 SOURCE=.\win32\FeelIt\fffx_feel.cpp
-# SUBTRACT CPP /YX
+# PROP Exclude_From_Build 1
 # End Source File
 # End Group
 # Begin Group "Ghoul2"
@@ -1817,6 +1846,254 @@ SOURCE=.\encryption\sockets.cpp
 # Begin Source File
 
 SOURCE=.\encryption\sockets.h
+# End Source File
+# End Group
+# Begin Group "FF (Immersion)"
+
+# PROP Default_Filter ""
+# Begin Group "IFC"
+
+# PROP Default_Filter ""
+# Begin Source File
+
+SOURCE=.\ff\IFC\FeelitAPI.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\IFC.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\IFCErrors.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmBaseTypes.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmBox.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmCompoundEffect.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmCondition.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmConstant.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmDamper.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmDevice.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmDevices.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmDXDevice.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmEffect.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmEffectSuite.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmEllipse.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmEnclosure.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmFriction.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmGrid.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmIFR.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmInertia.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmMouse.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmPeriodic.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmProjects.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmRamp.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmSpring.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\ImmTexture.h
+# End Source File
+# End Group
+# Begin Group "FF Binaries"
+
+# PROP Default_Filter "*.dll"
+# Begin Source File
+
+SOURCE=.\IFC22.dll
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\IFC\IFC22.lib
+# End Source File
+# End Group
+# Begin Source File
+
+SOURCE=.\ff\cl_ff.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\cl_ff.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\common_headers.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_ChannelCompound.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_ChannelSet.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_ChannelSet.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_ConfigParser.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_ConfigParser.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_ffset.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_ffset.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_HandleTable.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_HandleTable.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_local.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_MultiCompound.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_MultiCompound.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_MultiEffect.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_MultiEffect.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_MultiSet.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_MultiSet.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_public.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_snd.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_snd.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_system.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_system.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_utils.cpp
+# SUBTRACT CPP /YX
+# End Source File
+# Begin Source File
+
+SOURCE=.\ff\ff_utils.h
 # End Source File
 # End Group
 # End Target

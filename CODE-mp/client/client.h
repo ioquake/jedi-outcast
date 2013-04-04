@@ -234,7 +234,12 @@ typedef struct {
 	int			maxPing;
 	int			ping;
 	qboolean	visible;
-	int			allowAnonymous;
+//	int			allowAnonymous;
+	qboolean	needPassword;
+	int			trueJedi;
+	int			weaponDisable;
+	int			forceDisable;
+//	qboolean	pure;
 } serverInfo_t;
 
 typedef struct {
@@ -437,7 +442,7 @@ void IN_CenterView (void);
 void CL_VerifyCode( void );
 
 float CL_KeyState (kbutton_t *key);
-char *Key_KeynumToString( int keynum, qboolean bTranslate ); //note: translate is only called for menu display not configs
+const char *Key_KeynumToString( int keynum/*, qboolean bTranslate */ ); //note: translate is only called for menu display not configs
 
 //
 // cl_parse.c

@@ -5,7 +5,7 @@
 #include "../client/keycodes.h"
 
 
-#define UI_API_VERSION	2
+#define UI_API_VERSION	3
 
 
 typedef struct {
@@ -53,6 +53,7 @@ typedef struct {
 	int			(*R_Font_HeightPixels)(const int setIndex, const float scale = 1.0f);
 	void		(*R_Font_DrawString)(int ox, int oy, const char *text, const float *rgba, const int setIndex, int iMaxPixelWidth, const float scale = 1.0f);
 	qboolean	(*Language_IsAsian) (void);
+	qboolean	(*Language_UsesSpaces) (void);
 	unsigned int (*AnyLanguage_ReadCharFromString)( const char **ppsText, qboolean *pbIsTrailingPunctuation /* = NULL */);
 
 	// a scene is built up by calls to R_ClearScene and the various R_Add functions.

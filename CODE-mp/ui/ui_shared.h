@@ -204,8 +204,10 @@ typedef struct textScrollDef_s
 	int				maxLineChars;
 	int				drawPadding;
 
-	int				lineCount;
-	char*			lines[MAX_TEXTSCROLL_LINES];
+	// changed spelling to make them fall out during compile while I made them asian-aware	-Ste
+	//
+	int				iLineCount;
+	const char*		pLines[MAX_TEXTSCROLL_LINES];	// can contain NULL ptrs that you should skip over during paint.
 
 } textScrollDef_t;
 
@@ -353,8 +355,9 @@ typedef struct {
 	int		(*Font_StrLenChars) (const char *text);
 	int		(*Font_HeightPixels)(const int iFontIndex, const float scale);
 	void	(*Font_DrawString)(int ox, int oy, const char *text, const float *rgba, const int setIndex, int iCharLimit, const float scale);
-	unsigned int (*AnyLanguage_ReadCharFromString)( const char **ppText );
-
+	qboolean (*Language_IsAsian)(void);
+	qboolean (*Language_UsesSpaces)(void);
+	unsigned int (*AnyLanguage_ReadCharFromString)( const char *psText, int *piAdvanceCount, qboolean *pbIsTrailingPunctuation/* = NULL*/ );
   void (*ownerDrawItem) (float x, float y, float w, float h, float text_x, float text_y, int ownerDraw, int ownerDrawFlags, int align, float special, float scale, vec4_t color, qhandle_t shader, int textStyle,int iMenuFont);
 	float (*getValue) (int ownerDraw);
 	qboolean (*ownerDrawVisible) (int flags);
@@ -370,7 +373,7 @@ typedef struct {
   void (*startLocalSound)( sfxHandle_t sfx, int channelNum );
   qboolean (*ownerDrawHandleKey)(int ownerDraw, int flags, float *special, int key);
   int (*feederCount)(float feederID);
-  const char *(*feederItemText)(float feederID, int index, int column, qhandle_t *handle);
+  const char *(*feederItemText)(float feederID, int index, int column, qhandle_t *handle1, qhandle_t *handle2, qhandle_t *handle3);
   qhandle_t (*feederItemImage)(float feederID, int index);
   qboolean (*feederSelection)(float feederID, int index);
 	void (*keynumToStringBuf)( int keynum, char *buf, int buflen );
@@ -462,7 +465,6 @@ qboolean UI_OutOfMemory();
 
 void Controls_GetConfig( void );
 void Controls_SetConfig(qboolean restart);
-void Controls_SetDefaults( void );
 
 int			trap_PC_AddGlobalDefine			( char *define );
 int			trap_PC_LoadSource				( const char *filename );
@@ -471,6 +473,14 @@ int			trap_PC_ReadToken				( int handle, pc_token_t *pc_token );
 int			trap_PC_SourceFileAndLine		( int handle, char *filename, int *line );
 int			trap_PC_LoadGlobalDefines		( const char* filename );
 void		trap_PC_RemoveAllGlobalDefines	( void );
+
+int			trap_R_Font_StrLenPixels(const char *text, const int iFontIndex, const float scale);
+int			trap_R_Font_StrLenChars(const char *text);
+int			trap_R_Font_HeightPixels(const int iFontIndex, const float scale);
+void		trap_R_Font_DrawString(int ox, int oy, const char *text, const float *rgba, const int setIndex, int iCharLimit, const float scale);
+qboolean	trap_Language_IsAsian(void);
+qboolean	trap_Language_UsesSpaces(void);
+unsigned int trap_AnyLanguage_ReadCharFromString( const char *psText, int *piAdvanceCount, qboolean *pbIsTrailingPunctuation );
 
 qboolean	trap_SP_RegisterServer( const char *package );
 qboolean	trap_SP_Register(char *file );

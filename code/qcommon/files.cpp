@@ -157,7 +157,7 @@ or configs will never get loaded from disk!
 
 // every time a new demo pk3 file is built, this checksum must be updated.
 // the easiest way to get it is to just run the game and see what it spits out
-#define	DEMO_PAK_CHECKSUM	3766578759u
+#define	DEMO_PAK_CHECKSUM	1431467275
 #define	DEMO_PAK_MAXFILES	5174u
 
 // if this is defined, the executable positively won't work with any paks other
@@ -2014,6 +2014,7 @@ static void FS_Startup( const char *gameName ) {
 
 	fs_gamedirvar = Cvar_Get ("fs_game", "", CVAR_INIT|CVAR_SERVERINFO );
 	fs_restrict = Cvar_Get ("fs_restrict", "", CVAR_INIT );
+	Cvar_Get( "com_demo", "", CVAR_INIT );
 
 	// set up cdpath
 	if (fs_cdpath->string[0]) {
@@ -2092,6 +2093,7 @@ static void FS_SetRestrictions( void ) {
 	}
 #endif
 	Cvar_Set( "fs_restrict", "1" );
+	Cvar_Set( "com_demo", "1" );
 
 	Com_Printf( "\nRunning in restricted demo mode.\n\n" );
 
@@ -2150,7 +2152,7 @@ void FS_InitFilesystem( void ) {
 FS_Restart
 ================
 */
-/*
+
 void FS_Restart( void ) {
 	// free anything we currently have loaded
 	FS_Shutdown();
@@ -2168,7 +2170,6 @@ void FS_Restart( void ) {
 		Com_Error( ERR_FATAL, "Couldn't load default.cfg" );
 	}
 }
-*/
 
 /*
 ========================================================================================

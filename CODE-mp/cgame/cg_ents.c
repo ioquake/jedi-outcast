@@ -492,6 +492,7 @@ static void CG_General( centity_t *cent ) {
 	int					beamID;
 	vec3_t				beamOrg;
 	mdxaBone_t			matrix;
+	qboolean			doNotSetModel = qfalse;
 
 	if (cent->currentState.modelGhoul2 == 127)
 	{ //not ready to be drawn or initialized..
@@ -512,8 +513,19 @@ static void CG_General( centity_t *cent ) {
 		cent->currentState.modelindex < MAX_CLIENTS &&
 		cent->currentState.weapon == G2_MODEL_PART)
 	{ //special case for client limbs
-		centity_t *clEnt = &cg_entities[cent->currentState.modelindex];
+		centity_t *clEnt;
 		int dismember_settings = cg_dismember.integer;
+		
+		doNotSetModel = qtrue;
+
+		if (cent->currentState.modelindex >= 0)
+		{
+			clEnt = &cg_entities[cent->currentState.modelindex];
+		}
+		else
+		{
+			clEnt = &cg_entities[cent->currentState.modelindex2];
+		}
 
 		if (!dismember_settings)
 		{ //This client does not wish to see dismemberment.
@@ -551,9 +563,8 @@ static void CG_General( centity_t *cent ) {
 			cent->bolt4 = -1;
 			cent->trailTime = 0;
 
-			switch (cent->currentState.modelGhoul2)
+			if (cent->currentState.modelGhoul2 == G2_MODELPART_HEAD)
 			{
-			case G2_MODELPART_HEAD:
 				limbBone = "cervical";
 				rotateBone = "cranium";
 				limbName = "head";
@@ -562,8 +573,9 @@ static void CG_General( centity_t *cent ) {
 				limbTagName = "*head_cap_torso";
 				stubTagName = "*torso_cap_head";
 				limb_anim = BOTH_DISMEMBER_HEAD1;
-				break;
-			case G2_MODELPART_WAIST:
+			}
+			else if (cent->currentState.modelGhoul2 == G2_MODELPART_WAIST)
+			{
 				limbBone = "pelvis";
 				rotateBone = "thoracic";
 				limbName = "torso";
@@ -572,8 +584,9 @@ static void CG_General( centity_t *cent ) {
 				limbTagName = "*torso_cap_hips";
 				stubTagName = "*hips_cap_torso";
 				limb_anim = BOTH_DISMEMBER_TORSO1;
-				break;
-			case G2_MODELPART_LARM:
+			}
+			else if (cent->currentState.modelGhoul2 == G2_MODELPART_LARM)
+			{
 				limbBone = "lhumerus";
 				rotateBone = "lradius";
 				limbName = "l_arm";
@@ -582,8 +595,9 @@ static void CG_General( centity_t *cent ) {
 				limbTagName = "*l_arm_cap_torso";
 				stubTagName = "*torso_cap_l_arm";
 				limb_anim = BOTH_DISMEMBER_LARM;
-				break;
-			case G2_MODELPART_RARM:
+			}
+			else if (cent->currentState.modelGhoul2 == G2_MODELPART_RARM)
+			{
 				limbBone = "rhumerus";
 				rotateBone = "rradius";
 				limbName = "r_arm";
@@ -592,8 +606,20 @@ static void CG_General( centity_t *cent ) {
 				limbTagName = "*r_arm_cap_torso";
 				stubTagName = "*torso_cap_r_arm";
 				limb_anim = BOTH_DISMEMBER_RARM;
-				break;
-			case G2_MODELPART_LLEG:
+			}
+			else if (cent->currentState.modelGhoul2 == G2_MODELPART_RHAND)
+			{
+				limbBone = "rradiusX";
+				rotateBone = "rhand";
+				limbName = "r_hand";
+				limbCapName = "r_hand_cap_r_arm_off";
+				stubCapName = "r_arm_cap_r_hand_off";
+				limbTagName = "*r_hand_cap_r_arm";
+				stubTagName = "*r_arm_cap_r_hand";
+				limb_anim = BOTH_DISMEMBER_RARM;
+			}
+			else if (cent->currentState.modelGhoul2 == G2_MODELPART_LLEG)
+			{
 				limbBone = "lfemurYZ";
 				rotateBone = "ltibia";
 				limbName = "l_leg";
@@ -602,8 +628,9 @@ static void CG_General( centity_t *cent ) {
 				limbTagName = "*l_leg_cap_hips";
 				stubTagName = "*hips_cap_l_leg";
 				limb_anim = BOTH_DISMEMBER_LLEG;
-				break;
-			case G2_MODELPART_RLEG:
+			}
+			else if (cent->currentState.modelGhoul2 == G2_MODELPART_RLEG)
+			{
 				limbBone = "rfemurYZ";
 				rotateBone = "rtibia";
 				limbName = "r_leg";
@@ -612,8 +639,9 @@ static void CG_General( centity_t *cent ) {
 				limbTagName = "*r_leg_cap_hips";
 				stubTagName = "*hips_cap_r_leg";
 				limb_anim = BOTH_DISMEMBER_RLEG;
-				break;
-			default:
+			}
+			else
+			{
 				limbBone = "rfemurYZ";
 				rotateBone = "rtibia";
 				limbName = "r_leg";
@@ -622,7 +650,6 @@ static void CG_General( centity_t *cent ) {
 				limbTagName = "*r_leg_cap_hips";
 				stubTagName = "*hips_cap_r_leg";
 				limb_anim = BOTH_DISMEMBER_RLEG;
-				break;
 			}
 
 			if (clEnt && clEnt->ghoul2)
@@ -632,28 +659,35 @@ static void CG_General( centity_t *cent ) {
 				int				flags=BONE_ANIM_OVERRIDE_FREEZE;
 				clientInfo_t	*ci;
 
-				ci = &cgs.clientinfo[ clEnt->currentState.number ];
+				if (clEnt->currentState.number < MAX_CLIENTS)
+				{
+					ci = &cgs.clientinfo[ clEnt->currentState.number ];
+				}
+				else
+				{
+					ci = NULL;
+				}
 
 				if (ci)
 				{
-					/*
-					if (cent->currentState.modelGhoul2 == G2_MODELPART_WAIST)
-					{
-						anim = &ci->animations[ cent->currentState.modelindex2 ];
-					}
-					else
-					*/
-					{
-						anim = &bgGlobalAnimations[ limb_anim ];
-					}
+					//anim = &bgGlobalAnimations[ limb_anim ];
+					//I guess it looks better to continue the body anim on the severed limb. If not a bit strange. It's what
+					//SP seems to do anyway.
+					anim = &bgGlobalAnimations[ (clEnt->currentState.torsoAnim&~ANIM_TOGGLEBIT) ];
+				}
+				else
+				{ //a g2anim ent, maybe? For those, we can settle for generic limb anims.
+					anim = &bgGlobalAnimations[ limb_anim ];
 				}
 
 				trap_G2API_DuplicateGhoul2Instance(clEnt->ghoul2, &cent->ghoul2);
 
 				if (anim)
 				{
+					int aNum;
 					animSpeed = 50.0f / anim->frameLerp;
 
+					/*
 					if (cent->currentState.modelGhoul2 == G2_MODELPART_WAIST)
 					{
 						trap_G2API_SetBoneAnim(cent->ghoul2, 0, "upper_lumbar", anim->firstFrame, anim->firstFrame + anim->numFrames, flags, animSpeed, cg.time, -1, 0);
@@ -664,6 +698,31 @@ static void CG_General( centity_t *cent ) {
 						trap_G2API_SetBoneAnim(cent->ghoul2, 0, "upper_lumbar", anim->firstFrame + anim->numFrames-1, anim->firstFrame + anim->numFrames, flags, animSpeed, cg.time, -1, 0);
 						trap_G2API_SetBoneAnim(cent->ghoul2, 0, "model_root", anim->firstFrame + anim->numFrames-1, anim->firstFrame + anim->numFrames, flags, animSpeed, cg.time, -1, 0);
 					}
+					*/
+					//I guess it looks better to continue the body anim on the severed limb. If not a bit strange. It's what
+					//SP seems to do anyway.
+					if (ci)
+					{
+						aNum = ci->frame+1;
+
+						while (aNum >= anim->firstFrame+anim->numFrames)
+						{
+							aNum--;
+						}
+
+						if (aNum < anim->firstFrame-1)
+						{ //wrong animation...?
+							aNum = (anim->firstFrame+anim->numFrames)-1;
+						}
+					}
+					else
+					{
+						aNum = anim->firstFrame;
+					}
+
+					trap_G2API_SetBoneAnim(cent->ghoul2, 0, "upper_lumbar", aNum, anim->firstFrame + anim->numFrames, flags, animSpeed, cg.time, -1, 150);
+					trap_G2API_SetBoneAnim(cent->ghoul2, 0, "model_root", aNum, anim->firstFrame + anim->numFrames, flags, animSpeed, cg.time, -1, 150);
+					trap_G2API_SetBoneAnim(cent->ghoul2, 0, "Motion", aNum, anim->firstFrame + anim->numFrames, flags, animSpeed, cg.time, -1, 150);
 				}
 			}
 
@@ -709,7 +768,7 @@ static void CG_General( centity_t *cent ) {
 				trap_FX_PlayEffectID(trap_FX_RegisterEffect("blaster/smoke_bolton"), boltOrg, boltAng);
 			}
 
-			if (cent->currentState.modelGhoul2 == G2_MODELPART_RARM || cent->currentState.modelGhoul2 == G2_MODELPART_WAIST)
+			if (cent->currentState.modelGhoul2 == G2_MODELPART_RARM || cent->currentState.modelGhoul2 == G2_MODELPART_RHAND || cent->currentState.modelGhoul2 == G2_MODELPART_WAIST)
 			{ //Cut his weapon holding arm off, so remove the weapon
 				if (trap_G2API_HasGhoul2ModelOnIndex(&(clEnt->ghoul2), 1))
 				{
@@ -989,7 +1048,7 @@ Ghoul2 Insert End
 		VectorCopy( cg.autoAngles, cent->lerpAngles );
 		AxisCopy( cg.autoAxis, ent.axis );
 	}
-	else
+	else if (!doNotSetModel)
 	{
 		ent.hModel = cgs.gameModels[s1->modelindex];
 	}
@@ -1074,6 +1133,13 @@ Ghoul2 Insert End
 	else if (cent->currentState.eType == ET_BODY)
 	{
 		cent->dustTrailTime = 0;
+	}
+
+	if (cent->currentState.modelGhoul2 &&
+		!ent.ghoul2 &&
+		!ent.hModel)
+	{
+		return;
 	}
 
 	// add to refresh list
@@ -2294,9 +2360,15 @@ static void CG_TeamBase( centity_t *cent ) {
 		else {
 			model.hModel = cgs.media.neutralFlagBaseModel;
 		}
-		trap_R_AddRefEntityToScene( &model );
+
+		if (cent->currentState.eType != ET_GRAPPLE)
+		{ //do not do this for g2animents
+			trap_R_AddRefEntityToScene( &model );
+		}
 	}
 }
+
+void CG_G2Animated( centity_t *cent );
 
 /*
 ===============
@@ -2366,6 +2438,8 @@ Ghoul2 Insert End
 	case ET_SPEAKER:
 		CG_Speaker( cent );
 		break;
+	case ET_GRAPPLE: //An entity that wants to be able to use ghoul2 humanoid anims. Like a player, but not.
+		CG_G2Animated( cent );
 	case ET_TEAM:
 		CG_TeamBase( cent );
 		break;

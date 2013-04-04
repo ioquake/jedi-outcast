@@ -197,7 +197,7 @@ int			s_entityWavVol_back[MAX_GENTITIES];
 *
 \**************************************************************************************************/
 
-int			s_UseOpenAL	= true;		// Determines if using Open AL or the default software mixer
+int			s_UseOpenAL	= false;	// Determines if using Open AL or the default software mixer
 
 ALfloat		listener_pos[3];		// Listener Position
 ALfloat		listener_ori[6];		// Listener Orientation
@@ -456,19 +456,13 @@ void S_Init( void ) {
 				// Reached limit of sources
 				break;
 			}
-			alSourcef(s_channels[i].alSource, AL_REFERENCE_DISTANCE, 250.0f);
+			alSourcef(s_channels[i].alSource, AL_REFERENCE_DISTANCE, 400.0f);
 			if (alGetError() != AL_NO_ERROR)
 			{
 				break;
 			}
 			s_numChannels++;
 		}
-
-//#ifdef _DEBUG
-//		char szString[256];
-//		sprintf(szString, "Created %d Open AL Sources\n", s_numChannels);
-//		OutputDebugString(szString);
-//#endif
 
 		// Generate AL Buffers for streaming audio playback (used for MP3s)
 		ch = s_channels + 1;
@@ -1386,6 +1380,7 @@ Entchannel 0 will never override a playing sound
 */
 void S_StartSound(const vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle ) 
 {
+	int i;
 	channel_t	*ch;
 	/*const*/ sfx_t *sfx;
 
@@ -1410,6 +1405,44 @@ void S_StartSound(const vec3_t origin, int entityNum, int entchannel, sfxHandle_
 	if ( s_show->integer == 1 ) {
 		Com_Printf( "%i : %s on (%d)\n", s_paintedtime, sfx->sSoundName, entityNum );
 	}
+
+	if (s_UseOpenAL)
+	{
+		if (entchannel == CHAN_WEAPON)
+		{
+			// Check if we are playing a 'charging' sound, if so, stop it now ..
+			ch = s_channels + 1;
+			for (i = 1; i < s_numChannels; i++, ch++)
+			{
+				if ((ch->entnum == entityNum) && (ch->entchannel == CHAN_WEAPON) && (ch->thesfx) && (strstr(strlwr(ch->thesfx->sSoundName), "altcharge") != NULL))
+				{
+					// Stop this sound
+					alSourceStop(ch->alSource);
+					alSourcei(ch->alSource, AL_BUFFER, NULL);
+					ch->bPlaying = false;
+					ch->thesfx = NULL;
+					break;
+				}
+			}
+		}
+		else
+		{
+			ch = s_channels + 1;
+			for (i = 1; i < s_numChannels; i++, ch++)
+			{
+				if ((ch->entnum == entityNum) && (ch->thesfx) && (strstr(strlwr(ch->thesfx->sSoundName), "falling") != NULL))
+				{
+					// Stop this sound
+					alSourceStop(ch->alSource);
+					alSourcei(ch->alSource, AL_BUFFER, NULL);
+					ch->bPlaying = false;
+					ch->thesfx = NULL;
+					break;
+				}
+			}
+		}
+	}
+
 
 	// pick a channel to play on
 	
@@ -1617,6 +1650,7 @@ void S_StopSounds(void)
 		for (i = 0; i < s_numChannels; i++, ch++)
 		{
 			alSourceStop(s_channels[i].alSource);
+			alSourcei(s_channels[i].alSource, AL_BUFFER, NULL);
 			ch->thesfx = NULL;
 			memset(&ch->MP3StreamHeader, 0, sizeof(MP3STREAM));
 			ch->bLooping = false;
@@ -2077,14 +2111,14 @@ void S_UpdateEntityPosition( int entityNum, const vec3_t origin )
 		ch = s_channels;
 		for (i = 0; i < s_numChannels; i++, ch++)
 		{
-			if ((s_channels[i].bPlaying) & (s_channels[i].entnum == entityNum))
+			if ((s_channels[i].bPlaying) & (s_channels[i].entnum == entityNum) & (!s_channels[i].bLooping))
 			{
 				pos[0] = origin[0];
 				pos[1] = origin[2];
 				pos[2] = -origin[1];
 				alSourcefv(s_channels[i].alSource, AL_POSITION, pos);
 	
-				if (s_bEALFileLoaded)
+				if ((s_bEALFileLoaded) && !( ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL ) )
 				{
 					UpdateEAXBuffer(ch);
 				}
@@ -2245,12 +2279,6 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], qboolean 
 		listener_pos[1] = head[2];
 		listener_pos[2] = -head[1];
 		alListenerfv(AL_POSITION, listener_pos);
-
-//#ifdef _DEBUG
-//		char szString[256];
-//		sprintf(szString, "Listener at %f,%f,%f\n", listener_pos[0], listener_pos[1], listener_pos[2]);
-//		OutputDebugString(szString);
-//#endif
 
 		listener_ori[0] = axis[0][0];
 		listener_ori[1] = axis[0][2];
@@ -2543,6 +2571,8 @@ void S_Update_(void) {
 	int i,j;
 	int			source;
 	float		pos[3];
+	EAXOBSTRUCTIONPROPERTIES eaxOBProp;
+	EAXOCCLUSIONPROPERTIES eaxOCProp;
 #ifdef _DEBUG
 	char szString[256];
 #endif
@@ -2560,13 +2590,7 @@ void S_Update_(void) {
 		{	
 			if ( !ch->thesfx || (ch->bPlaying))
 				continue;
-	
-//			if ( ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL )
-//				snd_vol = voice_vol;
-//			else
-//				snd_vol = normal_vol;
-			
-	
+
 			source = ch - s_channels;
 
 			// Get position of source
@@ -2606,21 +2630,40 @@ void S_Update_(void) {
 			}
 	
 			alSourcefv(s_channels[source].alSource, AL_POSITION, pos);
-
-//#ifdef _DEBUG
-//		sprintf(szString, "Sound %s on channel %d at %f,%f,%f\n", ch->thesfx->sSoundName, source, pos[0], pos[1], pos[2]);
-//		OutputDebugString(szString);
-//#endif
-
 			alSourcei(s_channels[source].alSource, AL_LOOPING, AL_FALSE);
 
 			if ( ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL )
+			{
+				alSourcef(s_channels[source].alSource, AL_REFERENCE_DISTANCE, 1500.0f);
 				alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volumeVoice->value) / 255.0f);
+
+				if (s_bEAX)
+				{
+					// Switch-off Occlusion + Obstruction
+					eaxOBProp.lObstruction = EAXBUFFER_DEFAULTOBSTRUCTION;
+					eaxOBProp.flObstructionLFRatio = EAXBUFFER_DEFAULTOBSTRUCTIONLFRATIO;
+
+					eaxOCProp.lOcclusion = EAXBUFFER_DEFAULTOCCLUSION;
+					eaxOCProp.flOcclusionLFRatio = EAXBUFFER_DEFAULTOCCLUSIONLFRATIO;
+					eaxOCProp.flOcclusionRoomRatio = EAXBUFFER_DEFAULTOCCLUSIONROOMRATIO;
+					eaxOCProp.flOcclusionDirectRatio = EAXBUFFER_DEFAULTOCCLUSIONDIRECTRATIO;
+
+					s_eaxSet(&DSPROPSETID_EAX_BufferProperties, DSPROPERTY_EAXBUFFER_OBSTRUCTIONPARAMETERS,
+						ch->alSource, &eaxOBProp, sizeof(EAXOBSTRUCTIONPROPERTIES));
+
+					s_eaxSet(&DSPROPSETID_EAX_BufferProperties, DSPROPERTY_EAXBUFFER_OCCLUSIONPARAMETERS,
+						ch->alSource, &eaxOCProp, sizeof(EAXOCCLUSIONPROPERTIES));
+				}
+			}
 			else
+			{
+				alSourcef(s_channels[source].alSource, AL_REFERENCE_DISTANCE, 400.f);
 				alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.f);
 
-			if (s_bEALFileLoaded)
-				UpdateEAXBuffer(ch);
+				if (s_bEALFileLoaded)
+					UpdateEAXBuffer(ch);
+			}
+
 
 			int nBytesDecoded = 0;
 			int nTotalBytesDecoded = 0;
@@ -2786,7 +2829,7 @@ void UpdateSingleShotSounds()
 	ALint processed;
 	channel_t *ch;
 #ifdef _DEBUG
-	char szString[245];
+	char szString[256];
 #endif
 
 	// Firstly, check if any single-shot sounds have completed, or if they need more data (for streaming Sources),
@@ -2796,7 +2839,7 @@ void UpdateSingleShotSounds()
 	{
 		ch->bProcessed = false;
 		if ((s_channels[i].bPlaying) && (!ch->bLooping))
-		{
+		{	
 			// Single-shot
 			if (s_channels[i].bStreaming == false)
 			{
@@ -3029,6 +3072,7 @@ void UpdateLoopingSounds()
 			for (j = 0; j < numLoopSounds; j++)
 			{
 				loop = &loopSounds[j];
+
 				if ((loop->bProcessed == false) && (ch->thesfx == loop->sfx))
 				{
 					// Same sound - wrong position
@@ -3076,6 +3120,7 @@ void UpdateLoopingSounds()
 	for (j = 0; j < numLoopSounds; j++)
 	{
 		loop = &loopSounds[j];
+
 		if (loop->bProcessed == false)
 		{
 			ch = S_PickChannel(0,0);
@@ -3113,9 +3158,10 @@ void UpdateLoopingSounds()
 			alSourcei(s_channels[source].alSource, AL_BUFFER, ch->thesfx->Buffer);
 			alSourcefv(s_channels[source].alSource, AL_POSITION, pos);
 			alSourcei(s_channels[source].alSource, AL_LOOPING, AL_TRUE);
+			alSourcef(s_channels[source].alSource, AL_REFERENCE_DISTANCE, 400.f);
 			alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.0f);
 			alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, ch->fixed_origin ? AL_TRUE : AL_FALSE);
-			
+
 			if (s_bEALFileLoaded)
 				UpdateEAXBuffer(ch);
 

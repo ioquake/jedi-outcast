@@ -106,6 +106,7 @@ void CG_DrawInformation( void ) {
 	int			value, valueNOFP;
 	qhandle_t	levelshot;
 	char		buf[1024];
+	int			iPropHeight = 18;	// I know, this is total crap, but as a post release asian-hack....  -Ste
 
 	info = CG_ConfigString( CS_SERVERINFO );
 	sysInfo = CG_ConfigString( CS_SYSTEMINFO );
@@ -147,14 +148,15 @@ void CG_DrawInformation( void ) {
 		Q_CleanStr(buf);
 		UI_DrawProportionalString( 320, y, buf,
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 
 		// pure server
 		s = Info_ValueForKey( sysInfo, "sv_pure" );
 		if ( s[0] == '1' ) {
-			UI_DrawProportionalString( 320, y, "Pure Server",
+			const char *psPure = CG_GetStripEdString("INGAMETEXT", "PURE_SERVER");
+			UI_DrawProportionalString( 320, y, psPure,
 				UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-			y += PROP_HEIGHT;
+			y += iPropHeight;
 		}
 
 		// server-specific message of the day
@@ -162,7 +164,7 @@ void CG_DrawInformation( void ) {
 		if ( s[0] ) {
 			UI_DrawProportionalString( 320, y, s,
 				UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-			y += PROP_HEIGHT;
+			y += iPropHeight;
 		}
 
 		// some extra space after hostname and motd
@@ -174,7 +176,7 @@ void CG_DrawInformation( void ) {
 	if ( s[0] ) {
 		UI_DrawProportionalString( 320, y, s,
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 	}
 
 	// cheats warning
@@ -182,7 +184,7 @@ void CG_DrawInformation( void ) {
 	if ( s[0] == '1' ) {
 		UI_DrawProportionalString( 320, y, CG_GetStripEdString("INGAMETEXT", "CHEATSAREENABLED"),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 	}
 
 	// game type
@@ -220,13 +222,13 @@ void CG_DrawInformation( void ) {
 	}
 	UI_DrawProportionalString( 320, y, s,
 		UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-	y += PROP_HEIGHT;
+	y += iPropHeight;
 		
 	value = atoi( Info_ValueForKey( info, "timelimit" ) );
 	if ( value ) {
 		UI_DrawProportionalString( 320, y, va( "%s %i", CG_GetStripEdString("INGAMETEXT", "TIMELIMIT"), value ),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 	}
 
 	if (cgs.gametype < GT_CTF ) {
@@ -234,7 +236,7 @@ void CG_DrawInformation( void ) {
 		if ( value ) {
 			UI_DrawProportionalString( 320, y, va( "%s %i", CG_GetStripEdString("INGAMETEXT", "FRAGLIMIT"), value ),
 				UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-			y += PROP_HEIGHT;
+			y += iPropHeight;
 		}
 
 		if (cgs.gametype == GT_TOURNAMENT)
@@ -243,7 +245,7 @@ void CG_DrawInformation( void ) {
 			if ( value ) {
 				UI_DrawProportionalString( 320, y, va( "%s %i", CG_GetStripEdString("INGAMETEXT", "WINLIMIT"), value ),
 					UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-				y += PROP_HEIGHT;
+				y += iPropHeight;
 			}
 		}
 	}
@@ -253,7 +255,7 @@ void CG_DrawInformation( void ) {
 		if ( value ) {
 			UI_DrawProportionalString( 320, y, va( "%s %i", CG_GetStripEdString("INGAMETEXT", "CAPTURELIMIT"), value ),
 				UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-			y += PROP_HEIGHT;
+			y += iPropHeight;
 		}
 	}
 
@@ -263,7 +265,7 @@ void CG_DrawInformation( void ) {
 		if ( value ) {
 			UI_DrawProportionalString( 320, y, CG_GetStripEdString("INGAMETEXT", "FORCEBASEDTEAMS"),
 				UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-			y += PROP_HEIGHT;
+			y += iPropHeight;
 		}
 	}
 
@@ -277,7 +279,7 @@ void CG_DrawInformation( void ) {
 
 		UI_DrawProportionalString( 320, y, va( "%s %s", fmStr, CG_GetStripEdString("INGAMETEXT", forceMasteryLevels[value]) ),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 	}
 	else if (!valueNOFP)
 	{
@@ -286,7 +288,7 @@ void CG_DrawInformation( void ) {
 
 		UI_DrawProportionalString( 320, y, va( "%s %s", fmStr, (char *)CG_GetStripEdString("INGAMETEXT", forceMasteryLevels[7]) ),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 	}
 
 	if (cgs.gametype == GT_TOURNAMENT)
@@ -300,75 +302,75 @@ void CG_DrawInformation( void ) {
 	if ( cgs.gametype != GT_JEDIMASTER && value ) {
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "SABERONLYSET") ),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 	}
 
 	if ( valueNOFP ) {
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "NOFPSET") ),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 	}
 
 
 	// Display the rules based on type
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 	switch ( cgs.gametype ) {
 	case GT_FFA:					
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_FFA_1")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		break;
 	case GT_HOLOCRON:
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_HOLO_1")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_HOLO_2")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		break;
 	case GT_JEDIMASTER:
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_JEDI_1")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_JEDI_2")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		break;
 	case GT_SINGLE_PLAYER:
 		break;
 	case GT_TOURNAMENT:
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_DUEL_1")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_DUEL_2")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		break;
 	case GT_TEAM:
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_TEAM_1")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_TEAM_2")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		break;
 	case GT_SAGA:
 		break;
 	case GT_CTF:
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_CTF_1")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_CTF_2")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		break;
 	case GT_CTY:
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_CTY_1")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		UI_DrawProportionalString( 320, y, va( "%s", (char *)CG_GetStripEdString("INGAMETEXT", "RULES_CTY_2")),
 			UI_CENTER|UI_INFOFONT|UI_DROPSHADOW, colorWhite );
-		y += PROP_HEIGHT;
+		y += iPropHeight;
 		break;
 	default:
 		break;

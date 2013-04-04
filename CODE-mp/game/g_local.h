@@ -33,6 +33,8 @@
 #define FL_NO_HUMANS			0x00004000	// spawn point just for bots
 #define FL_FORCE_GESTURE		0x00008000	// force gesture on client
 
+#define ANIMENT_SPAWNER //allow animent spawners
+
 // movers are things like doors, plats, buttons, etc
 typedef enum {
 	MOVER_POS1,
@@ -87,6 +89,9 @@ typedef enum
 
 extern void *precachedKyle;
 extern void *g2SaberInstance;
+
+extern qboolean gEscaping;
+extern int gEscapeTime;
 
 typedef struct gentity_s gentity_t;
 typedef struct gclient_s gclient_t;
@@ -405,9 +410,16 @@ struct gclient_s {
 
 	vec3_t		lastSaberTip;		//position of saber tip last update
 	vec3_t		lastSaberBase;		//position of saber base last update
+
+	vec3_t		lastSaberDir_Always; //every getboltmatrix, set to saber dir
+	vec3_t		lastSaberBase_Always; //every getboltmatrix, set to saber base
+	int			lastSaberStorageTime; //server time that the above two values were updated (for making sure they aren't out of date)
+
 	qboolean	hasCurrentPosition;	//are lastSaberTip and lastSaberBase valid?
 
 	int			dangerTime;		// level.time when last attack occured
+
+	int			forcePowerSoundDebounce; //if > level.time, don't do certain sound events again (drain sound, absorb sound, etc)
 
 	qboolean	fjDidJump;
 };
@@ -621,6 +633,8 @@ qboolean	trap_G2API_GetBoltMatrix(void *ghoul2, const int modelIndex, const int 
 								const vec3_t angles, const vec3_t position, const int frameNum, qhandle_t *modelList, vec3_t scale);
 qboolean	trap_G2API_GetBoltMatrix_NoReconstruct(void *ghoul2, const int modelIndex, const int boltIndex, mdxaBone_t *matrix,
 								const vec3_t angles, const vec3_t position, const int frameNum, qhandle_t *modelList, vec3_t scale);
+qboolean	trap_G2API_GetBoltMatrix_NoRecNoRot(void *ghoul2, const int modelIndex, const int boltIndex, mdxaBone_t *matrix,
+								const vec3_t angles, const vec3_t position, const int frameNum, qhandle_t *modelList, vec3_t scale);
 int			trap_G2API_InitGhoul2Model(void **ghoul2Ptr, const char *fileName, int modelIndex, qhandle_t customSkin,
 						  qhandle_t customShader, int modelFlags, int lodBias);
 int			trap_G2API_AddBolt(void *ghoul2, int modelIndex, const char *boneName);
@@ -632,6 +646,8 @@ void		trap_G2API_DuplicateGhoul2Instance(void *g2From, void **g2To);
 qboolean	trap_G2API_HasGhoul2ModelOnIndex(void *ghlInfo, int modelIndex);
 qboolean	trap_G2API_RemoveGhoul2Model(void *ghlInfo, int modelIndex);
 void		trap_G2API_CleanGhoul2Models(void **ghoul2Ptr);
+void		trap_G2API_CollisionDetect ( CollisionRecord_t *collRecMap, void* ghoul2, const vec3_t angles, const vec3_t position,
+								int frameNumber, int entNum, vec3_t rayStart, vec3_t rayEnd, vec3_t scale, int traceFlags, int useLod, float fRadius );
 
 qboolean	trap_G2API_SetBoneAngles(void *ghoul2, int modelIndex, const char *boneName, const vec3_t angles, const int flags,
 								const int up, const int right, const int forward, qhandle_t *modelList,
@@ -654,6 +670,9 @@ void TossClientWeapon(gentity_t *self, vec3_t direction, float speed);
 void TossClientItems( gentity_t *self );
 void TossClientCubes( gentity_t *self );
 void ExplodeDeath( gentity_t *self );
+void G_CheckForDismemberment(gentity_t *ent, vec3_t point, int damage, int deathAnim);
+extern int gGAvoidDismember;
+
 
 // damage flags
 #define DAMAGE_NORMAL				0x00000000	// No flags set.
@@ -688,6 +707,9 @@ void WP_FireBlasterMissile( gentity_t *ent, vec3_t start, vec3_t dir, qboolean a
 //
 // g_mover.c
 //
+#define SPF_BUTTON_USABLE		1
+#define SPF_BUTTON_FPUSHABLE	2
+
 void G_RunMover( gentity_t *ent );
 void Touch_DoorTrigger( gentity_t *ent, gentity_t *other, trace_t *trace );
 
@@ -703,6 +725,7 @@ void trigger_teleporter_touch (gentity_t *self, gentity_t *other, trace_t *trace
 void TeleportPlayer( gentity_t *player, vec3_t origin, vec3_t angles );
 void ATST_ManageDamageBoxes(gentity_t *ent);
 int G_PlayerBecomeATST(gentity_t *ent);
+void G_CreateExampleAnimEnt(gentity_t *ent);
 
 
 //
@@ -842,7 +865,7 @@ qboolean G_DoesMapSupportGametype(const char *mapname, int gametype);
 const char *G_RefreshNextMap(int gametype, qboolean forced);
 
 // w_force.c / w_saber.c
-void G_PreDefSound(vec3_t org, int pdSound);
+gentity_t *G_PreDefSound(vec3_t org, int pdSound);
 qboolean HasSetSaberOnly(void);
 void WP_ForcePowerStop( gentity_t *self, forcePowers_t forcePower );
 void WP_SaberPositionUpdate( gentity_t *self, usercmd_t *ucmd );
@@ -924,12 +947,23 @@ extern	vmCvar_t	g_maxclients;			// allow this many total, including spectators
 extern	vmCvar_t	g_maxGameClients;		// allow this many active
 extern	vmCvar_t	g_restarted;
 
+extern	vmCvar_t	g_trueJedi;
+
 extern	vmCvar_t	g_autoMapCycle;
 extern	vmCvar_t	g_dmflags;
 extern	vmCvar_t	g_maxForceRank;
 extern	vmCvar_t	g_forceBasedTeams;
 extern	vmCvar_t	g_privateDuel;
 extern	vmCvar_t	g_saberLocking;
+extern	vmCvar_t	g_saberLockFactor;
+extern	vmCvar_t	g_saberTraceSaberFirst;
+
+#ifdef G2_COLLISION_ENABLED
+extern	vmCvar_t	g_saberGhoul2Collision;
+#endif
+extern	vmCvar_t	g_saberAlwaysBoxTrace;
+extern	vmCvar_t	g_saberBoxTraceSize;
+
 extern	vmCvar_t	g_forceRegenTime;
 extern	vmCvar_t	g_spawnInvulnerability;
 extern	vmCvar_t	g_forcePowerDisable;
@@ -981,6 +1015,14 @@ extern	vmCvar_t	g_singlePlayer;
 extern	vmCvar_t	g_dismember;
 extern	vmCvar_t	g_forceDodge;
 extern	vmCvar_t	g_timeouttospec;
+
+extern	vmCvar_t	g_saberDmgVelocityScale;
+extern	vmCvar_t	g_saberDmgDelay_Idle;
+extern	vmCvar_t	g_saberDmgDelay_Wound;
+
+extern	vmCvar_t	g_saberDebugPrint;
+
+extern	vmCvar_t	g_austrian;
 
 void	trap_Printf( const char *fmt );
 void	trap_Error( const char *fmt );

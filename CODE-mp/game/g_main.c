@@ -20,6 +20,8 @@ gclient_t		g_clients[MAX_CLIENTS];
 
 qboolean gDuelExit = qfalse;
 
+vmCvar_t	g_trueJedi;
+
 vmCvar_t	g_gametype;
 vmCvar_t	g_MaxHolocronCarry;
 vmCvar_t	g_ff_objectives;
@@ -29,6 +31,15 @@ vmCvar_t	g_maxForceRank;
 vmCvar_t	g_forceBasedTeams;
 vmCvar_t	g_privateDuel;
 vmCvar_t	g_saberLocking;
+vmCvar_t	g_saberLockFactor;
+vmCvar_t	g_saberTraceSaberFirst;
+
+#ifdef G2_COLLISION_ENABLED
+vmCvar_t	g_saberGhoul2Collision;
+#endif
+vmCvar_t	g_saberAlwaysBoxTrace;
+vmCvar_t	g_saberBoxTraceSize;
+
 vmCvar_t	g_forceRegenTime;
 vmCvar_t	g_spawnInvulnerability;
 vmCvar_t	g_forcePowerDisable;
@@ -93,6 +104,14 @@ vmCvar_t	g_dismember;
 vmCvar_t	g_forceDodge;
 vmCvar_t	g_timeouttospec;
 
+vmCvar_t	g_saberDmgVelocityScale;
+vmCvar_t	g_saberDmgDelay_Idle;
+vmCvar_t	g_saberDmgDelay_Wound;
+
+vmCvar_t	g_saberDebugPrint;
+
+vmCvar_t	g_austrian;
+
 int gDuelist1 = -1;
 int gDuelist2 = -1;
 
@@ -117,6 +136,8 @@ static cvarTable_t		gameCvarTable[] = {
 	// change anytime vars
 	{ &g_ff_objectives, "g_ff_objectives", "0", /*CVAR_SERVERINFO |*/  CVAR_NORESTART, 0, qtrue },
 
+	{ &g_trueJedi, "g_jediVmerc", "0", CVAR_INTERNAL |CVAR_SERVERINFO | CVAR_LATCH, 0, qtrue },
+
 	{ &g_autoMapCycle, "g_autoMapCycle", "0", CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
 	{ &g_dmflags, "dmflags", "0", CVAR_SERVERINFO | CVAR_ARCHIVE, 0, qtrue  },
 	
@@ -124,6 +145,15 @@ static cvarTable_t		gameCvarTable[] = {
 	{ &g_forceBasedTeams, "g_forceBasedTeams", "0", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_USERINFO | CVAR_LATCH, 0, qfalse  },
 	{ &g_privateDuel, "g_privateDuel", "1", CVAR_SERVERINFO | CVAR_ARCHIVE, 0, qtrue  },
 	{ &g_saberLocking, "g_saberLocking", "1", CVAR_SERVERINFO | CVAR_ARCHIVE, 0, qtrue  },
+	{ &g_saberLockFactor, "g_saberLockFactor", "6", CVAR_ARCHIVE, 0, qtrue  },
+	{ &g_saberTraceSaberFirst, "g_saberTraceSaberFirst", "1", CVAR_ARCHIVE, 0, qtrue  },
+
+#ifdef G2_COLLISION_ENABLED
+	{ &g_saberGhoul2Collision, "g_saberGhoul2Collision", "0", 0, 0, qtrue  },
+#endif
+	{ &g_saberAlwaysBoxTrace, "g_saberAlwaysBoxTrace", "0", 0, 0, qtrue  },
+	{ &g_saberBoxTraceSize, "g_saberBoxTraceSize", "2", 0, 0, qtrue  },
+
 	{ &g_forceRegenTime, "g_forceRegenTime", "200", CVAR_SERVERINFO | CVAR_ARCHIVE, 0, qtrue  },
 
 	{ &g_spawnInvulnerability, "g_spawnInvulnerability", "3000", CVAR_ARCHIVE, 0, qtrue  },
@@ -203,10 +233,18 @@ static cvarTable_t		gameCvarTable[] = {
 
 	{ &g_rankings, "g_rankings", "0", 0, 0, qfalse},
 
-	{ &g_dismember, "g_dismember", "0", 0, 0, qtrue  },
+	{ &g_dismember, "g_dismember", "0", CVAR_ARCHIVE, 0, qtrue  },
 	{ &g_forceDodge, "g_forceDodge", "1", 0, 0, qtrue  },
 
 	{ &g_timeouttospec, "g_timeouttospec", "70", CVAR_ARCHIVE, 0, qfalse },
+
+	{ &g_saberDmgVelocityScale, "g_saberDmgVelocityScale", "0", CVAR_ARCHIVE, 0, qtrue  },
+	{ &g_saberDmgDelay_Idle, "g_saberDmgDelay_Idle", "350", CVAR_ARCHIVE, 0, qtrue  },
+	{ &g_saberDmgDelay_Wound, "g_saberDmgDelay_Wound", "0", CVAR_ARCHIVE, 0, qtrue  },
+
+	{ &g_saberDebugPrint, "g_saberDebugPrint", "0", CVAR_CHEAT, 0, qfalse  },
+
+	{ &g_austrian, "g_austrian", "0", CVAR_ARCHIVE, 0, qfalse  },
 };
 
 // bk001129 - made static to avoid aliasing
@@ -461,7 +499,7 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 
 	//trap_SP_RegisterServer("mp_svgame");
 
-	if ( g_gametype.integer != GT_SINGLE_PLAYER && g_log.string[0] ) {
+	if ( g_log.string[0] ) {
 		if ( g_logSync.integer ) {
 			trap_FS_FOpenFile( g_log.string, &level.logFile, FS_APPEND_SYNC );
 		} else {
@@ -554,6 +592,11 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 	}
 
 	G_RemapTeamShaders();
+
+	if ( g_gametype.integer == GT_TOURNAMENT )
+	{
+		G_LogPrintf("Duel Tournament Begun: kill limit %d, win limit: %d\n", g_fraglimit.integer, g_duel_fraglimit.integer );
+	}
 }
 
 
@@ -702,6 +745,47 @@ void RemoveTournamentLoser( void ) {
 	SetTeam( &g_entities[ clientNum ], "s" );
 }
 
+void RemoveDuelDrawLoser(void)
+{
+	int clFirst = 0;
+	int clSec = 0;
+	int clFailure = 0;
+
+	if ( level.clients[ level.sortedClients[0] ].pers.connected != CON_CONNECTED )
+	{
+		return;
+	}
+	if ( level.clients[ level.sortedClients[1] ].pers.connected != CON_CONNECTED )
+	{
+		return;
+	}
+
+	clFirst = level.clients[ level.sortedClients[0] ].ps.stats[STAT_HEALTH] + level.clients[ level.sortedClients[0] ].ps.stats[STAT_ARMOR];
+	clSec = level.clients[ level.sortedClients[1] ].ps.stats[STAT_HEALTH] + level.clients[ level.sortedClients[1] ].ps.stats[STAT_ARMOR];
+
+	if (clFirst > clSec)
+	{
+		clFailure = 1;
+	}
+	else if (clSec > clFirst)
+	{
+		clFailure = 0;
+	}
+	else
+	{
+		clFailure = 2;
+	}
+
+	if (clFailure != 2)
+	{
+		SetTeam( &g_entities[ level.sortedClients[clFailure] ], "s" );
+	}
+	else
+	{ //we could be more elegant about this, but oh well.
+		SetTeam( &g_entities[ level.sortedClients[1] ], "s" );
+	}
+}
+
 /*
 =======================
 RemoveTournamentWinner
@@ -732,20 +816,78 @@ AdjustTournamentScores
 void AdjustTournamentScores( void ) {
 	int			clientNum;
 
-	clientNum = level.sortedClients[0];
-	if ( level.clients[ clientNum ].pers.connected == CON_CONNECTED ) {
-		level.clients[ clientNum ].sess.wins++;
-		ClientUserinfoChanged( clientNum );
+	if (level.clients[level.sortedClients[0]].ps.persistant[PERS_SCORE] ==
+		level.clients[level.sortedClients[1]].ps.persistant[PERS_SCORE] &&
+		level.clients[level.sortedClients[0]].pers.connected == CON_CONNECTED &&
+		level.clients[level.sortedClients[1]].pers.connected == CON_CONNECTED)
+	{
+		int clFirst = level.clients[ level.sortedClients[0] ].ps.stats[STAT_HEALTH] + level.clients[ level.sortedClients[0] ].ps.stats[STAT_ARMOR];
+		int clSec = level.clients[ level.sortedClients[1] ].ps.stats[STAT_HEALTH] + level.clients[ level.sortedClients[1] ].ps.stats[STAT_ARMOR];
+		int clFailure = 0;
+		int clSuccess = 0;
 
-		trap_SetConfigstring ( CS_CLIENT_DUELWINNER, va("%i", clientNum ) );
+		if (clFirst > clSec)
+		{
+			clFailure = 1;
+			clSuccess = 0;
+		}
+		else if (clSec > clFirst)
+		{
+			clFailure = 0;
+			clSuccess = 1;
+		}
+		else
+		{
+			clFailure = 2;
+			clSuccess = 2;
+		}
+
+		if (clFailure != 2)
+		{
+			clientNum = level.sortedClients[clSuccess];
+
+			level.clients[ clientNum ].sess.wins++;
+			ClientUserinfoChanged( clientNum );
+			trap_SetConfigstring ( CS_CLIENT_DUELWINNER, va("%i", clientNum ) );
+
+			clientNum = level.sortedClients[clFailure];
+
+			level.clients[ clientNum ].sess.losses++;
+			ClientUserinfoChanged( clientNum );
+		}
+		else
+		{
+			clSuccess = 0;
+			clFailure = 1;
+
+			clientNum = level.sortedClients[clSuccess];
+
+			level.clients[ clientNum ].sess.wins++;
+			ClientUserinfoChanged( clientNum );
+			trap_SetConfigstring ( CS_CLIENT_DUELWINNER, va("%i", clientNum ) );
+
+			clientNum = level.sortedClients[clFailure];
+
+			level.clients[ clientNum ].sess.losses++;
+			ClientUserinfoChanged( clientNum );
+		}
 	}
+	else
+	{
+		clientNum = level.sortedClients[0];
+		if ( level.clients[ clientNum ].pers.connected == CON_CONNECTED ) {
+			level.clients[ clientNum ].sess.wins++;
+			ClientUserinfoChanged( clientNum );
 
-	clientNum = level.sortedClients[1];
-	if ( level.clients[ clientNum ].pers.connected == CON_CONNECTED ) {
-		level.clients[ clientNum ].sess.losses++;
-		ClientUserinfoChanged( clientNum );
+			trap_SetConfigstring ( CS_CLIENT_DUELWINNER, va("%i", clientNum ) );
+		}
+
+		clientNum = level.sortedClients[1];
+		if ( level.clients[ clientNum ].pers.connected == CON_CONNECTED ) {
+			level.clients[ clientNum ].sess.losses++;
+			ClientUserinfoChanged( clientNum );
+		}
 	}
-
 }
 
 /*
@@ -805,6 +947,9 @@ int QDECL SortRanks( const void *a, const void *b ) {
 	}
 	return 0;
 }
+
+qboolean gQueueScoreMessage = qfalse;
+int gQueueScoreMessageTime = 0;
 
 /*
 ============
@@ -953,9 +1098,12 @@ void CalculateRanks( void ) {
 	// see if it is time to end the level
 	CheckExitRules();
 
-	// if we are at the intermission, send the new info to everyone
-	if ( level.intermissiontime ) {
-		SendScoreboardMessageToAllClients();
+	// if we are at the intermission or in multi-frag Duel game mode, send the new info to everyone
+	if ( level.intermissiontime || g_gametype.integer == GT_TOURNAMENT ) {
+		gQueueScoreMessage = qtrue;
+		gQueueScoreMessageTime = level.time + 500;
+		//SendScoreboardMessageToAllClients();
+		//rww - Made this operate on a "queue" system because it was causing large overflows
 	}
 }
 
@@ -1313,10 +1461,6 @@ void CheckIntermissionExit( void ) {
 	gclient_t	*cl;
 	int			readyMask;
 
-	if ( g_gametype.integer == GT_SINGLE_PLAYER ) {
-		return;
-	}
-
 	// see which players are ready
 	ready = 0;
 	notReady = 0;
@@ -1345,14 +1489,51 @@ void CheckIntermissionExit( void ) {
 	{
 		gDidDuelStuff = qtrue;
 
+		if ( g_austrian.integer )
+		{
+			G_LogPrintf("Duel Results:\n");
+			//G_LogPrintf("Duel Time: %d\n", level.time );
+			G_LogPrintf("winner: %s, score: %d, wins/losses: %d/%d\n", 
+				level.clients[level.sortedClients[0]].pers.netname,
+				level.clients[level.sortedClients[0]].ps.persistant[PERS_SCORE],
+				level.clients[level.sortedClients[0]].sess.wins,
+				level.clients[level.sortedClients[0]].sess.losses );
+			G_LogPrintf("loser: %s, score: %d, wins/losses: %d/%d\n", 
+				level.clients[level.sortedClients[1]].pers.netname,
+				level.clients[level.sortedClients[1]].ps.persistant[PERS_SCORE],
+				level.clients[level.sortedClients[1]].sess.wins,
+				level.clients[level.sortedClients[1]].sess.losses );
+		}
 		// if we are running a tournement map, kick the loser to spectator status,
 		// which will automatically grab the next spectator and restart
 		if (!DuelLimitHit())
 		{
-			RemoveTournamentLoser();
+			if (level.clients[level.sortedClients[0]].ps.persistant[PERS_SCORE] ==
+				level.clients[level.sortedClients[1]].ps.persistant[PERS_SCORE] &&
+				level.clients[level.sortedClients[0]].pers.connected == CON_CONNECTED &&
+				level.clients[level.sortedClients[1]].pers.connected == CON_CONNECTED)
+			{
+				RemoveDuelDrawLoser();
+			}
+			else
+			{
+				RemoveTournamentLoser();
+			}
 
 			AddTournamentPlayer();
 
+			if ( g_austrian.integer )
+			{
+				G_LogPrintf("Duel Initiated: %s %d/%d vs %s %d/%d, kill limit: %d\n", 
+					level.clients[level.sortedClients[0]].pers.netname,
+					level.clients[level.sortedClients[0]].sess.wins,
+					level.clients[level.sortedClients[0]].sess.losses,
+					level.clients[level.sortedClients[1]].pers.netname,
+					level.clients[level.sortedClients[1]].sess.wins,
+					level.clients[level.sortedClients[1]].sess.losses,
+					g_fraglimit.integer );
+			}
+			
 			if (level.numPlayingClients >= 2)
 			{
 				trap_SetConfigstring ( CS_CLIENT_DUELISTS, va("%i|%i", level.sortedClients[0], level.sortedClients[1] ) );
@@ -1365,11 +1546,30 @@ void CheckIntermissionExit( void ) {
 			return;	
 		}
 
+		if ( g_austrian.integer )
+		{
+			G_LogPrintf("Duel Tournament Winner: %s wins/losses: %d/%d\n", 
+				level.clients[level.sortedClients[0]].pers.netname,
+				level.clients[level.sortedClients[0]].sess.wins,
+				level.clients[level.sortedClients[0]].sess.losses );
+		}
 		//this means we hit the duel limit so reset the wins/losses
 		//but still push the loser to the back of the line, and retain the order for
 		//the map change
-		RemoveTournamentLoser();
+		if (level.clients[level.sortedClients[0]].ps.persistant[PERS_SCORE] ==
+			level.clients[level.sortedClients[1]].ps.persistant[PERS_SCORE] &&
+			level.clients[level.sortedClients[0]].pers.connected == CON_CONNECTED &&
+			level.clients[level.sortedClients[1]].pers.connected == CON_CONNECTED)
+		{
+			RemoveDuelDrawLoser();
+		}
+		else
+		{
+			RemoveTournamentLoser();
+		}
+
 		AddTournamentPlayer();
+
 		if (level.numPlayingClients >= 2)
 		{
 			trap_SetConfigstring ( CS_CLIENT_DUELISTS, va("%i|%i", level.sortedClients[0], level.sortedClients[1] ) );
@@ -1485,6 +1685,38 @@ void CheckExitRules( void ) {
 		return;
 	}
 
+	if (gEscaping)
+	{
+		int i = 0;
+		int numLiveClients = 0;
+
+		while (i < MAX_CLIENTS)
+		{
+			if (g_entities[i].inuse && g_entities[i].client && g_entities[i].health > 0)
+			{
+				if (g_entities[i].client->sess.sessionTeam != TEAM_SPECTATOR &&
+					!(g_entities[i].client->ps.pm_flags & PMF_FOLLOW))
+				{
+					numLiveClients++;
+				}
+			}
+
+			i++;
+		}
+		if (gEscapeTime < level.time)
+		{
+			gEscaping = qfalse;
+			LogExit( "Escape time ended." );
+			return;
+		}
+		if (!numLiveClients)
+		{
+			gEscaping = qfalse;
+			LogExit( "Everyone failed to escape." );
+			return;
+		}
+	}
+
 	if ( level.intermissionQueued ) {
 		int time = (g_singlePlayer.integer) ? SP_INTERMISSION_DELAY_TIME : INTERMISSION_DELAY_TIME;
 		if ( level.time - level.intermissionQueued >= time ) {
@@ -1497,12 +1729,16 @@ void CheckExitRules( void ) {
 	// check for sudden death
 	if ( ScoreIsTied() ) {
 		// always wait for sudden death
-		return;
+		if (g_gametype.integer != GT_TOURNAMENT || !g_timelimit.integer)
+		{
+			return;
+		}
 	}
 
 	if ( g_timelimit.integer && !level.warmupTime ) {
 		if ( level.time - level.startTime >= g_timelimit.integer*60000 ) {
-			trap_SendServerCommand( -1, "print \"Timelimit hit.\n\"");
+//			trap_SendServerCommand( -1, "print \"Timelimit hit.\n\"");
+			trap_SendServerCommand( -1, va("print \"%s.\n\"",G_GetStripEdString("SVINGAME", "TIMELIMIT_HIT")));
 			LogExit( "Timelimit hit." );
 			return;
 		}
@@ -1618,6 +1854,19 @@ void CheckTournament( void ) {
 				trap_SetConfigstring ( CS_CLIENT_DUELISTS, va("%i|%i", level.sortedClients[0], level.sortedClients[1] ) );
 				gDuelist1 = level.sortedClients[0];
 				gDuelist2 = level.sortedClients[1];
+				if ( g_austrian.integer )
+				{
+					G_LogPrintf("Duel Initiated: %s %d/%d vs %s %d/%d, kill limit: %d\n", 
+						level.clients[level.sortedClients[0]].pers.netname,
+						level.clients[level.sortedClients[0]].sess.wins,
+						level.clients[level.sortedClients[0]].sess.losses,
+						level.clients[level.sortedClients[1]].pers.netname,
+						level.clients[level.sortedClients[1]].sess.wins,
+						level.clients[level.sortedClients[1]].sess.losses,
+						g_fraglimit.integer );
+				}
+				//trap_SendConsoleCommand( EXEC_APPEND, "map_restart 0\n" );
+				//FIXME: This seems to cause problems. But we'd like to reset things whenever a new opponent is set.
 			}
 		}
 
@@ -1672,7 +1921,7 @@ void CheckTournament( void ) {
 			return;
 		}
 #endif
-	} else if ( g_gametype.integer != GT_SINGLE_PLAYER && level.warmupTime != 0 ) {
+	} else if ( level.warmupTime != 0 ) {
 		int		counts[TEAM_NUM_TEAMS];
 		qboolean	notEnough = qfalse;
 
@@ -2099,6 +2348,18 @@ end = trap_Milliseconds();
 
 	//At the end of the frame, send out the ghoul2 kill queue, if there is one
 	G_SendG2KillQueue();
+
+
+	if (gQueueScoreMessage)
+	{
+		if (gQueueScoreMessageTime < level.time)
+		{
+			SendScoreboardMessageToAllClients();
+
+			gQueueScoreMessageTime = 0;
+			gQueueScoreMessage = 0;
+		}
+	}
 
 	g_LastFrameTime = level.time;
 }

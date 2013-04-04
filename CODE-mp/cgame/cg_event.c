@@ -640,6 +640,10 @@ void CG_ReattachLimb(centity_t *source)
 		limbName = "r_arm";
 		stubCapName = "torso_cap_r_arm_off";
 		break;
+	case G2_MODELPART_RHAND:
+		limbName = "r_hand";
+		stubCapName = "r_arm_cap_r_hand_off";
+		break;
 	case G2_MODELPART_LLEG:
 		limbName = "l_leg";
 		stubCapName = "hips_cap_l_leg_off";
@@ -649,9 +653,9 @@ void CG_ReattachLimb(centity_t *source)
 		stubCapName = "hips_cap_r_leg_off";
 		break;
 	default:
-		limbName = "r_leg";
-		stubCapName = "hips_cap_r_leg_off";
-		break;
+		source->torsoBolt = 0;
+		source->ghoul2weapon = NULL;
+		return;
 	}
 
 	trap_G2API_SetSurfaceOnOff(source->ghoul2, limbName, 0);
@@ -1014,7 +1018,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			cl_ent->isATST = 0;
 			cl_ent->atstFootClang = 0;
 			cl_ent->atstSwinging = 0;
-			cl_ent->torsoBolt = 0;
+//			cl_ent->torsoBolt = 0;
 			cl_ent->bolt1 = 0;
 			cl_ent->bolt2 = 0;
 			cl_ent->bolt3 = 0;
@@ -1231,7 +1235,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 					const char *strText = CG_GetStripEdString("INGAMETEXT", "PICKUPLINE");
 
 					//Com_Printf("%s %s\n", strText, showPowersName[index]);
-					CG_CenterPrint( va("%s %s\n", strText, showPowersName[index]), SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
+					CG_CenterPrint( va("%s %s\n", strText, CG_GetStripEdString("INGAME",showPowersName[index])), SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
 				}
 
 				//Show the player their force selection bar in case picking the holocron up changed the current selection
@@ -1340,7 +1344,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		break;
 	case EV_FIRE_WEAPON:
 		DEBUGNAME("EV_FIRE_WEAPON");
-		if (cent->currentState.number >= MAX_CLIENTS)
+		if (cent->currentState.number >= MAX_CLIENTS && cent->currentState.eType != ET_GRAPPLE)
 		{ //special case for turret firing
 			vec3_t gunpoint, gunangle;
 			mdxaBone_t matrix;
@@ -1431,7 +1435,23 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 	case EV_SABER_HIT:
 		DEBUGNAME("EV_SABER_HIT");
-		if (es->eventParm)
+		if (es->eventParm == 16)
+		{ //Make lots of sparks, something special happened
+			vec3_t fxDir;
+			VectorCopy(es->angles, fxDir);
+			if (!fxDir[0] && !fxDir[1] && !fxDir[2])
+			{
+				fxDir[1] = 1;
+			}
+			trap_S_StartSound(es->origin, es->number, CHAN_AUTO, trap_S_RegisterSound("sound/weapons/saber/saberhit.wav"));
+			trap_FX_PlayEffectID( trap_FX_RegisterEffect("saber/blood_sparks.efx"), es->origin, fxDir );
+			trap_FX_PlayEffectID( trap_FX_RegisterEffect("saber/blood_sparks.efx"), es->origin, fxDir );
+			trap_FX_PlayEffectID( trap_FX_RegisterEffect("saber/blood_sparks.efx"), es->origin, fxDir );
+			trap_FX_PlayEffectID( trap_FX_RegisterEffect("saber/blood_sparks.efx"), es->origin, fxDir );
+			trap_FX_PlayEffectID( trap_FX_RegisterEffect("saber/blood_sparks.efx"), es->origin, fxDir );
+			trap_FX_PlayEffectID( trap_FX_RegisterEffect("saber/blood_sparks.efx"), es->origin, fxDir );
+		}
+		else if (es->eventParm)
 		{ //hit a person
 			vec3_t fxDir;
 			VectorCopy(es->angles, fxDir);
@@ -1611,6 +1631,13 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 				break;
 			case PDSOUND_ABSORBHIT:
 				sID = trap_S_RegisterSound("sound/weapons/force/absorbhit.mp3");
+				if (es->trickedentindex >= 0 && es->trickedentindex < MAX_CLIENTS)
+				{
+					int clnum = es->trickedentindex;
+
+					cg_entities[clnum].teamPowerEffectTime = cg.time + 1000;
+					cg_entities[clnum].teamPowerType = 3;
+				}
 				break;
 			case PDSOUND_ABSORB:
 				sID = trap_S_RegisterSound("sound/weapons/force/absorb.mp3");
@@ -2265,7 +2292,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 	case EV_GIB_PLAYER:
 		DEBUGNAME("EV_GIB_PLAYER");
 		//trap_S_StartSound( NULL, es->number, CHAN_BODY, cgs.media.gibSound );
-		CG_GibPlayer( cent->lerpOrigin );
+		//CG_GibPlayer( cent->lerpOrigin );
 		break;
 
 	case EV_STARTLOOPINGSOUND:

@@ -132,9 +132,19 @@ void trap_R_Font_DrawString(int ox, int oy, const char *text, const float *rgba,
 	syscall( UI_R_FONT_DRAWSTRING, ox, oy, text, rgba, setIndex, iCharLimit, PASSFLOAT(scale));
 }
 
-unsigned int trap_AnyLanguage_ReadCharFromString( const char **ppText )
+qboolean trap_Language_IsAsian(void)
 {
-	return syscall( UI_ANYLANGUAGE_READCHARFROMSTRING, ppText);
+	return syscall( UI_LANGUAGE_ISASIAN );
+}
+
+qboolean trap_Language_UsesSpaces(void)
+{
+	return syscall( UI_LANGUAGE_USESSPACES );
+}
+
+unsigned int trap_AnyLanguage_ReadCharFromString( const char *psText, int *piAdvanceCount, qboolean *pbIsTrailingPunctuation )
+{
+	return syscall( UI_ANYLANGUAGE_READCHARFROMSTRING, psText, piAdvanceCount, pbIsTrailingPunctuation);
 }
 
 qhandle_t trap_R_RegisterShaderNoMip( const char *name ) {

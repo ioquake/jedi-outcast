@@ -293,14 +293,17 @@ void Use_target_push( gentity_t *self, gentity_t *other, gentity_t *activator ) 
 	// play fly sound every 1.5 seconds
 	if ( activator->fly_sound_debounce_time < level.time ) {
 		activator->fly_sound_debounce_time = level.time + 1500;
-		G_Sound( activator, CHAN_AUTO, self->noise_index );
+		if (self->noise_index)
+		{
+			G_Sound( activator, CHAN_AUTO, self->noise_index );
+		}
 	}
 }
 
 /*QUAKED target_push (.5 .5 .5) (-8 -8 -8) (8 8 8) bouncepad
 Pushes the activator in the direction.of angle, or towards a target apex.
 "speed"		defaults to 1000
-if "bouncepad", play bounce noise instead of windfly
+if "bouncepad", play bounce noise instead of none
 */
 void SP_target_push( gentity_t *self ) {
 	if (!self->speed) {

@@ -1572,12 +1572,12 @@ commandDef_t commandList[] =
   {"setitemcolor", &Script_SetItemColor},       // group/name
   {"setitemrect", &Script_SetItemRect},			// group/name
   {"setteamcolor", &Script_SetTeamColor},       // sets this background color to team color
-  {"setfocus", &Script_SetFocus},               // sets this background color to team color
-  {"setplayermodel", &Script_SetPlayerModel},   // sets this background color to team color
-  {"setplayerhead", &Script_SetPlayerHead},     // sets this background color to team color
+  {"setfocus", &Script_SetFocus},               // sets focus
+  {"setplayermodel", &Script_SetPlayerModel},   // sets model
+  {"setplayerhead", &Script_SetPlayerHead},     // sets head
   {"transition", &Script_Transition},           // group/name
-  {"setcvar", &Script_SetCvar},					// group/name
-  {"setcvartocvar", &Script_SetCvarToCvar},     // group/name
+  {"setcvar", &Script_SetCvar},					// name
+  {"setcvartocvar", &Script_SetCvarToCvar},     // name
   {"exec", &Script_Exec},						// group/name
   {"play", &Script_Play},						// group/name
   {"playlooped", &Script_playLooped},           // group/name
@@ -1754,7 +1754,7 @@ int Item_TextScroll_MaxScroll ( itemDef_t *item )
 {
 	textScrollDef_t *scrollPtr = (textScrollDef_t*)item->typeData;
 	
-	int count = scrollPtr->lineCount;
+	int count = scrollPtr->iLineCount;
 	int max   = count - (int)(item->window.rect.h / scrollPtr->lineHeight) + 1;
 
 	if (max < 0) 
@@ -1815,7 +1815,7 @@ int Item_TextScroll_OverLB ( itemDef_t *item, float x, float y )
 	int				count;
 
 	scrollPtr = (textScrollDef_t*)item->typeData;
-	count     = scrollPtr->lineCount;
+	count     = scrollPtr->iLineCount;
 
 	r.x = item->window.rect.x + item->window.rect.w - SCROLLBAR_SIZE;
 	r.y = item->window.rect.y;
@@ -1872,7 +1872,7 @@ qboolean Item_TextScroll_HandleKey ( itemDef_t *item, int key, qboolean down, qb
 		max = Item_TextScroll_MaxScroll(item);
 
 		viewmax = (item->window.rect.h / scrollPtr->lineHeight);
-		if ( key == K_UPARROW || key == K_KP_UPARROW ) 
+		if ( key == A_CURSOR_UP || key == A_KP_8 ) 
 		{
 			scrollPtr->startPos--;
 			if (scrollPtr->startPos < 0)
@@ -1882,7 +1882,7 @@ qboolean Item_TextScroll_HandleKey ( itemDef_t *item, int key, qboolean down, qb
 			return qtrue;
 		}
 
-		if ( key == K_DOWNARROW || key == K_KP_DOWNARROW ) 
+		if ( key == A_CURSOR_DOWN || key == A_KP_2 ) 
 		{
 			scrollPtr->startPos++;
 			if (scrollPtr->startPos > max)
@@ -1894,7 +1894,7 @@ qboolean Item_TextScroll_HandleKey ( itemDef_t *item, int key, qboolean down, qb
 		}
 
 		// mouse hit
-		if (key == K_MOUSE1 || key == K_MOUSE2) 
+		if (key == A_MOUSE1 || key == A_MOUSE2) 
 		{
 			if (item->window.flags & WINDOW_LB_LEFTARROW) 
 			{
@@ -1939,19 +1939,19 @@ qboolean Item_TextScroll_HandleKey ( itemDef_t *item, int key, qboolean down, qb
 			return qtrue;
 		}
 
-		if ( key == K_HOME || key == K_KP_HOME) 
+		if ( key == A_HOME || key == A_KP_7) 
 		{
 			// home
 			scrollPtr->startPos = 0;
 			return qtrue;
 		}
-		if ( key == K_END || key == K_KP_END) 
+		if ( key == A_END || key == A_KP_1) 
 		{
 			// end
 			scrollPtr->startPos = max;
 			return qtrue;
 		}
-		if (key == K_PGUP || key == K_KP_PGUP ) 
+		if (key == A_PAGE_UP || key == A_KP_9 ) 
 		{
 			scrollPtr->startPos -= viewmax;
 			if (scrollPtr->startPos < 0) 
@@ -1961,7 +1961,7 @@ qboolean Item_TextScroll_HandleKey ( itemDef_t *item, int key, qboolean down, qb
 
 			return qtrue;
 		}
-		if ( key == K_PGDN || key == K_KP_PGDN ) 
+		if ( key == A_PAGE_DOWN || key == A_KP_3 ) 
 		{
 			scrollPtr->startPos += viewmax;
 			if (scrollPtr->startPos > max) 
@@ -2301,7 +2301,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 		max = Item_ListBox_MaxScroll(item);
 		if (item->window.flags & WINDOW_HORIZONTAL) {
 			viewmax = (item->window.rect.w / listPtr->elementWidth);
-			if ( key == K_LEFTARROW || key == K_KP_LEFTARROW ) 
+			if ( key == A_CURSOR_LEFT || key == A_KP_4 ) 
 			{
 				if (!listPtr->notselectable) {
 					listPtr->cursorPos--;
@@ -2324,7 +2324,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 				}
 				return qtrue;
 			}
-			if ( key == K_RIGHTARROW || key == K_KP_RIGHTARROW ) 
+			if ( key == A_CURSOR_RIGHT || key == A_KP_6 ) 
 			{
 				if (!listPtr->notselectable) {
 					listPtr->cursorPos++;
@@ -2350,7 +2350,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 		}
 		else {
 			viewmax = (item->window.rect.h / listPtr->elementHeight);
-			if ( key == K_UPARROW || key == K_KP_UPARROW ) 
+			if ( key == A_CURSOR_UP || key == A_KP_8 ) 
 			{
 				if (!listPtr->notselectable) {
 					listPtr->cursorPos--;
@@ -2373,7 +2373,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 				}
 				return qtrue;
 			}
-			if ( key == K_DOWNARROW || key == K_KP_DOWNARROW ) 
+			if ( key == A_CURSOR_DOWN || key == A_KP_2 ) 
 			{
 				if (!listPtr->notselectable) {
 					listPtr->cursorPos++;
@@ -2398,7 +2398,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 			}
 		}
 		// mouse hit
-		if (key == K_MOUSE1 || key == K_MOUSE2) {
+		if (key == A_MOUSE1 || key == A_MOUSE2) {
 			if (item->window.flags & WINDOW_LB_LEFTARROW) {
 				listPtr->startPos--;
 				if (listPtr->startPos < 0) {
@@ -2443,17 +2443,17 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 			}
 			return qtrue;
 		}
-		if ( key == K_HOME || key == K_KP_HOME) {
+		if ( key == A_HOME || key == A_KP_7) {
 			// home
 			listPtr->startPos = 0;
 			return qtrue;
 		}
-		if ( key == K_END || key == K_KP_END) {
+		if ( key == A_END || key == A_KP_1) {
 			// end
 			listPtr->startPos = max;
 			return qtrue;
 		}
-		if (key == K_PGUP || key == K_KP_PGUP ) {
+		if (key == A_PAGE_UP || key == A_KP_9 ) {
 			// page up
 			if (!listPtr->notselectable) {
 				listPtr->cursorPos -= viewmax;
@@ -2477,7 +2477,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 			}
 			return qtrue;
 		}
-		if ( key == K_PGDN || key == K_KP_PGDN ) {
+		if ( key == A_PAGE_DOWN || key == A_KP_3 ) {
 			// page down
 			if (!listPtr->notselectable) {
 				listPtr->cursorPos += viewmax;
@@ -2508,7 +2508,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 qboolean Item_YesNo_HandleKey(itemDef_t *item, int key) {
 
   if (Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && item->window.flags & WINDOW_HASFOCUS && item->cvar) {
-		if (key == K_MOUSE1 || key == K_ENTER || key == K_MOUSE2 || key == K_MOUSE3) {
+		if (key == A_MOUSE1 || key == A_ENTER || key == A_MOUSE2 || key == A_MOUSE3) {
 	    DC->setCVar(item->cvar, va("%i", !DC->getCVarValue(item->cvar)));
 		  return qtrue;
 		}
@@ -2582,7 +2582,7 @@ qboolean Item_Multi_HandleKey(itemDef_t *item, int key) {
 	multiDef_t *multiPtr = (multiDef_t*)item->typeData;
 	if (multiPtr) {
 	  if (Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && item->window.flags & WINDOW_HASFOCUS && item->cvar) {
-			if (key == K_MOUSE1 || key == K_ENTER || key == K_MOUSE2 || key == K_MOUSE3) {
+			if (key == A_MOUSE1 || key == A_ENTER || key == A_MOUSE2 || key == A_MOUSE3) {
 				int current = Item_Multi_FindCvarByValue(item) + 1;
 				int max = Item_Multi_CountSettings(item);
 				if ( current < 0 || current >= max ) {
@@ -2684,7 +2684,7 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key) {
 
 		} else {
 
-			if ( key == K_DEL || key == K_KP_DEL ) {
+			if ( key == A_DELETE || key == A_KP_PERIOD ) {
 				if ( item->cursorPos < len ) {
 					memmove( buff + item->cursorPos, buff + item->cursorPos + 1, len - item->cursorPos);
 					DC->setCVar(item->cvar, buff);
@@ -2692,7 +2692,7 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key) {
 				return qtrue;
 			}
 
-			if ( key == K_RIGHTARROW || key == K_KP_RIGHTARROW ) 
+			if ( key == A_CURSOR_RIGHT || key == A_KP_6 ) 
 			{
 				if (editPtr->maxPaintChars && item->cursorPos >= editPtr->maxPaintChars && item->cursorPos < len) {
 					item->cursorPos++;
@@ -2705,7 +2705,7 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key) {
 				return qtrue;
 			}
 
-			if ( key == K_LEFTARROW || key == K_KP_LEFTARROW ) 
+			if ( key == A_CURSOR_LEFT || key == A_KP_4 ) 
 			{
 				if ( item->cursorPos > 0 ) {
 					item->cursorPos--;
@@ -2716,13 +2716,13 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key) {
 				return qtrue;
 			}
 
-			if ( key == K_HOME || key == K_KP_HOME) {// || ( tolower(key) == 'a' && trap_Key_IsDown( K_CTRL ) ) ) {
+			if ( key == A_HOME || key == A_KP_7) {// || ( tolower(key) == 'a' && trap_Key_IsDown( K_CTRL ) ) ) {
 				item->cursorPos = 0;
 				editPtr->paintOffset = 0;
 				return qtrue;
 			}
 
-			if ( key == K_END || key == K_KP_END)  {// ( tolower(key) == 'e' && trap_Key_IsDown( K_CTRL ) ) ) {
+			if ( key == A_END || key == A_KP_1)  {// ( tolower(key) == 'e' && trap_Key_IsDown( K_CTRL ) ) ) {
 				item->cursorPos = len;
 				if(item->cursorPos > editPtr->maxPaintChars) {
 					editPtr->paintOffset = len - editPtr->maxPaintChars;
@@ -2730,27 +2730,27 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key) {
 				return qtrue;
 			}
 
-			if ( key == K_INS || key == K_KP_INS ) {
+			if ( key == A_INSERT || key == A_KP_0 ) {
 				DC->setOverstrikeMode(!DC->getOverstrikeMode());
 				return qtrue;
 			}
 		}
 
-		if (key == K_TAB || key == K_DOWNARROW || key == K_KP_DOWNARROW) {
+		if (key == A_TAB || key == A_CURSOR_DOWN || key == A_KP_2) {
 			newItem = Menu_SetNextCursorItem(item->parent);
 			if (newItem && (newItem->type == ITEM_TYPE_EDITFIELD || newItem->type == ITEM_TYPE_NUMERICFIELD)) {
 				g_editItem = newItem;
 			}
 		}
 
-		if (key == K_UPARROW || key == K_KP_UPARROW) {
+		if (key == A_CURSOR_UP || key == A_KP_8) {
 			newItem = Menu_SetPrevCursorItem(item->parent);
 			if (newItem && (newItem->type == ITEM_TYPE_EDITFIELD || newItem->type == ITEM_TYPE_NUMERICFIELD)) {
 				g_editItem = newItem;
 			}
 		}
 
-		if ( key == K_ENTER || key == K_KP_ENTER || key == K_ESCAPE)  {
+		if ( key == A_ENTER || key == A_KP_ENTER || key == A_ESCAPE)  {
 			return qfalse;
 		}
 
@@ -3021,7 +3021,7 @@ qboolean Item_Slider_HandleKey(itemDef_t *item, int key, qboolean down) {
 
 	//DC->Print("slider handle key\n");
 	if (item->window.flags & WINDOW_HASFOCUS && item->cvar && Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory)) {
-		if (key == K_MOUSE1 || key == K_ENTER || key == K_MOUSE2 || key == K_MOUSE3) {
+		if (key == A_MOUSE1 || key == A_ENTER || key == A_MOUSE2 || key == A_MOUSE3) {
 			editFieldDef_t *editDef = item->typeData;
 			if (editDef) {
 				rectDef_t testRect;
@@ -3066,7 +3066,7 @@ qboolean Item_HandleKey(itemDef_t *item, int key, qboolean down) {
 		captureData = NULL;
 	} else {
 	  // bk001206 - parentheses
-		if ( down && ( key == K_MOUSE1 || key == K_MOUSE2 || key == K_MOUSE3 ) ) {
+		if ( down && ( key == A_MOUSE1 || key == A_MOUSE2 || key == A_MOUSE3 ) ) {
 			Item_StartCapture(item, key);
 		}
 	}
@@ -3087,7 +3087,7 @@ qboolean Item_HandleKey(itemDef_t *item, int key, qboolean down) {
       break;
     case ITEM_TYPE_EDITFIELD:
     case ITEM_TYPE_NUMERICFIELD:
-		if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER)
+		if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER)
 		{
 			editFieldDef_t *editPtr = (editFieldDef_t*)item->typeData;
 
@@ -3317,11 +3317,11 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down) {
 			g_editItem = NULL;
 			inHandler = qfalse;
 			return;
-		} else if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_MOUSE3) {
+		} else if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_MOUSE3) {
 			g_editingField = qfalse;
 			g_editItem = NULL;
 			Display_MouseMove(NULL, DC->cursorx, DC->cursory);
-		} else if (key == K_TAB || key == K_UPARROW || key == K_DOWNARROW) {
+		} else if (key == A_TAB || key == A_CURSOR_UP || key == A_CURSOR_DOWN) {
 			return;
 		}
 	}
@@ -3335,7 +3335,7 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down) {
 	if (down && !(menu->window.flags & WINDOW_POPUP) && !Rect_ContainsPoint(&menu->window.rect, DC->cursorx, DC->cursory)) {
 		static qboolean inHandleKey = qfalse;
 		// bk001206 - parentheses
-		if (!inHandleKey && ( key == K_MOUSE1 || key == K_MOUSE2 || key == K_MOUSE3 ) ) {
+		if (!inHandleKey && ( key == A_MOUSE1 || key == A_MOUSE2 || key == A_MOUSE3 ) ) {
 			inHandleKey = qtrue;
 			Menus_HandleOOBClick(menu, key, down);
 			inHandleKey = qfalse;
@@ -3367,23 +3367,23 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down) {
 	// default handling
 	switch ( key ) {
 
-		case K_F11:
+		case A_F11:
 			if (DC->getCVarValue("developer")) {
 				debugMode ^= 1;
 			}
 			break;
 
-		case K_F12:
+		case A_F12:
 			if (DC->getCVarValue("developer")) {
 				DC->executeText(EXEC_APPEND, "screenshot\n");
 			}
 			break;
-		case K_KP_UPARROW:
-		case K_UPARROW:
+		case A_KP_8:
+		case A_CURSOR_UP:
 			Menu_SetPrevCursorItem(menu);
 			break;
 
-		case K_ESCAPE:
+		case A_ESCAPE:
 			if (!g_waitingForKey && menu->onESC) {
 				itemDef_t it;
 		    it.parent = menu;
@@ -3391,14 +3391,14 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down) {
 			}
 		    g_waitingForKey = qfalse;
 			break;
-		case K_TAB:
-		case K_KP_DOWNARROW:
-		case K_DOWNARROW:
+		case A_TAB:
+		case A_KP_2:
+		case A_CURSOR_DOWN:
 			Menu_SetNextCursorItem(menu);
 			break;
 
-		case K_MOUSE1:
-		case K_MOUSE2:
+		case A_MOUSE1:
+		case A_MOUSE2:
 			if (item) {
 				if (item->type == ITEM_TYPE_TEXT) {
 					if (Rect_ContainsPoint(Item_CorrectedTextRect(item), DC->cursorx, DC->cursory)) {
@@ -3419,29 +3419,31 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down) {
 			}
 			break;
 
-		case K_JOY1:
-		case K_JOY2:
-		case K_JOY3:
-		case K_JOY4:
-		case K_AUX1:
-		case K_AUX2:
-		case K_AUX3:
-		case K_AUX4:
-		case K_AUX5:
-		case K_AUX6:
-		case K_AUX7:
-		case K_AUX8:
-		case K_AUX9:
-		case K_AUX10:
-		case K_AUX11:
-		case K_AUX12:
-		case K_AUX13:
-		case K_AUX14:
-		case K_AUX15:
-		case K_AUX16:
+		case A_JOY0:
+		case A_JOY1:
+		case A_JOY2:
+		case A_JOY3:
+		case A_JOY4:
+		case A_AUX0:
+		case A_AUX1:
+		case A_AUX2:
+		case A_AUX3:
+		case A_AUX4:
+		case A_AUX5:
+		case A_AUX6:
+		case A_AUX7:
+		case A_AUX8:
+		case A_AUX9:
+		case A_AUX10:
+		case A_AUX11:
+		case A_AUX12:
+		case A_AUX13:
+		case A_AUX14:
+		case A_AUX15:
+		case A_AUX16:
 			break;
-		case K_KP_ENTER:
-		case K_ENTER:
+		case A_KP_ENTER:
+		case A_ENTER:
 			if (item) {
 				if (item->type == ITEM_TYPE_EDITFIELD || item->type == ITEM_TYPE_NUMERICFIELD) {
 					item->cursorPos = 0;
@@ -3860,22 +3862,22 @@ typedef struct
 
 static bind_t g_bindings[] = 
 {
-	{"+scores",			 K_TAB,				-1,		-1, -1},
-	{"+button2",		 K_ENTER,			-1,		-1, -1},
-	{"+speed", 			 K_SHIFT,			-1,		-1,	-1},
-	{"+forward", 		 K_UPARROW,			-1,		-1, -1},
-	{"+back", 			 K_DOWNARROW,		-1,		-1, -1},
+	{"+scores",			 A_TAB,				-1,		-1, -1},
+	{"+button2",		 A_ENTER,			-1,		-1, -1},
+	{"+speed", 			 A_SHIFT,			-1,		-1,	-1},
+	{"+forward", 		 A_CURSOR_UP,		-1,		-1, -1},
+	{"+back", 			 A_CURSOR_DOWN,		-1,		-1, -1},
 	{"+moveleft",		 ',',				-1,		-1, -1},
 	{"+moveright", 		 '.',				-1,		-1, -1},
-	{"+moveup",			 K_SPACE,			-1,		-1, -1},
+	{"+moveup",			 A_SPACE,			-1,		-1, -1},
 	{"+movedown",		 'c',				-1,		-1, -1},
-	{"+left", 			 K_LEFTARROW,		-1,		-1, -1},
-	{"+right", 			 K_RIGHTARROW,		-1,		-1, -1},
-	{"+strafe", 		 K_ALT,				-1,		-1, -1},
-	{"+lookup", 		 K_PGDN,			-1,		-1, -1},
-	{"+lookdown",	 	 K_DEL,				-1,		-1, -1},
+	{"+left", 			 A_CURSOR_LEFT,		-1,		-1, -1},
+	{"+right", 			 A_CURSOR_RIGHT,	-1,		-1, -1},
+	{"+strafe", 		 A_ALT,				-1,		-1, -1},
+	{"+lookup", 		 A_PAGE_DOWN,		-1,		-1, -1},
+	{"+lookdown",	 	 A_DELETE,			-1,		-1, -1},
 	{"+mlook", 			 '/',				-1,		-1, -1},
-	{"centerview",		 K_END,				-1,		-1, -1},
+	{"centerview",		 A_END,				-1,		-1, -1},
 //	{"+zoom", 			 -1,				-1,		-1, -1},
 	{"weapon 1",		 '1',				-1,		-1, -1},
 	{"weapon 2",		 '2',				-1,		-1, -1},
@@ -3891,7 +3893,7 @@ static bind_t g_bindings[] =
 	{"weapon 11",		 -1,				-1,		-1, -1},
 	{"weapon 12",		 -1,				-1,		-1, -1},
 	{"weapon 13",		 -1,				-1,		-1, -1},
-	{"+attack", 		 K_CTRL,			-1,		-1, -1},
+	{"+attack", 		 A_CTRL,			-1,		-1, -1},
 	{"+altattack", 		-1,					-1,		-1,	-1},
 	{"+use",			-1,					-1,		-1, -1},
 	{"engage_duel",		'h',				-1,		-1, -1},
@@ -3917,21 +3919,21 @@ static bind_t g_bindings[] =
 	{"tauntTaunt",		-1,					-1,		-1, -1},
 	{"tauntDeathInsult",-1,					-1,		-1, -1},
 	{"tauntGauntlet",	-1,					-1,		-1, -1},
-	{"scoresUp",		K_INS,			-1,		-1, -1},
-	{"scoresDown",		K_DEL,			-1,		-1, -1},
+	{"scoresUp",		A_INSERT,			-1,		-1, -1},
+	{"scoresDown",		A_DELETE,			-1,		-1, -1},
 	{"messagemode",		-1,					-1,		-1, -1},
 	{"messagemode2",	-1,					-1,		-1, -1},
 	{"messagemode3",	-1,					-1,		-1, -1},
 	{"messagemode4",	-1,					-1,		-1, -1},
 	{"+use",			-1,					-1,		-1,	-1},
 	{"+force_jump",		-1,					-1,		-1,	-1},
-	{"force_throw",		K_F1,				-1,		-1,	-1},
-	{"force_pull",		K_F2,				-1,		-1,	-1},
-	{"force_speed",		K_F3,				-1,		-1,	-1},
-	{"force_distract",	K_F4,				-1,		-1,	-1},
-	{"force_heal",		K_F5,				-1,		-1,	-1},
-	{"+force_grip",		K_F6,				-1,		-1,	-1},
-	{"+force_lightning",K_F7,				-1,		-1,	-1},
+	{"force_throw",		A_F1,				-1,		-1,	-1},
+	{"force_pull",		A_F2,				-1,		-1,	-1},
+	{"force_speed",		A_F3,				-1,		-1,	-1},
+	{"force_distract",	A_F4,				-1,		-1,	-1},
+	{"force_heal",		A_F5,				-1,		-1,	-1},
+	{"+force_grip",		A_F6,				-1,		-1,	-1},
+	{"+force_lightning",A_F7,				-1,		-1,	-1},
 //mp only
 	{"+force_drain",	-1,					-1,		-1,	-1},
 	{"force_rage",		-1,					-1,		-1,	-1},
@@ -3972,7 +3974,7 @@ static void Controls_GetKeyAssignment (char *command, int *twokeys)
 	twokeys[0] = twokeys[1] = -1;
 	count = 0;
 
-	for ( j = 0; j < 256; j++ )
+	for ( j = 0; j < MAX_KEYS; j++ )
 	{
 		DC->getBindingBuf( j, b, 256 );
 		if ( *b == 0 ) {
@@ -4056,31 +4058,6 @@ void Controls_SetConfig(qboolean restart)
 // ^--this is bad, it shows the cursor during map load, if you need to, add it as an exec cmd to use_joy or something.
 }
 
-/*
-=================
-Controls_SetDefaults
-=================
-*/
-void Controls_SetDefaults( void )
-{
-	int	i;
-
-	// iterate each command, set its default binding
-  for (i=0; i < g_bindCount; i++)
-	{
-		g_bindings[i].bind1 = g_bindings[i].defaultbind1;
-		g_bindings[i].bind2 = g_bindings[i].defaultbind2;
-	}
-
-	//s_controls.invertmouse.curvalue  = Controls_GetCvarDefault( "m_pitch" ) < 0;
-	//s_controls.smoothmouse.curvalue  = Controls_GetCvarDefault( "m_filter" );
-	//s_controls.alwaysrun.curvalue    = Controls_GetCvarDefault( "cl_run" );
-	//s_controls.autoswitch.curvalue   = Controls_GetCvarDefault( "cg_autoswitch" );
-	//s_controls.sensitivity.curvalue  = Controls_GetCvarDefault( "sensitivity" );
-	//s_controls.joyenable.curvalue    = Controls_GetCvarDefault( "in_joystick" );
-	//s_controls.joythreshold.curvalue = Controls_GetCvarDefault( "joy_threshold" );
-	//s_controls.freelook.curvalue     = Controls_GetCvarDefault( "cl_freelook" );
-}
 
 int BindingIDFromName(const char *name) {
 	int i;
@@ -4242,7 +4219,7 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down) {
 	int			id;
 	int			i;
 
-	if (key == K_MOUSE1 && Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && !g_waitingForKey)
+	if (key == A_MOUSE1 && Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && !g_waitingForKey)
 	{
 		if (down) {
 			g_waitingForKey = qtrue;
@@ -4250,7 +4227,7 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down) {
 		}
 		return qtrue;
 	}
-	else if (key == K_ENTER && !g_waitingForKey)
+	else if (key == A_ENTER && !g_waitingForKey)
 	{
 		if (down) 
 		{
@@ -4271,11 +4248,11 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down) {
 
 		switch (key)
 		{
-			case K_ESCAPE:
+			case A_ESCAPE:
 				g_waitingForKey = qfalse;
 				return qtrue;
 	
-			case K_BACKSPACE:
+			case A_BACKSPACE:
 				id = BindingIDFromName(item->cvar);
 				if (id != -1) 
 				{
@@ -4461,7 +4438,7 @@ void Item_TextScroll_Paint(itemDef_t *item)
 	int	  i;
 	textScrollDef_t *scrollPtr = (textScrollDef_t*)item->typeData;
 
-	count = scrollPtr->lineCount;
+	count = scrollPtr->iLineCount;
 
 	// draw scrollbar to right side of the window
 	x = item->window.rect.x + item->window.rect.w - SCROLLBAR_SIZE - 1;
@@ -4490,9 +4467,9 @@ void Item_TextScroll_Paint(itemDef_t *item)
 
 	for (i = scrollPtr->startPos; i < count; i++) 
 	{
-		char *text;
+		const char *text;
 
-		text = scrollPtr->lines[i];
+		text = scrollPtr->pLines[i];
 		if (!text) 
 		{
 			continue;
@@ -4515,7 +4492,7 @@ void Item_TextScroll_Paint(itemDef_t *item)
 void Item_ListBox_Paint(itemDef_t *item) {
 	float x, y, size, count, i, thumb;
 	qhandle_t image;
-	qhandle_t optionalImage;
+	qhandle_t optionalImage1, optionalImage2, optionalImage3;
 	listBoxDef_t *listPtr = (listBoxDef_t*)item->typeData;
 
 	// the listbox is horizontal or vertical and has a fixed size scroll bar going either direction
@@ -4577,7 +4554,7 @@ void Item_ListBox_Paint(itemDef_t *item) {
 			//
 		}
 
-		text = DC->feederItemText(item->special, item->cursorPos, 0, &optionalImage);
+		text = DC->feederItemText(item->special, item->cursorPos, 0, &optionalImage1, &optionalImage2, &optionalImage3);
 		if (text) 
 		{
 			DC->drawText(item->window.rect.x, item->window.rect.y+item->window.rect.h, item->textscale, item->window.foreColor, text, 0, 0, item->textStyle, item->iMenuFont);
@@ -4637,24 +4614,41 @@ void Item_ListBox_Paint(itemDef_t *item) {
 				// which may overdraw the box if it is too small for the element
 
 				if (listPtr->numColumns > 0) {
-					int j;
+					int j;//, subX = listPtr->elementHeight;
 
-					for (j = 0; j < listPtr->numColumns; j++) {
-						text = DC->feederItemText(item->special, i, j, &optionalImage);
+					for (j = 0; j < listPtr->numColumns; j++) 
+					{
+						int imageStartX = listPtr->columnInfo[j].pos;
+						text = DC->feederItemText(item->special, i, j, &optionalImage1, &optionalImage2, &optionalImage3);
+						/*
 						if (optionalImage >= 0) {
 							DC->drawHandlePic(x + 4 + listPtr->columnInfo[j].pos, y - 1 + listPtr->elementHeight / 2, listPtr->columnInfo[j].width, listPtr->columnInfo[j].width, optionalImage);
 						} 
-						else if (text) 
+						else 
+						*/if ( text )
 						{
 //							DC->drawText(x + 4 + listPtr->columnInfo[j].pos, y + listPtr->elementHeight, item->textscale, item->window.foreColor, text, 0, listPtr->columnInfo[j].maxChars, item->textStyle);
 							DC->drawText(x + 4 + listPtr->columnInfo[j].pos, y, item->textscale, item->window.foreColor, text, 0, listPtr->columnInfo[j].maxChars, item->textStyle, item->iMenuFont);
 						}
+						if ( j < listPtr->numColumns - 1 )
+						{
+							imageStartX = listPtr->columnInfo[j+1].pos;
+						}
+						if (optionalImage3 >= 0) {
+							DC->drawHandlePic(imageStartX - listPtr->elementHeight*3, y+2, listPtr->elementHeight, listPtr->elementHeight, optionalImage3);
+						} 
+						if (optionalImage2 >= 0) {
+							DC->drawHandlePic(imageStartX - listPtr->elementHeight*2, y+2, listPtr->elementHeight, listPtr->elementHeight, optionalImage2);
+						} 
+						if (optionalImage1 >= 0) {
+							DC->drawHandlePic(imageStartX - listPtr->elementHeight, y+2, listPtr->elementHeight, listPtr->elementHeight, optionalImage1);
+						} 
 					}
 				} 
 				else 
 				{
-					text = DC->feederItemText(item->special, i, 0, &optionalImage);
-					if (optionalImage >= 0) 
+					text = DC->feederItemText(item->special, i, 0, &optionalImage1, &optionalImage2, &optionalImage3 );
+					if ( optionalImage1 >= 0 || optionalImage2 >= 0 || optionalImage3 >= 0) 
 					{
 						//DC->drawHandlePic(x + 4 + listPtr->elementHeight, y, listPtr->columnInfo[j].width, listPtr->columnInfo[j].width, optionalImage);
 					} 
@@ -5043,7 +5037,7 @@ void Menu_ScrollFeeder(menuDef_t *menu, int feeder, qboolean down) {
 		int i;
     for (i = 0; i < menu->itemCount; i++) {
 			if (menu->items[i]->special == feeder) {
-				Item_ListBox_HandleKey(menu->items[i], (down) ? K_DOWNARROW : K_UPARROW, qtrue, qtrue);
+				Item_ListBox_HandleKey(menu->items[i], (down) ? A_CURSOR_DOWN : A_CURSOR_UP, qtrue, qtrue);
 				return;
 			}
 		}
@@ -6431,28 +6425,156 @@ qboolean Item_Parse(int handle, itemDef_t *item) {
 
 static void Item_TextScroll_BuildLines ( itemDef_t* item )
 {
+#if 1
+	// new asian-aware line breaker...  (pasted from elsewhere late @ night, hence aliasing-vars ;-)
+	//
 	textScrollDef_t* scrollPtr = (textScrollDef_t*) item->typeData;
+	const char *psText = item->text;	// for copy/paste ease
+	int iBoxWidth = item->window.rect.w - SCROLLBAR_SIZE - 10;
+
+	// this could probably be simplified now, but it was converted from something else I didn't originally write, 
+	//	and it works anyway so wtf...
+	//
+	const char *psCurrentTextReadPos = psText;
+	const char *psReadPosAtLineStart = psCurrentTextReadPos;	
+	const char *psBestLineBreakSrcPos = psCurrentTextReadPos;
+	const char *psLastGood_s;	// needed if we get a full screen of chars with no punctuation or space (see usage notes)
+	qboolean bIsTrailingPunctuation;
+	unsigned int uiLetter;
+
+	scrollPtr->iLineCount = 0;
+	memset((char*)scrollPtr->pLines,0,sizeof(scrollPtr->pLines));
+
+	while (*psCurrentTextReadPos && (scrollPtr->iLineCount < MAX_TEXTSCROLL_LINES) )
+	{
+		char sLineForDisplay[2048];	// ott
+
+		// construct a line...
+		//
+		psCurrentTextReadPos = psReadPosAtLineStart;
+		sLineForDisplay[0] = '\0';
+		while ( *psCurrentTextReadPos )
+		{
+			int iAdvanceCount;
+			psLastGood_s = psCurrentTextReadPos;
+
+			// read letter...
+			//
+			uiLetter = trap_AnyLanguage_ReadCharFromString(psCurrentTextReadPos, &iAdvanceCount, &bIsTrailingPunctuation);
+			psCurrentTextReadPos += iAdvanceCount;
+
+			// concat onto string so far...
+			//
+			if (uiLetter == 32 && sLineForDisplay[0] == '\0')
+			{
+				psReadPosAtLineStart++;
+				continue;	// unless it's a space at the start of a line, in which case ignore it.
+			}
+
+			if (uiLetter > 255)
+			{
+				Q_strcat(sLineForDisplay, sizeof(sLineForDisplay),va("%c%c",uiLetter >> 8, uiLetter & 0xFF));
+			}
+			else
+			{
+				Q_strcat(sLineForDisplay, sizeof(sLineForDisplay),va("%c",uiLetter & 0xFF));
+			}
+
+			if (uiLetter == '\n')
+			{
+				// explicit new line...
+				//
+				sLineForDisplay[ strlen(sLineForDisplay)-1 ] = '\0';	// kill the CR
+				psReadPosAtLineStart = psCurrentTextReadPos;
+				psBestLineBreakSrcPos = psCurrentTextReadPos;
+
+				// hack it to fit in with this code...
+				//
+				scrollPtr->pLines[ scrollPtr->iLineCount ] = String_Alloc ( sLineForDisplay );
+				break;	// print this line
+			}
+			else 
+			if ( DC->textWidth( sLineForDisplay, item->textscale, item->iMenuFont ) >= iBoxWidth )
+			{					
+				// reached screen edge, so cap off string at bytepos after last good position...
+				//
+				if (uiLetter > 255 && bIsTrailingPunctuation && !trap_Language_UsesSpaces())
+				{
+					// Special case, don't consider line breaking if you're on an asian punctuation char of
+					//	a language that doesn't use spaces...
+					//
+					uiLetter = uiLetter;	// breakpoint line only
+				}
+				else
+				{
+					if (psBestLineBreakSrcPos == psReadPosAtLineStart)
+					{
+						//  aarrrggh!!!!!   we'll only get here is someone has fed in a (probably) garbage string,
+						//		since it doesn't have a single space or punctuation mark right the way across one line
+						//		of the screen.  So far, this has only happened in testing when I hardwired a taiwanese 
+						//		string into this function while the game was running in english (which should NEVER happen 
+						//		normally).  On the other hand I suppose it's entirely possible that some taiwanese string 
+						//		might have no punctuation at all, so...
+						//
+						psBestLineBreakSrcPos = psLastGood_s;	// force a break after last good letter
+					}
+
+					sLineForDisplay[ psBestLineBreakSrcPos - psReadPosAtLineStart ] = '\0';
+					psReadPosAtLineStart = psCurrentTextReadPos = psBestLineBreakSrcPos;
+
+					// hack it to fit in with this code...
+					//
+					scrollPtr->pLines[ scrollPtr->iLineCount ] = String_Alloc( sLineForDisplay );
+					break;	// print this line
+				}
+			}
+
+			// record last-good linebreak pos...  (ie if we've just concat'd a punctuation point (western or asian) or space)
+			//
+			if (bIsTrailingPunctuation || uiLetter == ' ' || (uiLetter > 255 && !trap_Language_UsesSpaces()))
+			{
+				psBestLineBreakSrcPos = psCurrentTextReadPos;
+			}
+		}
+
+		/// arrgghh, this is gettng horrible now...
+		//
+		if (scrollPtr->pLines[ scrollPtr->iLineCount ] == NULL && strlen(sLineForDisplay))
+		{
+			// then this is the last line and we've just run out of text, no CR, no overflow etc...
+			//
+			scrollPtr->pLines[ scrollPtr->iLineCount ] = String_Alloc( sLineForDisplay );
+		}
+			
+		scrollPtr->iLineCount++;
+	}
+	
+#else
+	// old version...
+	//
 	int				 width;
 	char*			 lineStart;
 	char*			 lineEnd;
 	float			 w;
 	float			 cw;
 
-	scrollPtr->lineCount = 0;
+	textScrollDef_t* scrollPtr = (textScrollDef_t*) item->typeData;
+
+	scrollPtr->iLineCount = 0;
 	width = scrollPtr->maxLineChars;
 	lineStart = (char*)item->text;
 	lineEnd   = lineStart;
 	w		  = 0;
 
 	// Keep going as long as there are more lines
-	while ( scrollPtr->lineCount < MAX_TEXTSCROLL_LINES )
+	while ( scrollPtr->iLineCount < MAX_TEXTSCROLL_LINES )
 	{
 		// End of the road
 		if ( *lineEnd == '\0')
 		{
 			if ( lineStart < lineEnd )
 			{
-				scrollPtr->lines[ scrollPtr->lineCount++ ] = lineStart;
+				scrollPtr->pLines[ scrollPtr->iLineCount++ ] = lineStart;
 			}
 
 			break;
@@ -6462,7 +6584,7 @@ static void Item_TextScroll_BuildLines ( itemDef_t* item )
 		else if ( *lineEnd == '\n' )
 		{
 			*lineEnd = '\0';
-			scrollPtr->lines[ scrollPtr->lineCount++ ] = lineStart;
+			scrollPtr->pLines[ scrollPtr->iLineCount++ ] = lineStart;
 			lineStart = lineEnd + 1;
 			lineEnd   = lineStart;
 			w = 0;
@@ -6482,7 +6604,7 @@ static void Item_TextScroll_BuildLines ( itemDef_t* item )
 			}					
 
 			*lineEnd = '\0';
-			scrollPtr->lines[ scrollPtr->lineCount++ ] = lineStart;
+			scrollPtr->pLines[ scrollPtr->iLineCount++ ] = lineStart;
 
 			// Skip any whitespaces
 			lineEnd++;
@@ -6500,6 +6622,7 @@ static void Item_TextScroll_BuildLines ( itemDef_t* item )
 			lineEnd++;
 		}
 	}
+#endif
 }
 
 // Item_InitControls

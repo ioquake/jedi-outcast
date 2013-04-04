@@ -3,6 +3,10 @@
 
 #include "g_local.h"
 
+qboolean PM_SaberInTransition( int move );
+qboolean PM_SaberInStart( int move );
+qboolean PM_SaberInReturn( int move );
+
 void P_SetTwitchInfo(gclient_t	*client)
 {
 	client->ps.painTime = level.time;
@@ -1362,9 +1366,46 @@ void ClientThink_real( gentity_t *ent ) {
 	else
 	{
 		ent->client->ps.saberLockFrame = 0;
+		//check for taunt
+		if ( (pm.cmd.generic_cmd == GENCMD_ENGAGE_DUEL) && (g_gametype.integer == GT_TOURNAMENT) )
+		{//already in a duel, make it a taunt command
+			pm.cmd.buttons |= BUTTON_GESTURE;
+		}
 	}
 
 	Pmove (&pm);
+
+	if (pm.checkDuelLoss)
+	{
+		if (pm.checkDuelLoss > 0 && pm.checkDuelLoss <= MAX_CLIENTS)
+		{
+			gentity_t *clientLost = &g_entities[pm.checkDuelLoss-1];
+
+			if (clientLost && clientLost->inuse && clientLost->client && Q_irand(0, 40) > clientLost->health)
+			{
+				vec3_t attDir;
+				VectorSubtract(ent->client->ps.origin, clientLost->client->ps.origin, attDir);
+				VectorNormalize(attDir);
+
+				VectorClear(clientLost->client->ps.velocity);
+				clientLost->client->ps.forceHandExtend = HANDEXTEND_NONE;
+				clientLost->client->ps.forceHandExtendTime = 0;
+
+				gGAvoidDismember = 1;
+				G_Damage(clientLost, ent, ent, attDir, clientLost->client->ps.origin, 9999, DAMAGE_NO_PROTECTION, MOD_SABER);
+
+				if (clientLost->health < 1)
+				{
+					gGAvoidDismember = 2;
+					G_CheckForDismemberment(clientLost, clientLost->client->ps.origin, 999, (clientLost->client->ps.legsAnim&~ANIM_TOGGLEBIT));
+				}
+
+				gGAvoidDismember = 0;
+			}
+		}
+
+		pm.checkDuelLoss = 0;
+	}
 
 	switch(pm.cmd.generic_cmd)
 	{
@@ -1374,7 +1415,13 @@ void ClientThink_real( gentity_t *ent ) {
 		Cmd_ToggleSaber_f(ent);
 		break;
 	case GENCMD_ENGAGE_DUEL:
-		Cmd_EngageDuel_f(ent);
+		if ( g_gametype.integer == GT_TOURNAMENT )
+		{//already in a duel, made it a taunt command
+		}
+		else
+		{
+			Cmd_EngageDuel_f(ent);
+		}
 		break;
 	case GENCMD_FORCE_HEAL:
 		ForceHeal(ent);
@@ -1561,24 +1608,29 @@ void ClientThink_real( gentity_t *ent ) {
 
 				G_Damage( faceKicked, ent, ent, oppDir, client->ps.origin, strength, DAMAGE_NO_ARMOR, MOD_MELEE );
 
-				if (faceKicked->health > 0 &&
-					faceKicked->client->ps.stats[STAT_HEALTH] > 0 &&
-					faceKicked->client->ps.forceHandExtend != HANDEXTEND_KNOCKDOWN)
+				if ( faceKicked->client->ps.weapon != WP_SABER ||
+					 faceKicked->client->ps.fd.saberAnimLevel < FORCE_LEVEL_3 ||
+					 (!BG_SaberInAttack(faceKicked->client->ps.saberMove) && !PM_SaberInStart(faceKicked->client->ps.saberMove) && !PM_SaberInReturn(faceKicked->client->ps.saberMove) && !PM_SaberInTransition(faceKicked->client->ps.saberMove)) )
 				{
-					if (Q_irand(1, 10) <= 3)
-					{ //only actually knock over sometimes, but always do velocity hit
-						faceKicked->client->ps.forceHandExtend = HANDEXTEND_KNOCKDOWN;
-						faceKicked->client->ps.forceHandExtendTime = level.time + 1100;
-						faceKicked->client->ps.forceDodgeAnim = 0; //this toggles between 1 and 0, when it's 1 we should play the get up anim
+					if (faceKicked->health > 0 &&
+						faceKicked->client->ps.stats[STAT_HEALTH] > 0 &&
+						faceKicked->client->ps.forceHandExtend != HANDEXTEND_KNOCKDOWN)
+					{
+						if (Q_irand(1, 10) <= 3)
+						{ //only actually knock over sometimes, but always do velocity hit
+							faceKicked->client->ps.forceHandExtend = HANDEXTEND_KNOCKDOWN;
+							faceKicked->client->ps.forceHandExtendTime = level.time + 1100;
+							faceKicked->client->ps.forceDodgeAnim = 0; //this toggles between 1 and 0, when it's 1 we should play the get up anim
+						}
+
+						faceKicked->client->ps.otherKiller = ent->s.number;
+						faceKicked->client->ps.otherKillerTime = level.time + 5000;
+						faceKicked->client->ps.otherKillerDebounceTime = level.time + 100;
+
+						faceKicked->client->ps.velocity[0] = oppDir[0]*(strength*40);
+						faceKicked->client->ps.velocity[1] = oppDir[1]*(strength*40);
+						faceKicked->client->ps.velocity[2] = 200;
 					}
-
-					faceKicked->client->ps.otherKiller = ent->s.number;
-					faceKicked->client->ps.otherKillerTime = level.time + 5000;
-					faceKicked->client->ps.otherKillerDebounceTime = level.time + 100;
-
-					faceKicked->client->ps.velocity[0] = oppDir[0]*(strength*40);
-					faceKicked->client->ps.velocity[1] = oppDir[1]*(strength*40);
-					faceKicked->client->ps.velocity[2] = 200;
 				}
 
 				G_Sound( faceKicked, CHAN_AUTO, G_SoundIndex( va("sound/weapons/melee/punch%d", Q_irand(1, 4)) ) );

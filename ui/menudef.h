@@ -298,6 +298,9 @@
 #define UI_SKIN_COLOR 287
 #define UI_FORCE_POINTS 288
 
+//extra, for patch
+#define UI_JEDI_NONJEDI 289
+
 #define VOICECHAT_GETFLAG			"getflag"				// command someone to get the flag
 #define VOICECHAT_OFFENSE			"offense"				// command someone to go on offense
 #define VOICECHAT_DEFEND			"defend"				// command someone to go on defense

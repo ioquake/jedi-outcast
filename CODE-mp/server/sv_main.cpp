@@ -29,8 +29,7 @@ cvar_t	*sv_gametype;
 cvar_t	*sv_pure;
 cvar_t	*sv_floodProtect;
 cvar_t	*sv_allowAnonymous;
-
-cvar_t	*sv_debugserver;
+cvar_t	*sv_needpass;
 
 /*
 =============================================================================
@@ -294,9 +293,11 @@ void SVC_Status( netadr_t from ) {
 	char	infostring[MAX_INFO_STRING];
 
 	// ignore if we are in single player
+	/*
 	if ( Cvar_VariableValue( "g_gametype" ) == GT_SINGLE_PLAYER ) {
 		return;
 	}
+	*/
 
 	strcpy( infostring, Cvar_InfoString( CVAR_SERVERINFO ) );
 
@@ -343,14 +344,16 @@ if a user is interested in a server to do a full status
 ================
 */
 void SVC_Info( netadr_t from ) {
-	int		i, count;
+	int		i, count, wDisable;
 	char	*gamedir;
 	char	infostring[MAX_INFO_STRING];
 
 	// ignore if we are in single player
+	/*
 	if ( Cvar_VariableValue( "g_gametype" ) == GT_SINGLE_PLAYER || Cvar_VariableValue("ui_singlePlayerActive")) {
 		return;
 	}
+	*/
 
 	// don't count privateclients
 	count = 0;
@@ -373,7 +376,19 @@ void SVC_Info( netadr_t from ) {
 	Info_SetValueForKey( infostring, "sv_maxclients", 
 		va("%i", sv_maxclients->integer - sv_privateClients->integer ) );
 	Info_SetValueForKey( infostring, "gametype", va("%i", sv_gametype->integer ) );
-	Info_SetValueForKey( infostring, "pure", va("%i", sv_pure->integer ) );
+	Info_SetValueForKey( infostring, "needpass", va("%i", sv_needpass->integer ) );
+	Info_SetValueForKey( infostring, "truejedi", va("%i", Cvar_VariableIntegerValue( "g_jediVmerc" ) ) );
+	if ( sv_gametype->integer == GT_TOURNAMENT )
+	{
+		wDisable = Cvar_VariableIntegerValue( "g_duelWeaponDisable" );
+	}
+	else
+	{
+		wDisable = Cvar_VariableIntegerValue( "g_weaponDisable" );
+	}
+	Info_SetValueForKey( infostring, "wdisable", va("%i", wDisable ) );
+	Info_SetValueForKey( infostring, "fdisable", va("%i", Cvar_VariableIntegerValue( "g_forcePowerDisable" ) ) );
+	//Info_SetValueForKey( infostring, "pure", va("%i", sv_pure->integer ) );
 
 	if( sv_minPing->integer ) {
 		Info_SetValueForKey( infostring, "minPing", va("%i", sv_minPing->integer) );
@@ -411,11 +426,11 @@ Redirect all printfs
 */
 void SVC_RemoteCommand( netadr_t from, msg_t *msg ) {
 	qboolean	valid;
-	int			i, time;
+	unsigned int	i, time;
 	char		remaining[1024];
 #define	SV_OUTPUTBUF_LENGTH	(MAX_MSGLEN - 16)
 	char		sv_outputbuf[SV_OUTPUTBUF_LENGTH];
-	static		int	lasttime = 0;
+	static		unsigned int	lasttime = 0;
 
 	time = Com_Milliseconds();
 	if (time<(lasttime+500)) {

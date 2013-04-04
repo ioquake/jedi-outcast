@@ -11,12 +11,15 @@ CNavigator		navigator;
 
 extern qboolean G_EntIsUnlockedDoor( int entityNum );
 extern qboolean G_EntIsDoor( int entityNum );
+extern qboolean G_EntIsBreakable( int entityNum );
+extern qboolean G_EntIsRemovableUsable( int entNum );
 extern qboolean G_FindClosestPointOnLineSegment( const vec3_t start, const vec3_t end, const vec3_t from, vec3_t result );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
 //For debug graphics
 extern void CG_Line( vec3_t start, vec3_t end, vec3_t color, float alpha );
 extern void CG_Cube( vec3_t mins, vec3_t maxs, vec3_t color, float alpha );
 extern void CG_CubeOutline( vec3_t mins, vec3_t maxs, int time, unsigned int color, float alpha );
+extern qboolean FlyingCreature( gentity_t *ent );
 
 qboolean NAV_CheckAhead( gentity_t *self, vec3_t end, trace_t &trace, int clipmask );
 void NAV_StoreWaypoint( gentity_t *ent );
@@ -130,7 +133,7 @@ NAV_HitNavGoal
 -------------------------
 */
 
-qboolean NAV_HitNavGoal( vec3_t point, vec3_t mins, vec3_t maxs, vec3_t dest, int radius )
+qboolean NAV_HitNavGoal( vec3_t point, vec3_t mins, vec3_t maxs, vec3_t dest, int radius, qboolean flying )
 {
 	vec3_t	dmins, dmaxs, pmins, pmaxs;
 
@@ -141,8 +144,20 @@ qboolean NAV_HitNavGoal( vec3_t point, vec3_t mins, vec3_t maxs, vec3_t dest, in
 		//			a radius manually set! We can't do the smaller navgoals against
 		//			walls to get around this because player-sized traces to them
 		//			from angles will not work... - MCG
-		//FIXME:  Allow for a little z difference?
-		return ( DistanceSquared(dest, point) <= (radius*radius) );
+		if ( !flying )
+		{//Allow for a little z difference
+			vec3_t	diff;
+			VectorSubtract( point, dest, diff );
+			if ( fabs(diff[2]) <= 24 )
+			{
+				diff[2] = 0;
+			}
+			return ( VectorLengthSquared( diff ) <= (radius*radius) );
+		}
+		else
+		{//must hit exactly
+			return ( DistanceSquared(dest, point) <= (radius*radius) );
+		}
 		//There is probably a better way to do this, either by preserving the original
 		//		mins and maxs of the navgoal and doing this check ONLY if the radius 
 		//		is non-zero (like the original implementation) or some boolean to
@@ -241,7 +256,7 @@ qboolean NAV_ClearPathToPoint( gentity_t *self, vec3_t pmins, vec3_t pmaxs, vec3
 		}
 
 		//Okay, didn't get all the way there, let's see if we got close enough:
-		if ( NAV_HitNavGoal( self->currentOrigin, self->owner->mins, self->owner->maxs, trace.endpos, NPCInfo->goalRadius ) )
+		if ( NAV_HitNavGoal( self->currentOrigin, self->owner->mins, self->owner->maxs, trace.endpos, NPCInfo->goalRadius, FlyingCreature( self->owner ) ) )
 		{
 			return qtrue;
 		}
@@ -827,7 +842,7 @@ qboolean NAV_TestForBlocked( gentity_t *self, gentity_t *goal, gentity_t *blocke
 	if ( blocker->s.eType == ET_ITEM )
 		return qfalse;
 
-	if ( NAV_HitNavGoal( blocker->currentOrigin, blocker->mins, blocker->maxs, goal->currentOrigin, 12 ) )
+	if ( NAV_HitNavGoal( blocker->currentOrigin, blocker->mins, blocker->maxs, goal->currentOrigin, 12, qfalse ) )
 	{
 		flags |= NIF_BLOCKED;
 
@@ -940,19 +955,20 @@ int NAV_TestBestNode( gentity_t *self, int startID, int endID, qboolean failEdge
 	}
 
 	//See if we're too far above
-	if ( fabs( self->currentOrigin[2] - end[2] ) > 48 )
+	if ( self->s.weapon != WP_SABER && fabs( self->currentOrigin[2] - end[2] ) > 48 )
 	{
-		return startID;
 	}
+	else
+	{
+		//This is a work around
+		float	radius = ( self->maxs[0] > self->maxs[1] ) ? self->maxs[0] : self->maxs[1];
+		float	dist = Distance( self->currentOrigin, end );
+		float	tFrac = 1.0f - ( radius / dist );
 
-	//This is a work around
-	float	radius = ( self->maxs[0] > self->maxs[1] ) ? self->maxs[0] : self->maxs[1];
-	float	dist = Distance( self->currentOrigin, end );
-	float	tFrac = 1.0f - ( radius / dist );
-
-	if ( trace.fraction >= tFrac )
-	{//it's clear
-		return endID;
+		if ( trace.fraction >= tFrac )
+		{//it's clear
+			return endID;
+		}
 	}
 
 	//Do a special check for doors
@@ -971,11 +987,41 @@ int NAV_TestBestNode( gentity_t *self, int startID, int endID, qboolean failEdge
 					return startID;
 				}
 				//we can keep heading to the door, it should open
-				return endID;
+				if ( self->s.weapon != WP_SABER && fabs( self->currentOrigin[2] - end[2] ) > 48 )
+				{//too far above
+				}
+				else
+				{
+					return endID;
+				}
 			}
 			else if ( G_EntIsDoor( blocker->s.number ) )
 			{//a locked door!
 				//path is blocked by a locked door, mark it as such if instructed to do so
+				if ( failEdge )
+				{
+					navigator.AddFailedEdge( self->s.number, startID, endID );
+				}
+			}
+			else if ( G_EntIsBreakable( blocker->s.number ) )
+			{//do same for breakable brushes/models/glass?
+				//path is blocked by a breakable, mark it as such if instructed to do so
+				if ( failEdge )
+				{
+					navigator.AddFailedEdge( self->s.number, startID, endID );
+				}
+			}
+			else if ( G_EntIsRemovableUsable( blocker->s.number ) )
+			{//and removable usables
+				//path is blocked by a removable usable, mark it as such if instructed to do so
+				if ( failEdge )
+				{
+					navigator.AddFailedEdge( self->s.number, startID, endID );
+				}
+			}
+			else if ( blocker->targetname && blocker->s.solid == SOLID_BMODEL && ((blocker->contents&CONTENTS_MONSTERCLIP)|| (blocker->contents&CONTENTS_BOTCLIP)) )
+			{//some other kind of do not enter entity brush that will probably be removed
+				//path is blocked by a removable brushent, mark it as such if instructed to do so
 				if ( failEdge )
 				{
 					navigator.AddFailedEdge( self->s.number, startID, endID );
@@ -1287,7 +1333,7 @@ radius - how far from the navgoal an ent can be before it thinks it reached it -
 
 void SP_waypoint_navgoal( gentity_t *ent )
 {
-	int radius = ( ent->radius ) ? ((int)(ent->radius)|NAVGOAL_USE_RADIUS) : 12;
+	int radius = ( ent->radius ) ? (((int)ent->radius)|NAVGOAL_USE_RADIUS) : 12;
 
 	VectorSet( ent->mins, -16, -16, -24 );
 	VectorSet( ent->maxs, 16, 16, 32 );

@@ -991,7 +991,9 @@ int				trap_R_Font_StrLenPixels(const char *text, const int iFontIndex, const fl
 int				trap_R_Font_StrLenChars(const char *text);
 int				trap_R_Font_HeightPixels(const int iFontIndex, const float scale);
 void			trap_R_Font_DrawString(int ox, int oy, const char *text, const float *rgba, const int setIndex, int iCharLimit, const float scale);
-unsigned		trap_AnyLanguage_ReadCharFromString( const char **ppText );
+qboolean		trap_Language_IsAsian(void);
+qboolean		trap_Language_UsesSpaces(void);
+unsigned		trap_AnyLanguage_ReadCharFromString( const char *psText, int *piAdvanceCount, qboolean *pbIsTrailingPunctuation/* = NULL*/ );
 void			trap_S_StopBackgroundTrack( void );
 void			trap_S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bReturnWithoutStarting);
 int				trap_CIN_PlayCinematic( const char *arg0, int xpos, int ypos, int width, int height, int bits);

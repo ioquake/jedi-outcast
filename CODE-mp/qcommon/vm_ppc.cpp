@@ -426,8 +426,8 @@ void VM_Compile( vm_t *vm, vmHeader_t *header ) {
 
 	// allocate a very large temp buffer, we will shrink it later
 	maxLength = header->codeLength * 8;
-	buf = Z_Malloc( maxLength );
-	jused = Z_Malloc(header->instructionCount + 2);
+	buf = Z_Malloc( maxLength,qfalse );
+	jused = Z_Malloc(header->instructionCount + 2,qfalse);
 	Com_Memset(jused, 0, header->instructionCount+2);
 	
     // compile everything twice, so the second pass will have valid instruction

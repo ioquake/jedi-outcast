@@ -9,6 +9,12 @@ Ghoul2 Insert Start
 	#include "../renderer/tr_local.h"
 #endif
 
+#ifdef G2_COLLISION_ENABLED
+#if !defined (MINIHEAP_H_INC)
+#include "../qcommon/miniheap.h"
+#endif
+#endif
+
 #include "../qcommon/strip.h"
 
 /*
@@ -430,6 +436,11 @@ This is NOT called for map_restart
 */
 extern void FixGhoul2InfoLeaks(bool,bool);
 
+#ifdef G2_COLLISION_ENABLED
+extern CMiniHeap *G2VertSpaceServer;
+#define G2_VERT_SPACE_SERVER_SIZE 256
+#endif
+
 extern void RE_RegisterMedia_LevelLoadBegin(const char *psMapName, ForceReload_e eForceReload);
 void SV_SpawnServer( char *server, qboolean killBots, ForceReload_e eForceReload ) {
 	int			i;
@@ -498,6 +509,13 @@ Ghoul2 Insert Start
 	else
 	{
 		R_SVModelInit();
+
+#ifdef G2_COLLISION_ENABLED
+		if (!G2VertSpaceServer)
+		{
+			G2VertSpaceServer = new CMiniHeap(G2_VERT_SPACE_SERVER_SIZE * 1024);
+		}
+#endif
 	}
 
 	SV_SendMapChange();
@@ -730,9 +748,9 @@ void SV_Init (void) {
 	Cvar_Get ("duel_fraglimit", "10", CVAR_SERVERINFO);
 	Cvar_Get ("g_forceBasedTeams", "0", CVAR_SERVERINFO);
 	Cvar_Get ("g_duelWeaponDisable", "1", CVAR_SERVERINFO);
-	Cvar_Get ("g_needpass", "0", CVAR_SERVERINFO);
 
 	sv_gametype = Cvar_Get ("g_gametype", "0", CVAR_SERVERINFO | CVAR_LATCH );
+	sv_needpass = Cvar_Get ("g_needpass", "0", CVAR_SERVERINFO | CVAR_ROM );
 	Cvar_Get ("sv_keywords", "", CVAR_SERVERINFO);
 	Cvar_Get ("protocol", va("%i", PROTOCOL_VERSION), CVAR_SERVERINFO | CVAR_ROM);
 	sv_mapname = Cvar_Get ("mapname", "nomap", CVAR_SERVERINFO | CVAR_ROM);
@@ -746,7 +764,7 @@ void SV_Init (void) {
 	sv_allowAnonymous = Cvar_Get ("sv_allowAnonymous", "0", CVAR_SERVERINFO);
 
 	// systeminfo
-	Cvar_Get ("sv_cheats", "1", CVAR_SYSTEMINFO | CVAR_ROM );
+	Cvar_Get ("sv_cheats", "0", CVAR_SYSTEMINFO | CVAR_ROM );
 	sv_serverid = Cvar_Get ("sv_serverid", "0", CVAR_SYSTEMINFO | CVAR_ROM );
 #ifndef DLL_ONLY // bk010216 - for DLL-only servers
 	sv_pure = Cvar_Get ("sv_pure", "1", CVAR_SYSTEMINFO );
@@ -778,7 +796,7 @@ void SV_Init (void) {
 	sv_killserver = Cvar_Get ("sv_killserver", "0", 0);
 	sv_mapChecksum = Cvar_Get ("sv_mapChecksum", "", CVAR_ROM);
 
-	sv_debugserver = Cvar_Get ("sv_debugserver", "0", 0);
+//	sv_debugserver = Cvar_Get ("sv_debugserver", "0", 0);
 
 	SP_Register("str_server",SP_REGISTER_REQUIRED);
 
@@ -855,6 +873,14 @@ Ghoul2 Insert Start
 		delete[] svs.snapshotEntities;
 		svs.snapshotEntities = NULL;
 	}
+
+#ifdef G2_COLLISION_ENABLED
+	if ( com_dedicated->integer && G2VertSpaceServer)
+	{
+		delete G2VertSpaceServer;
+		G2VertSpaceServer = 0;
+	}
+#endif
 
 	// free current level
 	SV_ClearServer();

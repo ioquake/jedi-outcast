@@ -57,10 +57,10 @@ extern void NPC_Mark2_Precache(void);
 extern void NPC_GalakMech_Precache( void );
 extern void NPC_GalakMech_Init( gentity_t *ent );
 extern void NPC_Protocol_Precache( void );
+extern int WP_SetSaberModel( gclient_t *client, class_t npcClass );
 
 #define	NSF_DROP_TO_FLOOR	16
 
-extern gitem_t	*FindItemForAmmo( ammo_t ammo );
 
 //void HirogenAlpha_Precache( void );
 
@@ -1723,6 +1723,8 @@ void SP_NPC_Kyle( gentity_t *self)
 {
 	self->NPC_type = "Kyle";
 
+	WP_SetSaberModel( NULL, CLASS_KYLE );
+
 	SP_NPC_spawner( self );
 }
 
@@ -1765,6 +1767,8 @@ void SP_NPC_Luke( gentity_t *self)
 {
 	self->NPC_type = "Luke";
 
+	WP_SetSaberModel( NULL, CLASS_LUKE );
+
 	SP_NPC_spawner( self );
 }
 
@@ -1792,6 +1796,8 @@ SHY - Spawner is shy
 void SP_NPC_Tavion( gentity_t *self)
 {
 	self->NPC_type = "Tavion";
+
+	WP_SetSaberModel( NULL, CLASS_TAVION );
 
 	SP_NPC_spawner( self );
 }
@@ -1844,6 +1850,8 @@ SHY - Spawner is shy
 void SP_NPC_Desann( gentity_t *self)
 {
 	self->NPC_type = "Desann";
+
+	WP_SetSaberModel( NULL, CLASS_DESANN );
 
 	SP_NPC_spawner( self );
 }
@@ -1917,6 +1925,7 @@ void SP_NPC_Jedi( gentity_t *self)
 		}
 	}
 
+	WP_SetSaberModel( NULL, CLASS_JEDI );
 
 	SP_NPC_spawner( self );
 }
@@ -2345,6 +2354,7 @@ void SP_NPC_Reborn( gentity_t *self)
 		}
 	}
 	
+	WP_SetSaberModel( NULL, CLASS_REBORN );
 	SP_NPC_spawner( self );
 }
 
@@ -2370,6 +2380,7 @@ void SP_NPC_ShadowTrooper( gentity_t *self)
 	}
 	
 	NPC_ShadowTrooper_Precache();
+	WP_SetSaberModel( NULL, CLASS_SHADOWTROOPER );
 
 	SP_NPC_spawner( self );
 }

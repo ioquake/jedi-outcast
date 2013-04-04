@@ -28,6 +28,10 @@ Ghoul2 Insert Start
 
 #include "../qcommon/strip.h"
 
+#ifdef G2_COLLISION_ENABLED
+extern CMiniHeap *G2VertSpaceClient;
+#endif
+
 /*
 Ghoul2 Insert End
 */
@@ -635,8 +639,12 @@ int CL_CgameSystemCalls( int *args ) {
 	case CG_R_FONT_DRAWSTRING:
 		re.Font_DrawString( args[1], args[2], (const char *)VMA(3), (const float *) VMA(4), args[5], args[6], VMF(7) );
 		return 0;
+	case CG_LANGUAGE_ISASIAN:
+		return re.Language_IsAsian();
+	case CG_LANGUAGE_USESSPACES:
+		return re.Language_UsesSpaces();
 	case CG_ANYLANGUAGE_READCHARFROMSTRING:
-		return re.AnyLanguage_ReadCharFromString( (const char **)VMA(1) );
+		return re.AnyLanguage_ReadCharFromString( (const char *) VMA(1), (int *) VMA(2), (qboolean *) VMA(3) );
 	case CG_R_CLEARSCENE:
 		re.ClearScene();
 		return 0;
@@ -994,10 +1002,33 @@ Ghoul2 Insert Start
 		gG2_GBMNoReconstruct = qtrue;
 		return G2API_GetBoltMatrix(*((CGhoul2Info_v *)args[1]), args[2], args[3], (mdxaBone_t *)VMA(4), (const float *)VMA(5),(const float *)VMA(6), args[7], (qhandle_t *)VMA(8), (float *)VMA(9));
 
+	case CG_G2_GETBOLT_NOREC_NOROT:
+		gG2_GBMNoReconstruct = qtrue;
+		gG2_GBMUseSPMethod = qtrue;
+		return G2API_GetBoltMatrix(*((CGhoul2Info_v *)args[1]), args[2], args[3], (mdxaBone_t *)VMA(4), (const float *)VMA(5),(const float *)VMA(6), args[7], (qhandle_t *)VMA(8), (float *)VMA(9));
+
 	case CG_G2_INITGHOUL2MODEL:
 		RicksCrazyOnServer=false;
 		return	G2API_InitGhoul2Model((CGhoul2Info_v **)VMA(1), (const char *)VMA(2), args[3], (qhandle_t) args[4],
 									  (qhandle_t) args[5], args[6], args[7]);
+
+
+	case CG_G2_COLLISIONDETECT:
+#ifdef G2_COLLISION_ENABLED
+		G2API_CollisionDetect ( (CollisionRecord_t*)VMA(1), *((CGhoul2Info_v *)args[2]), 
+								   (const float*)VMA(3),
+								   (const float*)VMA(4),
+								   args[5],
+								   args[6],
+								   (float*)VMA(7),
+								   (float*)VMA(8),
+								   (float*)VMA(9),
+								   G2VertSpaceClient,
+								   args[10],
+								   args[11],
+								   VMF(12) );
+#endif
+		return 0;
 
 	case CG_G2_ANGLEOVERRIDE:
 		return G2API_SetBoneAngles(*((CGhoul2Info_v *)args[1]), args[2], (const char *)VMA(3), (float *)VMA(4), args[5],

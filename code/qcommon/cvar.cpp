@@ -130,17 +130,15 @@ char *Cvar_CompleteVariable( const char *partial ) {
 		return NULL;
 	}
 		
-	// check exact match
-	for ( cvar = cvar_vars ; cvar ; cvar = cvar->next ) {
-		if ( !Q_stricmp (partial,cvar->name) ) {
-			return cvar->name;
-		}
-	}
-
 	// check partial match
 	for ( cvar=cvar_vars ; cvar ; cvar=cvar->next ) {
 		if ( !Q_stricmpn (partial,cvar->name, len) ) {
-			return cvar->name;
+			if ( (cvar->flags & CVAR_CHEAT) && !cvar_cheats->integer ) {
+				continue;
+			}
+			else {
+				return cvar->name;
+			}
 		}
 	}
 
@@ -184,15 +182,19 @@ char *Cvar_CompleteVariableNext (char *partial, char *last)
 	{
 		base = cvar_vars;
 	}
-	// check exact match
-	for (cvar=base ; cvar ; cvar=cvar->next)
-		if (!Q_stricmp (partial,cvar->name))
-			return cvar->name;
 
 	// check partial match
 	for (cvar=base ; cvar ; cvar=cvar->next)
-		if (!Q_stricmpn (partial,cvar->name, len))
-			return cvar->name;
+	{
+		if (!Q_stricmpn (partial,cvar->name, len)) {
+			if ( (cvar->flags & CVAR_CHEAT) && !cvar_cheats->integer ) {
+				continue;
+			}
+			else {
+				return cvar->name;
+			}
+		}
+	}
 
 	return NULL;
 }
@@ -513,7 +515,7 @@ void Cvar_Toggle_f( void ) {
 		return;
 	}
 
-	v = Cvar_VariableValue( Cmd_Argv( 1 ) );
+	v = Cvar_VariableIntegerValue( Cmd_Argv( 1 ) );
 	v = !v;
 
 	Cvar_Set2 (Cmd_Argv(1), va("%i", v), qfalse);

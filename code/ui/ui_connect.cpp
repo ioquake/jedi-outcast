@@ -188,7 +188,7 @@ UI_KeyConnect
 */
 void UI_KeyConnect( int key ) 
 {
-	if ( key == K_ESCAPE ) 
+	if ( key == A_ESCAPE ) 
 	{
 		ui.Cmd_ExecuteText( EXEC_APPEND, "disconnect\n" );
 		return;

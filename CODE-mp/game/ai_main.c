@@ -61,6 +61,7 @@ boteventtracker_t gBotEventTracker[MAX_CLIENTS];
 //rww - new bot cvars..
 vmCvar_t bot_forcepowers;
 vmCvar_t bot_forgimmick;
+vmCvar_t bot_honorableduelacceptance;
 #ifdef _DEBUG
 vmCvar_t bot_nogoals;
 vmCvar_t bot_debugmessages;
@@ -5686,6 +5687,7 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 	}
 
 	trap_Cvar_Update(&bot_forgimmick);
+	trap_Cvar_Update(&bot_honorableduelacceptance);
 
 	if (bot_forgimmick.integer)
 	{
@@ -5693,6 +5695,11 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 		bs->currentEnemy = NULL;
 		bs->wpDestination = NULL;
 		bs->wpDirection = 0;
+
+		if (bot_forgimmick.integer == 2)
+		{ //for debugging saber stuff, this is handy
+			trap_EA_Attack(bs->client);
+		}
 		return;
 	}
 
@@ -6044,42 +6051,43 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 		}
 	}
 
-	/*
-	if (bs->currentEnemy && bs->currentEnemy->client &&
-		bs->cur_ps.weapon == WP_SABER &&
-		g_privateDuel.integer &&
-		bs->frame_Enemy_Vis &&
-		bs->frame_Enemy_Len < 400 &&
-		bs->currentEnemy->client->ps.weapon == WP_SABER &&
-		bs->currentEnemy->client->ps.saberHolstered)
+	if (bot_honorableduelacceptance.integer)
 	{
-		vec3_t e_ang_vec;
+		if (bs->currentEnemy && bs->currentEnemy->client &&
+			bs->cur_ps.weapon == WP_SABER &&
+			g_privateDuel.integer &&
+			bs->frame_Enemy_Vis &&
+			bs->frame_Enemy_Len < 400 &&
+			bs->currentEnemy->client->ps.weapon == WP_SABER &&
+			bs->currentEnemy->client->ps.saberHolstered)
+		{
+			vec3_t e_ang_vec;
 
-		VectorSubtract(bs->currentEnemy->client->ps.origin, bs->eye, e_ang_vec);
+			VectorSubtract(bs->currentEnemy->client->ps.origin, bs->eye, e_ang_vec);
 
-		if (InFieldOfVision(bs->viewangles, 100, e_ang_vec))
-		{ //Our enemy has his saber holstered and has challenged us to a duel, so challenge him back
-			if (!bs->cur_ps.saberHolstered)
-			{
-				Cmd_ToggleSaber_f(&g_entities[bs->client]);
-			}
-			else
-			{
-				if (bs->currentEnemy->client->ps.duelIndex == bs->client &&
-					bs->currentEnemy->client->ps.duelTime > level.time &&
-					!bs->cur_ps.duelInProgress)
+			if (InFieldOfVision(bs->viewangles, 100, e_ang_vec))
+			{ //Our enemy has his saber holstered and has challenged us to a duel, so challenge him back
+				if (!bs->cur_ps.saberHolstered)
 				{
-					Cmd_EngageDuel_f(&g_entities[bs->client]);
+					Cmd_ToggleSaber_f(&g_entities[bs->client]);
 				}
-			}
+				else
+				{
+					if (bs->currentEnemy->client->ps.duelIndex == bs->client &&
+						bs->currentEnemy->client->ps.duelTime > level.time &&
+						!bs->cur_ps.duelInProgress)
+					{
+						Cmd_EngageDuel_f(&g_entities[bs->client]);
+					}
+				}
 
-			bs->doAttack = 0;
-			bs->doAltAttack = 0;
-			bs->botChallengingTime = level.time + 100;
-			bs->beStill = level.time + 100;
+				bs->doAttack = 0;
+				bs->doAltAttack = 0;
+				bs->botChallengingTime = level.time + 100;
+				bs->beStill = level.time + 100;
+			}
 		}
 	}
-	*/
 	//Apparently this "allows you to cheese" when fighting against bots. I'm not sure why you'd want to con bots
 	//into an easy kill, since they're bots and all. But whatever.
 
@@ -6914,7 +6922,7 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 		else
 		{
 #endif
-			if (bot_forcepowers.integer)
+			if (bot_forcepowers.integer && !g_forcePowerDisable.integer)
 			{
 				trap_EA_ForcePower(bs->client);
 			}
@@ -7006,6 +7014,7 @@ int BotAISetup( int restart ) {
 	//rww - new bot cvars..
 	trap_Cvar_Register(&bot_forcepowers, "bot_forcepowers", "1", CVAR_CHEAT);
 	trap_Cvar_Register(&bot_forgimmick, "bot_forgimmick", "0", CVAR_CHEAT);
+	trap_Cvar_Register(&bot_honorableduelacceptance, "bot_honorableduelacceptance", "0", CVAR_CHEAT);
 #ifdef _DEBUG
 	trap_Cvar_Register(&bot_nogoals, "bot_nogoals", "0", CVAR_CHEAT);
 	trap_Cvar_Register(&bot_debugmessages, "bot_debugmessages", "0", CVAR_CHEAT);

@@ -318,7 +318,44 @@ RE_AddLightToScene
 =====================
 */
 void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
-	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
+	dlight_t	*dl;
+
+	if (r_newDLights->integer)
+	{
+		if ( !tr.registered ) {
+			return;
+		}
+		if ( r_numdlights >= MAX_DLIGHTS ) {
+			return;
+		}
+		//dl = &backEnd.refdef.dlights[r_numdlights++];
+		dl = &backEndData[tr.smpFrame]->dlights[r_numdlights++];
+
+		dl->mType=DLIGHT_VERTICAL;
+		VectorCopy (org, dl->origin);
+		dl->color[0] = r;
+		dl->color[1] = g;
+		dl->color[2] = b;
+		if ( intensity <= 0 ) 
+		{
+			// projected from viewer
+			VectorCopy (tr.viewParms.ori.axis[0], dl->mDirection);
+			VectorCopy (tr.viewParms.ori.axis[1], dl->mBasis2);
+			VectorCopy (tr.viewParms.ori.axis[2], dl->mBasis3);
+			dl->mType=DLIGHT_PROJECTED;
+			dl->radius = -intensity;
+		}
+		else
+		{
+			dl->radius = intensity;
+		}
+
+	//	dl->additive = qtrue;
+	}
+	else
+	{
+		RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
+	}
 }
 
 /*

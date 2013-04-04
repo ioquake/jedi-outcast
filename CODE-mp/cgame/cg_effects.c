@@ -726,14 +726,68 @@ Throws specified debris from within a given bounding box in the world
 #define DEBRIS_SPECIALCASE_CHUNKS		-2
 #define DEBRIS_SPECIALCASE_WOOD			-3
 #define DEBRIS_SPECIALCASE_GLASS		-4
+
+#define NUM_DEBRIS_MODELS_GLASS				8
+#define NUM_DEBRIS_MODELS_WOOD				8
+#define NUM_DEBRIS_MODELS_CHUNKS			3
+#define NUM_DEBRIS_MODELS_ROCKS				4 //12
+
+int dbModels_Glass[NUM_DEBRIS_MODELS_GLASS];
+int dbModels_Wood[NUM_DEBRIS_MODELS_WOOD];
+int dbModels_Chunks[NUM_DEBRIS_MODELS_CHUNKS];
+int dbModels_Rocks[NUM_DEBRIS_MODELS_ROCKS];
+
 void CG_CreateDebris(int entnum, vec3_t org, vec3_t mins, vec3_t maxs, int debrissound, int debrismodel)
 {
 	vec3_t velocity, a, shardorg, dif, difx;
 	float windowmass;
 	float shardsthrow = 0;
-	char chunkname[256];
-	int rfact = 0;
 	int omodel = debrismodel;
+
+	if (omodel == DEBRIS_SPECIALCASE_GLASS && !dbModels_Glass[0])
+	{ //glass no longer exists, using it for metal.
+		dbModels_Glass[0] = trap_R_RegisterModel("models/chunks/metal/metal1_1.md3");
+		dbModels_Glass[1] = trap_R_RegisterModel("models/chunks/metal/metal1_2.md3");
+		dbModels_Glass[2] = trap_R_RegisterModel("models/chunks/metal/metal1_3.md3");
+		dbModels_Glass[3] = trap_R_RegisterModel("models/chunks/metal/metal1_4.md3");
+		dbModels_Glass[4] = trap_R_RegisterModel("models/chunks/metal/metal2_1.md3");
+		dbModels_Glass[5] = trap_R_RegisterModel("models/chunks/metal/metal2_2.md3");
+		dbModels_Glass[6] = trap_R_RegisterModel("models/chunks/metal/metal2_3.md3");
+		dbModels_Glass[7] = trap_R_RegisterModel("models/chunks/metal/metal2_4.md3");
+	}
+	if (omodel == DEBRIS_SPECIALCASE_WOOD && !dbModels_Wood[0])
+	{
+		dbModels_Wood[0] = trap_R_RegisterModel("models/chunks/crate/crate1_1.md3");
+		dbModels_Wood[1] = trap_R_RegisterModel("models/chunks/crate/crate1_2.md3");
+		dbModels_Wood[2] = trap_R_RegisterModel("models/chunks/crate/crate1_3.md3");
+		dbModels_Wood[3] = trap_R_RegisterModel("models/chunks/crate/crate1_4.md3");
+		dbModels_Wood[4] = trap_R_RegisterModel("models/chunks/crate/crate2_1.md3");
+		dbModels_Wood[5] = trap_R_RegisterModel("models/chunks/crate/crate2_2.md3");
+		dbModels_Wood[6] = trap_R_RegisterModel("models/chunks/crate/crate2_3.md3");
+		dbModels_Wood[7] = trap_R_RegisterModel("models/chunks/crate/crate2_4.md3");
+	}
+	if (omodel == DEBRIS_SPECIALCASE_CHUNKS && !dbModels_Chunks[0])
+	{
+		dbModels_Chunks[0] = trap_R_RegisterModel("models/chunks/generic/chunks_1.md3");
+		dbModels_Chunks[1] = trap_R_RegisterModel("models/chunks/generic/chunks_2.md3");
+	}
+	if (omodel == DEBRIS_SPECIALCASE_ROCK && !dbModels_Rocks[0])
+	{
+		dbModels_Rocks[0] = trap_R_RegisterModel("models/chunks/rock/rock1_1.md3");
+		dbModels_Rocks[1] = trap_R_RegisterModel("models/chunks/rock/rock1_2.md3");
+		dbModels_Rocks[2] = trap_R_RegisterModel("models/chunks/rock/rock1_3.md3");
+		dbModels_Rocks[3] = trap_R_RegisterModel("models/chunks/rock/rock1_4.md3");
+		/*
+		dbModels_Rocks[4] = trap_R_RegisterModel("models/chunks/rock/rock2_1.md3");
+		dbModels_Rocks[5] = trap_R_RegisterModel("models/chunks/rock/rock2_2.md3");
+		dbModels_Rocks[6] = trap_R_RegisterModel("models/chunks/rock/rock2_3.md3");
+		dbModels_Rocks[7] = trap_R_RegisterModel("models/chunks/rock/rock2_4.md3");
+		dbModels_Rocks[8] = trap_R_RegisterModel("models/chunks/rock/rock3_1.md3");
+		dbModels_Rocks[9] = trap_R_RegisterModel("models/chunks/rock/rock3_2.md3");
+		dbModels_Rocks[10] = trap_R_RegisterModel("models/chunks/rock/rock3_3.md3");
+		dbModels_Rocks[11] = trap_R_RegisterModel("models/chunks/rock/rock3_4.md3");
+		*/
+	}
 
 	VectorSubtract(maxs, mins, a);
 
@@ -747,35 +801,19 @@ void CG_CreateDebris(int entnum, vec3_t org, vec3_t mins, vec3_t maxs, int debri
 
 		if (omodel == DEBRIS_SPECIALCASE_GLASS)
 		{
-			Com_sprintf(chunkname, sizeof(chunkname), "models/chunks/glass/glchunks_%i.md3", Q_irand(1, 6));
-			debrismodel = trap_R_RegisterModel(chunkname);
+			debrismodel = dbModels_Glass[Q_irand(0, NUM_DEBRIS_MODELS_GLASS-1)];
 		}
 		else if (omodel == DEBRIS_SPECIALCASE_WOOD)
 		{
-			Com_sprintf(chunkname, sizeof(chunkname), "models/chunks/generic/wood_%i.md3", Q_irand(1, 3));
-			debrismodel = trap_R_RegisterModel(chunkname);
+			debrismodel = dbModels_Wood[Q_irand(0, NUM_DEBRIS_MODELS_WOOD-1)];
 		}
 		else if (omodel == DEBRIS_SPECIALCASE_CHUNKS)
 		{
-			Com_sprintf(chunkname, sizeof(chunkname), "models/chunks/generic/chunks_%i.md3", Q_irand(1, 6));
-			debrismodel = trap_R_RegisterModel(chunkname);
+			debrismodel = dbModels_Chunks[Q_irand(0, NUM_DEBRIS_MODELS_CHUNKS-1)];
 		}
 		else if (omodel == DEBRIS_SPECIALCASE_ROCK)
 		{
-			rfact = Q_irand(1, 3);
-			if (rfact == 1)
-			{
-				Com_sprintf(chunkname, sizeof(chunkname), "models/chunks/rock/rock_small.md3");
-			}
-			else if (rfact == 2)
-			{
-				Com_sprintf(chunkname, sizeof(chunkname), "models/chunks/rock/rock_med.md3");
-			}
-			else
-			{
-				Com_sprintf(chunkname, sizeof(chunkname), "models/chunks/rock/rock_big.md3");
-			}
-			debrismodel = trap_R_RegisterModel(chunkname);
+			debrismodel = dbModels_Rocks[Q_irand(0, NUM_DEBRIS_MODELS_ROCKS-1)];
 		}
 
 		VectorCopy(org, shardorg);
@@ -1158,168 +1196,3 @@ void CG_LaunchGib( vec3_t origin, vec3_t velocity, qhandle_t hModel ) {
 	le->leBounceSoundType = LEBS_BLOOD;
 	le->leMarkType = LEMT_BLOOD;
 }
-
-/*
-===================
-CG_GibPlayer
-
-Generated a bunch of gibs launching out from the bodies location
-===================
-*/
-#define	GIB_VELOCITY	250
-#define	GIB_JUMP		250
-void CG_GibPlayer( vec3_t playerOrigin ) {
-	vec3_t	origin, velocity;
-
-	if ( !cg_blood.integer ) {
-		return;
-	}
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*GIB_VELOCITY;
-	velocity[1] = crandom()*GIB_VELOCITY;
-	velocity[2] = GIB_JUMP + crandom()*GIB_VELOCITY;
-	if ( rand() & 1 ) {
-//		CG_LaunchGib( origin, velocity, cgs.media.gibSkull );
-	} else {
-//		CG_LaunchGib( origin, velocity, cgs.media.gibBrain );
-	}
-
-	// allow gibs to be turned off for speed
-	if ( !cg_gibs.integer ) {
-		return;
-	}
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*GIB_VELOCITY;
-	velocity[1] = crandom()*GIB_VELOCITY;
-	velocity[2] = GIB_JUMP + crandom()*GIB_VELOCITY;
-//	CG_LaunchGib( origin, velocity, cgs.media.gibAbdomen );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*GIB_VELOCITY;
-	velocity[1] = crandom()*GIB_VELOCITY;
-	velocity[2] = GIB_JUMP + crandom()*GIB_VELOCITY;
-//	CG_LaunchGib( origin, velocity, cgs.media.gibArm );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*GIB_VELOCITY;
-	velocity[1] = crandom()*GIB_VELOCITY;
-	velocity[2] = GIB_JUMP + crandom()*GIB_VELOCITY;
-//	CG_LaunchGib( origin, velocity, cgs.media.gibChest );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*GIB_VELOCITY;
-	velocity[1] = crandom()*GIB_VELOCITY;
-	velocity[2] = GIB_JUMP + crandom()*GIB_VELOCITY;
-//	CG_LaunchGib( origin, velocity, cgs.media.gibFist );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*GIB_VELOCITY;
-	velocity[1] = crandom()*GIB_VELOCITY;
-	velocity[2] = GIB_JUMP + crandom()*GIB_VELOCITY;
-//	CG_LaunchGib( origin, velocity, cgs.media.gibFoot );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*GIB_VELOCITY;
-	velocity[1] = crandom()*GIB_VELOCITY;
-	velocity[2] = GIB_JUMP + crandom()*GIB_VELOCITY;
-//	CG_LaunchGib( origin, velocity, cgs.media.gibForearm );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*GIB_VELOCITY;
-	velocity[1] = crandom()*GIB_VELOCITY;
-	velocity[2] = GIB_JUMP + crandom()*GIB_VELOCITY;
-//	CG_LaunchGib( origin, velocity, cgs.media.gibIntestine );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*GIB_VELOCITY;
-	velocity[1] = crandom()*GIB_VELOCITY;
-	velocity[2] = GIB_JUMP + crandom()*GIB_VELOCITY;
-//	CG_LaunchGib( origin, velocity, cgs.media.gibLeg );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*GIB_VELOCITY;
-	velocity[1] = crandom()*GIB_VELOCITY;
-	velocity[2] = GIB_JUMP + crandom()*GIB_VELOCITY;
-//	CG_LaunchGib( origin, velocity, cgs.media.gibLeg );
-}
-
-/*
-==================
-CG_LaunchGib
-==================
-*/
-void CG_LaunchExplode( vec3_t origin, vec3_t velocity, qhandle_t hModel ) {
-	localEntity_t	*le;
-	refEntity_t		*re;
-
-	le = CG_AllocLocalEntity();
-	re = &le->refEntity;
-
-	le->leType = LE_FRAGMENT;
-	le->startTime = cg.time;
-	le->endTime = le->startTime + 10000 + random() * 6000;
-
-	VectorCopy( origin, re->origin );
-	AxisCopy( axisDefault, re->axis );
-	re->hModel = hModel;
-
-	le->pos.trType = TR_GRAVITY;
-	VectorCopy( origin, le->pos.trBase );
-	VectorCopy( velocity, le->pos.trDelta );
-	le->pos.trTime = cg.time;
-
-	le->bounceFactor = 0.1f;
-
-	le->leBounceSoundType = LEBS_BRASS;
-	le->leMarkType = LEMT_NONE;
-}
-
-#define	EXP_VELOCITY	100
-#define	EXP_JUMP		150
-/*
-===================
-CG_GibPlayer
-
-Generated a bunch of gibs launching out from the bodies location
-===================
-*/
-void CG_BigExplode( vec3_t playerOrigin ) {
-	vec3_t	origin, velocity;
-
-	if ( !cg_blood.integer ) {
-		return;
-	}
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*EXP_VELOCITY;
-	velocity[1] = crandom()*EXP_VELOCITY;
-	velocity[2] = EXP_JUMP + crandom()*EXP_VELOCITY;
-//	CG_LaunchExplode( origin, velocity, cgs.media.smoke2 );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*EXP_VELOCITY;
-	velocity[1] = crandom()*EXP_VELOCITY;
-	velocity[2] = EXP_JUMP + crandom()*EXP_VELOCITY;
-//	CG_LaunchExplode( origin, velocity, cgs.media.smoke2 );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*EXP_VELOCITY*1.5;
-	velocity[1] = crandom()*EXP_VELOCITY*1.5;
-	velocity[2] = EXP_JUMP + crandom()*EXP_VELOCITY;
-//	CG_LaunchExplode( origin, velocity, cgs.media.smoke2 );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*EXP_VELOCITY*2.0;
-	velocity[1] = crandom()*EXP_VELOCITY*2.0;
-	velocity[2] = EXP_JUMP + crandom()*EXP_VELOCITY;
-//	CG_LaunchExplode( origin, velocity, cgs.media.smoke2 );
-
-	VectorCopy( playerOrigin, origin );
-	velocity[0] = crandom()*EXP_VELOCITY*2.5;
-	velocity[1] = crandom()*EXP_VELOCITY*2.5;
-	velocity[2] = EXP_JUMP + crandom()*EXP_VELOCITY;
-//	CG_LaunchExplode( origin, velocity, cgs.media.smoke2 );
-}
-

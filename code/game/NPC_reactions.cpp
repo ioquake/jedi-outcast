@@ -15,12 +15,6 @@
 extern qboolean G_CheckForStrongAttackMomentum( gentity_t *self );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
 extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
-float g_crosshairEntDist = Q3_INFINITE;
-int g_crosshairSameEntTime = 0;
-int g_crosshairEntNum = ENTITYNUM_NONE;
-int g_crosshairEntTime = 0;
-extern int	teamLastEnemyTime[];
-extern	cvar_t	*g_spskill;
 extern int PM_AnimLength( int index, animNumber_t anim );
 extern void cgi_S_StartSound( vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfx );
 extern qboolean Q3_TaskIDPending( gentity_t *ent, taskID_t taskType );
@@ -39,7 +33,15 @@ extern qboolean PM_FlippingAnim( int anim );
 extern qboolean PM_RollingAnim( int anim );
 extern qboolean PM_InCartwheel( int anim );
 
+extern	cvar_t	*g_spskill;
+extern int	teamLastEnemyTime[];
 extern qboolean	stop_icarus;
+extern int killPlayerTimer;
+
+float g_crosshairEntDist = Q3_INFINITE;
+int g_crosshairSameEntTime = 0;
+int g_crosshairEntNum = ENTITYNUM_NONE;
+int g_crosshairEntTime = 0;
 /*
 -------------------------
 NPC_CheckAttacker
@@ -54,6 +56,9 @@ static void NPC_CheckAttacker( gentity_t *other, int mod )
 	
 	//valid ent - FIXME: a VALIDENT macro would be nice here
 	if ( !other )
+		return;
+
+	if ( other == NPC )
 		return;
 
 	if ( !other->inuse )
@@ -365,7 +370,10 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t p
 	//	}
 	}
 
-	if ( self->client->playerTeam && other->client && otherTeam == self->client->playerTeam && (!player->client->ps.viewEntity || other->s.number != player->client->ps.viewEntity)) 
+	if ( self->client->playerTeam 
+		&& other->client 
+		&& otherTeam == self->client->playerTeam 
+		&& (!player->client->ps.viewEntity || other->s.number != player->client->ps.viewEntity)) 
 	{//hit by a teammate
 		if ( other != self->enemy && self != other->enemy )
 		{//we weren't already enemies
@@ -402,7 +410,11 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t p
 			}
 			else if ( self->NPC && !other->s.number )//should be assumed, but...
 			{//dammit, stop that!
-				if ( self->NPC->ffireCount < 3+((2-g_spskill->integer)*2) )
+				if ( self->NPC->charmedTime )
+				{//mindtricked
+					return;
+				}
+				else if ( self->NPC->ffireCount < 3+((2-g_spskill->integer)*2) )
 				{//not mad enough yet
 					//Com_Printf( "chck: %d < %d\n", self->NPC->ffireCount, 3+((2-g_spskill->integer)*2) );
 					if ( damage != -1 )
@@ -436,6 +448,10 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t p
 					self->NPC->scriptFlags |= (SCF_CHASE_ENEMIES|SCF_NO_MIND_TRICK);
 					//NOTE: we also stop ICARUS altogether
 					stop_icarus = qtrue;
+					if ( !killPlayerTimer )
+					{
+						killPlayerTimer = level.time + 10000;
+					}
 				}
 			}
 		}
@@ -454,14 +470,14 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t p
 			NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc, voiceEvent );
 		}
 		//Check to take a new enemy
-		if ( NPC->enemy != other )
+		if ( NPC->enemy != other && NPC != other )
 		{//not already mad at them
 			NPC_CheckAttacker( other, mod );
 		}
 	}
 
 	//Attempt to run any pain instructions
-	if(self->client && self->NPC)
+	if ( self->client && self->NPC )
 	{
 		//FIXME: This needs better heuristics perhaps
 		if(self->health <= (self->max_health/3) && G_ActivateBehavior(self, BSET_FLEE) )

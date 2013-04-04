@@ -2531,7 +2531,7 @@ qboolean FS_idPak( char *pak, char *base ) {
 	int i;
 
 	for (i = 0; i < NUM_ID_PAKS; i++) {
-		if ( !FS_FilenameCompare(pak, va("%s/pak%d", base, i)) ) {
+		if ( !FS_FilenameCompare(pak, va("%s/assets%d", base, i)) ) {
 			break;
 		}
 	}
@@ -3266,7 +3266,11 @@ void FS_Restart( int checksumFeed ) {
 	if ( Q_stricmp(fs_gamedirvar->string, lastValidGame) ) {
 		// skip the jk2mpconfig.cfg if "safe" is on the command line
 		if ( !Com_SafeMode() ) {
+#ifdef DEDICATED
+			Cbuf_AddText ("exec jk2mpserver.cfg\n");
+#else
 			Cbuf_AddText ("exec jk2mpconfig.cfg\n");
+#endif
 		}
 	}
 

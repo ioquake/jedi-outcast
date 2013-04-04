@@ -379,6 +379,8 @@ extern int MenuFontToHandle(int iMenuFont);
 //
 static void CG_Text_Paint_Limit(float *maxX, float x, float y, float scale, vec4_t color, const char* text, float adjust, int limit, int iMenuFont) 
 {
+	qboolean bIsTrailingPunctuation;
+
 	// this is kinda dirty, but...
 	//
 	int iFontIndex = MenuFontToHandle(iMenuFont);
@@ -400,9 +402,12 @@ static void CG_Text_Paint_Limit(float *maxX, float x, float y, float scale, vec4
 			   && psOut < &sTemp[sizeof(sTemp)-1]	// sanity
 				)
 		{
-			psOutLastGood = psOut;
-			
-			uiLetter = trap_AnyLanguage_ReadCharFromString(&psText);
+			int iAdvanceCount;
+			psOutLastGood = psOut;			
+
+			uiLetter = trap_AnyLanguage_ReadCharFromString(psText, &iAdvanceCount, &bIsTrailingPunctuation);
+			psText += iAdvanceCount;
+
 			if (uiLetter > 255)
 			{
 				*psOut++ = uiLetter>>8;
@@ -967,7 +972,7 @@ void CG_KeyEvent(int key, qboolean down) {
 	if (cgs.capturedItem) {
 		cgs.capturedItem = NULL;
 	}	else {
-		if (key == K_MOUSE2 && down) {
+		if (key == A_MOUSE2 && down) {
 			cgs.capturedItem = Display_CaptureItem(cgs.cursorX, cgs.cursorY);
 		}
 	}

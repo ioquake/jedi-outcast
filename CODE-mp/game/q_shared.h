@@ -292,6 +292,7 @@ typedef int		sfxHandle_t;
 typedef int		fileHandle_t;
 typedef int		clipHandle_t;
 
+#define G2_COLLISION_ENABLED
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -364,6 +365,7 @@ typedef enum {
 
 typedef enum {
 	BLOCKED_NONE,
+	BLOCKED_BOUNCE_MOVE,
 	BLOCKED_PARRY_BROKEN,
 	BLOCKED_ATK_BOUNCE,
 	BLOCKED_UPPER_RIGHT,
@@ -669,7 +671,9 @@ extern	vec4_t		colorLtBlue;
 extern	vec4_t		colorDkBlue;
 
 #define Q_COLOR_ESCAPE	'^'
-#define Q_IsColorString(p)	( p && *(p) == Q_COLOR_ESCAPE && *((p)+1) && *((p)+1) != Q_COLOR_ESCAPE )
+// you MUST have the last bit on here about colour strings being less than 7 or taiwanese strings register as colour!!!!
+#define Q_IsColorString(p)	( p && *(p) == Q_COLOR_ESCAPE && *((p)+1) && *((p)+1) != Q_COLOR_ESCAPE && *((p)+1) <= '7' )
+
 
 #define COLOR_BLACK		'0'
 #define COLOR_RED		'1'
@@ -939,6 +943,10 @@ char	*COM_ParseExt( const char **data_p, qboolean allowLineBreak );
 int		COM_Compress( char *data_p );
 void	COM_ParseError( char *format, ... );
 void	COM_ParseWarning( char *format, ... );
+qboolean COM_ParseString( const char **data, const char **s );
+qboolean COM_ParseInt( const char **data, int *i );
+qboolean COM_ParseFloat( const char **data, float *f );
+qboolean COM_ParseVec4( const char **buffer, vec4_t *c);
 //int		COM_ParseInfos( char *buf, int max, char infos[][MAX_INFO_STRING] );
 
 #define MAX_TOKENLENGTH		1024
@@ -1178,6 +1186,11 @@ typedef struct
 }CollisionRecord_t;
 
 #define MAX_G2_COLLISIONS 16
+
+#ifdef G2_COLLISION_ENABLED
+typedef CollisionRecord_t G2Trace_t[MAX_G2_COLLISIONS];	// map that describes all of the parts of ghoul2 models that got hit
+#endif
+
 /*
 Ghoul2 Insert End
 */
@@ -1526,6 +1539,9 @@ typedef struct playerState_s {
 	float		emplacedTime;
 
 	qboolean	isJediMaster;
+	qboolean	forceRestricted;
+	qboolean	trueJedi;
+	qboolean	trueNonJedi;
 	int			saberIndex;
 
 	int			genericEnemyIndex;
@@ -1619,8 +1635,7 @@ typedef struct playerState_s {
 // so they aren't game/cgame only definitions
 //
 #define	BUTTON_ATTACK			1
-//#define	BUTTON_TALK			2			// displays talk balloon and disables actions
-//#define BUTTON_FORCEJUMP		2			//rww - might be better to just reassign this from button1 on the client..
+#define	BUTTON_TALK				2			// displays talk balloon and disables actions
 #define	BUTTON_USE_HOLDABLE		4
 #define	BUTTON_GESTURE			8
 #define	BUTTON_WALKING			16			// walking can't just be infered from MOVE_RUN

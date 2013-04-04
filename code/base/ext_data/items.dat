@@ -149,7 +149,7 @@ max		 10  10 12
 itemname	ITM_THERMAL_DET_PICKUP
 
 classname	weapon_thermal
-worldmodel	models/weapons2/thermal/thermal_w.glm
+worldmodel	models/weapons2/thermal/thermal_pu.md3
 icon		gfx/hud/w_icon_thermal
 // Amount of ammo given with weapon
 count		50
@@ -163,7 +163,7 @@ max		 10  10 12
 itemname	ITM_TRIP_MINE_PICKUP
 
 classname	weapon_trip_mine
-worldmodel	models/weapons2/laser_trap/laser_trap_w.glm
+worldmodel	models/weapons2/laser_trap/laser_trap_pu.md3
 icon		gfx/hud/w_icon_tripmine
 // Amount of ammo given with weapon
 count		50
@@ -177,7 +177,7 @@ max		 10  10 12
 itemname	ITM_DET_PACK_PICKUP
 
 classname	weapon_det_pack
-worldmodel	models/weapons2/detpack/det_pack_w.glm
+worldmodel	models/weapons2/detpack/det_pack_pu.md3
 icon		gfx/hud/w_icon_detpack
 // Amount of ammo given with weapon
 count		50

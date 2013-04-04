@@ -47,5 +47,5 @@ void S_DisplayFreeMemory(void);
 
 void S_ClearSoundBuffer( void );
 
-void SNDDMA_Activate( void );
+void SNDDMA_Activate( qboolean bAppActive );
 

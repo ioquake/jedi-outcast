@@ -76,9 +76,8 @@
 #define TEAM_OVERLAY_MAXNAME_WIDTH	12
 #define TEAM_OVERLAY_MAXLOCATION_WIDTH	16
 
-#define	DEFAULT_MODEL			"kyle/default"
-#define	DEFAULT_TEAM_MODEL		"kyle/default"
-#define	DEFAULT_TEAM_HEAD		"kyle/default"
+#define	DEFAULT_MODEL			"kyle"
+#define	DEFAULT_TEAM_MODEL		"kyle"
 
 #define DEFAULT_FORCEPOWERS		"5-1-000000000000000000"
 //"rank-side-heal.lev.speed.push.pull.tele.grip.lightning.rage.protect.absorb.teamheal.teamforce.drain.see"
@@ -236,7 +235,7 @@ typedef struct centity_s {
 	int				trickAlphaTime;
 
 	int				teamPowerEffectTime;
-	qboolean		teamPowerType; //0 regen, 1 heal, 2 drain
+	qboolean		teamPowerType; //0 regen, 1 heal, 2 drain, 3 absorb
 } centity_t;
 
 
@@ -957,9 +956,9 @@ typedef struct {
 	qhandle_t	teamRedShader;
 	qhandle_t	teamBlueShader;
 
+	qhandle_t	balloonShader;
 	qhandle_t	connectionShader;
 
-	qhandle_t	selectShader;
 	qhandle_t	viewBloodShader;
 	qhandle_t	tracerShader;
 	qhandle_t	crosshairShader[NUM_CROSSHAIRS];
@@ -968,9 +967,6 @@ typedef struct {
 	qhandle_t	noammoShader;
 
 	qhandle_t	smokePuffShader;
-	qhandle_t	smokePuffRageProShader;
-	qhandle_t	shotgunSmokePuffShader;
-	qhandle_t	plasmaBallShader;
 	qhandle_t	waterBubbleShader;
 	qhandle_t	bloodTrailShader;
 
@@ -1414,7 +1410,6 @@ extern	vmCvar_t		cg_bobpitch;
 extern	vmCvar_t		cg_bobroll;
 //extern	vmCvar_t		cg_swingSpeed;
 extern	vmCvar_t		cg_shadows;
-extern	vmCvar_t		cg_gibs;
 extern	vmCvar_t		cg_drawTimer;
 extern	vmCvar_t		cg_drawFPS;
 extern	vmCvar_t		cg_drawSnapshot;
@@ -1461,8 +1456,14 @@ extern	vmCvar_t		cg_zoomFov;
 
 extern	vmCvar_t		cg_swingAngles;
 
+#ifdef G2_COLLISION_ENABLED
+extern	vmCvar_t		cg_saberModelTraceEffect;
+#endif
+
 extern	vmCvar_t		cg_saberContact;
 extern	vmCvar_t		cg_saberTrail;
+
+extern	vmCvar_t		cg_duelHeadAngles;
 
 extern	vmCvar_t		cg_speedTrail;
 extern	vmCvar_t		cg_auraShell;
@@ -1789,9 +1790,6 @@ void CG_GlassShatter(int entnum, vec3_t dmgPt, vec3_t dmgDir, float dmgRadius, i
 void CG_CreateDebris(int entnum, vec3_t org, vec3_t mins, vec3_t maxs, int debrissound, int debrismodel);
 void CG_ScorePlum( int client, vec3_t org, int score );
 
-void CG_GibPlayer( vec3_t playerOrigin );
-void CG_BigExplode( vec3_t playerOrigin );
-
 void CG_Bleed( vec3_t origin, int entityNum );
 
 localEntity_t *CG_MakeExplosion( vec3_t origin, vec3_t dir, 
@@ -1964,7 +1962,9 @@ int			trap_R_Font_StrLenPixels(const char *text, const int iFontIndex, const flo
 int			trap_R_Font_StrLenChars(const char *text);
 int			trap_R_Font_HeightPixels(const int iFontIndex, const float scale);
 void		trap_R_Font_DrawString(int ox, int oy, const char *text, const float *rgba, const int setIndex, int iCharLimit, const float scale);
-unsigned	trap_AnyLanguage_ReadCharFromString( const char **ppText );
+qboolean	trap_Language_IsAsian(void);
+qboolean	trap_Language_UsesSpaces(void);
+unsigned	trap_AnyLanguage_ReadCharFromString( const char *psText, int *piAdvanceCount, qboolean *pbIsTrailingPunctuation/* = NULL*/ );
 
 
 // a scene is built up by calls to R_ClearScene and the various R_Add functions.
@@ -2171,6 +2171,8 @@ void FX_BlasterWeaponHitWall( vec3_t origin, vec3_t normal );
 void FX_BlasterWeaponHitPlayer( vec3_t origin, vec3_t normal, qboolean humanoid );
 
 
+void		trap_G2API_CollisionDetect		( CollisionRecord_t *collRecMap, void* ghoul2, const vec3_t angles, const vec3_t position,int frameNumber, int entNum, const vec3_t rayStart, const vec3_t rayEnd, const vec3_t scale, int traceFlags, int useLod, float fRadius );
+
 
 /*
 Ghoul2 Insert Start
@@ -2183,6 +2185,8 @@ qboolean	trap_G2_HaveWeGhoul2Models(void *ghoul2);
 qboolean	trap_G2API_GetBoltMatrix(void *ghoul2, const int modelIndex, const int boltIndex, mdxaBone_t *matrix,
 								const vec3_t angles, const vec3_t position, const int frameNum, qhandle_t *modelList, vec3_t scale);
 qboolean	trap_G2API_GetBoltMatrix_NoReconstruct(void *ghoul2, const int modelIndex, const int boltIndex, mdxaBone_t *matrix,
+								const vec3_t angles, const vec3_t position, const int frameNum, qhandle_t *modelList, vec3_t scale);
+qboolean	trap_G2API_GetBoltMatrix_NoRecNoRot(void *ghoul2, const int modelIndex, const int boltIndex, mdxaBone_t *matrix,
 								const vec3_t angles, const vec3_t position, const int frameNum, qhandle_t *modelList, vec3_t scale);
 int			trap_G2API_InitGhoul2Model(void **ghoul2Ptr, const char *fileName, int modelIndex, qhandle_t customSkin,
 						  qhandle_t customShader, int modelFlags, int lodBias);

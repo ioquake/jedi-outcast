@@ -500,7 +500,7 @@ void cStringsSingle::SetText(const char *newText)
 // fix problems caused by fucking morons entering clever "rich" chars in to new text files *after* the auto-stripper
 //	removed them all in the first place...
 //
-// ONLY DO THIS FOR ENGLISH, OR IT BREAKS ASIAN STRINGS!!!!!!!!!!!!!!!!!!!!!
+// ONLY DO THIS FOR EUROPEAN LANGUAGES, OR IT BREAKS ASIAN STRINGS!!!!!!!!!!!!!!!!!!!!!
 //
 static void FixIllegalChars(char *psText)
 {
@@ -596,7 +596,8 @@ bool cStringsSingle::UnderstandToken(int token, char *data )
 				{	// default to english in case there is no foreign
 					if (LanguagePair->Name == TK_TEXT_LANGUAGE1 ||
 						LanguagePair->Name == TK_TEXT_LANGUAGE2 ||
-						LanguagePair->Name == TK_TEXT_LANGUAGE3
+						LanguagePair->Name == TK_TEXT_LANGUAGE3 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE8
 						)
 					{
 						FixIllegalChars(data);
@@ -608,7 +609,8 @@ bool cStringsSingle::UnderstandToken(int token, char *data )
 				{
 					if (LanguagePair->Name == TK_TEXT_LANGUAGE1 ||
 						LanguagePair->Name == TK_TEXT_LANGUAGE2 ||
-						LanguagePair->Name == TK_TEXT_LANGUAGE3
+						LanguagePair->Name == TK_TEXT_LANGUAGE3 ||
+						LanguagePair->Name == TK_TEXT_LANGUAGE8
 						)
 					{
 						FixIllegalChars(data);
@@ -1092,6 +1094,8 @@ void SP_Init(void)
 
 	SP_UpdateLanguage();
 	sp_language->modified = false;
+
+	SP_Register("con_text", SP_REGISTER_REQUIRED);	//reference is CON_TEXT
 }
 
 // called in Com_Frame, so don't take up any time! (can also be called during dedicated)

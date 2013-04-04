@@ -151,6 +151,7 @@ public:
 	int					*TransformedVertsArray;
 	int					traceFlags;
 	bool				hitOne;
+	float				m_fRadius;
 
 
 	CTraceSurface(
@@ -166,7 +167,8 @@ public:
 	skin_t				*initskin,
 	shader_t			*initcust_shader,
 	int					*initTransformedVertsArray,
-	int				inittraceFlags):
+	int					inittraceFlags,
+	float				fRadius):
 
 	surfaceNum(initsurfaceNum),
 	rootSList(initrootSList),   
@@ -178,7 +180,8 @@ public:
 	skin(initskin),
 	cust_shader(initcust_shader),
 	traceFlags(inittraceFlags),
-	TransformedVertsArray(initTransformedVertsArray)
+	TransformedVertsArray(initTransformedVertsArray),
+	m_fRadius(fRadius)
 	{
 		VectorCopy(initrayStart, rayStart);
 		VectorCopy(initrayEnd, rayEnd);
@@ -307,6 +310,99 @@ int G2_DecideTraceLod(CGhoul2Info &ghoul2, int useLod, model_t *mod)
 	return returnLod;
 }
 
+#ifdef G2_COLLISION_ENABLED
+void R_TransformEachSurface( mdxmSurface_t	*surface, vec3_t scale, CMiniHeap *G2VertSpace, int *TransformedVertsArray, mdxaBone_v &bonePtr) {
+	int				j, k, pos;
+	int				numVerts;
+	mdxmVertex_t 	*v;
+	float			*TransformedVerts;
+
+	//
+	// deform the vertexes by the lerped bones
+	//
+   
+	// alloc some space for the transformed verts to get put in
+	v = (mdxmVertex_t *) ((byte *)surface + surface->ofsVerts);
+	numVerts = surface->numVerts;
+	mdxmVertexTexCoord_t *pTexCoords = (mdxmVertexTexCoord_t *) &v[numVerts];
+
+	TransformedVerts = (float *)G2VertSpace->MiniHeapAlloc(numVerts * 5 * 4);
+	TransformedVertsArray[surface->thisSurfaceIndex] = (int)TransformedVerts;
+	if (!TransformedVerts)
+	{
+		Com_Error(ERR_DROP, "Ran out of transform space gameside for Ghoul2 Models.\n");
+	}
+
+	// whip through and actually transform each vertex
+	int *piBoneRefs = (int*) ((byte*)surface + surface->ofsBoneReferences);		
+
+	// optimisation issue
+	if ((scale[0] != 1.0) || (scale[1] != 1.0) || (scale[2] != 1.0))
+	{
+		for ( j = pos = 0; j < numVerts; j++ ) 
+		{
+			vec3_t			tempVert;
+
+			VectorClear( tempVert );
+
+			const int iNumWeights = G2_GetVertWeights( v );
+			float fTotalWeight = 0.0f;
+			for ( k = 0 ; k < iNumWeights ; k++ ) 
+			{
+				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k, fTotalWeight, iNumWeights );
+
+				const mdxaBone_t &bone=bonePtr[piBoneRefs[iBoneIndex]].second;
+
+				tempVert[0] += fBoneWeight * ( DotProduct( bone.matrix[0], v->vertCoords ) + bone.matrix[0][3] );
+				tempVert[1] += fBoneWeight * ( DotProduct( bone.matrix[1], v->vertCoords ) + bone.matrix[1][3] );
+				tempVert[2] += fBoneWeight * ( DotProduct( bone.matrix[2], v->vertCoords ) + bone.matrix[2][3] );
+			}
+			// copy tranformed verts into temp space
+			TransformedVerts[pos++] = tempVert[0] * scale[0];
+			TransformedVerts[pos++] = tempVert[1] * scale[1];
+			TransformedVerts[pos++] = tempVert[2] * scale[2];
+			// we will need the S & T coors too for hitlocation and hitmaterial stuff
+			TransformedVerts[pos++] = pTexCoords[j].texCoords[0];
+			TransformedVerts[pos++] = pTexCoords[j].texCoords[1];
+
+			v++;// = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
+		}
+	}
+	else
+	{
+	  	for ( j = pos = 0; j < numVerts; j++ ) 
+		{
+			vec3_t			tempVert;
+
+			VectorClear( tempVert );
+
+			const int iNumWeights = G2_GetVertWeights( v );
+			float fTotalWeight = 0.0f;
+			for ( k = 0 ; k < iNumWeights ; k++ ) 
+			{
+				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k, fTotalWeight, iNumWeights );
+
+				const mdxaBone_t &bone=bonePtr[piBoneRefs[iBoneIndex]].second;
+
+				tempVert[0] += fBoneWeight * ( DotProduct( bone.matrix[0], v->vertCoords ) + bone.matrix[0][3] );
+				tempVert[1] += fBoneWeight * ( DotProduct( bone.matrix[1], v->vertCoords ) + bone.matrix[1][3] );
+				tempVert[2] += fBoneWeight * ( DotProduct( bone.matrix[2], v->vertCoords ) + bone.matrix[2][3] );
+			}
+			// copy tranformed verts into temp space
+			TransformedVerts[pos++] = tempVert[0];
+			TransformedVerts[pos++] = tempVert[1];
+			TransformedVerts[pos++] = tempVert[2];
+			// we will need the S & T coors too for hitlocation and hitmaterial stuff
+			TransformedVerts[pos++] = pTexCoords[j].texCoords[0];
+			TransformedVerts[pos++] = pTexCoords[j].texCoords[1];
+
+			v++;// = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
+		}
+	}
+}
+#else
 void R_TransformEachSurface( mdxmSurface_t	*surface, vec3_t scale, CMiniHeap *G2VertSpace, int *TransformedVertsArray, mdxaBone_v &bonePtr) {
 	int				 j, k;
 	int				numVerts;
@@ -415,6 +511,7 @@ void R_TransformEachSurface( mdxmSurface_t	*surface, vec3_t scale, CMiniHeap *G2
 		}
 	}
 }
+#endif
 
 void G2_TransformSurfaces(int surfaceNum, surfaceInfo_v &rootSList, 
 					mdxaBone_v &bonePtr, model_t *currentModel, int lod, vec3_t scale, CMiniHeap *G2VertSpace, int *TransformedVertArray, bool secondTimeAround)
@@ -845,6 +942,222 @@ void G2_GorePolys( const mdxmSurface_t *surface, const vec3_t rayStart, const ve
 }
 #endif // _SOF2
 
+//Sorry for the sloppiness here, this stuff is just hacked together to work from SP
+#ifdef G2_COLLISION_ENABLED
+
+#ifndef _SOF2
+struct SVertexTemp
+{
+	int flags;
+	int touch;
+	int newindex;
+	float tex[2];
+	SVertexTemp()
+	{
+		touch=0;
+	}
+};
+#define MAX_GORE_VERTS (3000)
+static SVertexTemp GoreVerts[MAX_GORE_VERTS];
+#endif
+
+void TransformAndTranslatePoint_SP (const vec3_t in, vec3_t out, mdxaBone_t *mat)
+{
+
+	for (int i=0;i<3;i++)
+	{
+		out[i]= in[0]*mat->matrix[i][0] + in[1]*mat->matrix[i][1] + in[2]*mat->matrix[i][2] + mat->matrix[i][3];
+	}
+}
+
+// now we're at poly level, check each model space transformed poly against the model world transfomed ray
+static bool G2_RadiusTracePolys( const mdxmSurface_t *surface, const vec3_t rayStart, const vec3_t rayEnd, CollisionRecord_t *collRecMap, int entNum, int modelIndex, const skin_t *skin, const shader_t *cust_shader, const mdxmSurfHierarchy_t *surfInfo, int *TransformedVertsArray, int traceFlags, float fRadius)
+{
+	int		j;
+	vec3_t basis1;
+	vec3_t basis2;
+	vec3_t taxis;
+	vec3_t saxis;
+
+	basis2[0]=0.0f;
+	basis2[1]=0.0f;
+	basis2[2]=1.0f;
+
+	vec3_t v3RayDir;
+	VectorSubtract(rayEnd, rayStart, v3RayDir);
+
+	CrossProduct(v3RayDir,basis2,basis1);
+
+	if (DotProduct(basis1,basis1)<.1f)
+	{
+		basis2[0]=0.0f;
+		basis2[1]=1.0f;
+		basis2[2]=0.0f;
+		CrossProduct(v3RayDir,basis2,basis1);
+	}
+
+	CrossProduct(v3RayDir,basis1,basis2);
+	// Give me a shot direction not a bunch of zeros :) -Gil
+//	assert(DotProduct(basis1,basis1)>.0001f);
+//	assert(DotProduct(basis2,basis2)>.0001f);
+
+	VectorNormalize(basis1);
+	VectorNormalize(basis2);
+
+	const float c=cos(0);//theta
+	const float s=sin(0);//theta
+
+	VectorScale(basis1, 0.5f * c / fRadius,taxis);
+	VectorMA(taxis,     0.5f * s / fRadius,basis2,taxis);
+
+	VectorScale(basis1,-0.5f * s /fRadius,saxis);
+	VectorMA(    saxis, 0.5f * c /fRadius,basis2,saxis);
+
+	const float * const verts = (float *)TransformedVertsArray[surface->thisSurfaceIndex];
+	const int numVerts = surface->numVerts;
+	
+	int flags=63;
+	//rayDir/=lengthSquared(raydir);
+	const float f = VectorLengthSquared(v3RayDir); 
+	v3RayDir[0]/=f;
+	v3RayDir[1]/=f;
+	v3RayDir[2]/=f;
+
+	for ( j = 0; j < numVerts; j++ ) 
+	{
+		const int pos=j*5;
+		vec3_t delta;
+		delta[0]=verts[pos+0]-rayStart[0];
+		delta[1]=verts[pos+1]-rayStart[1];
+		delta[2]=verts[pos+2]-rayStart[2];
+		const float s=DotProduct(delta,saxis)+0.5f;
+		const float t=DotProduct(delta,taxis)+0.5f;
+		const float u=DotProduct(delta,v3RayDir);
+		int vflags=0;
+
+		if (s>0)
+		{
+			vflags|=1;
+		}
+		if (s<1)
+		{
+			vflags|=2;
+		}
+		if (t>0)
+		{
+			vflags|=4;
+		}
+		if (t<1)
+		{
+			vflags|=8;
+		}
+		if (u>0)
+		{
+			vflags|=16;
+		}
+		if (u<1)
+		{
+			vflags|=32;
+		}
+
+		vflags=(~vflags);
+		flags&=vflags;
+		GoreVerts[j].flags=vflags;
+	}
+
+	if (flags)
+	{
+		return false; // completely off the gore splotch  (so presumably hit nothing? -Ste)
+	}
+	const int numTris = surface->numTriangles;
+	const mdxmTriangle_t * const tris = (mdxmTriangle_t *) ((byte *)surface + surface->ofsTriangles);
+
+	for ( j = 0; j < numTris; j++ ) 
+	{
+		assert(tris[j].indexes[0]>=0&&tris[j].indexes[0]<numVerts);
+		assert(tris[j].indexes[1]>=0&&tris[j].indexes[1]<numVerts);
+		assert(tris[j].indexes[2]>=0&&tris[j].indexes[2]<numVerts);
+		flags=63&
+			GoreVerts[tris[j].indexes[0]].flags&
+			GoreVerts[tris[j].indexes[1]].flags&
+			GoreVerts[tris[j].indexes[2]].flags;
+		if (flags)
+		{
+			continue;
+		}
+		else
+		{
+			// we hit a triangle, so init a collision record...
+			//
+			for (int i=0; i<MAX_G2_COLLISIONS;i++)
+			{
+				if (collRecMap[i].mEntityNum == -1)
+				{
+					CollisionRecord_t  	&newCol = collRecMap[i];
+					
+					newCol.mPolyIndex = j;
+					newCol.mEntityNum = entNum;
+					newCol.mSurfaceIndex = surface->thisSurfaceIndex;
+					newCol.mModelIndex = modelIndex;
+//					if (face>0)
+//					{
+						newCol.mFlags = G2_FRONTFACE;
+//					}
+//					else
+//					{
+//						newCol.mFlags = G2_BACKFACE;
+//					}
+
+					//get normal from triangle				
+					const float *A = &verts[(tris[j].indexes[0] * 5)];
+					const float *B = &verts[(tris[j].indexes[1] * 5)];
+					const float *C = &verts[(tris[j].indexes[2] * 5)];
+					vec3_t normal;
+					vec3_t edgeAC, edgeBA;
+
+					VectorSubtract(C, A, edgeAC);
+					VectorSubtract(B, A, edgeBA);
+					CrossProduct(edgeBA, edgeAC, normal);
+
+					// transform normal (but don't translate) into world angles
+					TransformPoint(normal, newCol.mCollisionNormal, &worldMatrix);
+					VectorNormalize(newCol.mCollisionNormal);
+
+					newCol.mMaterial = newCol.mLocation = 0;
+					// exit now if we should
+					if (traceFlags & G2_RETURNONHIT)
+					{
+						//hitOne = true;
+						return true;
+					}
+
+					//i don't know the hitPoint, but let's just assume it's the first vert for now...
+					const float *hitPoint = A;
+					vec3_t			  distVect;
+
+					VectorSubtract(hitPoint, rayStart, distVect);
+					newCol.mDistance = VectorLength(distVect);
+
+					// put the hit point back into world space
+					TransformAndTranslatePoint_SP(hitPoint, newCol.mCollisionPosition, &worldMatrix);
+					newCol.mBarycentricI = newCol.mBarycentricJ = 0.0f;
+
+					break;
+				}
+			}
+			if (i==MAX_G2_COLLISIONS)
+			{
+				//assert(i!=MAX_G2_COLLISIONS);		// run out of collision record space - happens OFTEN
+				//hitOne = true;	//force stop recursion
+				return true;	// return true to avoid wasting further time, but no hit will result without a record
+			}
+		}
+	}
+
+	return false;
+}
+#endif
+
 // now we're at poly level, check each model space transformed poly against the model world transfomed ray
 bool G2_TracePolys( const mdxmSurface_t *surface, const vec3_t rayStart, const vec3_t rayEnd, CollisionRecord_t *collRecMap, int entNum, int modelIndex, const skin_t *skin, const shader_t *cust_shader, const mdxmSurfHierarchy_t *surfInfo, int *TransformedVertsArray, int traceFlags)
 {
@@ -1002,13 +1315,30 @@ void G2_TraceSurfaces(CTraceSurface &TS)
 	// if this surface is not off, add it to the shader render list
 	if (!offFlags)
 	{
-		// go away and trace the polys in this surface
-		if (G2_TracePolys(surface, TS.rayStart, TS.rayEnd, TS.collRecMap, TS.entNum, TS.modelIndex, TS.skin, TS.cust_shader, surfInfo, TS.TransformedVertsArray, TS.traceFlags) && (TS.traceFlags & G2_RETURNONHIT))
+#ifdef G2_COLLISION_ENABLED
+		if (!(fabs(TS.m_fRadius) < 0.1))	// if not a point-trace
 		{
-			// ok, we hit one, *and* we want to return instantly because the returnOnHit is set
-			// so indicate we've hit one, so other surfaces don't get hit and return
-			TS.hitOne = true;
-			return;
+			// .. then use radius check
+			//
+			if (G2_RadiusTracePolys(surface, TS.rayStart, TS.rayEnd, TS.collRecMap, TS.entNum, TS.modelIndex, TS.skin, TS.cust_shader, surfInfo, TS.TransformedVertsArray, TS.traceFlags, TS.m_fRadius) && (TS.traceFlags & G2_RETURNONHIT))
+			{
+				// ok, we hit one, *and* we want to return instantly because the returnOnHit is set
+				// so indicate we've hit one, so other surfaces don't get hit and return
+				TS.hitOne = true;
+				return;
+			}
+		}
+		else
+#endif
+		{
+			// go away and trace the polys in this surface
+			if (G2_TracePolys(surface, TS.rayStart, TS.rayEnd, TS.collRecMap, TS.entNum, TS.modelIndex, TS.skin, TS.cust_shader, surfInfo, TS.TransformedVertsArray, TS.traceFlags) && (TS.traceFlags & G2_RETURNONHIT))
+			{
+				// ok, we hit one, *and* we want to return instantly because the returnOnHit is set
+				// so indicate we've hit one, so other surfaces don't get hit and return
+				TS.hitOne = true;
+				return;
+			}
 		}
 	}
 
@@ -1027,7 +1357,7 @@ void G2_TraceSurfaces(CTraceSurface &TS)
 
 }
 
-void G2_TraceModels(CGhoul2Info_v &ghoul2, vec3_t rayStart, vec3_t rayEnd, CollisionRecord_t *collRecMap, int entNum, int traceFlags, int useLod)
+void G2_TraceModels(CGhoul2Info_v &ghoul2, vec3_t rayStart, vec3_t rayEnd, CollisionRecord_t *collRecMap, int entNum, int traceFlags, int useLod, float fRadius)
 {
 	int				i, lod;
 	model_t			*currentModel;
@@ -1075,10 +1405,24 @@ void G2_TraceModels(CGhoul2Info_v &ghoul2, vec3_t rayStart, vec3_t rayEnd, Colli
 		{
 			skin = NULL;
 		}
-
+#ifdef G2_COLLISION_ENABLED
+		if (collRecMap)
+		{
+			lod = G2_DecideTraceLod(ghoul2[i],useLod, currentModel);
+		}
+		else
+		{
+			lod=useLod;
+			if (lod>=currentModel->numLods)
+			{
+				return;
+			}
+		}
+#else
 		lod = G2_DecideTraceLod(ghoul2[i],useLod, currentModel);
+#endif
 
-		CTraceSurface TS(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist,  currentModel, lod, rayStart, rayEnd, collRecMap, entNum, i, skin, cust_shader, ghoul2[i].mTransformedVertsArray, traceFlags);
+		CTraceSurface TS(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist,  currentModel, lod, rayStart, rayEnd, collRecMap, entNum, i, skin, cust_shader, ghoul2[i].mTransformedVertsArray, traceFlags, fRadius);
 		// start the surface recursion loop
 		G2_TraceSurfaces(TS);
 

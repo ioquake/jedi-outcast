@@ -105,6 +105,7 @@ typedef enum {
 	G2_MODELPART_WAIST,
 	G2_MODELPART_LARM,
 	G2_MODELPART_RARM,
+	G2_MODELPART_RHAND,
 	G2_MODELPART_LLEG,
 	G2_MODELPART_RLEG
 } g2ModelParts_t;
@@ -273,6 +274,7 @@ typedef struct {
 	int			(*pointcontents)( const vec3_t point, int passEntityNum );
 
 	playerState_t	*bgClients[MAX_CLIENTS];
+	int			checkDuelLoss;
 } pmove_t;
 
 extern	pmove_t		*pm;
@@ -338,25 +340,36 @@ typedef enum {
 #define	EF_DEAD				0x00000001		// don't draw a foe marker over players with EF_DEAD
 #define	EF_BOUNCE_SHRAPNEL	0x00000002		// special shrapnel flag
 #define	EF_TELEPORT_BIT		0x00000004		// toggled every time the origin abruptly changes
+
+//doesn't do anything
 #define	EF_AWARD_EXCELLENT	0x00000008		// draw an excellent sprite
 
 #define EF_PLAYER_EVENT		0x00000010
 #define	EF_BOUNCE			0x00000010		// for missiles
 
 #define	EF_BOUNCE_HALF		0x00000020		// for missiles
+
+//doesn't do anything
 #define	EF_AWARD_GAUNTLET	0x00000040		// draw a gauntlet sprite
+
 #define	EF_NODRAW			0x00000080		// may have an event, but no model (unspawned items)
 #define	EF_FIRING			0x00000100		// for lightning gun
 #define EF_ALT_FIRING		0x00000200		// for alt-fires, mostly for lightning guns though
 #define	EF_MOVER_STOP		0x00000400		// will push otherwise
+
+//doesn't do anything
 #define EF_AWARD_CAP		0x00000800		// draw the capture sprite
+
 #define	EF_TALK				0x00001000		// draw a talk balloon
 #define	EF_CONNECTION		0x00002000		// draw a connection trouble sprite
 #define	EF_VOTED			0x00004000		// already cast a vote
+
+//next 4 don't actually do anything
 #define	EF_AWARD_IMPRESSIVE	0x00008000		// draw an impressive sprite
 #define	EF_AWARD_DEFEND		0x00010000		// draw a defend sprite
 #define	EF_AWARD_ASSIST		0x00020000		// draw a assist sprite
 #define EF_AWARD_DENIED		0x00040000		// denied
+
 #define EF_TEAMVOTED		0x00080000		// already cast a team vote
 #define EF_SEEKERDRONE		0x00100000		// show seeker drone floating around head
 #define EF_MISSILE_STICK	0x00200000		// missiles that stick to the wall.
@@ -1000,6 +1013,9 @@ qboolean BG_SaberInIdle( int move );
 qboolean BG_FlippingAnim( int anim );
 qboolean BG_SpinningSaberAnim( int anim );
 qboolean BG_SaberInSpecialAttack( int anim );
+int BG_BrokenParryForAttack( int move );
+int BG_BrokenParryForParry( int move );
+int BG_KnockawayForParry( int move );
 qboolean BG_InRoll( playerState_t *ps, int anim );
 qboolean BG_InDeathAnim( int anim );
 

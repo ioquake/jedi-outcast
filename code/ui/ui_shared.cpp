@@ -1881,6 +1881,12 @@ qboolean Script_SetFocus(itemDef_t *item, const char **args)
 			{
 				DC->startLocalSound( DC->Assets.itemFocusSound, CHAN_LOCAL_SOUND );
 			}
+#ifdef _IMMERSION
+			if (DC->Assets.itemFocusForce)
+			{
+				DC->startForce( DC->Assets.itemFocusForce );
+			}
+#endif // _IMMERSION
 		}
 	}
 
@@ -2110,6 +2116,22 @@ qboolean Script_playLooped(itemDef_t *item, const char **args)
 	return qtrue;
 }
 
+#ifdef _IMMERSION
+/*
+=================
+Script_FFPlay
+=================
+*/
+qboolean Script_FFPlay(itemDef_t *item, const char **args) 
+{
+	const char *val;
+	if (String_Parse(args, &val)) 
+	{
+		DC->startForce(DC->registerForce(val));
+	}
+	return qtrue;
+}
+#endif // _IMMERSION
 /*
 =================
 Script_Orbit
@@ -2147,6 +2169,9 @@ commandDef_t commandList[] =
   {"orbit",			&Script_Orbit},					// group/name
   {"play",			&Script_Play},					// group/name
   {"playlooped",	&Script_playLooped},			// group/name
+#ifdef _IMMERSION
+  {"ffplay",		&Script_FFPlay},
+#endif // _IMMERSION
   {"setasset",		&Script_SetAsset},				// works on this
   {"setbackground", &Script_SetBackground},			// works on this
   {"setcolor",		&Script_SetColor},				// works on this
@@ -2286,9 +2311,28 @@ qboolean ItemParse_focusSound( itemDef_t *item)
 
 
 
+#ifdef _IMMERSION
+/*
+===============
+ItemParse_focusForce
+	name <string>
+===============
+*/
+qboolean ItemParse_focusForce( itemDef_t *item) 
+{
+	const char *temp;
+
+	if (!PC_ParseStringMem((const char **)&temp)) 
+	{
 //#ifdef _DEBUG
 //extern void UI_Debug_EnterReference(LPCSTR ps4LetterType, LPCSTR psItemString);
 //#endif
+		return qfalse;
+	}
+	item->focusForce = DC->registerForce(temp);
+	return qtrue;
+}
+#endif // _IMMERSION
 
 /*
 ===============
@@ -3740,6 +3784,9 @@ keywordHash_t itemParseKeywords[] = {
 	{"feeder",			ItemParse_feeder,			},
 	{"flag",			ItemParse_flag,				},
 	{"focusSound",		ItemParse_focusSound,		},
+#ifdef _IMMERSION
+	{"focusForce",		ItemParse_focusForce,		},
+#endif // _IMMERSION
 	{"font",			ItemParse_font,				},
 	{"forecolor",		ItemParse_forecolor,		},
 	{"group",			ItemParse_group,			},
@@ -4078,14 +4125,14 @@ typedef struct {
 
 static bind_t g_bindings[] = 
 {
-	{"invuse",			K_ENTER,			-1,		-1,		-1},
-	{"force_throw",		K_F1,				-1,		-1,		-1},
-	{"force_pull",		K_F2,				-1,		-1,		-1},
-	{"force_speed",		K_F3,				-1,		-1,		-1},
-	{"force_distract",	K_F4,				-1,		-1,		-1},
-	{"force_heal",		K_F5,				-1,		-1,		-1},
-	{"+force_grip",		K_F6,				-1,		-1,		-1},
-	{"+force_lightning",K_F7,				-1,		-1,		-1},
+	{"invuse",			A_ENTER,			-1,		-1,		-1},
+	{"force_throw",		A_F1,				-1,		-1,		-1},
+	{"force_pull",		A_F2,				-1,		-1,		-1},
+	{"force_speed",		A_F3,				-1,		-1,		-1},
+	{"force_distract",	A_F4,				-1,		-1,		-1},
+	{"force_heal",		A_F5,				-1,		-1,		-1},
+	{"+force_grip",		A_F6,				-1,		-1,		-1},
+	{"+force_lightning",A_F7,				-1,		-1,		-1},
 	{"+useforce",		'f',				-1,		-1,		-1},
 	{"forceprev",		'z',				-1,		-1,		-1},
 	{"forcenext",		'x',				-1,		-1,		-1},
@@ -4097,20 +4144,20 @@ static bind_t g_bindings[] =
 	{"invnext",			-1,					-1,		-1,		-1},
 	{"invprev",			-1,					-1,		-1,		-1},
 	{"invuse",			-1,					-1,		-1,		-1},
-	{"+speed", 			K_SHIFT,			-1,		-1,		-1},
-	{"+forward", 		K_UPARROW,			-1,		-1,		-1},
-	{"+back", 			K_DOWNARROW,		-1,		-1,		-1},
+	{"+speed", 			A_SHIFT,			-1,		-1,		-1},
+	{"+forward", 		A_CURSOR_UP,		-1,		-1,		-1},
+	{"+back", 			A_CURSOR_DOWN,		-1,		-1,		-1},
 	{"+moveleft", 		',',				-1,		-1,		-1},
 	{"+moveright",		'.',				-1,		-1,		-1},
 	{"+moveup",			'v',				-1,		-1,		-1},
 	{"+movedown",		'c',				-1,		-1,		-1},
-	{"+left", 			K_LEFTARROW,		-1,		-1,		-1},
-	{"+right", 			K_RIGHTARROW,		-1,		-1,		-1},
-	{"+strafe", 		K_ALT,				-1,		-1,		-1},
-	{"+lookup", 		K_PGDN,				-1,		-1,		-1},
-	{"+lookdown",		K_DEL,				-1,		-1,		-1},
+	{"+left", 			A_CURSOR_LEFT,		-1,		-1,		-1},
+	{"+right", 			A_CURSOR_RIGHT,		-1,		-1,		-1},
+	{"+strafe", 		A_ALT,				-1,		-1,		-1},
+	{"+lookup", 		A_PAGE_DOWN,		-1,		-1,		-1},
+	{"+lookdown",		A_DELETE,			-1,		-1,		-1},
 	{"+mlook", 			 '/',				-1,		-1,		-1},
-	{"centerview",		K_END,				-1,		-1,		-1},
+	{"centerview",		A_END,				-1,		-1,		-1},
 	{"zoom", 			-1,					-1,		-1,		-1},
 	{"weapon 0",		-1,					-1,		-1,		-1},
 	{"weapon 1",		'1',				-1,		-1,		-1},
@@ -4126,20 +4173,20 @@ static bind_t g_bindings[] =
 	{"weapon 11",		-1,					-1,		-1,		-1},
 	{"weapon 12",		-1,					-1,		-1,		-1},
 	{"weapon 13",		-1,					-1,		-1,		-1},
-	{"+attack", 		K_CTRL,				-1,		-1,		-1},
+	{"+attack", 		A_CTRL,				-1,		-1,		-1},
 	{"+altattack", 		-1,					-1,		-1,		-1},
 	{"weapprev",		'[',				-1,		-1,		-1},
 	{"weapnext", 		']',				-1,		-1,		-1},
 	{"+block", 			-1,					-1,		-1,		-1},
-	{"+use",			K_SPACE,			-1,		-1,		-1},
-	{"datapad",			K_TAB,				-1,		-1,		-1},
-	{"save quik*",		K_F9,				-1,		-1,		-1},
+	{"+use",			A_SPACE,			-1,		-1,		-1},
+	{"datapad",			A_TAB,				-1,		-1,		-1},
+	{"save quik*",		A_F9,				-1,		-1,		-1},
 	{"load quik",		-1,					-1,		-1,		-1},
 	{"load auto",		-1,					-1,		-1,		-1},
 	{"cg_thirdperson !",'p',				-1,		-1,		-1},
 	{"exitview",		-1,					-1,		-1,		-1},
-	{"uimenu ingameloadmenu",	K_F10,		-1,		-1,		-1},
-	{"uimenu ingamesavemenu",	K_F11,		-1,		-1,		-1},
+	{"uimenu ingameloadmenu",	A_F10,		-1,		-1,		-1},
+	{"uimenu ingamesavemenu",	A_F11,		-1,		-1,		-1},
 	{"saberAttackCycle",-1,					-1,		-1,		-1},
 };
 
@@ -4160,7 +4207,7 @@ static void Controls_GetKeyAssignment (char *command, int *twokeys)
 	twokeys[0] = twokeys[1] = -1;
 	count = 0;
 
-	for ( j = 0; j < 256; j++ )
+	for ( j = 0; j < MAX_KEYS; j++ )
 	{
 		DC->getBindingBuf( j, b, 256 );
 		if ( *b == 0 ) 
@@ -5237,13 +5284,13 @@ void BindingFromName(const char *cvar)
 			{
 				break;
 			}
-			DC->keynumToStringBuf( b1, g_nameBind1, 32 );
+			DC->keynumToStringBuf( b1, g_nameBind1, sizeof(g_nameBind1) );
 			Q_strupr(g_nameBind1);
 
 			b2 = g_bindings[i].bind2;
 			if (b2 != -1)
 			{
-				DC->keynumToStringBuf( b2, g_nameBind2, 32 );
+				DC->keynumToStringBuf( b2, g_nameBind2, sizeof(g_nameBind2) );
 				Q_strupr(g_nameBind2);
 
 				strcat( g_nameBind1, va(" %s ",ui.SP_GetStringTextString("MENUS3_KEYBIND_OR")) );
@@ -5572,6 +5619,7 @@ void Item_Multi_Paint(itemDef_t *item)
 	{
 		text = SP_GetStringText(-(int)text);
 	}
+	assert (text);
 
 
 	if (item->text) 
@@ -6658,6 +6706,10 @@ qboolean Item_SetFocus(itemDef_t *item, float x, float y)
 	itemDef_t *oldFocus;
 	sfxHandle_t *sfx = &DC->Assets.itemFocusSound;
 	qboolean playSound = qfalse;
+#ifdef _IMMERSION
+	ffHandle_t *ff = &DC->Assets.itemFocusForce;
+	qboolean playForce = qfalse;
+#endif // _IMMERSION
 	menuDef_t *parent = (menuDef_t*)item->parent;
 	// sanity check, non-null, not a decoration and does not already have the focus
 	if (item == NULL || item->window.flags & WINDOW_DECORATION || item->window.flags & WINDOW_HASFOCUS || !(item->window.flags & WINDOW_VISIBLE)) 
@@ -6691,6 +6743,13 @@ qboolean Item_SetFocus(itemDef_t *item, float x, float y)
 				sfx = &item->focusSound;
 			}
 			playSound = qtrue;
+#ifdef _IMMERSION
+			if (item->focusForce)
+			{
+				ff = &item->focusForce;
+			}
+			playForce = qtrue;
+#endif // _IMMERSION
 		} 
 		else 
 		{
@@ -6716,6 +6775,13 @@ qboolean Item_SetFocus(itemDef_t *item, float x, float y)
 			sfx = &item->focusSound;
 		}
 		playSound = qtrue;
+#ifdef _IMMERSION
+		if (item->focusForce)
+		{
+			ff = &item->focusForce;
+		}
+		playForce = qtrue;
+#endif // _IMMERSION
 	}
 
 	if (playSound && sfx) 
@@ -6723,6 +6789,12 @@ qboolean Item_SetFocus(itemDef_t *item, float x, float y)
 		DC->startLocalSound( *sfx, CHAN_LOCAL_SOUND );
 	}
 
+#ifdef _IMMERSION
+	if (playForce && ff)
+	{
+		DC->startForce( *ff );
+	}
+#endif // _IMMERSION
 	for (i = 0; i < parent->itemCount; i++) 
 	{
 		if (parent->items[i] == item) 
@@ -7023,7 +7095,7 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down)
 	int			i;
 	menuDef_t *menu;
 
-	if (key == K_MOUSE1 && Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && !g_waitingForKey)
+	if (key == A_MOUSE1 && Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && !g_waitingForKey)
 	{
 		if (down) 
 		{
@@ -7044,7 +7116,7 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down)
 		}
 		return qtrue;
 	}
-	else if (key == K_ENTER && !g_waitingForKey)
+	else if (key == A_ENTER && !g_waitingForKey)
 	{
 		if (down) 
 		{
@@ -7079,12 +7151,12 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down)
 
 		switch (key)
 		{
-			case K_ESCAPE:
+			case A_ESCAPE:
 				g_waitingForKey = qfalse;
 				Item_Bind_Ungrey(item);
 				return qtrue;
 	
-			case K_BACKSPACE:
+			case A_BACKSPACE:
 				id = BindingIDFromName(item->cvar);
 				if (id != -1) 
 				{
@@ -7333,7 +7405,7 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key)
 		else 
 		{
 
-			if ( key == K_DEL || key == K_KP_DEL ) 
+			if ( key == A_DELETE || key == A_KP_PERIOD ) 
 			{
 				if ( item->cursorPos < len ) 
 				{
@@ -7343,7 +7415,7 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key)
 				return qtrue;
 			}
 
-			if ( key == K_RIGHTARROW || key == K_KP_RIGHTARROW ) 
+			if ( key == A_CURSOR_RIGHT || key == A_KP_6 ) 
 			{
 				if (editPtr->maxPaintChars && item->cursorPos >= editPtr->maxPaintChars && item->cursorPos < len) 
 				{
@@ -7359,7 +7431,7 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key)
 				return qtrue;
 			}
 
-			if ( key == K_LEFTARROW || key == K_KP_LEFTARROW ) 
+			if ( key == A_CURSOR_LEFT|| key == A_KP_4 ) 
 			{
 				if ( item->cursorPos > 0 ) 
 				{
@@ -7372,14 +7444,14 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key)
 				return qtrue;
 			}
 
-			if ( key == K_HOME || key == K_KP_HOME) 
+			if ( key == A_HOME || key == A_KP_7) 
 			{
 				item->cursorPos = 0;
 				editPtr->paintOffset = 0;
 				return qtrue;
 			}
 
-			if ( key == K_END || key == K_KP_END)  
+			if ( key == A_END || key == A_KP_1)  
 			{
 				item->cursorPos = len;
 				if(item->cursorPos > editPtr->maxPaintChars) 
@@ -7389,14 +7461,14 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key)
 				return qtrue;
 			}
 
-			if ( key == K_INS || key == K_KP_INS ) 
+			if ( key == A_INSERT || key == A_KP_0 ) 
 			{
 				DC->setOverstrikeMode(!DC->getOverstrikeMode());
 				return qtrue;
 			}
 		}
 
-		if (key == K_TAB || key == K_DOWNARROW || key == K_KP_DOWNARROW) 
+		if (key == A_TAB || key == A_CURSOR_DOWN || key == A_KP_2) 
 		{
 			newItem = Menu_SetNextCursorItem((menuDef_t *) item->parent);
 			if (newItem && (newItem->type == ITEM_TYPE_EDITFIELD || newItem->type == ITEM_TYPE_NUMERICFIELD)) 
@@ -7405,7 +7477,7 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key)
 			}
 		}
 
-		if (key == K_UPARROW || key == K_KP_UPARROW) 
+		if (key == A_CURSOR_UP || key == A_KP_8) 
 		{
 			newItem = Menu_SetPrevCursorItem((menuDef_t *) item->parent);
 			if (newItem && (newItem->type == ITEM_TYPE_EDITFIELD || newItem->type == ITEM_TYPE_NUMERICFIELD)) 
@@ -7414,7 +7486,7 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key)
 			}
 		}
 
-		if ( key == K_ENTER || key == K_KP_ENTER || key == K_ESCAPE)  
+		if ( key == A_ENTER || key == A_KP_ENTER || key == A_ESCAPE)  
 		{
 			return qfalse;
 		}
@@ -7614,7 +7686,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 		if (item->window.flags & WINDOW_HORIZONTAL) 
 		{
 			viewmax = (item->window.rect.w / listPtr->elementWidth);
-			if ( key == K_LEFTARROW || key == K_KP_LEFTARROW ) 
+			if ( key == A_CURSOR_LEFT || key == A_KP_4 ) 
 			{
 				if (!listPtr->notselectable) 
 				{
@@ -7644,7 +7716,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 				}
 				return qtrue;
 			}
-			if ( key == K_RIGHTARROW || key == K_KP_RIGHTARROW ) 
+			if ( key == A_CURSOR_RIGHT || key == A_KP_6 ) 
 			{
 				if (!listPtr->notselectable) 
 				{
@@ -7678,7 +7750,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 		else 
 		{
 			viewmax = (item->window.rect.h / listPtr->elementHeight);
-			if ( key == K_UPARROW || key == K_KP_UPARROW ) 
+			if ( key == A_CURSOR_UP || key == A_KP_8 ) 
 			{
 				if (!listPtr->notselectable) 
 				{
@@ -7708,7 +7780,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 				}
 				return qtrue;
 			}
-			if ( key == K_DOWNARROW || key == K_KP_DOWNARROW ) 
+			if ( key == A_CURSOR_DOWN || key == A_KP_2 ) 
 			{
 				if (!listPtr->notselectable) 
 				{
@@ -7740,7 +7812,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 			}
 		}
 		// mouse hit
-		if (key == K_MOUSE1 || key == K_MOUSE2) 
+		if (key == A_MOUSE1 || key == A_MOUSE2) 
 		{
 			if (item->window.flags & WINDOW_LB_LEFTARROW) 
 			{
@@ -7797,19 +7869,19 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 			}
 			return qtrue;
 		}
-		if ( key == K_HOME || key == K_KP_HOME) 
+		if ( key == A_HOME || key == A_KP_7) 
 		{
 			// home
 			listPtr->startPos = 0;
 			return qtrue;
 		}
-		if ( key == K_END || key == K_KP_END) 
+		if ( key == A_END || key == A_KP_1) 
 		{
 			// end
 			listPtr->startPos = max;
 			return qtrue;
 		}
-		if (key == K_PGUP || key == K_KP_PGUP ) 
+		if (key == A_PAGE_UP || key == A_KP_9 ) 
 		{
 			// page up
 			if (!listPtr->notselectable) 
@@ -7840,7 +7912,7 @@ qboolean Item_ListBox_HandleKey(itemDef_t *item, int key, qboolean down, qboolea
 			}
 			return qtrue;
 		}
-		if ( key == K_PGDN || key == K_KP_PGDN ) 
+		if ( key == A_PAGE_DOWN || key == A_KP_3 ) 
 		{
 			// page down
 			if (!listPtr->notselectable) 
@@ -8111,7 +8183,7 @@ qboolean Item_YesNo_HandleKey(itemDef_t *item, int key)
 {
 	if (Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && item->window.flags & WINDOW_HASFOCUS && item->cvar) 
 	{
-		if (key == K_MOUSE1 || key == K_ENTER || key == K_MOUSE2 || key == K_MOUSE3) 
+		if (key == A_MOUSE1 || key == A_ENTER || key == A_MOUSE2 || key == A_MOUSE3) 
 		{
 			DC->setCVar(item->cvar, va("%i", !DC->getCVarValue(item->cvar)));
 			return qtrue;
@@ -8208,7 +8280,7 @@ qboolean Item_Multi_HandleKey(itemDef_t *item, int key)
 //		if (Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && item->window.flags & WINDOW_HASFOCUS && item->cvar) 
 		if (Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && item->window.flags & WINDOW_HASFOCUS) 
 		{
-			if (key == K_MOUSE1 || key == K_ENTER || key == K_MOUSE2 || key == K_MOUSE3) 
+			if (key == A_MOUSE1 || key == A_ENTER || key == A_MOUSE2 || key == A_MOUSE3) 
 			{
 				if (item->cvar)
 				{
@@ -8265,7 +8337,7 @@ qboolean Item_Slider_HandleKey(itemDef_t *item, int key, qboolean down)
 	//DC->Print("slider handle key\n");
 	if (item->window.flags & WINDOW_HASFOCUS && item->cvar && Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory)) 
 	{
-		if (key == K_MOUSE1 || key == K_ENTER || key == K_MOUSE2 || key == K_MOUSE3) 
+		if (key == A_MOUSE1 || key == A_ENTER || key == A_MOUSE2 || key == A_MOUSE3) 
 		{
 			editFieldDef_t *editDef = (editFieldDef_s *) item->typeData;
 			if (editDef) 
@@ -8323,7 +8395,7 @@ qboolean Item_HandleKey(itemDef_t *item, int key, qboolean down)
 	} 
 	else 
 	{
-		if (down && key == K_MOUSE1 || key == K_MOUSE2 || key == K_MOUSE3) 
+		if (down && key == A_MOUSE1 || key == A_MOUSE2 || key == A_MOUSE3) 
 		{
 			Item_StartCapture(item, key);
 		}
@@ -8425,13 +8497,13 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down)
 			inHandler = qfalse;
 			return;
 		} 
-		else if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_MOUSE3) 
+		else if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_MOUSE3) 
 		{
 			g_editingField = qfalse;
 			g_editItem = NULL;
 			Display_MouseMove(NULL, DC->cursorx, DC->cursory);
 		} 
-		else if (key == K_TAB || key == K_UPARROW || key == K_DOWNARROW) 
+		else if (key == A_TAB || key == A_CURSOR_UP || key == A_CURSOR_DOWN) 
 		{
 			return;
 		}
@@ -8447,7 +8519,7 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down)
 	if (down && !(menu->window.flags & WINDOW_POPUP) && !Rect_ContainsPoint(&menu->window.rect, DC->cursorx, DC->cursory)) 
 	{
 		static qboolean inHandleKey = qfalse;
-		if (!inHandleKey && key == K_MOUSE1 || key == K_MOUSE2 || key == K_MOUSE3) 
+		if (!inHandleKey && key == A_MOUSE1 || key == A_MOUSE2 || key == A_MOUSE3) 
 		{
 			inHandleKey = qtrue;
 			Menus_HandleOOBClick(menu, key, down);
@@ -8494,32 +8566,32 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down)
 			 (Q_stricmp(menu->window.name,"datapadForcePowersMenu") == 0) ||
 			 (Q_stricmp(menu->window.name,"datapadInventoryMenu") == 0))
 			{
-				key = K_ESCAPE;	//pop on outta here
+				key = A_ESCAPE;	//pop on outta here
 			}
 		}
 	}
 	// default handling
 	switch ( key ) 
 	{
-		case K_F11:
+		case A_F11:
 			if (DC->getCVarValue("developer")) 
 			{
 				uis.debugMode ^= 1;
 			}
 			break;
 
-		case K_F12:
+		case A_F12:
 			if (DC->getCVarValue("developer")) 
 			{
 				DC->executeText(EXEC_APPEND, "screenshot\n");
 			}
 			break;
-		case K_KP_UPARROW:
-		case K_UPARROW:
+		case A_KP_8:
+		case A_CURSOR_UP:
 			Menu_SetPrevCursorItem(menu);
 			break;
 
-		case K_ESCAPE:
+		case A_ESCAPE:
 			if (!g_waitingForKey && menu->onESC) 
 			{
 				itemDef_t it;
@@ -8527,14 +8599,14 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down)
 				Item_RunScript(&it, menu->onESC);
 			}
 			break;
-		case K_TAB:
-		case K_KP_DOWNARROW:
-		case K_DOWNARROW:
+		case A_TAB:
+		case A_KP_2:
+		case A_CURSOR_DOWN:
 			Menu_SetNextCursorItem(menu);
 			break;
 
-		case K_MOUSE1:
-		case K_MOUSE2:
+		case A_MOUSE1:
+		case A_MOUSE2:
 			if (item) 
 			{
 				if (item->type == ITEM_TYPE_TEXT) 
@@ -8564,29 +8636,31 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down)
 			}
 			break;
 
-		case K_JOY1:
-		case K_JOY2:
-		case K_JOY3:
-		case K_JOY4:
-		case K_AUX1:
-		case K_AUX2:
-		case K_AUX3:
-		case K_AUX4:
-		case K_AUX5:
-		case K_AUX6:
-		case K_AUX7:
-		case K_AUX8:
-		case K_AUX9:
-		case K_AUX10:
-		case K_AUX11:
-		case K_AUX12:
-		case K_AUX13:
-		case K_AUX14:
-		case K_AUX15:
-		case K_AUX16:
+		case A_JOY0:
+		case A_JOY1:
+		case A_JOY2:
+		case A_JOY3:
+		case A_JOY4:
+		case A_AUX0:
+		case A_AUX1:
+		case A_AUX2:
+		case A_AUX3:
+		case A_AUX4:
+		case A_AUX5:
+		case A_AUX6:
+		case A_AUX7:
+		case A_AUX8:
+		case A_AUX9:
+		case A_AUX10:
+		case A_AUX11:
+		case A_AUX12:
+		case A_AUX13:
+		case A_AUX14:
+		case A_AUX15:
+		case A_AUX16:
 			break;
-		case K_KP_ENTER:
-		case K_ENTER:
+		case A_KP_ENTER:
+		case A_ENTER:
 			if (item) 
 			{
 				if (item->type == ITEM_TYPE_EDITFIELD || item->type == ITEM_TYPE_NUMERICFIELD) 

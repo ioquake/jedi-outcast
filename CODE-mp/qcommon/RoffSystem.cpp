@@ -801,7 +801,6 @@ qboolean CROFFSystem::ApplyROFF( SROFFEntity *roff_ent, CROFFSystem::CROFF *roff
 	sharedEntity_t	*ent = NULL;
 	trajectory_t	*originTrajectory, *angleTrajectory;
 	vec_t			*origin, *angle;
-	vec3_t			originTemp, angleTemp;
 
 
 	if ( svs.time < roff_ent->mNextROFFTime )
@@ -812,6 +811,7 @@ qboolean CROFFSystem::ApplyROFF( SROFFEntity *roff_ent, CROFFSystem::CROFF *roff
 	if (roff_ent->mIsClient)
 	{
 #ifndef DEDICATED
+		vec3_t		originTemp, angleTemp;
 		originTrajectory = (trajectory_t *)VM_Call( cgvm, CG_GET_ORIGIN_TRAJECTORY, roff_ent->mEntID );
 		angleTrajectory = (trajectory_t *)VM_Call( cgvm, CG_GET_ANGLE_TRAJECTORY, roff_ent->mEntID );
 		VM_Call( cgvm, CG_GET_ORIGIN, roff_ent->mEntID, originTemp );
@@ -949,11 +949,11 @@ qboolean CROFFSystem::ClearLerp( SROFFEntity *roff_ent )
 	sharedEntity_t	*ent;
 	trajectory_t	*originTrajectory, *angleTrajectory;
 	vec_t			*origin, *angle;
-	vec3_t			originTemp, angleTemp;
 
 	if (roff_ent->mIsClient)
 	{
 #ifndef DEDICATED
+		vec3_t		originTemp, angleTemp;
 		originTrajectory = (trajectory_t *)VM_Call( cgvm, CG_GET_ORIGIN_TRAJECTORY, roff_ent->mEntID );
 		angleTrajectory = (trajectory_t *)VM_Call( cgvm, CG_GET_ANGLE_TRAJECTORY, roff_ent->mEntID );
 		VM_Call( cgvm, CG_GET_ORIGIN, roff_ent->mEntID, originTemp );

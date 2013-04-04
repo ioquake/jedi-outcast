@@ -402,7 +402,8 @@ extern vec4_t colorTable[CT_MAX];
 
 
 #define Q_COLOR_ESCAPE	'^'
-#define Q_IsColorString(p)	( p && *(p) == Q_COLOR_ESCAPE && *((p)+1) && *((p)+1) != Q_COLOR_ESCAPE )
+// you MUST have the last bit on here about colour strings being less than 7 or taiwanese strings register as colour!!!!
+#define Q_IsColorString(p)	( p && *(p) == Q_COLOR_ESCAPE && *((p)+1) && *((p)+1) != Q_COLOR_ESCAPE && *((p)+1) <= '7' )
 
 #define COLOR_BLACK		'0'
 #define COLOR_RED		'1'
@@ -1168,6 +1169,9 @@ typedef struct {
 #define	MAX_MODELS			256		// these are sent over the net as 8 bits
 #define	MAX_SOUNDS			256		// so they cannot be blindly increased
 
+#ifdef _IMMERSION
+#define MAX_FORCES			96
+#endif // _IMMERSION
 #define	MAX_SUBMODELS		512		// nine bits
 
 #define MAX_FX				128
@@ -1202,7 +1206,12 @@ Ghoul2 Insert End
 
 #define	CS_MODELS			10
 #define	CS_SOUNDS			(CS_MODELS+MAX_MODELS)
+#ifdef _IMMERSION
+#define CS_FORCES			(CS_SOUNDS+MAX_SOUNDS)
+#define CS_PLAYERS			(CS_FORCES+MAX_FORCES)
+#else
 #define	CS_PLAYERS			(CS_SOUNDS+MAX_SOUNDS)
+#endif // _IMMERSION
 #define	CS_LIGHT_STYLES		(CS_PLAYERS+MAX_CLIENTS)
 #define CS_EFFECTS			(CS_LIGHT_STYLES + (MAX_LIGHT_STYLES*3))
 /*
@@ -1652,5 +1661,8 @@ typedef enum
 
 #include "../game/genericparser2.h"
 
+#ifdef _IMMERSION
+#include "../ff/ff_public.h"
+#endif // _IMMERSION
 
 #endif	// __Q_SHARED_H

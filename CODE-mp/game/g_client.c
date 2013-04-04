@@ -769,6 +769,15 @@ void respawn( gentity_t *ent ) {
 
 	CopyToBodyQue (ent);
 
+	if (gEscaping)
+	{
+		ent->client->sess.sessionTeam = TEAM_SPECTATOR;
+		ent->client->sess.spectatorState = SPECTATOR_FREE;
+		ent->client->sess.spectatorClient = 0;
+
+		ent->client->pers.teamState.state = TEAM_BEGIN;
+	}
+
 	trap_UnlinkEntity (ent);
 	ClientSpawn(ent);
 
@@ -1268,7 +1277,7 @@ void ClientUserinfoChanged( int clientNum ) {
 
 	trap_SetConfigstring( CS_PLAYERS+clientNum, s );
 
-	G_LogPrintf( "ClientUserinfoChanged: %i %s\n", clientNum, s );
+	//G_LogPrintf( "ClientUserinfoChanged: %i %s\n", clientNum, s );
 }
 
 
@@ -1315,7 +1324,9 @@ char *ClientConnect( int clientNum, qboolean firstTime, qboolean isBot ) {
 		value = Info_ValueForKey (userinfo, "password");
 		if ( g_password.string[0] && Q_stricmp( g_password.string, "none" ) &&
 			strcmp( g_password.string, value) != 0) {
-			return "Invalid password";
+			static char sTemp[1024];
+			Q_strncpyz(sTemp, G_GetStripEdString("SVINGAME","INVALID_PASSWORD"), sizeof (sTemp) );
+			return sTemp;// return "Invalid password";
 		}
 	}
 
@@ -1524,6 +1535,26 @@ void ClientBegin( int clientNum, qboolean allowTeamReset ) {
 	G_ClearClientLog(clientNum);
 }
 
+static qboolean AllForceDisabled(int force)
+{
+	int i;
+
+	if (force)
+	{
+		for (i=0;i<NUM_FORCE_POWERS;i++)
+		{
+			if (!(force & (1<<i)))
+			{
+				return qfalse;
+			}
+		}
+
+		return qtrue;
+	}
+
+	return qfalse;
+}
+
 /*
 ===========
 ClientSpawn
@@ -1533,6 +1564,7 @@ after the first ClientBegin, and after each respawn
 Initializes all non-persistant parts of playerState
 ============
 */
+extern qboolean WP_HasForcePowers( const playerState_t *ps );
 void ClientSpawn(gentity_t *ent) {
 	int		index;
 	vec3_t	spawn_origin, spawn_angles;
@@ -1693,23 +1725,6 @@ void ClientSpawn(gentity_t *ent) {
 	//give default weapons
 	client->ps.stats[STAT_WEAPONS] = ( 1 << WP_NONE );
 
-	if (g_gametype.integer == GT_HOLOCRON)
-	{
-		//always get free saber level 1 in holocron
-		client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_SABER );	//these are precached in g_items, ClearRegisteredItems()
-	}
-	else
-	{
-		if (client->ps.fd.forcePowerLevel[FP_SABERATTACK])
-		{
-			client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_SABER );	//these are precached in g_items, ClearRegisteredItems()
-		}
-		else
-		{ //if you don't have saber attack rank then you don't get a saber
-			client->ps.stats[STAT_WEAPONS] |= (1 << WP_STUN_BATON);
-		}
-	}
-
 	if (g_gametype.integer == GT_TOURNAMENT)
 	{
 		wDisable = g_duelWeaponDisable.integer;
@@ -1719,32 +1734,81 @@ void ClientSpawn(gentity_t *ent) {
 		wDisable = g_weaponDisable.integer;
 	}
 
-	if (!wDisable || !(wDisable & (1 << WP_BRYAR_PISTOL)))
-	{
-		client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_BRYAR_PISTOL );
-	}
-	else if (g_gametype.integer == GT_JEDIMASTER)
-	{
-		client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_BRYAR_PISTOL );
-	}
 
-	if (g_gametype.integer == GT_JEDIMASTER)
-	{
-		client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
-		client->ps.stats[STAT_WEAPONS] |= (1 << WP_STUN_BATON);
-	}
 
-	if (client->ps.stats[STAT_WEAPONS] & (1 << WP_BRYAR_PISTOL))
+	if ( g_gametype.integer != GT_HOLOCRON 
+		&& g_gametype.integer != GT_JEDIMASTER 
+		&& !HasSetSaberOnly()
+		&& !AllForceDisabled( g_forcePowerDisable.integer )
+		&& g_trueJedi.integer )
 	{
-		client->ps.weapon = WP_BRYAR_PISTOL;
-	}
-	else if (client->ps.stats[STAT_WEAPONS] & (1 << WP_SABER))
-	{
-		client->ps.weapon = WP_SABER;
+		if ( WP_HasForcePowers( &client->ps ) )
+		{
+			client->ps.trueNonJedi = qfalse;
+			client->ps.trueJedi = qtrue;
+			//make sure they only use the saber
+			client->ps.weapon = WP_SABER;
+			client->ps.stats[STAT_WEAPONS] = (1 << WP_SABER);
+		}
+		else
+		{//no force powers set
+			client->ps.trueNonJedi = qtrue;
+			client->ps.trueJedi = qfalse;
+			if (!wDisable || !(wDisable & (1 << WP_BRYAR_PISTOL)))
+			{
+				client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_BRYAR_PISTOL );
+			}
+			client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+			client->ps.stats[STAT_WEAPONS] |= (1 << WP_STUN_BATON);
+			client->ps.weapon = WP_BRYAR_PISTOL;
+		}
 	}
 	else
 	{
-		client->ps.weapon = WP_STUN_BATON;
+		if (g_gametype.integer == GT_HOLOCRON)
+		{
+			//always get free saber level 1 in holocron
+			client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_SABER );	//these are precached in g_items, ClearRegisteredItems()
+		}
+		else
+		{
+			if (client->ps.fd.forcePowerLevel[FP_SABERATTACK])
+			{
+				client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_SABER );	//these are precached in g_items, ClearRegisteredItems()
+			}
+			else
+			{ //if you don't have saber attack rank then you don't get a saber
+				client->ps.stats[STAT_WEAPONS] |= (1 << WP_STUN_BATON);
+			}
+		}
+
+		if (!wDisable || !(wDisable & (1 << WP_BRYAR_PISTOL)))
+		{
+			client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_BRYAR_PISTOL );
+		}
+		else if (g_gametype.integer == GT_JEDIMASTER)
+		{
+			client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_BRYAR_PISTOL );
+		}
+
+		if (g_gametype.integer == GT_JEDIMASTER)
+		{
+			client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+			client->ps.stats[STAT_WEAPONS] |= (1 << WP_STUN_BATON);
+		}
+
+		if (client->ps.stats[STAT_WEAPONS] & (1 << WP_BRYAR_PISTOL))
+		{
+			client->ps.weapon = WP_BRYAR_PISTOL;
+		}
+		else if (client->ps.stats[STAT_WEAPONS] & (1 << WP_SABER))
+		{
+			client->ps.weapon = WP_SABER;
+		}
+		else
+		{
+			client->ps.weapon = WP_STUN_BATON;
+		}
 	}
 
 	/*
@@ -1950,12 +2014,20 @@ void ClientDisconnect( int clientNum ) {
 
 	G_LogPrintf( "ClientDisconnect: %i\n", clientNum );
 
-	// if we are playing in tourney mode and losing, give a win to the other player
+	// if we are playing in tourney mode, give a win to the other player and clear his frags for this round
 	if ( (g_gametype.integer == GT_TOURNAMENT )
 		&& !level.intermissiontime
-		&& !level.warmupTime && level.sortedClients[1] == clientNum ) {
-		level.clients[ level.sortedClients[0] ].sess.wins++;
-		ClientUserinfoChanged( level.sortedClients[0] );
+		&& !level.warmupTime ) {
+		if ( level.sortedClients[1] == clientNum ) {
+			level.clients[ level.sortedClients[0] ].ps.persistant[PERS_SCORE] = 0;
+			level.clients[ level.sortedClients[0] ].sess.wins++;
+			ClientUserinfoChanged( level.sortedClients[0] );
+		}
+		else if ( level.sortedClients[0] == clientNum ) {
+			level.clients[ level.sortedClients[1] ].ps.persistant[PERS_SCORE] = 0;
+			level.clients[ level.sortedClients[1] ].sess.wins++;
+			ClientUserinfoChanged( level.sortedClients[1] );
+		}
 	}
 
 	trap_UnlinkEntity (ent);

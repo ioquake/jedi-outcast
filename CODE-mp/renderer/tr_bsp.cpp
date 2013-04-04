@@ -1771,6 +1771,32 @@ void R_LoadLightGrid( lump_t *l ) {
 			R_ColorShiftLightingBytes(w->lightGridData[i].directLight[j]);
 		}
 	}
+
+	if (r_newDLights->integer)
+	{
+		// Precalc soe data to speed up R_SetupEntityLightingGrid
+		w->lightGridStep[0] = 1;
+		w->lightGridStep[1] = w->lightGridBounds[0];
+		w->lightGridStep[2] = w->lightGridBounds[0] * w->lightGridBounds[1];
+
+		for(i = 0; i < 8; i++)
+		{
+			w->lightGridOffsets[i] = 0;
+
+			if(i & 1)
+			{
+				w->lightGridOffsets[i] += w->lightGridStep[0];
+			}
+			if(i & 2)
+			{
+				w->lightGridOffsets[i] += w->lightGridStep[1];
+			}
+			if(i & 4)
+			{
+				w->lightGridOffsets[i] += w->lightGridStep[2];
+			}
+		}
+	}
 }
 
 /*

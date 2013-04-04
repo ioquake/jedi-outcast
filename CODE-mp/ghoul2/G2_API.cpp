@@ -15,6 +15,10 @@
 #endif
 #include "G2_local.h"
 
+#ifdef G2_COLLISION_ENABLED
+#include "../qcommon/miniheap.h"
+#endif
+
 #include <set>
 
 extern mdxaBone_t		worldMatrix;
@@ -172,6 +176,7 @@ int G2API_InitGhoul2Model(CGhoul2Info_v **ghoul2Ptr, const char *fileName, int m
 	{
 		if (ghoul2.size() == 0)//very first model created
 		{//you can't have an empty vector, so let's not give it one
+			G2API_CleanGhoul2Models(ghoul2Ptr);
 			delete *ghoul2Ptr;
 			*ghoul2Ptr = 0;
 		}
@@ -777,10 +782,75 @@ void G2API_DetachEnt(int *boltInfo)
 }
 
 qboolean gG2_GBMNoReconstruct;
+qboolean gG2_GBMUseSPMethod;
+
+qboolean G2API_GetBoltMatrix_SPMethod(CGhoul2Info_v &ghoul2, const int modelIndex, const int boltIndex, mdxaBone_t *matrix, const vec3_t angles, 
+							 const vec3_t position, const int frameNum, qhandle_t *modelList, const vec3_t scale )
+{
+	assert(ghoul2.size() > modelIndex);
+
+	if ((int)&ghoul2 && (ghoul2.size() > modelIndex))
+	{
+		CGhoul2Info *ghlInfo = &ghoul2[modelIndex];
+
+		//assert(boltIndex < ghlInfo->mBltlist.size());
+
+		if (ghlInfo && (boltIndex < ghlInfo->mBltlist.size()) && boltIndex >= 0 )
+		{
+			// make sure we have transformed the skeleton
+			if (!gG2_GBMNoReconstruct)
+			{
+				G2_ConstructGhoulSkeleton(ghoul2, frameNum, modelList, true, angles, position, scale, false);
+			}
+
+			gG2_GBMNoReconstruct = qfalse;
+
+			mdxaBone_t scaled;
+			mdxaBone_t *use;
+			use=&ghlInfo->mBltlist[boltIndex].position;
+
+			if (scale[0]||scale[1]||scale[2])
+			{
+				scaled=*use;
+				use=&scaled;
+
+				// scale the bolt position by the scale factor for this model since at this point its still in model space
+				if (scale[0])
+				{
+					scaled.matrix[0][3] *= scale[0];
+				}
+				if (scale[1])
+				{
+					scaled.matrix[1][3] *= scale[1];
+				}
+				if (scale[2])
+				{
+					scaled.matrix[2][3] *= scale[2];
+				}
+			}
+			// pre generate the world matrix
+			G2_GenerateWorldMatrix(angles, position);
+
+			VectorNormalize((float*)use->matrix[0]);
+			VectorNormalize((float*)use->matrix[1]);
+			VectorNormalize((float*)use->matrix[2]);
+
+			Multiply_3x4Matrix(matrix, &worldMatrix, use);
+			return qtrue;
+		}
+	}
+	return qfalse;
+}
 
 qboolean G2API_GetBoltMatrix(CGhoul2Info_v &ghoul2, const int modelIndex, const int boltIndex, mdxaBone_t *matrix, const vec3_t angles, const vec3_t position, const int frameNum, qhandle_t *modelList, vec3_t scale )
 {
 	assert(ghoul2.size() > modelIndex);
+
+	if (gG2_GBMUseSPMethod)
+	{
+		gG2_GBMUseSPMethod = qfalse;
+		return G2API_GetBoltMatrix_SPMethod(ghoul2, modelIndex, boltIndex, matrix, angles, position, frameNum, modelList, scale);
+	}
 
 	if ((int)&ghoul2 && (ghoul2.size() > modelIndex))
 	{
@@ -950,7 +1020,7 @@ static int QDECL QsortDistance( const void *a, const void *b ) {
 
 
 void G2API_CollisionDetect(CollisionRecord_t *collRecMap, CGhoul2Info_v &ghoul2, const vec3_t angles, const vec3_t position,
-										  int frameNumber, int entNum, vec3_t rayStart, vec3_t rayEnd, vec3_t scale, CMiniHeap *G2VertSpace, int traceFlags, int useLod)
+										  int frameNumber, int entNum, vec3_t rayStart, vec3_t rayEnd, vec3_t scale, CMiniHeap *G2VertSpace, int traceFlags, int useLod, float fRadius)
 {
 
 	if ((int)&ghoul2)
@@ -963,6 +1033,10 @@ void G2API_CollisionDetect(CollisionRecord_t *collRecMap, CGhoul2Info_v &ghoul2,
 		// pre generate the world matrix - used to transform the incoming ray
 		G2_GenerateWorldMatrix(angles, position);
 
+#ifdef G2_COLLISION_ENABLED
+		G2VertSpace->ResetHeap();
+#endif
+
 		// now having done that, time to build the model
 		G2_TransformModel(ghoul2, frameNumber, scale, G2VertSpace, useLod);
 
@@ -972,11 +1046,20 @@ void G2API_CollisionDetect(CollisionRecord_t *collRecMap, CGhoul2Info_v &ghoul2,
 		TransformAndTranslatePoint(rayEnd, transRayEnd, &worldMatrixInv);
 
 		// now walk each model and check the ray against each poly - sigh, this is SO expensive. I wish there was a better way to do this.
-		G2_TraceModels(ghoul2, transRayStart, transRayEnd, collRecMap, entNum, traceFlags, useLod);
+		G2_TraceModels(ghoul2, transRayStart, transRayEnd, collRecMap, entNum, traceFlags, useLod, fRadius);
+#ifdef G2_COLLISION_ENABLED
+		int i;
+		for ( i = 0; i < MAX_G2_COLLISIONS && collRecMap[i].mEntityNum != -1; i ++ );
 
+		// now sort the resulting array of collision records so they are distance ordered
+		qsort( collRecMap, i, 
+			sizeof( CCollisionRecord ), QsortDistance );
+
+#else
 		// now sort the resulting array of collision records so they are distance ordered
 		qsort( collRecMap, MAX_G2_COLLISIONS, 
 			sizeof( CCollisionRecord ), QsortDistance );
+#endif
 
 	}
 }

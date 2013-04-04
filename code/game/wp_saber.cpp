@@ -37,6 +37,7 @@ extern void			G_SetViewEntity( gentity_t *self, gentity_t *viewEntity );
 extern qboolean G_ControlledByPlayer( gentity_t *self );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
 extern void CG_ChangeWeapon( int num );
+extern void G_AngerAlert( gentity_t *self );
 extern void G_ReflectMissile( gentity_t *ent, gentity_t *missile, vec3_t forward );
 extern int G_CheckLedgeDive( gentity_t *self, float checkDist, vec3_t checkVel, qboolean tryOpposite, qboolean tryPerp );
 extern void G_BounceMissile( gentity_t *ent, trace_t *trace );
@@ -341,6 +342,47 @@ void G_Throw( gentity_t *targ, vec3_t newDir, float push )
 	}
 }
 
+int WP_SetSaberModel( gclient_t *client, class_t npcClass )
+{
+	if ( client )
+	{
+		switch ( npcClass )
+		{
+		case CLASS_DESANN://Desann
+			client->ps.saberModel = "models/weapons2/saber_desann/saber_w.glm";
+			break;
+		case CLASS_LUKE://Luke
+			client->ps.saberModel = "models/weapons2/saber_luke/saber_w.glm";
+			break;
+		case CLASS_KYLE://Kyle NPC and player
+			client->ps.saberModel = "models/weapons2/saber/saber_w.glm";
+			break;
+		default://reborn and tavion and everyone else
+			client->ps.saberModel = "models/weapons2/saber_reborn/saber_w.glm";
+			break;
+		}
+		return ( G_ModelIndex( client->ps.saberModel ) );
+	}
+	else
+	{
+		switch ( npcClass )
+		{
+		case CLASS_DESANN://Desann
+			return ( G_ModelIndex( "models/weapons2/saber_desann/saber_w.glm" ) );
+			break;
+		case CLASS_LUKE://Luke
+			return ( G_ModelIndex( "models/weapons2/saber_luke/saber_w.glm" ) );
+			break;
+		case CLASS_KYLE://Kyle NPC and player
+			return ( G_ModelIndex( "models/weapons2/saber/saber_w.glm" ) );
+			break;
+		default://reborn and tavion and everyone else
+			return ( G_ModelIndex( "models/weapons2/saber_reborn/saber_w.glm" ) );
+			break;
+		}
+	}
+}
+
 void WP_SaberInitBladeData( gentity_t *ent )
 {
 	gentity_t *saberent;
@@ -442,23 +484,7 @@ void WP_SaberInitBladeData( gentity_t *ent )
 Ghoul2 Insert Start
 */
 			//FIXME: get saberModel from NPCs.cfg for NPCs?
-			if ( ent->client->NPC_class == CLASS_DESANN )
-			{
-				ent->client->ps.saberModel = "models/weapons2/saber_desann/saber_w.glm";
-			}
-			else if ( ent->client->NPC_class == CLASS_LUKE )
-			{
-				ent->client->ps.saberModel = "models/weapons2/saber_luke/saber_w.glm";
-			}
-			else if ( ent->client->NPC_class == CLASS_KYLE )
-			{//Kyle NPC and player
-				ent->client->ps.saberModel = "models/weapons2/saber/saber_w.glm";
-			}
-			else
-			{//reborn and tavion and everyone else
-				ent->client->ps.saberModel = "models/weapons2/saber_reborn/saber_w.glm";
-			}
-			saberent->s.modelindex = G_ModelIndex( ent->client->ps.saberModel );
+			saberent->s.modelindex = WP_SetSaberModel( ent->client, ent->client->NPC_class );
 			gi.G2API_InitGhoul2Model( saberent->ghoul2, ent->client->ps.saberModel, saberent->s.modelindex );
 			// set up a bolt on the end so we can get where the sabre muzzle is - we can assume this is always bolt 0
 			gi.G2API_AddBolt( &saberent->ghoul2[0], "*flash" );
@@ -806,7 +832,7 @@ qboolean WP_SaberApplyDamage( gentity_t *ent, float baseDamage, int baseDFlags, 
 							{//already being knocked around
 								dFlags |= DAMAGE_NO_KNOCKBACK;
 							}
-							if ( g_dismemberment->integer > 3 || g_saberRealisticCombat->integer )
+							if ( g_dismemberment->integer >= 11381138 || g_saberRealisticCombat->integer )
 							{
 								dFlags |= DAMAGE_DISMEMBER;
 								if ( hitDismember[i] )
@@ -1902,7 +1928,7 @@ qboolean WP_SabersCheckLock2( gentity_t *attacker, gentity_t *defender, sabersLo
 	VectorClear( defender->client->ps.velocity );
 	attacker->client->ps.saberLockTime = defender->client->ps.saberLockTime = level.time + SABER_LOCK_TIME;
 	attacker->client->ps.legsAnimTimer = attacker->client->ps.torsoAnimTimer = defender->client->ps.legsAnimTimer = defender->client->ps.torsoAnimTimer = SABER_LOCK_TIME;
-	attacker->client->ps.weaponTime = defender->client->ps.weaponTime = SABER_LOCK_TIME;
+	//attacker->client->ps.weaponTime = defender->client->ps.weaponTime = SABER_LOCK_TIME;
 	attacker->client->ps.saberLockEnemy = defender->s.number;
 	defender->client->ps.saberLockEnemy = attacker->s.number;
 
@@ -3006,18 +3032,18 @@ void WP_SaberDamageTrace( gentity_t *ent )
 				if ( entAttacking 
 					&& hitOwnerAttacking 
 					&& ( entPowerLevel == hitOwnerPowerLevel 
-						|| (entPowerLevel > FORCE_LEVEL_2 && hitOwnerPowerLevel > FORCE_LEVEL_2)
-						|| (entPowerLevel < FORCE_LEVEL_3 && hitOwnerPowerLevel < FORCE_LEVEL_3 && hitOwner->client->ps.forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_2 )
-						|| (entPowerLevel < FORCE_LEVEL_2 && hitOwnerPowerLevel < FORCE_LEVEL_3 && hitOwner->client->ps.forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_1 )
-						|| (hitOwnerPowerLevel < FORCE_LEVEL_3 && entPowerLevel < FORCE_LEVEL_3 && ent->client->ps.forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_2 )
-						|| (hitOwnerPowerLevel < FORCE_LEVEL_2 && entPowerLevel < FORCE_LEVEL_3 && ent->client->ps.forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_1 ))
+						|| (entPowerLevel > FORCE_LEVEL_2 && hitOwnerPowerLevel > FORCE_LEVEL_2 )
+						|| (entPowerLevel < FORCE_LEVEL_3 && hitOwnerPowerLevel < FORCE_LEVEL_3 && hitOwner->client->ps.forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_2 && Q_irand( 0, 2 ))
+						|| (entPowerLevel < FORCE_LEVEL_2 && hitOwnerPowerLevel < FORCE_LEVEL_3 && hitOwner->client->ps.forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_1 && Q_irand( 0, 1 ))
+						|| (hitOwnerPowerLevel < FORCE_LEVEL_3 && entPowerLevel < FORCE_LEVEL_3 && ent->client->ps.forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_2 && !Q_irand( 0, 1 ))
+						|| (hitOwnerPowerLevel < FORCE_LEVEL_2 && entPowerLevel < FORCE_LEVEL_3 && ent->client->ps.forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_1 && !Q_irand( 0, 1 )))
 					&& WP_SabersCheckLock( ent, hitOwner ) )
 				{
 					collisionResolved = qtrue;
 				}
 				else if ( hitOwnerAttacking 
 					&& entDefending 
-					&& !Q_irand( 0, 1 )
+					&& !Q_irand( 0, 2 )
 					&& (ent->client->ps.saberMove != LS_READY || (hitOwnerPowerLevel-ent->client->ps.forcePowerLevel[FP_SABER_DEFENSE]) < Q_irand( -6, 0 ) )
 					&& ((hitOwnerPowerLevel < FORCE_LEVEL_3 && ent->client->ps.forcePowerLevel[FP_SABER_DEFENSE] > FORCE_LEVEL_2 )||
 						(hitOwnerPowerLevel < FORCE_LEVEL_2 && ent->client->ps.forcePowerLevel[FP_SABER_DEFENSE] > FORCE_LEVEL_1 )||
@@ -3029,7 +3055,7 @@ void WP_SaberDamageTrace( gentity_t *ent )
 				else if ( entAttacking && hitOwnerDefending )
 				{//I'm attacking hit, they're parrying
 					qboolean activeDefense = (hitOwner->s.number||g_saberAutoBlocking->integer||hitOwner->client->ps.saberBlockingTime > level.time);
-					if ( !Q_irand( 0, 1 )
+					if ( !Q_irand( 0, 2 )
 						&& activeDefense
 						&& (hitOwner->client->ps.saberMove != LS_READY || (entPowerLevel-hitOwner->client->ps.forcePowerLevel[FP_SABER_DEFENSE]) < Q_irand( -6, 0 ) )
 						&& ( ( entPowerLevel < FORCE_LEVEL_3 && hitOwner->client->ps.forcePowerLevel[FP_SABER_DEFENSE] > FORCE_LEVEL_2 )
@@ -3327,11 +3353,39 @@ void WP_SaberDamageTrace( gentity_t *ent )
 				{
 					if ( deflected )
 					{
+#ifdef _IMMERSION
+						int index = Q_irand(1,3);
+						G_Sound( ent, G_SoundIndex( va("sound/weapons/saber/saberbounce%d.wav", index) ) );
+						int ff = G_ForceIndex( va("fffx/weapons/saber/saberbounce%d", index), FF_CHANNEL_WEAPON );
+						if ( !ent->s.saberInFlight )
+						{
+							G_Force( ent, ff );
+						}
+						if ( hitOwner && !hitOwner->s.saberInFlight )
+						{
+							G_Force( hitOwner, ff );
+						}
+#else
 						G_Sound( ent, G_SoundIndex( va( "sound/weapons/saber/saberbounce%d.wav", Q_irand(1,3) ) ) );
+#endif // _IMMERSION
 					}
 					else
 					{
+#ifdef _IMMERSION
+						int index = Q_irand(1, 9);
+						G_Sound( ent, G_SoundIndex( va( "sound/weapons/saber/saberblock%d.wav", index) ) );
+						int ff = G_ForceIndex( va("fffx/weapons/saber/saberblock%d", index), FF_CHANNEL_WEAPON );
+						if ( !ent->s.saberInFlight )
+						{
+							G_Force( ent, ff );
+						}
+						if ( hitOwner && !hitOwner->s.saberInFlight )
+						{
+							G_Force( hitOwner, ff );
+						}
+#else
 						G_Sound( ent, G_SoundIndex( va( "sound/weapons/saber/saberblock%d.wav", Q_irand(1, 9) ) ) );
+#endif // _IMMERSION
 					}
 				}
 				G_PlayEffect( "saber_block", saberHitLocation, saberHitNormal );
@@ -3409,7 +3463,21 @@ void WP_SaberDamageTrace( gentity_t *ent )
 				g_saberFlashTime = level.time-50;
 				G_PlayEffect( "saber_cut", g_saberFlashPos, hitNorm );
 			}
+#ifdef _IMMERSION
+			int index = Q_irand(1, 9);
+			G_Sound( ent, G_SoundIndex( va( "sound/weapons/saber/saberblock%d.wav", index ) ) );
+			int ff = G_ForceIndex( va("fffx/weapons/saber/saberblock%d", index), FF_CHANNEL_WEAPON );
+			if ( !ent->s.saberInFlight )
+			{
+				G_Force( ent, ff );
+			}
+			if ( !g_entities[ent->client->ps.saberLockEnemy].s.saberInFlight )
+			{
+				G_Force( &g_entities[ent->client->ps.saberLockEnemy], ff );
+			}
+#else
 			G_Sound( ent, G_SoundIndex( va( "sound/weapons/saber/saberblock%d.wav", Q_irand(1, 9) ) ) );
+#endif // _IMMERSION
 		}
 	}
 
@@ -3421,7 +3489,13 @@ void WP_SaberDamageTrace( gentity_t *ent )
 			gi.Printf( "base damage was %4.2f\n", baseDamage );
 		}
 #endif
+#ifdef _IMMERSION
+		int index = Q_irand( 1, 3 );
+		G_Sound( ent, G_SoundIndex( va( "sound/weapons/saber/saberhit%d.wav", index ) ) );
+		G_Force( ent, G_ForceIndex( va( "fffx/weapons/saber/saberhit%d", index), FF_CHANNEL_WEAPON ) );
+#else
 		G_Sound( ent, G_SoundIndex( va( "sound/weapons/saber/saberhit%d.wav", Q_irand( 1, 3 ) ) ) );
+#endif // _IMMERSION
 	}
 	
 	if ( hit_wall )
@@ -3880,8 +3954,13 @@ void WP_RunSaber( gentity_t *self, gentity_t *saber )
 
 	// trace a line from the previous position to the current position,
 	// ignoring interactions with the missile owner
+	int clipmask = saber->clipmask;
+	if ( !self || !self->client || self->client->ps.saberLength <= 0 )
+	{//don't keep hitting other sabers when turned off
+		clipmask &= ~CONTENTS_LIGHTSABER;
+	}
 	gi.trace( &tr, saber->currentOrigin, saber->mins, saber->maxs, origin, 
-		saber->owner ? saber->owner->s.number : ENTITYNUM_NONE, saber->clipmask );
+		saber->owner ? saber->owner->s.number : ENTITYNUM_NONE, clipmask );
 
 	VectorCopy( tr.endpos, saber->currentOrigin );
 
@@ -4271,10 +4350,16 @@ void WP_SaberDrop( gentity_t *self, gentity_t *saber )
 	if ( self->client->playerTeam == TEAM_PLAYER )
 	{
 		G_SoundOnEnt( saber, CHAN_AUTO, "sound/weapons/saber/saberoff.wav" );
+#ifdef _IMMERSION
+		G_Force( self, G_ForceIndex( "fffx/weapons/saber/saberoff", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 	}
 	else
 	{
 		G_SoundOnEnt( saber, CHAN_AUTO, "sound/weapons/saber/enemy_saber_off.wav" );
+#ifdef _IMMERSION
+		G_Force( self, G_ForceIndex( "fffx/weapons/saber/enemy_saber_off", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 	}
 
 	if ( self->health <= 0 )
@@ -4298,6 +4383,9 @@ void WP_SaberPull( gentity_t *self, gentity_t *saber )
 		saber->s.eFlags &= EF_BOUNCE_HALF;
 		//play sound
 		G_Sound( self, G_SoundIndex( "sound/weapons/force/pull.wav" ) );
+#ifdef _IMMERSION
+		G_Force( self, G_ForceIndex( "fffx/weapons/force/pull", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 	}
 }
 
@@ -5539,6 +5627,9 @@ void ForceThrow( gentity_t *self, qboolean pull )
 	trace_t		tr;
 	int			anim, hold, soundIndex, cost, actualCost;
 
+#ifdef _IMMERSION
+	int			forceIndex;
+#endif // _IMMERSION
 	if ( self->health <= 0 )
 	{
 		return;
@@ -5599,6 +5690,9 @@ void ForceThrow( gentity_t *self, qboolean pull )
 		//make sure this plays and that you cannot press fire for about 200ms after this
 		anim = BOTH_FORCEPULL;
 		soundIndex = G_SoundIndex( "sound/weapons/force/pull.wav" );
+#ifdef _IMMERSION
+		forceIndex = G_ForceIndex( "fffx/weapons/force/pull", FF_CHANNEL_WEAPON );
+#endif // _IMMERSION
 		hold = 200;
 	}
 	else
@@ -5611,6 +5705,9 @@ void ForceThrow( gentity_t *self, qboolean pull )
 		//make sure this plays and that you cannot press fire for about 1 second after this
 		anim = BOTH_FORCEPUSH;
 		soundIndex = G_SoundIndex( "sound/weapons/force/push.wav" );
+#ifdef _IMMERSION
+		forceIndex = G_ForceIndex( "fffx/weapons/force/push", FF_CHANNEL_WEAPON );
+#endif // _IMMERSION
 		hold = 650;
 	}
 
@@ -5641,6 +5738,9 @@ void ForceThrow( gentity_t *self, qboolean pull )
 	self->client->ps.powerups[PW_FORCE_PUSH] = level.time + self->client->ps.torsoAnimTimer + 500;
 
 	G_Sound( self, soundIndex );
+#ifdef _IMMERSION
+	G_Force( self, forceIndex );
+#endif // _IMMERSION
 
 	VectorCopy( self->client->ps.viewangles, fwdangles );
 	//fwdangles[1] = self->client->ps.viewangles[1];
@@ -6491,6 +6591,9 @@ void ForceSpeed( gentity_t *self, int duration )
 		self->client->ps.forcePowerDuration[FP_SPEED] = level.time + duration;
 	}
 	G_Sound( self, G_SoundIndex( "sound/weapons/force/speed.wav" ) );
+#ifdef _IMMERSION
+	G_Force( self, G_ForceIndex( "fffx/weapons/force/speed", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 }
 
 void ForceHeal( gentity_t *self )
@@ -6505,7 +6608,7 @@ void ForceHeal( gentity_t *self )
 		return;
 	}
 
-	if ( self->painDebounceTime > level.time || self->client->ps.weaponTime )
+	if ( self->painDebounceTime > level.time || (self->client->ps.weaponTime&&self->client->ps.weapon!=WP_NONE) )
 	{//can't initiate a heal while taking pain or attacking
 		return;
 	}
@@ -6555,10 +6658,16 @@ void ForceHeal( gentity_t *self )
 				if ( self->client->playerTeam == TEAM_PLAYER )
 				{
 					G_SoundOnEnt( self, CHAN_WEAPON, "sound/weapons/saber/saberoff.wav" );
+#ifdef _IMMERSION
+					G_Force( self, G_ForceIndex( "fffx/weapons/saber/saberoff", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 				}
 				else
 				{
 					G_SoundOnEnt( self, CHAN_WEAPON, "sound/weapons/saber/enemy_saber_off.wav" );
+#ifdef _IMMERSION
+					G_Force( self, G_ForceIndex( "fffx/weapons/saber/enemy_saber_off", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 				}
 			}
 		}
@@ -6575,6 +6684,9 @@ void ForceHeal( gentity_t *self )
 	
 	//FIXME: always play healing effect
 	G_SoundOnEnt( self, CHAN_ITEM, "sound/weapons/force/heal.mp3" );
+#ifdef _IMMERSION
+	G_Force( self, G_ForceIndex( "fffx/weapons/force/heal", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 }
 
 extern void NPC_PlayConfusionSound( gentity_t *self );
@@ -6911,6 +7023,7 @@ void ForceGrip( gentity_t *self )
 			return;
 			break;
 		case CLASS_ATST://much too big to grip!
+			return;
 		//no droids either...?
 		case CLASS_GONK:
 		case CLASS_R2D2:
@@ -6919,6 +7032,7 @@ void ForceGrip( gentity_t *self )
 		case CLASS_MARK2:
 		case CLASS_MOUSE://?
 		case CLASS_PROTOCOL:
+			//*sigh*... in JK3, you'll be able to grab and move *anything*...
 			return;
 			break;
 		case CLASS_PROBE:
@@ -6980,6 +7094,9 @@ void ForceGrip( gentity_t *self )
 					//turn it off?
 					traceEnt->client->ps.saberActive = qfalse;
 					G_SoundOnEnt( traceEnt, CHAN_WEAPON, "sound/weapons/saber/saberoffquick.wav" );
+#ifdef _IMMERSION
+					G_Force( traceEnt, G_ForceIndex( "fffx/weapons/saber/saberoffquick", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 				}
 			}
 		}
@@ -6998,6 +7115,10 @@ void ForceGrip( gentity_t *self )
 		self->client->ps.forcePowerDebounce[FP_GRIP] = level.time + 250;
 		self->client->ps.forcePowerDuration[FP_GRIP] = level.time + 5000;
 		traceEnt->s.loopSound = G_SoundIndex( "sound/weapons/force/grip.mp3" );
+#ifdef _IMMERSION
+		G_Force( self, G_ForceIndex( "fffx/weapons/force/gripcast", FF_CHANNEL_FORCE ) );
+		//G_Force( traceEnt, G_ForceIndex( "fffx/weapons/force/grip", FF_CHANNEL_DAMAGE ) );
+#endif // _IMMERSION
 	}
 	else
 	{
@@ -7058,6 +7179,9 @@ void ForceLightning( gentity_t *self )
 	self->client->ps.saberBlocked = BLOCKED_NONE;
 
 	G_SoundOnEnt( self, CHAN_BODY, "sound/weapons/force/lightning.wav" );
+#ifdef _IMMERSION
+	G_Force( self, G_ForceIndex( "fffx/weapons/force/lightning", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 	if ( self->client->ps.forcePowerLevel[FP_LIGHTNING] < FORCE_LEVEL_2 )
 	{//short burst
 		//G_SoundOnEnt( self, CHAN_BODY, "sound/weapons/force/lightning.wav" );
@@ -7328,6 +7452,9 @@ void ForceJumpCharge( gentity_t *self, usercmd_t *ucmd )
 	if ( !self->client->ps.forceJumpCharge )
 	{//FIXME: this should last only as long as the actual charge-up
 		G_SoundOnEnt( self, CHAN_BODY, "sound/weapons/force/jumpbuild.wav" );
+#ifdef _IMMERSION
+		G_Force( self, G_ForceIndex( "fffx/weapons/force/jumpbuild", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 	}
 	//Increment
 	self->client->ps.forceJumpCharge += forceJumpChargeInterval;
@@ -7448,6 +7575,9 @@ void ForceJump( gentity_t *self, usercmd_t *ucmd )
 	}
 
 	G_SoundOnEnt( self, CHAN_BODY, "sound/weapons/force/jump.wav" );
+#ifdef _IMMERSION
+	G_Force( self, G_ForceIndex( "fffx/weapons/force/jump", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 
 	float forceJumpChargeInterval = forceJumpStrength[self->client->ps.forcePowerLevel[FP_LEVITATION]]/(FORCE_JUMP_CHARGE_TIME/FRAMETIME);
 
@@ -7734,6 +7864,8 @@ void WP_ForcePowerStop( gentity_t *self, forcePowers_t forcePower )
 				gi.cvar_set("timescale", "1");
 			}
 		}
+		//FIXME: reset my current anim, keeping current frame, but with proper anim speed
+		//		otherwise, the anim will continue playing at high speed
 		self->s.loopSound = 0;
 		break;
 	case FP_PUSH:
@@ -7805,9 +7937,14 @@ void WP_ForcePowerStop( gentity_t *self, forcePowers_t forcePower )
 								}
 							}
 						}
-						if ( gripEnt->NPC && !(gripEnt->NPC->aiFlags&NPCAI_DIE_ON_IMPACT) )
-						{//not falling to their death
-							gripEnt->NPC->nextBStateThink = level.time + holdTime;
+						if ( gripEnt->NPC )
+						{
+							if ( !(gripEnt->NPC->aiFlags&NPCAI_DIE_ON_IMPACT) )
+							{//not falling to their death
+								gripEnt->NPC->nextBStateThink = level.time + holdTime;
+							}
+							//if still alive after stopped gripping, let them wake others up
+							G_AngerAlert( gripEnt );
 						}
 					}
 				}
@@ -7882,11 +8019,17 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 		{//fully healed or used up all 25
 			if ( !Q3_TaskIDPending( self, TID_CHAN_VOICE ) )
 			{
+#ifdef _IMMERSION
+				int index = Q_irand( 1, 4 );
+				G_SoundOnEnt( self, CHAN_VOICE, va( "sound/weapons/force/heal%d.mp3", index ) );
+				G_Force( self, G_ForceIndex( va( "fffx/weapons/force/heal%d", index ), FF_CHANNEL_WEAPON ) );
+#else
 				G_SoundOnEnt( self, CHAN_VOICE, va( "sound/weapons/force/heal%d.mp3", Q_irand( 1, 4 ) ) );
+#endif // _IMMERSION
 			}
 			WP_ForcePowerStop( self, forcePower );
 		}
-		else if ( self->client->ps.forcePowerLevel[FP_HEAL] < FORCE_LEVEL_3 && ( (cmd->buttons&BUTTON_ATTACK) || (cmd->buttons&BUTTON_ALT_ATTACK) || self->painDebounceTime > level.time || self->client->ps.weaponTime ) )
+		else if ( self->client->ps.forcePowerLevel[FP_HEAL] < FORCE_LEVEL_3 && ( (cmd->buttons&BUTTON_ATTACK) || (cmd->buttons&BUTTON_ALT_ATTACK) || self->painDebounceTime > level.time || (self->client->ps.weaponTime&&self->client->ps.weapon!=WP_NONE) ) )
 		{//attacked or was hit while healing...
 			//stop healing
 			WP_ForcePowerStop( self, forcePower );

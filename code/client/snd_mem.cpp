@@ -496,9 +496,9 @@ void R_CheckMP3s( const char *psDir )
 void S_MP3_CalcVols_f( void )
 {
 	char sStartDir[MAX_QPATH] = {"sound"};
-	const char sUsage[] = "Usage: mp3_calcvols [-rescan] [startdir (default='sound')]\n";
+	const char sUsage[] = "Usage: mp3_calcvols [-rescan] <startdir>\ne.g. mp3_calcvols sound/chars";
 
-	if (Cmd_Argc()>4)	// 3 optional arguments
+	if (Cmd_Argc() == 1 || Cmd_Argc()>4)	// 3 optional arguments
 	{
 		Com_Printf(sUsage);
 		return;
@@ -569,12 +569,13 @@ static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pDa
 		if (com_buildScript->integer)
 		{
 			fileHandle_t hFile;
+			//German
 			strncpy(psVoice,"chr_d",5);	// same number of letters as "chars"
-			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cache this file
+			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cache the wav
 			if (!hFile)
 			{
 				strcpy(&psFilename[iNameStrlen-3],"mp3");		//not there try mp3
-				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache this file
+				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache the mp3
 			}
 			if (hFile)
 			{
@@ -582,19 +583,35 @@ static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pDa
 			}
 			strcpy(&psFilename[iNameStrlen-3],"wav");	//put it back to wav
 
+			//French
 			strncpy(psVoice,"chr_f",5);	// same number of letters as "chars"
-			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cahce this file
+			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cache the wav
 			if (!hFile)
 			{
 				strcpy(&psFilename[iNameStrlen-3],"mp3");		//not there try mp3
-				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache this file
+				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache the mp3
 			}
 			if (hFile)
 			{
 				FS_FCloseFile(hFile);
 			}
-			strncpy(psVoice,"chars",5);	//put it back to chars
 			strcpy(&psFilename[iNameStrlen-3],"wav");	//put it back to wav
+
+			//Spanish
+			strncpy(psVoice,"chr_e",5);	// same number of letters as "chars"
+			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cache the wav
+			if (!hFile)
+			{
+				strcpy(&psFilename[iNameStrlen-3],"mp3");		//not there try mp3
+				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache the mp3
+			}
+			if (hFile)
+			{
+				FS_FCloseFile(hFile);
+			}
+			strcpy(&psFilename[iNameStrlen-3],"wav");	//put it back to wav
+
+			strncpy(psVoice,"chars",5);	//put it back to chars
 		}
 
 		// account for foreign voices...
@@ -604,10 +621,13 @@ static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pDa
 		{				
 			strncpy(psVoice,"chr_d",5);	// same number of letters as "chars"
 		}
-		else
-		if (s_language && stricmp("FRANCAIS",s_language->string)==0)
+		else if (s_language && stricmp("FRANCAIS",s_language->string)==0)
 		{				
 			strncpy(psVoice,"chr_f",5);	// same number of letters as "chars"
+		}
+		else if (s_language && stricmp("ESPANOL",s_language->string)==0)
+		{				
+			strncpy(psVoice,"chr_e",5);	// same number of letters as "chars"
 		}
 		else
 		{
@@ -630,46 +650,7 @@ static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pDa
 			if (psVoice)	// were we trying to load foreign?
 			{
 				// yep, so fallback to re-try the english...
-				//
-				
-
-				// this doesn't work that well, there are just FAR too many exception (probetalk, gonktalk, headjump etc)
-				//	that this fails to do english fallback on. If I put the check the other way round, then the list of
-				//	what's not acceptable is also pretty long. Just forget it I guess...
-				//
-#if 0
-/*
-				if (0)	// set to 0 to be disabled
-				{
-					// NEW BIT!!!  We can sort of make this work by only allowing vocal fallback to certain noises,
-					//	this stops foreigners whining that their languages aren't fully localised...
-					//
-					const char *psBasePart = strrchr(psFilename,'/');
-								psBasePart = psBasePart ? psBasePart+1 : psFilename;	// probably irrelevant here, but good practice
-
-					// quicker to say what's allowed than what's forbidden (based on quick dir check)...
-					//
-					if (!	
-							(
-							!strnicmp(psBasePart,"choke",5) ||
-							!strnicmp(psBasePart,"death",5) ||
-							!strnicmp(psBasePart,"drown",5) ||
-							!strnicmp(psBasePart,"falling",7) ||
-							!strnicmp(psBasePart,"gasp",4) ||
-							!strnicmp(psBasePart,"gurp",4) ||
-							!strnicmp(psBasePart,"jump",4) ||
-							!strnicmp(psBasePart,"land",4) ||
-							!strnicmp(psBasePart,"pain",4) ||
-							!strnicmp(psBasePart,"pushed",5)
-							)
-						)
-					{
-						return qfalse;
-					}
-				}
-*/
-#endif
-
+				//				
 #ifndef FINAL_BUILD
 				Com_Printf(S_COLOR_YELLOW "Foreign file missing: \"%s\"! (using English...)\n",psFilename);
 #endif

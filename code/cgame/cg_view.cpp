@@ -793,8 +793,9 @@ static void CG_OffsetThirdPersonView( void )
 
 	// We must now take the angle taken from the camera target and location.
 	VectorSubtract(cameraCurTarget, cameraCurLoc, diff);
+	//Com_Printf( "%s\n", vtos(diff) );
 	float dist = VectorNormalize(diff);
-	if ( !dist )
+	if ( dist < 1.0f )
 	{//must be hitting something, need some value to calc angles, so use cam forward
 		VectorCopy( camerafwd, diff );
 	}
@@ -1392,18 +1393,30 @@ static qboolean	CG_CalcFov( void ) {
 					if ( zoomSoundTime < cg.time )
 					{
 						sfxHandle_t snd;
+#ifdef _IMMERSION
+//						ffHandle_t ff;
+#endif // _IMMERSION
 						
 						if ( cg.zoomMode == 1 )
 						{
 							snd = cgs.media.zoomLoop;
+#ifdef _IMMERSION
+//							ff = cgs.media.zoomLoopForce;
+#endif // _IMMERSION
 						}
 						else
 						{
 							snd = cgs.media.disruptorZoomLoop;
+#ifdef _IMMERSION
+//							ff = cgs.media.disruptorZoomLoopForce;
+#endif // _IMMERSION
 						}
 
 						// huh?  This could probably just be added as a looping sound??
 						cgi_S_StartSound( cg.refdef.vieworg, ENTITYNUM_WORLD, CHAN_LOCAL, snd );
+#ifdef _IMMERSION
+//						cgi_FF_Start( ff, cg.snap->ps.clientNum );
+#endif // _IMMERSION
 						zoomSoundTime = cg.time + 150; 
 					}
 				}
@@ -1664,6 +1677,13 @@ static qboolean CG_CalcViewValues( void ) {
 	// shake the camera if necessary
 	CGCam_UpdateSmooth( cg.refdef.vieworg, cg.refdefViewAngles );
 	CGCam_UpdateShake( cg.refdef.vieworg, cg.refdefViewAngles );
+
+	/*
+	if ( in_camera )
+	{
+		Com_Printf( "%s %s\n", vtos(client_camera.origin), vtos(cg.refdef.vieworg) ); 
+	}
+	*/
 
 	// see if we are drugged by an interrogator.  We muck with the angles here, just a bit earlier, we mucked with the FOV
 	if ( cg.wonkyTime > 0 && cg.wonkyTime > cg.time )

@@ -278,6 +278,7 @@ void QDECL Com_Error( int code, const char *fmt, ... ) {
 	va_end (argptr);
 
 	if ( code != ERR_DISCONNECT ) {
+		Cvar_Get("com_errorMessage", "", CVAR_ROM);	//give com_errorMessage a default so it won't come back to life after a resetDefaults
 		Cvar_Set("com_errorMessage", com_errorMessage);
 	}
 
@@ -857,7 +858,11 @@ void *Z_Malloc(int iSize, memtag_t eTag, qboolean bZeroit /* = qfalse */)
 	zoneHeader_t *pMemory = NULL;
 	while (pMemory == NULL)
 	{
-		pMemory = (zoneHeader_t *) malloc ( iRealSize );
+		if (bZeroit) {
+			pMemory = (zoneHeader_t *) calloc ( iRealSize, 1 );
+		} else {
+			pMemory = (zoneHeader_t *) malloc ( iRealSize );
+		}
 		if (!pMemory)
 		{
 			// new bit, if we fail to malloc memory, try dumping some of the cached stuff that's non-vital and try again...
@@ -980,9 +985,6 @@ void *Z_Malloc(int iSize, memtag_t eTag, qboolean bZeroit /* = qfalse */)
 	Z_Validate();	// check for corruption
 
 	void *pvReturnMem = &pMemory[1];
-	if (bZeroit) {
-		memset(pvReturnMem, 0, iSize);
-	}
 	return pvReturnMem;
 }
 
@@ -1639,6 +1641,15 @@ void Com_InitHunkMemory( void ) {
 	Cmd_AddCommand( "hunklog", Hunk_Log );
 	Cmd_AddCommand( "hunksmalllog", Hunk_SmallLog );
 #endif
+}
+
+void Com_ShutdownHunkMemory(void)
+{
+	if(s_hunkData)
+	{
+		free(s_hunkData);
+		s_hunkData = NULL;
+	}
 }
 
 /*
@@ -2494,7 +2505,11 @@ void Com_Init( char *commandLine ) {
 
 		// skip the jk2mpconfig.cfg if "safe" is on the command line
 		if ( !Com_SafeMode() ) {
+#ifdef DEDICATED
+			Cbuf_AddText ("exec jk2mpserver.cfg\n");
+#else
 			Cbuf_AddText ("exec jk2mpconfig.cfg\n");
+#endif
 		}
 
 		Cbuf_AddText ("exec autoexec.cfg\n");
@@ -2532,7 +2547,7 @@ void Com_Init( char *commandLine ) {
 		com_dropsim = Cvar_Get ("com_dropsim", "0", CVAR_CHEAT);
 		com_viewlog = Cvar_Get( "viewlog", "0", CVAR_CHEAT );
 		com_speeds = Cvar_Get ("com_speeds", "0", 0);
-		com_timedemo = Cvar_Get ("timedemo", "0", CVAR_CHEAT);
+		com_timedemo = Cvar_Get ("timedemo", "0", 0);
 		com_cameraMode = Cvar_Get ("com_cameraMode", "0", CVAR_CHEAT);
 
 		cl_paused = Cvar_Get ("cl_paused", "0", CVAR_ROM);
@@ -2569,7 +2584,7 @@ void Com_Init( char *commandLine ) {
 		com_version = Cvar_Get ("version", s, CVAR_ROM | CVAR_SERVERINFO );
 
 		SP_Init();
-#ifndef __linux__
+#ifndef DEDICATED
 		extern void QuickMemTest(void);
 		QuickMemTest();
 #endif
@@ -2669,7 +2684,11 @@ void Com_WriteConfiguration( void ) {
 	}
 	cvar_modifiedFlags &= ~CVAR_ARCHIVE;
 
+#ifdef DEDICATED
+	Com_WriteConfigToFile( "jk2mpserver.cfg" );
+#else
 	Com_WriteConfigToFile( "jk2mpconfig.cfg" );
+#endif
 
 	// bk001119 - tentative "not needed for dedicated"
 #ifndef DEDICATED
@@ -2938,7 +2957,6 @@ void MSG_shutdownHuffman();
 void Com_Shutdown (void) 
 {
 	CM_ClearMap();
-	CM_FreeShaderText();
 
 	if (logfile) {
 		FS_FCloseFile (logfile);

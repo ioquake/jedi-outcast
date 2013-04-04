@@ -332,15 +332,6 @@ int Sys_GetCPUSpeedOld()
 {
 	timeBeginPeriod(1);
 
-	DWORD clockStart = timeGetTime();
-	DWORD clockEnd = clockStart + 100;
-
-	while(clockEnd < clockStart)
-	{
-		clockStart = timeGetTime();
-		clockEnd = clockStart + 100;
-	}
-
 #ifdef WIN32
 	int iPriority;
 	HANDLE hThread = GetCurrentThread();
@@ -351,6 +342,9 @@ int Sys_GetCPUSpeedOld()
 		SetThreadPriority(hThread, THREAD_PRIORITY_TIME_CRITICAL);
 	}
 #endif // WIN32
+
+	DWORD clockStart = timeGetTime();
+	DWORD clockEnd = clockStart + 100;
 
 	unsigned long start;
 	unsigned long end;
@@ -372,11 +366,11 @@ int Sys_GetCPUSpeedOld()
 
 
 #ifdef WIN32
-		// Reset priority
-		if ( iPriority != THREAD_PRIORITY_ERROR_RETURN )
-		{
-			SetThreadPriority(hThread, iPriority);
-		}
+	// Reset priority
+	if ( iPriority != THREAD_PRIORITY_ERROR_RETURN )
+	{
+		SetThreadPriority(hThread, iPriority);
+	}
 #endif // WIN32
 	
 	timeEndPeriod(1);
@@ -462,8 +456,8 @@ int Sys_GetCPUSpeed()
 			
 		t0 = t1;		// Reset Initial Time
 
-   		while ((unsigned long)t1.LowPart-(unsigned long)t0.LowPart<1000 ) {
-   		// Loop until 1000 ticks have passed since last read of hi-res counter. This allows for elapsed time for sampling.
+   		while ((unsigned long)t1.LowPart-(unsigned long)t0.LowPart<2000 ) {
+   		// Loop until enough ticks have passed since last read of hi-res counter. This allows for elapsed time for sampling.
    			QueryPerformanceCounter(&t1);
 			__asm {
 				rdtsc;						// Read Time Stamp
@@ -503,6 +497,10 @@ int Sys_GetCPUSpeed()
 		if ( ticks%count_freq.LowPart > count_freq.LowPart/2 )
 			ticks++;			// Round up if necessary
 			
+		if (!ticks){
+			ticks++;			// prevent DIV by ZERO
+		}
+
 		freq = cycles/ticks;	// Cycles / us  = MHz
         										
      	if ( cycles%ticks > ticks/2 )
@@ -516,6 +514,10 @@ int Sys_GetCPUSpeed()
 	           (abs(3 * freq2-total) > 3*TOLERANCE )||
 	           (abs(3 * freq3-total) > 3*TOLERANCE )));	
 				// Compare last three calculations to average of last three calculations.		
+
+	if (!total_ticks){
+		total_ticks++;			// prevent DIV by ZERO
+	}
 
 	// Try one more significant digit.
 	freq3 = ( total_cycles * 10 ) / total_ticks;

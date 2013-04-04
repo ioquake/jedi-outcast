@@ -8,6 +8,7 @@
 #include "b_local.h"
 #include "Q3_Interface.h"
 
+extern qboolean FlyingCreature( gentity_t *ent );
 /*
 SetGoal
 */
@@ -137,7 +138,7 @@ ReachedGoal
 
 id removed checks against waypoints and is now checking surfaces
 */
-//qboolean NAV_HitNavGoal( vec3_t point, vec3_t mins, vec3_t maxs, gentity_t *goal );
+//qboolean NAV_HitNavGoal( vec3_t point, vec3_t mins, vec3_t maxs, gentity_t *goal, qboolean flying );
 qboolean ReachedGoal( gentity_t *goal ) 
 {
 	//FIXME: For script waypoints, need a special check
@@ -149,7 +150,7 @@ qboolean ReachedGoal( gentity_t *goal )
 
 	if ( goal->svFlags & SVF_NAVGOAL )
 	{//waypoint_navgoal
-		return NAV_HitNavGoal( NPC->currentOrigin, NPC->mins, NPC->maxs, goal );
+		return NAV_HitNavGoal( NPC->currentOrigin, NPC->mins, NPC->maxs, goal, FlyingCreature( NPC ) );
 	}
 
 	if ( goal == NPCInfo->tempGoal && !(goal->svFlags & SVF_NAVGOAL)) 
@@ -232,7 +233,7 @@ qboolean ReachedGoal( gentity_t *goal )
 		}
 	}
 */	
-	return NAV_HitNavGoal( NPC->currentOrigin, NPC->mins, NPC->maxs, goal->currentOrigin, NPCInfo->goalRadius );
+	return NAV_HitNavGoal( NPC->currentOrigin, NPC->mins, NPC->maxs, goal->currentOrigin, NPCInfo->goalRadius, FlyingCreature( NPC ) );
 }
 
 /*

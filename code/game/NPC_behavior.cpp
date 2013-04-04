@@ -577,6 +577,7 @@ void NPC_BSFollowLeader (void)
 		{
 			if ( NPC->client->leader 
 				&& NPC->client->leader->enemy 
+				&& NPC->client->leader->enemy != NPC
 				&& ( (NPC->client->leader->enemy->client&&NPC->client->leader->enemy->client->playerTeam==NPC->client->enemyTeam)
 					||(NPC->client->leader->enemy->svFlags&SVF_NONNPC_ENEMY&&NPC->client->leader->enemy->noDamageTeam==NPC->client->enemyTeam) )
 				&& NPC->client->leader->enemy->health > 0 )

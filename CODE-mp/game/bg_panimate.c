@@ -114,7 +114,7 @@ qboolean BG_SaberInIdle( int move )
 
 qboolean BG_FlippingAnim( int anim )
 {
-	switch ( anim )
+	switch ( anim&~ANIM_TOGGLEBIT )
 	{
 	case BOTH_FLIP_F:			//# Flip forward
 	case BOTH_FLIP_B:			//# Flip backwards
@@ -151,7 +151,7 @@ qboolean BG_FlippingAnim( int anim )
 
 qboolean BG_SpinningSaberAnim( int anim )
 {
-	switch ( anim )
+	switch ( anim&~ANIM_TOGGLEBIT )
 	{
 	//level 1 - FIXME: level 1 will have *no* spins
 	case BOTH_T1_BR_BL:
@@ -236,6 +236,103 @@ qboolean BG_SaberInSpecialAttack( int anim )
 	return qfalse;
 }
 
+int BG_BrokenParryForAttack( int move )
+{
+	//Our attack was knocked away by a knockaway parry
+	//FIXME: need actual anims for this
+	//FIXME: need to know which side of the saber was hit!  For now, we presume the saber gets knocked away from the center
+	switch ( saberMoveData[move].startQuad )
+	{
+	case Q_B:
+		return LS_V1_B_;
+		break;
+	case Q_BR:
+		return LS_V1_BR;
+		break;
+	case Q_R:
+		return LS_V1__R;
+		break;
+	case Q_TR:
+		return LS_V1_TR;
+		break;
+	case Q_T:
+		return LS_V1_T_;
+		break;
+	case Q_TL:
+		return LS_V1_TL;
+		break;
+	case Q_L:
+		return LS_V1__L;
+		break;
+	case Q_BL:
+		return LS_V1_BL;
+		break;
+	}
+	return LS_NONE;
+}
+
+int BG_BrokenParryForParry( int move )
+{
+	//FIXME: need actual anims for this
+	//FIXME: need to know which side of the saber was hit!  For now, we presume the saber gets knocked away from the center
+	switch ( move )
+	{
+	case LS_PARRY_UP:
+		//Hmm... since we don't know what dir the hit came from, randomly pick knock down or knock back
+		if ( Q_irand( 0, 1 ) )
+		{
+			return LS_H1_B_;
+		}
+		else
+		{
+			return LS_H1_T_;
+		}
+		break;
+	case LS_PARRY_UR:
+		return LS_H1_TR;
+		break;
+	case LS_PARRY_UL:
+		return LS_H1_TL;
+		break;
+	case LS_PARRY_LR:
+		return LS_H1_BR;
+		break;
+	case LS_PARRY_LL:
+		return LS_H1_BL;
+		break;
+	case LS_READY:
+		return LS_H1_B_;//???
+		break;
+	}
+	return LS_NONE;
+}
+
+int BG_KnockawayForParry( int move )
+{
+	//FIXME: need actual anims for this
+	//FIXME: need to know which side of the saber was hit!  For now, we presume the saber gets knocked away from the center
+	switch ( move )
+	{
+	case BLOCKED_TOP://LS_PARRY_UP:
+		return LS_K1_T_;//push up
+		break;
+	case BLOCKED_UPPER_RIGHT://LS_PARRY_UR:
+	default://case LS_READY:
+		return LS_K1_TR;//push up, slightly to right
+		break;
+	case BLOCKED_UPPER_LEFT://LS_PARRY_UL:
+		return LS_K1_TL;//push up and to left
+		break;
+	case BLOCKED_LOWER_RIGHT://LS_PARRY_LR:
+		return LS_K1_BR;//push down and to left
+		break;
+	case BLOCKED_LOWER_LEFT://LS_PARRY_LL:
+		return LS_K1_BL;//push down and to right
+		break;
+	}
+	//return LS_NONE;
+}
+
 qboolean BG_InRoll( playerState_t *ps, int anim )
 {
 	switch ( (anim&~ANIM_TOGGLEBIT) )
@@ -285,9 +382,89 @@ qboolean BG_InDeathAnim( int anim )
 }
 
 //Called only where pm is valid (not all require pm, but some do):
+int PM_SaberBounceForAttack( int move )
+{
+	switch ( saberMoveData[move].startQuad )
+	{
+	case Q_B:
+	case Q_BR:
+		return LS_B1_BR;
+		break;
+	case Q_R:
+		return LS_B1__R;
+		break;
+	case Q_TR:
+		return LS_B1_TR;
+		break;
+	case Q_T:
+		return LS_B1_T_;
+		break;
+	case Q_TL:
+		return LS_B1_TL;
+		break;
+	case Q_L:
+		return LS_B1__L;
+		break;
+	case Q_BL:
+		return LS_B1_BL;
+		break;
+	}
+	return LS_NONE;
+}
+
+int PM_SaberDeflectionForQuad( int quad )
+{
+	switch ( quad )
+	{
+	case Q_B:
+		return LS_D1_B_;
+		break;
+	case Q_BR:
+		return LS_D1_BR;
+		break;
+	case Q_R:
+		return LS_D1__R;
+		break;
+	case Q_TR:
+		return LS_D1_TR;
+		break;
+	case Q_T:
+		return LS_D1_T_;
+		break;
+	case Q_TL:
+		return LS_D1_TL;
+		break;
+	case Q_L:
+		return LS_D1__L;
+		break;
+	case Q_BL:
+		return LS_D1_BL;
+		break;
+	}
+	return LS_NONE;
+}
+
+qboolean PM_SaberInDeflect( int move )
+{
+	if ( move >= LS_D1_BR && move <= LS_D1_B_ )
+	{
+		return qtrue;
+	}
+	return qfalse;
+}
+
 qboolean PM_SaberInParry( int move )
 {
 	if ( move >= LS_PARRY_UP && move <= LS_PARRY_LL )
+	{
+		return qtrue;
+	}
+	return qfalse;
+}
+
+qboolean PM_SaberInKnockaway( int move )
+{
+	if ( move >= LS_K1_T_ && move <= LS_K1_BL )
 	{
 		return qtrue;
 	}
@@ -306,6 +483,15 @@ qboolean PM_SaberInReflect( int move )
 qboolean PM_SaberInStart( int move )
 {
 	if ( move >= LS_S_TL2BR && move <= LS_S_T2B )
+	{
+		return qtrue;
+	}
+	return qfalse;
+}
+
+qboolean PM_SaberInReturn( int move )
+{
+	if ( move >= LS_R_TL2BR && move <= LS_R_TL2BR )
 	{
 		return qtrue;
 	}
@@ -544,6 +730,34 @@ char		BGPAFtext[40000];
 qboolean	BGPAFtextLoaded = qfalse;
 animation_t	bgGlobalAnimations[MAX_TOTALANIMATIONS];
 
+//#define CONVENIENT_ANIMATION_FILE_DEBUG_THING
+
+#ifdef CONVENIENT_ANIMATION_FILE_DEBUG_THING
+void SpewDebugStuffToFile()
+{
+	fileHandle_t f;
+	int i = 0;
+
+	trap_FS_FOpenFile("file_of_debug_stuff_MP.txt", &f, FS_WRITE);
+
+	if (!f)
+	{
+		return;
+	}
+
+	BGPAFtext[0] = 0;
+
+	while (i < MAX_ANIMATIONS)
+	{
+		strcat(BGPAFtext, va("%i %i\n", i, bgGlobalAnimations[i].frameLerp));
+		i++;
+	}
+
+	trap_FS_Write(BGPAFtext, strlen(BGPAFtext), f);
+	trap_FS_FCloseFile(f);
+}
+#endif
+
 qboolean BG_ParseAnimationFile(const char *filename) 
 {
 	char		*text_p;
@@ -673,6 +887,9 @@ qboolean BG_ParseAnimationFile(const char *filename)
 	}
 #endif // _DEBUG
 
+#ifdef CONVENIENT_ANIMATION_FILE_DEBUG_THING
+	SpewDebugStuffToFile();
+#endif
 	BGPAFtextLoaded = qtrue;
 	return qtrue;
 }
@@ -831,7 +1048,7 @@ void PM_SetAnimFinal(int setAnimParts,int anim,int setAnimFlags,
 {
 	animation_t *animations = pm->animations;
 
-	float editAnimSpeed = 0;
+	float editAnimSpeed = 1;
 
 	if (!animations)
 	{
@@ -864,10 +1081,13 @@ void PM_SetAnimFinal(int setAnimParts,int anim,int setAnimFlags,
 			if (setAnimFlags & SETANIM_FLAG_HOLDLESS)
 			{	// Make sure to only wait in full 1/20 sec server frame intervals.
 				int dur;
+				int speedDif;
 				
-				dur = (animations[anim].numFrames ) * fabs(animations[anim].frameLerp);
+				dur = (animations[anim].numFrames-1) * fabs(animations[anim].frameLerp);
 				//dur = ((int)(dur/50.0)) * 50 / timeScaleMod;
-				dur -= blendTime+fabs(animations[anim].frameLerp)*2;
+				//dur -= blendTime+fabs(animations[anim].frameLerp)*2;
+				speedDif = dur - (dur * editAnimSpeed);
+				dur += speedDif;
 				if (dur > 1)
 				{
 					pm->ps->torsoTimer = dur-1;
@@ -885,11 +1105,6 @@ void PM_SetAnimFinal(int setAnimParts,int anim,int setAnimFlags,
 			if (pm->ps->fd.forcePowersActive & (1 << FP_RAGE))
 			{
 				pm->ps->torsoTimer /= 1.7;
-			}
-
-			if (editAnimSpeed)
-			{
-				pm->ps->torsoTimer /= editAnimSpeed;
 			}
 		}
 	}
@@ -916,10 +1131,13 @@ setAnimLegs:
 			if (setAnimFlags & SETANIM_FLAG_HOLDLESS)
 			{	// Make sure to only wait in full 1/20 sec server frame intervals.
 				int dur;
+				int speedDif;
 				
-				dur = (animations[anim].numFrames -1) * fabs(animations[anim].frameLerp);
+				dur = (animations[anim].numFrames-1) * fabs(animations[anim].frameLerp);
 				//dur = ((int)(dur/50.0)) * 50 / timeScaleMod;
-				dur -= blendTime+fabs(animations[anim].frameLerp)*2;
+				//dur -= blendTime+fabs(animations[anim].frameLerp)*2;
+				speedDif = dur - (dur * editAnimSpeed);
+				dur += speedDif;
 				if (dur > 1)
 				{
 					pm->ps->legsTimer = dur-1;

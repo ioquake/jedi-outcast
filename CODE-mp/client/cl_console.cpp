@@ -30,8 +30,8 @@ void Con_ToggleConsole_f (void) {
 		return;
 	}
 
-	Field_Clear( &g_consoleField );
-	g_consoleField.widthInChars = g_console_field_width;
+	Field_Clear( &kg.g_consoleField );
+	kg.g_consoleField.widthInChars = g_console_field_width;
 
 	Con_ClearNotify ();
 	cls.keyCatchers ^= KEYCATCH_CONSOLE;
@@ -130,7 +130,7 @@ void Con_Dump_f (void)
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf(SP_GetStringText(CON_TEXT_DUMP_USAGE));
+		Com_Printf (SP_GetStringText(CON_TEXT_DUMP_USAGE));
 		return;
 	}
 
@@ -139,7 +139,7 @@ void Con_Dump_f (void)
 	f = FS_FOpenFileWrite( Cmd_Argv( 1 ) );
 	if (!f)
 	{
-		Com_Printf ("ERROR: couldn't open.\n");
+		Com_Printf (S_COLOR_RED"ERROR: couldn't open.\n");
 		return;
 	}
 
@@ -277,11 +277,11 @@ void Con_Init (void) {
 	con_notifytime = Cvar_Get ("con_notifytime", "3", 0);
 	con_conspeed = Cvar_Get ("scr_conspeed", "3", 0);
 
-	Field_Clear( &g_consoleField );
-	g_consoleField.widthInChars = g_console_field_width;
+	Field_Clear( &kg.g_consoleField );
+	kg.g_consoleField.widthInChars = g_console_field_width;
 	for ( i = 0 ; i < COMMAND_HISTORY ; i++ ) {
-		Field_Clear( &historyEditLines[i] );
-		historyEditLines[i].widthInChars = g_console_field_width;
+		Field_Clear( &kg.historyEditLines[i] );
+		kg.historyEditLines[i].widthInChars = g_console_field_width;
 	}
 
 	Cmd_AddCommand ("toggleconsole", Con_ToggleConsole_f);
@@ -424,15 +424,17 @@ void Con_DrawInput (void) {
 		return;
 	}
 
-	y = con.vislines - ( SMALLCHAR_HEIGHT * 2 );
+	y = con.vislines - ( SMALLCHAR_HEIGHT * (re.Language_IsAsian() ? 1.5 : 2) );
 
 	re.SetColor( con.color );
 
 	SCR_DrawSmallChar( (int)(con.xadjust + 1 * SMALLCHAR_WIDTH), y, ']' );
 
-	Field_Draw( &g_consoleField, (int)(con.xadjust + 2 * SMALLCHAR_WIDTH), y,
+	Field_Draw( &kg.g_consoleField, (int)(con.xadjust + 2 * SMALLCHAR_WIDTH), y,
 				SCREEN_WIDTH - 3 * SMALLCHAR_WIDTH, qtrue );
 }
+
+
 
 
 /*
@@ -471,22 +473,59 @@ void Con_DrawNotify (void)
 			continue;
 		}
 
-		for (x = 0 ; x < con.linewidth ; x++) {
-			if ( ( text[x] & 0xff ) == ' ' ) {
-				continue;
-			}
-			if ( ( (text[x]>>8)&7 ) != currentColor ) {
-				currentColor = (text[x]>>8)&7;
-				re.SetColor( g_color_table[currentColor] );
-			}
-			if (!cl_conXOffset)
-			{
-				cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
-			}
-			SCR_DrawSmallChar( (int)(cl_conXOffset->integer + con.xadjust + (x+1)*SMALLCHAR_WIDTH), v, text[x] & 0xff );
+
+		if (!cl_conXOffset)
+		{
+			cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
 		}
 
-		v += SMALLCHAR_HEIGHT;
+		// asian language needs to use the new font system to print glyphs...
+		//
+		// (ignore colours since we're going to print the whole thing as one string)
+		//
+		if (re.Language_IsAsian())
+		{
+			static int iFontIndex = re.RegisterFont("ocr_a");	// this seems naughty
+			const float fFontScale = 0.75f*con.yadjust;
+			const int iPixelHeightToAdvance =   2+(1.3/con.yadjust) * re.Font_HeightPixels(iFontIndex, fFontScale);	// for asian spacing, since we don't want glyphs to touch.
+
+			// concat the text to be printed...
+			//
+			char sTemp[4096]={0};	// ott
+			for (x = 0 ; x < con.linewidth ; x++) 
+			{
+				if ( ( (text[x]>>8)&7 ) != currentColor ) {
+					currentColor = (text[x]>>8)&7;
+					strcat(sTemp,va("^%i", (text[x]>>8)&7) );
+				}
+				strcat(sTemp,va("%c",text[x] & 0xFF));				
+			}
+			//
+			// and print...
+			//
+			re.Font_DrawString(cl_conXOffset->integer + con.xadjust*(con.xadjust + (1*SMALLCHAR_WIDTH/*aesthetics*/)), con.yadjust*(v), sTemp, g_color_table[currentColor], iFontIndex, -1, fFontScale);
+
+			v +=  iPixelHeightToAdvance;
+		}
+		else
+		{		
+			for (x = 0 ; x < con.linewidth ; x++) {
+				if ( ( text[x] & 0xff ) == ' ' ) {
+					continue;
+				}
+				if ( ( (text[x]>>8)&7 ) != currentColor ) {
+					currentColor = (text[x]>>8)&7;
+					re.SetColor( g_color_table[currentColor] );
+				}
+				if (!cl_conXOffset)
+				{
+					cl_conXOffset = Cvar_Get ("cl_conXOffset", "0", 0);
+				}
+				SCR_DrawSmallChar( (int)(cl_conXOffset->integer + con.xadjust + (x+1)*SMALLCHAR_WIDTH), v, text[x] & 0xff );
+			}
+
+			v += SMALLCHAR_HEIGHT;
+		}
 	}
 
 	re.SetColor( NULL );
@@ -589,7 +628,19 @@ void Con_DrawSolidConsole( float frac ) {
 	currentColor = 7;
 	re.SetColor( g_color_table[currentColor] );
 
-	for (i=0 ; i<rows ; i++, y -= SMALLCHAR_HEIGHT, row--)
+	static int iFontIndexForAsian = 0;
+	const float fFontScaleForAsian = 0.75f*con.yadjust;
+	int iPixelHeightToAdvance = SMALLCHAR_HEIGHT;
+	if (re.Language_IsAsian())
+	{
+		if (!iFontIndexForAsian) 
+		{
+			iFontIndexForAsian = re.RegisterFont("ocr_a");
+		}
+		iPixelHeightToAdvance = (1.3/con.yadjust) * re.Font_HeightPixels(iFontIndexForAsian, fFontScaleForAsian);	// for asian spacing, since we don't want glyphs to touch.
+	}
+
+	for (i=0 ; i<rows ; i++, y -= iPixelHeightToAdvance, row--)
 	{
 		if (row < 0)
 			break;
@@ -600,16 +651,41 @@ void Con_DrawSolidConsole( float frac ) {
 
 		text = con.text + (row % con.totallines)*con.linewidth;
 
-		for (x=0 ; x<con.linewidth ; x++) {
-			if ( ( text[x] & 0xff ) == ' ' ) {
-				continue;
+		// asian language needs to use the new font system to print glyphs...
+		//
+		// (ignore colours since we're going to print the whole thing as one string)
+		//
+		if (re.Language_IsAsian())
+		{
+			// concat the text to be printed...
+			//
+			char sTemp[4096]={0};	// ott
+			for (x = 0 ; x < con.linewidth ; x++) 
+			{
+				if ( ( (text[x]>>8)&7 ) != currentColor ) {
+					currentColor = (text[x]>>8)&7;
+					strcat(sTemp,va("^%i", (text[x]>>8)&7) );
+				}
+				strcat(sTemp,va("%c",text[x] & 0xFF));				
 			}
+			//
+			// and print...
+			//
+			re.Font_DrawString(con.xadjust*(con.xadjust + (1*SMALLCHAR_WIDTH/*(aesthetics)*/)), con.yadjust*(y), sTemp, g_color_table[currentColor], iFontIndexForAsian, -1, fFontScaleForAsian);
+		}
+		else
+		{		
+			for (x=0 ; x<con.linewidth ; x++) {
+				if ( ( text[x] & 0xff ) == ' ' ) {
+					continue;
+				}
 
-			if ( ( (text[x]>>8)&7 ) != currentColor ) {
-				currentColor = (text[x]>>8)&7;
-				re.SetColor( g_color_table[currentColor] );
+				if ( ( (text[x]>>8)&7 ) != currentColor ) {
+					currentColor = (text[x]>>8)&7;
+					re.SetColor( g_color_table[currentColor] );
+				}
+				SCR_DrawSmallChar(  (int) (con.xadjust + (x+1)*SMALLCHAR_WIDTH), y, text[x] & 0xff );
 			}
-			SCR_DrawSmallChar(  (int) (con.xadjust + (x+1)*SMALLCHAR_WIDTH), y, text[x] & 0xff );
 		}
 	}
 
@@ -712,7 +788,7 @@ void Con_Close( void ) {
 	if ( !com_cl_running->integer ) {
 		return;
 	}
-	Field_Clear( &g_consoleField );
+	Field_Clear( &kg.g_consoleField );
 	Con_ClearNotify ();
 	cls.keyCatchers &= ~KEYCATCH_CONSOLE;
 	con.finalFrac = 0;				// none visible

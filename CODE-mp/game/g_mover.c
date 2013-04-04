@@ -1197,9 +1197,10 @@ void Touch_Button(gentity_t *ent, gentity_t *other, trace_t *trace ) {
 	}
 }
 
-
-/*QUAKED func_button (0 .5 .8) ?
+/*QUAKED func_button (0 .5 .8) ? USABLE FPUSHABLE
 When a button is touched, it moves some distance in the direction of it's angle, triggers all of it's targets, waits some time, then returns to it's original position where it can be triggered again.
+USABLE - Can activate with use button
+FPUSHABLE - Can force-push it
 
 "model2"	.md3 model to also draw
 "angle"		determines the opening direction
@@ -1266,6 +1267,11 @@ void SP_func_button( gentity_t *ent ) {
 	} else {
 		// touchable button
 		ent->touch = Touch_Button;
+	}
+
+	if ( (ent->spawnflags&SPF_BUTTON_USABLE) )
+	{
+		ent->r.svFlags |= SVF_PLAYER_USABLE;
 	}
 
 	InitMover( ent );
@@ -1793,18 +1799,40 @@ void SP_func_breakable( gentity_t *ent ) {
 
 	if (strcmp(model, "rock") == 0)
 	{
+		G_ModelIndex("models/chunks/rock/rock1_1.md3");
+		G_ModelIndex("models/chunks/rock/rock1_2.md3");
+		G_ModelIndex("models/chunks/rock/rock1_3.md3");
+		G_ModelIndex("models/chunks/rock/rock1_4.md3");
 		ent->boltpoint2 = DEBRIS_SPECIALCASE_ROCK;
 	}
 	else if (strcmp(model, "chunks") == 0)
 	{
+		G_ModelIndex("models/chunks/generic/chunks_1.md3");
+		G_ModelIndex("models/chunks/generic/chunks_2.md3");
 		ent->boltpoint2 = DEBRIS_SPECIALCASE_CHUNKS;
 	}
 	else if (strcmp(model, "wood") == 0)
 	{
+		G_ModelIndex("models/chunks/crate/crate1_1.md3");
+		G_ModelIndex("models/chunks/crate/crate1_2.md3");
+		G_ModelIndex("models/chunks/crate/crate1_3.md3");
+		G_ModelIndex("models/chunks/crate/crate1_4.md3");
+		G_ModelIndex("models/chunks/crate/crate2_1.md3");
+		G_ModelIndex("models/chunks/crate/crate2_2.md3");
+		G_ModelIndex("models/chunks/crate/crate2_3.md3");
+		G_ModelIndex("models/chunks/crate/crate2_4.md3");
 		ent->boltpoint2 = DEBRIS_SPECIALCASE_WOOD;
 	}
 	else if (strcmp(model, "glass") == 0)
 	{
+		G_ModelIndex("models/chunks/metal/metal1_1.md3");
+		G_ModelIndex("models/chunks/metal/metal1_2.md3");
+		G_ModelIndex("models/chunks/metal/metal1_3.md3");
+		G_ModelIndex("models/chunks/metal/metal1_4.md3");
+		G_ModelIndex("models/chunks/metal/metal2_1.md3");
+		G_ModelIndex("models/chunks/metal/metal2_2.md3");
+		G_ModelIndex("models/chunks/metal/metal2_3.md3");
+		G_ModelIndex("models/chunks/metal/metal2_4.md3");
 		ent->boltpoint2 = DEBRIS_SPECIALCASE_GLASS;
 	}
 	else if (strcmp(model, "none") == 0)

@@ -20,6 +20,7 @@ extern void NPC_CheckGetNewWeapon( void );
 extern qboolean Q3_TaskIDPending( gentity_t *ent, taskID_t taskType );
 extern int GetTime ( int lastTime );
 extern void NPC_AimAdjust( int change );
+extern qboolean FlyingCreature( gentity_t *ent );
 
 extern	CNavigator	navigator;
 extern	cvar_t		*d_asynchronousGroupAI;
@@ -740,26 +741,29 @@ NPC_ST_InvestigateEvent
 static qboolean NPC_ST_InvestigateEvent( int eventID, bool extraSuspicious )
 {
 	//If they've given themselves away, just take them as an enemy
-	if ( level.alertEvents[eventID].level == AEL_DISCOVERED && (NPCInfo->scriptFlags&SCF_LOOK_FOR_ENEMIES) )
+	if ( NPCInfo->confusionTime < level.time )
 	{
-		NPCInfo->lastAlertID = level.alertEvents[eventID].ID;
-		if ( !level.alertEvents[eventID].owner || 
-			!level.alertEvents[eventID].owner->client || 
-			level.alertEvents[eventID].owner->health <= 0 ||
-			level.alertEvents[eventID].owner->client->playerTeam != NPC->client->enemyTeam )
-		{//not an enemy
-			return qfalse;
+		if ( level.alertEvents[eventID].level == AEL_DISCOVERED && (NPCInfo->scriptFlags&SCF_LOOK_FOR_ENEMIES) )
+		{
+			NPCInfo->lastAlertID = level.alertEvents[eventID].ID;
+			if ( !level.alertEvents[eventID].owner || 
+				!level.alertEvents[eventID].owner->client || 
+				level.alertEvents[eventID].owner->health <= 0 ||
+				level.alertEvents[eventID].owner->client->playerTeam != NPC->client->enemyTeam )
+			{//not an enemy
+				return qfalse;
+			}
+			//FIXME: what if can't actually see enemy, don't know where he is... should we make them just become very alert and start looking for him?  Or just let combat AI handle this... (act as if you lost him)
+			//ST_Speech( NPC, SPEECH_CHARGE, 0 );
+			G_SetEnemy( NPC, level.alertEvents[eventID].owner );
+			NPCInfo->enemyLastSeenTime = level.time;
+			TIMER_Set( NPC, "attackDelay", Q_irand( 500, 2500 ) );
+			if ( level.alertEvents[eventID].type == AET_SOUND )
+			{//heard him, didn't see him, stick for a bit
+				TIMER_Set( NPC, "roamTime", Q_irand( 500, 2500 ) );
+			}
+			return qtrue;
 		}
-		//FIXME: what if can't actually see enemy, don't know where he is... should we make them just become very alert and start looking for him?  Or just let combat AI handle this... (act as if you lost him)
-		//ST_Speech( NPC, SPEECH_CHARGE, 0 );
-		G_SetEnemy( NPC, level.alertEvents[eventID].owner );
-		NPCInfo->enemyLastSeenTime = level.time;
-		TIMER_Set( NPC, "attackDelay", Q_irand( 500, 2500 ) );
-		if ( level.alertEvents[eventID].type == AET_SOUND )
-		{//heard him, didn't see him, stick for a bit
-			TIMER_Set( NPC, "roamTime", Q_irand( 500, 2500 ) );
-		}
-		return qtrue;
 	}
 
 	//don't look at the same alert twice
@@ -956,30 +960,42 @@ void NPC_BSST_Investigate( void )
 		WeaponThink( qtrue );
 	}
 
-	//Look for an enemy
-	if ( NPC_CheckPlayerTeamStealth() )
+	if ( NPCInfo->confusionTime < level.time )
 	{
-		//NPCInfo->behaviorState	= BS_HUNT_AND_KILL;//should be auto now
-		ST_Speech( NPC, SPEECH_DETECTED, 0 );
-		NPCInfo->tempBehavior	= BS_DEFAULT;
-		NPC_UpdateAngles( qtrue, qtrue );
-		return;
+		if ( NPCInfo->scriptFlags&SCF_LOOK_FOR_ENEMIES )
+		{
+			//Look for an enemy
+			if ( NPC_CheckPlayerTeamStealth() )
+			{
+				//NPCInfo->behaviorState	= BS_HUNT_AND_KILL;//should be auto now
+				ST_Speech( NPC, SPEECH_DETECTED, 0 );
+				NPCInfo->tempBehavior	= BS_DEFAULT;
+				NPC_UpdateAngles( qtrue, qtrue );
+				return;
+			}
+		}
 	}
 
-	int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, NPCInfo->lastAlertID );
-
-	//There is an event to look at
-	if ( alertEvent >= 0 )
+	if ( !(NPCInfo->scriptFlags&SCF_IGNORE_ALERTS) )
 	{
-		if ( NPC_CheckForDanger( alertEvent ) )
-		{//running like hell
-			ST_Speech( NPC, SPEECH_COVER, 0 );//FIXME: flee sound?
-			return;
-		}
+		int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue, NPCInfo->lastAlertID );
 
-		if ( level.alertEvents[alertEvent].ID != NPCInfo->lastAlertID )
+		//There is an event to look at
+		if ( alertEvent >= 0 )
 		{
-			NPC_ST_InvestigateEvent( alertEvent, qtrue );
+			if ( NPCInfo->confusionTime < level.time )
+			{
+				if ( NPC_CheckForDanger( alertEvent ) )
+				{//running like hell
+					ST_Speech( NPC, SPEECH_COVER, 0 );//FIXME: flee sound?
+					return;
+				}
+			}
+
+			if ( level.alertEvents[alertEvent].ID != NPCInfo->lastAlertID )
+			{
+				NPC_ST_InvestigateEvent( alertEvent, qtrue );
+			}
 		}
 	}
 
@@ -998,10 +1014,10 @@ void NPC_BSST_Investigate( void )
 	//FIXME: else, look for new alerts
 
 	//See if we're searching for the noise's origin
-	if ( NPCInfo->localState == LSTATE_INVESTIGATE )
+	if ( NPCInfo->localState == LSTATE_INVESTIGATE && (NPCInfo->goalEntity!=NULL) )
 	{
 		//See if we're there
-		if ( NAV_HitNavGoal( NPC->currentOrigin, NPC->mins, NPC->maxs, NPCInfo->goalEntity->currentOrigin, 32 ) == qfalse )
+		if ( NAV_HitNavGoal( NPC->currentOrigin, NPC->mins, NPC->maxs, NPCInfo->goalEntity->currentOrigin, 32, FlyingCreature( NPC ) ) == qfalse )
 		{
 			ucmd.buttons |= BUTTON_WALKING;
 
@@ -1052,19 +1068,19 @@ void NPC_BSST_Patrol( void )
 				return;
 			}
 		}
+	}
 
-		if ( !(NPCInfo->scriptFlags&SCF_IGNORE_ALERTS) )
+	if ( !(NPCInfo->scriptFlags&SCF_IGNORE_ALERTS) )
+	{
+		int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue );
+
+		//There is an event to look at
+		if ( alertEvent >= 0 )
 		{
-			int alertEvent = NPC_CheckAlertEvents( qtrue, qtrue );
-
-			//There is an event to look at
-			if ( alertEvent >= 0 )
-			{
-				if ( NPC_ST_InvestigateEvent( alertEvent, qfalse ) )
-				{//actually going to investigate it
-					NPC_UpdateAngles( qtrue, qtrue );
-					return;
-				}
+			if ( NPC_ST_InvestigateEvent( alertEvent, qfalse ) )
+			{//actually going to investigate it
+				NPC_UpdateAngles( qtrue, qtrue );
+				return;
 			}
 		}
 	}
@@ -1277,7 +1293,7 @@ static void ST_CheckMoveState( void )
 	if ( ( NPCInfo->goalEntity != NPC->enemy ) && ( NPCInfo->goalEntity != NULL ) )
 	{
 		//Did we make it?
-		if ( NAV_HitNavGoal( NPC->currentOrigin, NPC->mins, NPC->maxs, NPCInfo->goalEntity->currentOrigin, 16 ) || 
+		if ( NAV_HitNavGoal( NPC->currentOrigin, NPC->mins, NPC->maxs, NPCInfo->goalEntity->currentOrigin, 16, FlyingCreature( NPC ) ) || 
 			( !Q3_TaskIDPending( NPC, TID_MOVE_NAV ) && NPCInfo->squadState == SQUAD_SCOUT && enemyLOS && enemyDist <= 10000 ) )
 		{//either hit our navgoal or our navgoal was not a crucial (scripted) one (maybe a combat point) and we're scouting and found our enemy
 			int	newSquadState = SQUAD_STAND_AND_SHOOT;

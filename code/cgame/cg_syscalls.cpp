@@ -8,12 +8,16 @@
 
 
 
+#ifdef _IMMERSION
+#include "../ff/ff.h"
+#else
 /////////////////////  this is a bit kludgy, but it only gives access to one
 //							enum table because of the #define. May get changed.
 #define CGAME_ONLY
 #include "../client/fffx.h"
 //
 /////////////////////
+#endif // _IMMERSION
 
 
 
@@ -116,8 +120,8 @@ clipHandle_t cgi_CM_InlineModel( int index ) {
 	return syscall( CG_CM_INLINEMODEL, index );
 }
 
-clipHandle_t cgi_CM_TempBoxModel( const vec3_t mins, const vec3_t maxs ) {
-	return syscall( CG_CM_TEMPBOXMODEL, mins, maxs );
+clipHandle_t cgi_CM_TempBoxModel( const vec3_t mins, const vec3_t maxs ) {//, const int contents ) {
+	return syscall( CG_CM_TEMPBOXMODEL, mins, maxs );//, contents );
 }
 
 int		cgi_CM_PointContents( const vec3_t p, clipHandle_t model ) {
@@ -209,6 +213,34 @@ float	cgi_S_GetSampleLength( sfxHandle_t sfx ) {
 	return syscall( CG_S_GETSAMPLELENGTH, sfx);
 }
 
+#ifdef _IMMERSION
+
+void	cgi_FF_Start( ffHandle_t ff, int clientNum ){
+	syscall( CG_FF_START, ff, clientNum );
+}
+
+void	cgi_FF_Stop( ffHandle_t ff, int clientNum ){
+	syscall( CG_FF_STOP, ff, clientNum );
+}
+
+void	cgi_FF_StopAll( void ){
+	syscall( CG_FF_STOPALL );
+}
+
+void	cgi_FF_Shake( int intensity, int duration ){
+	syscall( CG_FF_SHAKE, intensity, duration );
+}
+
+ffHandle_t cgi_FF_Register( const char *name, int channel ){
+	return syscall( CG_FF_REGISTER, name, channel );
+}
+
+void	cgi_FF_AddLoopingForce( ffHandle_t handle, int entNum ){
+	syscall( CG_FF_ADDLOOPINGFORCE, handle, entNum );
+}
+
+#else
+
 void	cgi_FF_StartFX( int iFX ){
 	syscall( CG_FF_STARTFX, iFX );
 }
@@ -225,6 +257,7 @@ void	cgi_FF_StopAllFX( void ){
 	syscall( CG_FF_STOPALLFX );
 }
 
+#endif // _IMMERSION
 void	cgi_R_LoadWorldMap( const char *mapname ) {
 	syscall( CG_R_LOADWORLDMAP, mapname );
 }
@@ -266,6 +299,11 @@ int cgi_R_Font_HeightPixels(const int iFontIndex, const float scale /*= 1.0f*/) 
 qboolean cgi_Language_IsAsian( void )
 {
 	return syscall( CG_LANGUAGE_ISASIAN );
+}
+
+qboolean cgi_Language_UsesSpaces(void)
+{
+	return syscall( CG_LANGUAGE_USESSPACES );
 }
 
 unsigned int cgi_AnyLanguage_ReadCharFromString( const char **ppText, qboolean *pbIsTrailingPunctuation /* = NULL */ )

@@ -61,6 +61,7 @@ void	trap_FS_FCloseFile( fileHandle_t f );
 
 //PM anim utility functions:
 qboolean PM_SaberInParry( int move );
+qboolean PM_SaberInKnockaway( int move );
 qboolean PM_SaberInReflect( int move );
 qboolean PM_SaberInStart( int move );
 qboolean PM_InSaberAnim( int anim );

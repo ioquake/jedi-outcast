@@ -52,7 +52,9 @@ equ trap_R_Font_StrLenPixels				 -49	; CG_R_FONT_STRLENPIXELS
 equ trap_R_Font_StrLenChars					 -50	; CG_R_FONT_STRLENCHARS 
 equ trap_R_Font_HeightPixels				 -51	; CG_R_FONT_STRHEIGHTPIXELS 
 equ trap_R_Font_DrawString					 -52	; CG_R_FONT_DRAWSTRING 
-equ trap_AnyLanguage_ReadCharFromString		 -53	; CG_ANYLANGUAGE_READCHARFROMSTRING 
+equ trap_Language_IsAsian					 -53	; CG_LANGUAGE_ISASIAN 
+equ trap_Language_UsesSpaces				 -54	; CG_LANGUAGE_USESSPACES 
+equ trap_AnyLanguage_ReadCharFromString		 -55	; CG_ANYLANGUAGE_READCHARFROMSTRING 
 equ trap_R_ClearScene						-201	; CG_R_CLEARSCENE 
 equ trap_R_AddRefEntityToScene				-202	; CG_R_ADDREFENTITYTOSCENE 
 equ trap_R_AddPolyToScene					-203	; CG_R_ADDPOLYTOSCENE 
@@ -136,22 +138,24 @@ equ trap_G2_HaveWeGhoul2Models				-282	; CG_G2_HAVEWEGHOULMODELS
 equ trap_G2API_GiveMeVectorFromMatrix		-283	; CG_G2_GIVEMEVECTORFROMMATRIX 
 equ trap_G2API_GetBoltMatrix				-284	; CG_G2_GETBOLT 
 equ trap_G2API_GetBoltMatrix_NoReconstruct	-285	; CG_G2_GETBOLT_NOREC 
-equ trap_G2API_InitGhoul2Model				-286	; CG_G2_INITGHOUL2MODEL 
-equ trap_G2API_CleanGhoul2Models			-287	; CG_G2_CLEANMODELS 
-equ trap_G2API_SetBoneAngles				-288	; CG_G2_ANGLEOVERRIDE 
-equ trap_G2API_SetBoneAnim					-289	; CG_G2_PLAYANIM 
-equ trap_G2API_GetGLAName					-290	; CG_G2_GETGLANAME 
-equ trap_G2API_CopyGhoul2Instance			-291	; CG_G2_COPYGHOUL2INSTANCE 
-equ trap_G2API_CopySpecificGhoul2Model		-292	; CG_G2_COPYSPECIFICGHOUL2MODEL 
-equ trap_G2API_DuplicateGhoul2Instance		-293	; CG_G2_DUPLICATEGHOUL2INSTANCE 
-equ trap_G2API_HasGhoul2ModelOnIndex		-294	; CG_G2_HASGHOUL2MODELONINDEX 
-equ trap_G2API_RemoveGhoul2Model			-295	; CG_G2_REMOVEGHOUL2MODEL 
-equ trap_G2API_AddBolt						-296	; CG_G2_ADDBOLT 
-equ trap_G2API_SetBoltInfo					-297	; CG_G2_SETBOLTON 
-equ trap_G2API_SetRootSurface				-298	; CG_G2_SETROOTSURFACE 
-equ trap_G2API_SetSurfaceOnOff				-299	; CG_G2_SETSURFACEONOFF 
-equ trap_G2API_SetNewOrigin					-300	; CG_G2_SETNEWORIGIN 
-equ trap_CG_RegisterSharedMemory			-301	; CG_SET_SHARED_BUFFER 
+equ trap_G2API_GetBoltMatrix_NoRecNoRot		-286	; CG_G2_GETBOLT_NOREC_NOROT 
+equ trap_G2API_InitGhoul2Model				-287	; CG_G2_INITGHOUL2MODEL 
+equ trap_G2API_CollisionDetect				-288	; CG_G2_COLLISIONDETECT 
+equ trap_G2API_CleanGhoul2Models			-289	; CG_G2_CLEANMODELS 
+equ trap_G2API_SetBoneAngles				-290	; CG_G2_ANGLEOVERRIDE 
+equ trap_G2API_SetBoneAnim					-291	; CG_G2_PLAYANIM 
+equ trap_G2API_GetGLAName					-292	; CG_G2_GETGLANAME 
+equ trap_G2API_CopyGhoul2Instance			-293	; CG_G2_COPYGHOUL2INSTANCE 
+equ trap_G2API_CopySpecificGhoul2Model		-294	; CG_G2_COPYSPECIFICGHOUL2MODEL 
+equ trap_G2API_DuplicateGhoul2Instance		-295	; CG_G2_DUPLICATEGHOUL2INSTANCE 
+equ trap_G2API_HasGhoul2ModelOnIndex		-296	; CG_G2_HASGHOUL2MODELONINDEX 
+equ trap_G2API_RemoveGhoul2Model			-297	; CG_G2_REMOVEGHOUL2MODEL 
+equ trap_G2API_AddBolt						-298	; CG_G2_ADDBOLT 
+equ trap_G2API_SetBoltInfo					-299	; CG_G2_SETBOLTON 
+equ trap_G2API_SetRootSurface				-300	; CG_G2_SETROOTSURFACE 
+equ trap_G2API_SetSurfaceOnOff				-301	; CG_G2_SETSURFACEONOFF 
+equ trap_G2API_SetNewOrigin					-302	; CG_G2_SETNEWORIGIN 
+equ trap_CG_RegisterSharedMemory			-303	; CG_SET_SHARED_BUFFER 
 
 
 ; hardcoded functions

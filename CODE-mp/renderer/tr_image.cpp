@@ -2280,7 +2280,14 @@ void R_CreateBuiltinImages( void ) {
 		tr.scratchImage[x] = R_CreateImage(va("*scratch%d",x), (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, qfalse, qtrue, qfalse, GL_CLAMP );
 	}
 
-	R_CreateDlightImage();
+	if (r_newDLights->integer)
+	{
+		tr.dlightImage = R_FindImageFile("gfx/2d/dlight", qtrue, qfalse, qfalse, GL_CLAMP);
+	}
+	else
+	{
+		R_CreateDlightImage();
+	}
 	R_CreateFogImage();
 }
 

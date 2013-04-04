@@ -55,7 +55,7 @@ qboolean	G2_Get_Bone_Anim_Index( boneInfo_v &blist, const int index, const int c
 void		G2_List_Model_Surfaces(const char *fileName);
 void		G2_List_Model_Bones(const char *fileName, int frame);
 qboolean	G2_GetAnimFileName(const char *fileName, char **filename);
-void		G2_TraceModels(CGhoul2Info_v &ghoul2, vec3_t rayStart, vec3_t rayEnd, CollisionRecord_t *collRecMap, int entNum, int traceFlags, int useLod);
+void		G2_TraceModels(CGhoul2Info_v &ghoul2, vec3_t rayStart, vec3_t rayEnd, CollisionRecord_t *collRecMap, int entNum, int traceFlags, int useLod, float fRadius);
 void		TransformAndTranslatePoint (vec3_t in, vec3_t out, mdxaBone_t *mat);
 void		G2_TransformModel(CGhoul2Info_v &ghoul2, const int frameNum, vec3_t scale, CMiniHeap *G2VertSpace, int useLod);
 void		G2_GenerateWorldMatrix(const vec3_t angles, const vec3_t origin);
@@ -128,7 +128,7 @@ int			G2API_GetGhoul2ModelFlags(CGhoul2Info *ghlInfo);
 
 qboolean	G2API_GetAnimFileName(CGhoul2Info *ghlInfo, char **filename);
 void		G2API_CollisionDetect(CollisionRecord_t *collRecMap, CGhoul2Info_v &ghoul2, const vec3_t angles, const vec3_t position,
-										  int frameNumber, int entNum, vec3_t rayStart, vec3_t rayEnd, vec3_t scale, CMiniHeap *G2VertSpace, int traceFlags, int useLod);
+										  int frameNumber, int entNum, vec3_t rayStart, vec3_t rayEnd, vec3_t scale, CMiniHeap *G2VertSpace, int traceFlags, int useLod, float fRadius);
 
 void		G2API_GiveMeVectorFromMatrix(mdxaBone_t *boltMatrix, Eorientations flags, vec3_t vec);
 int			G2API_CopyGhoul2Instance(CGhoul2Info_v &g2From, CGhoul2Info_v &g2To, int modelIndex);
@@ -160,6 +160,7 @@ void		G2API_DuplicateGhoul2Instance(CGhoul2Info_v &g2From, CGhoul2Info_v **g2To)
 void		G2API_SetBoltInfo(CGhoul2Info_v &ghoul2, int modelIndex, int boltInfo);
 
 extern qboolean gG2_GBMNoReconstruct;
+extern qboolean gG2_GBMUseSPMethod;
 // From tr_ghoul2.cpp
 void		G2_ConstructGhoulSkeleton( CGhoul2Info_v &ghoul2, const int frameNum, qhandle_t *modelList, bool checkForNewOrigin, const vec3_t angles, const vec3_t position, const vec3_t scale, bool modelSet);
 

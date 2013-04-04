@@ -9,6 +9,12 @@
 	#include "..\ghoul2\G2_local.h"
 #endif
 
+#ifdef G2_COLLISION_ENABLED
+#if !defined (MINIHEAP_H_INC)
+#include "../qcommon/miniheap.h"
+#endif
+#endif
+
 #ifdef _DONETPROFILE_
 #include "../qcommon/INetProfile.h"
 #endif
@@ -92,6 +98,10 @@ typedef struct serverStatus_s
 
 serverStatus_t cl_serverStatusList[MAX_SERVERSTATUSREQUESTS];
 int serverStatusCount;
+
+#ifdef G2_COLLISION_ENABLED
+CMiniHeap *G2VertSpaceClient = 0;
+#endif
 
 #if defined __USEA3D && defined __A3D_GEOM
 	void hA3Dg_ExportRenderGeom (refexport_t *incoming_re);
@@ -514,13 +524,7 @@ void CL_PlayDemo_f( void ) {
 	if (!clc.demofile) {
 		if (!Q_stricmp(arg, "(null)"))
 		{
-			extern cvar_t *sp_language;
-			switch (sp_language->integer)
-			{
-				case SP_LANGUAGE_GERMAN:	Com_Error( ERR_DROP, "Kein demo ausgewählt." );	break;
-				case SP_LANGUAGE_FRENCH:	Com_Error( ERR_DROP, "Aucun demo choisi." );	break;
-				default:					Com_Error( ERR_DROP, "No demo selected." );		break;
-			}
+			Com_Error( ERR_DROP, SP_GetStringTextString("CON_TEXT_NO_DEMO_SELECTED") );
 		}
 		else
 		{
@@ -757,9 +761,6 @@ void CL_Disconnect( qboolean showMainMenu ) {
 	Com_Memset( &clc, 0, sizeof( clc ) );
 
 	cls.state = CA_DISCONNECTED;
-
-	// allow cheats locally
-	Cvar_Set( "sv_cheats", "1" );
 
 	// not connected to a pure server anymore
 	cl_connectedToPureServer = qfalse;
@@ -1033,23 +1034,7 @@ void CL_Connect_f( void ) {
 
 	if ( !Cvar_VariableValue("fs_restrict") && !Sys_CheckCD() )
 	{
-		int iLanguage = Cvar_VariableValue("sp_language");
-		//rww - we don't have an actual cvar object for sp_language to use here.
-
-		if (iLanguage)	// dunno if SP files are loaded at this point if no CD...
-		{
-			switch (iLanguage)
-			{
-				case SP_LANGUAGE_GERMAN:
-					Com_Error( ERR_NEED_CD, "Spiel CD nicht im Laufwerk" );
-					break;	// keep compiler happy
-				case SP_LANGUAGE_FRENCH:
-					Com_Error( ERR_NEED_CD, "CD de jeu pas dans le lecteur" );
-					break;	// keep compiler happy
-			}
-		}
-
-		Com_Error( ERR_NEED_CD, "Game CD not in drive" );		
+		Com_Error( ERR_NEED_CD, SP_GetStringTextString("CON_TEXT_NEED_CD") ); //"Game CD not in drive" );		
 	}
 
 	if ( Cmd_Argc() != 2 ) {
@@ -1238,6 +1223,7 @@ void CL_Vid_Restart_f( void ) {
 
 	// if not running a server clear the whole hunk
 	if ( !com_sv_running->integer ) {
+		CM_ClearMap();
 		// clear the whole hunk
 		Hunk_Clear();
 	}
@@ -1665,7 +1651,11 @@ void CL_InitServerInfo( serverInfo_t *server, serverAddress_t *address ) {
 	server->game[0] = '\0';
 	server->gameType = 0;
 	server->netType = 0;
-	server->allowAnonymous = 0;
+	server->needPassword = qfalse;
+	server->trueJedi = 0;
+	server->weaponDisable = 0;
+	server->forceDisable = 0;
+	//server->pure = qfalse;
 }
 
 #define MAX_SERVERSPERPACKET	256
@@ -2096,6 +2086,10 @@ void CL_CheckUserinfo( void ) {
 
 }
 
+#ifdef G2_COLLISION_ENABLED
+extern CMiniHeap *G2VertSpaceServer;
+#endif
+
 /*
 ==================
 CL_Frame
@@ -2125,10 +2119,14 @@ void CL_Frame ( int msec ) {
 	if ( cl_avidemo->integer && msec) {
 		// save the current screen
 		if ( cls.state == CA_ACTIVE || cl_forceavidemo->integer) {
-			Cbuf_ExecuteText( EXEC_NOW, "screenshot silent\n" );
+			if (cl_avidemo->integer > 0) {
+				Cbuf_ExecuteText( EXEC_NOW, "screenshot silent\n" );
+			} else {
+				Cbuf_ExecuteText( EXEC_NOW, "screenshot_tga silent\n" );
+			}
 		}
 		// fixed time for next frame'
-		msec = (1000 / cl_avidemo->integer) * com_timescale->value;
+		msec = (1000 / abs(cl_avidemo->integer)) * com_timescale->value;
 		if (msec == 0) {
 			msec = 1;
 		}
@@ -2194,7 +2192,13 @@ void CL_Frame ( int msec ) {
 	SCR_RunCinematic();
 
 	Con_RunConsole();
-
+#ifdef G2_COLLISION_ENABLED
+	// reset the heap for Ghoul2 vert transform space gameside
+	if (G2VertSpaceServer)
+	{
+		G2VertSpaceServer->ResetHeap();
+	}
+#endif
 	cls.framecount++;
 }
 
@@ -2260,7 +2264,7 @@ void CL_InitRenderer( void ) {
 	cls.whiteShader = re.RegisterShader( "white" );
 	cls.consoleShader = re.RegisterShader( "console" );
 	g_console_field_width = cls.glconfig.vidWidth / SMALLCHAR_WIDTH - 2;
-	g_consoleField.widthInChars = g_console_field_width;
+	kg.g_consoleField.widthInChars = g_console_field_width;
 }
 
 /*
@@ -2401,19 +2405,9 @@ void CL_SetForcePowers_f( void ) {
 	return;
 }
 
-/*
-=======================
-Register_StringPackets
-=======================
-*/
-void Register_StringPackets (void)
-{
-	SP_Register("con_text", SP_REGISTER_REQUIRED);	//reference is CON_TEXT
-	SP_Register("mp_ingame",SP_REGISTER_REQUIRED);	//reference is INGAMETEXT
-	SP_Register("mp_svgame",SP_REGISTER_REQUIRED);	//reference is SVINGAME
-	SP_Register("sp_ingame",SP_REGISTER_REQUIRED);	//reference is INGAME	, needed for item pickups
-}
-
+#ifdef G2_COLLISION_ENABLED
+#define G2_VERT_SPACE_CLIENT_SIZE 256
+#endif
 
 /*
 ====================
@@ -2422,8 +2416,6 @@ CL_Init
 */
 void CL_Init( void ) {
 	Com_Printf( "----- Client Initialization -----\n" );
-
-	Register_StringPackets();
 
 	Con_Init ();	
 
@@ -2565,6 +2557,10 @@ void CL_Init( void ) {
 
 	Cvar_Set( "cl_running", "1" );
 
+#ifdef G2_COLLISION_ENABLED
+	G2VertSpaceClient = new CMiniHeap(G2_VERT_SPACE_CLIENT_SIZE * 1024);
+#endif
+
 	Com_Printf( "----- Client Initialization Complete -----\n" );
 }
 
@@ -2585,6 +2581,14 @@ void CL_Shutdown( void ) {
 		return;
 	}
 	recursive = qtrue;
+
+#ifdef G2_COLLISION_ENABLED
+	if (G2VertSpaceClient)
+	{
+		delete G2VertSpaceClient;
+		G2VertSpaceClient = 0;
+	}
+#endif
 
 	CL_Disconnect( qtrue );
 
@@ -2639,7 +2643,12 @@ static void CL_SetServerInfo(serverInfo_t *server, const char *info, int ping) {
 			server->netType = atoi(Info_ValueForKey(info, "nettype"));
 			server->minPing = atoi(Info_ValueForKey(info, "minping"));
 			server->maxPing = atoi(Info_ValueForKey(info, "maxping"));
-			server->allowAnonymous = atoi(Info_ValueForKey(info, "sv_allowAnonymous"));
+//			server->allowAnonymous = atoi(Info_ValueForKey(info, "sv_allowAnonymous"));
+			server->needPassword = (qboolean)atoi(Info_ValueForKey(info, "needpass" ));
+			server->trueJedi = atoi(Info_ValueForKey(info, "truejedi" ));
+			server->weaponDisable = atoi(Info_ValueForKey(info, "wdisable" ));
+			server->forceDisable = atoi(Info_ValueForKey(info, "fdisable" ));
+//			server->pure = (qboolean)atoi(Info_ValueForKey(info, "pure" ));
 		}
 		server->ping = ping;
 	}
@@ -2770,7 +2779,12 @@ void CL_ServerInfoPacket( netadr_t from, msg_t *msg ) {
 	cls.localServers[i].game[0] = '\0';
 	cls.localServers[i].gameType = 0;
 	cls.localServers[i].netType = from.type;
-	cls.localServers[i].allowAnonymous = 0;
+//	cls.localServers[i].allowAnonymous = 0;
+	cls.localServers[i].needPassword = qfalse;
+	cls.localServers[i].trueJedi = 0;
+	cls.localServers[i].weaponDisable = 0;
+	cls.localServers[i].forceDisable = 0;
+//	cls.localServers[i].pure = qfalse;
 									 
 	Q_strncpyz( info, MSG_ReadString( msg ), MAX_INFO_STRING );
 	if (strlen(info)) {

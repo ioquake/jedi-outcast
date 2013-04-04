@@ -180,9 +180,11 @@ static void SV_Map_f( void ) {
 			cheat = qfalse;
 			killBots = qfalse;
 		}
+		/*
 		if( sv_gametype->integer == GT_SINGLE_PLAYER ) {
 			Cvar_SetValue( "g_gametype", GT_FFA );
 		}
+		*/
 	}
 
 	// save the map name here cause on a map restart we reload the jk2mpconfig.cfg
@@ -663,11 +665,12 @@ SV_Status_f
 */
 static void SV_Status_f( void ) 
 {
-	int				i, j, l;
+	int				i;
 	client_t		*cl;
 	playerState_t	*ps;
 	const char		*s;
 	int				ping;
+	char			state[32];
 
 	// make sure server is running
 	if ( !com_sv_running->integer ) 
@@ -683,39 +686,36 @@ static void SV_Status_f( void )
 	for (i=0,cl=svs.clients ; i < sv_maxclients->integer ; i++,cl++)
 	{
 		if (!cl->state)
+		{
 			continue;
-		Com_Printf ("%3i ", i);
-		ps = SV_GameClientNum( i );
-		Com_Printf ("%5i ", ps->persistant[PERS_SCORE]);
+		}
 
 		if (cl->state == CS_CONNECTED)
-			Com_Printf ("CNCT ");
+		{
+			strcpy(state, "CNCT ");
+		}
 		else if (cl->state == CS_ZOMBIE)
-			Com_Printf ("ZMBI ");
+		{
+			strcpy(state, "ZMBI ");
+		}
 		else
 		{
 			ping = cl->ping < 9999 ? cl->ping : 9999;
-			Com_Printf ("%4i ", ping);
+			sprintf(state, "%4i", ping);
 		}
 
-		Com_Printf ("%s", cl->name);
-		l = 16 - strlen(cl->name);
-		for (j=0 ; j<l ; j++)
-			Com_Printf (" ");
-
-		Com_Printf ("%7i ", svs.time - cl->lastPacketTime );
-
+		ps = SV_GameClientNum( i );
 		s = NET_AdrToString( cl->netchan.remoteAddress );
-		Com_Printf ("%s", s);
-		l = 22 - strlen(s);
-		for (j=0 ; j<l ; j++)
-			Com_Printf (" ");
-		
-		Com_Printf ("%5i", cl->netchan.qport);
-
-		Com_Printf (" %5i", cl->rate);
-
-		Com_Printf ("\n");
+		Com_Printf ("%3i %5i %s %-15.15s %7i %21s %5i %5i\n", 
+			i, 
+			ps->persistant[PERS_SCORE],
+			state,
+			cl->name,
+			svs.time - cl->lastPacketTime,
+			s,
+			cl->netchan.qport,
+			cl->rate
+			);
 	}
 	Com_Printf ("\n");
 }
@@ -744,7 +744,7 @@ static void SV_ConSay_f(void) {
 		return;
 	}
 
-	strcpy (text, "console: ");
+	strcpy (text, "Server: ");
 	p = Cmd_Args();
 
 	if ( *p == '"' ) {
@@ -757,6 +757,85 @@ static void SV_ConSay_f(void) {
 	SV_SendServerCommand(NULL, "chat \"%s\n\"", text);
 }
 
+static const char *forceToggleNamePrints[] = 
+{
+	"HEAL",//FP_HEAL
+	"JUMP",//FP_LEVITATION
+	"SPEED",//FP_SPEED
+	"PUSH",//FP_PUSH
+	"PULL",//FP_PULL
+	"MINDTRICK",//FP_TELEPTAHY
+	"GRIP",//FP_GRIP
+	"LIGHTNING",//FP_LIGHTNING
+	"DARK RAGE",//FP_RAGE
+	"PROTECT",//FP_PROTECT
+	"ABSORB",//FP_ABSORB
+	"TEAM HEAL",//FP_TEAM_HEAL
+	"TEAM REPLENISH",//FP_TEAM_FORCE
+	"DRAIN",//FP_DRAIN
+	"SEEING",//FP_SEE
+	"SABER OFFENSE",//FP_SABERATTACK
+	"SABER DEFENSE",//FP_SABERDEFEND
+	"SABER THROW",//FP_SABERTHROW
+	NULL
+};
+
+/*
+==================
+SV_ForceToggle_f
+==================
+*/
+void SV_ForceToggle_f(void)
+{
+	int i = 0;
+	int fpDisabled = Cvar_VariableValue("g_forcePowerDisable");
+	int targetPower = 0;
+	const char *powerDisabled = "Enabled";
+
+	if ( Cmd_Argc () < 2 )
+	{ //no argument supplied, spit out a list of force powers and their numbers
+		while (i < NUM_FORCE_POWERS)
+		{
+			if (fpDisabled & (1 << i))
+			{
+				powerDisabled = "Disabled";
+			}
+			else
+			{
+				powerDisabled = "Enabled";
+			}
+
+			Com_Printf(va("%i - %s - Status: %s\n", i, forceToggleNamePrints[i], powerDisabled));
+			i++;
+		}
+
+		Com_Printf("Example usage: forcetoggle 3\n(toggles PUSH)\n");
+		return;
+	}
+
+	targetPower = atoi(Cmd_Argv(1));
+
+	if (targetPower < 0 || targetPower >= NUM_FORCE_POWERS)
+	{
+		Com_Printf("Specified a power that does not exist.\nExample usage: forcetoggle 3\n(toggles PUSH)\n");
+		return;
+	}
+
+	if (fpDisabled & (1 << targetPower))
+	{
+		powerDisabled = "enabled";
+		fpDisabled &= ~(1 << targetPower);
+	}
+	else
+	{
+		powerDisabled = "disabled";
+		fpDisabled |= (1 << targetPower);
+	}
+
+	Cvar_Set("g_forcePowerDisable", va("%i", fpDisabled));
+
+	Com_Printf("%s has been %s.\n", forceToggleNamePrints[targetPower], powerDisabled);
+}
 
 /*
 ==================
@@ -883,6 +962,8 @@ void SV_AddOperatorCommands( void ) {
 	{
 		Cmd_AddCommand ("svsay", SV_ConSay_f);
 	}
+
+	Cmd_AddCommand ("forcetoggle", SV_ForceToggle_f);
 }
 
 /*

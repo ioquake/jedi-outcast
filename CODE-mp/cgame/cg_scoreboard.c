@@ -173,7 +173,7 @@ static void CG_DrawClientScore( int y, score_t *score, float *color, float fade,
 	// add the "ready" marker for intermission exiting
 	if ( cg.snap->ps.stats[ STAT_CLIENTS_READY ] & ( 1 << score->client ) ) 
 	{
-		CG_Text_Paint (SB_NAME_X - 64, y + 2, 0.7f * scale, colorWhite, "READY" ,0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
+		CG_Text_Paint (SB_NAME_X - 64, y + 2, 0.7f * scale, colorWhite, CG_GetStripEdString("INGAMETEXT", "READY"),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
 	}
 }
 
@@ -253,11 +253,6 @@ qboolean CG_DrawOldScoreboard( void ) {
 
 	// don't draw amuthing if the menu or console is up
 	if ( cg_paused.integer ) {
-		cg.deferredPlayerLoading = 0;
-		return qfalse;
-	}
-
-	if ( cgs.gametype == GT_SINGLE_PLAYER && cg.predictedPlayerState.pm_type == PM_INTERMISSION ) {
 		cg.deferredPlayerLoading = 0;
 		return qfalse;
 	}
@@ -371,7 +366,10 @@ qboolean CG_DrawOldScoreboard( void ) {
 	CG_Text_Paint ( SB_NAME_X, y, 1.0f, colorWhite, "Name", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
 	if (cgs.gametype == GT_TOURNAMENT)
 	{
-		CG_Text_Paint ( SB_SCORE_X, y, 1.0f, colorWhite, "W/L", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
+		char sWL[100];
+		trap_SP_GetStringTextString("INGAMETEXT_W_L", sWL,	sizeof(sWL));
+
+		CG_Text_Paint ( SB_SCORE_X, y, 1.0f, colorWhite, sWL, 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
 	}
 	else
 	{

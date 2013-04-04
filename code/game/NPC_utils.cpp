@@ -237,8 +237,7 @@ qboolean NPC_UpdateAngles ( qboolean doPitch, qboolean doYaw )
 		yawSpeed = NPCInfo->stats.yawSpeed;
 	}
 
-	if ( (NPC->client->NPC_class == CLASS_TAVION||NPC->client->NPC_class == CLASS_DESANN) 
-		&& NPC->client->ps.forcePowersActive&(1<<FP_SPEED) )
+	if ( NPC->s.weapon == WP_SABER && NPC->client->ps.forcePowersActive&(1<<FP_SPEED) )
 	{
 		yawSpeed *= 1.0f/g_timescale->value;
 	}
@@ -915,6 +914,10 @@ qboolean NPC_ValidEnemy( gentity_t *ent )
 {
 	//Must be a valid pointer
 	if ( ent == NULL )
+		return qfalse;
+
+	//Must not be me
+	if ( ent == NPC )
 		return qfalse;
 
 	//Must not be deleted

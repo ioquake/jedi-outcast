@@ -59,14 +59,14 @@ extern float cg_zoomFov;	//from cg_view.cpp
 
 void CG_ToggleBinoculars( void )
 {
-	if ( in_camera)
+	if ( in_camera || !cg.snap )
 	{
 		return;
 	}
 
 	if ( cg.zoomMode == 0 || cg.zoomMode >= 2 ) // not zoomed or currently zoomed with the disruptor or LA goggles
 	{
-		if ( cg.snap->ps.saberActive && cg.snap->ps.saberInFlight && cg.snap->ps.stats[STAT_HEALTH] > 0 )
+		if ( (cg.snap->ps.saberActive && cg.snap->ps.saberInFlight) || cg.snap->ps.stats[STAT_HEALTH] <= 0)
 		{//can't select binoculars when throwing saber
 			//FIXME: indicate this to the player
 			return;
@@ -96,25 +96,31 @@ void CG_ToggleBinoculars( void )
 		}
 
 		cgi_S_StartSound( NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgs.media.zoomStart );
+#ifdef _IMMERSION
+		cgi_FF_Start( cgs.media.zoomStartForce, cg.snap->ps.clientNum );
+#endif // _IMMERSION
 	}
 	else
 	{
 		cg.zoomMode = 0;
 		cg.zoomTime = cg.time;
 		cgi_S_StartSound( NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgs.media.zoomEnd );
+#ifdef _IMMERSION
+		cgi_FF_Start( cgs.media.zoomEndForce, cg.snap->ps.clientNum );
+#endif // _IMMERSION
 	}
 }
 
 void CG_ToggleLAGoggles( void )
 {
-	if ( in_camera)
+	if ( in_camera || !cg.snap)
 	{
 		return;
 	}
 
 	if ( cg.zoomMode == 0 || cg.zoomMode < 3 ) // not zoomed or currently zoomed with the disruptor or regular binoculars
 	{
-		if ( cg.snap->ps.saberActive && cg.snap->ps.saberInFlight && cg.snap->ps.stats[STAT_HEALTH] > 0 )
+		if ( (cg.snap->ps.saberActive && cg.snap->ps.saberInFlight) || cg.snap->ps.stats[STAT_HEALTH] <= 0 )
 		{//can't select binoculars when throwing saber
 			//FIXME: indicate this to the player
 			return;
@@ -138,12 +144,18 @@ void CG_ToggleLAGoggles( void )
 		}
 
 		cgi_S_StartSound( NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgs.media.zoomStart );
+#ifdef _IMMERSION
+		cgi_FF_Start( cgs.media.zoomStartForce, cg.snap->ps.clientNum );
+#endif // _IMMERSION
 	}
 	else
 	{
 		cg.zoomMode = 0;
 		cg.zoomTime = cg.time;
 		cgi_S_StartSound( NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgs.media.zoomEnd );
+#ifdef _IMMERSION
+		cgi_FF_Start( cgs.media.zoomEndForce, cg.snap->ps.clientNum );
+#endif // _IMMERSION
 	}
 }
 

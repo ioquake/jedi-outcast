@@ -40,6 +40,8 @@ static void MissionPrint_Line(const int color, const int objectIndex, int &missi
 	char finalText[2048];
 	qhandle_t	graphic;
 
+	int iYPixelsPerLine = cgi_R_Font_HeightPixels(cgs.media.qhFontMedium, 1.0f) * (cgi_Language_IsAsian() ? 1.2f : 1.0f );
+
 	cgi_SP_GetStringText( PACKAGE_OBJECTIVES<<8|objectIndex , finalText, sizeof(finalText) );
 
 	pixelLen = cgi_R_Font_StrLenPixels(finalText, cgs.media.qhFontMedium, 1.0f);
@@ -54,7 +56,7 @@ static void MissionPrint_Line(const int color, const int objectIndex, int &missi
 */
 	if (pixelLen < 500)	// One shot - small enough to print entirely on one line
 	{
-		y =missionYpos + (18 * (missionYcnt));
+		y =missionYpos + (iYPixelsPerLine * (missionYcnt));
 		if (obj_graphics[0])
 		{
 			y += 32 + 4;
@@ -67,7 +69,8 @@ static void MissionPrint_Line(const int color, const int objectIndex, int &missi
 		{
 			y += 32 + 4;
 		}
-		CG_DrawProportionalString(108, y,str, CG_SMALLFONT, colorTable[color] );
+		//CG_DrawProportionalString(108, y,str, CG_SMALLFONT, colorTable[color] );
+		cgi_R_Font_DrawString (108, y, str, colorTable[color], cgs.media.qhFontMedium, -1, 1.0f);
 		++missionYcnt;
 	}
 	// Text is too long, break into lines.
@@ -107,7 +110,7 @@ static void MissionPrint_Line(const int color, const int objectIndex, int &missi
 				pixelLen = 0;
 				charLen = 1;
 
-				y = missionYpos + (18 * missionYcnt);
+				y = missionYpos + (iYPixelsPerLine * missionYcnt);
 
 				CG_DrawProportionalString(108, y, holdText, CG_SMALLFONT, colorTable[color] );
 				++missionYcnt;
@@ -116,7 +119,7 @@ static void MissionPrint_Line(const int color, const int objectIndex, int &missi
 			{
 				++charLen;
 
-				y = missionYpos + (18 * missionYcnt);
+				y = missionYpos + (iYPixelsPerLine * missionYcnt);
 
 				Q_strncpyz( holdText, strBegin, charLen);
 				CG_DrawProportionalString(108, y, holdText, CG_SMALLFONT, colorTable[color] );
@@ -132,21 +135,21 @@ static void MissionPrint_Line(const int color, const int objectIndex, int &missi
 	// Special case hack
 	if (objectIndex == DOOM_COMM_OBJ4)
 	{
-		y = missionYpos + (18 * missionYcnt);
+		y = missionYpos + (iYPixelsPerLine * missionYcnt);
 		graphic = cgi_R_RegisterShaderNoMip("textures/system/securitycode");
 		CG_DrawPic( 320 - (128/2), y+8, 128, 32, graphic );
 		obj_graphics[0] = qtrue;
 	}
 	else if (objectIndex == KEJIM_POST_OBJ3)
 	{
-		y = missionYpos + (18 * missionYcnt);
+		y = missionYpos + (iYPixelsPerLine * missionYcnt);
 		graphic = cgi_R_RegisterShaderNoMip("textures/system/securitycode_red");
 		CG_DrawPic( 320 - (32/2), y+8, 32, 32, graphic );
 		obj_graphics[1] = qtrue;
 	}
 	else if (objectIndex == KEJIM_POST_OBJ4)
 	{
-		y =missionYpos + (18 * missionYcnt);
+		y =missionYpos + (iYPixelsPerLine * missionYcnt);
 		if (obj_graphics[1])
 		{
 			y += 32 + 4;
@@ -157,7 +160,7 @@ static void MissionPrint_Line(const int color, const int objectIndex, int &missi
 	}
 	else if (objectIndex == KEJIM_POST_OBJ5)
 	{
-		y =missionYpos + (18 * missionYcnt);
+		y =missionYpos + (iYPixelsPerLine * missionYcnt);
 		if (obj_graphics[1])
 		{
 			y += 32 + 4;
@@ -180,6 +183,7 @@ MissionInformation_Draw
 void MissionInformation_Draw( centity_t *cent )
 {
 	int		i,totalY;
+	int iYPixelsPerLine = cgi_R_Font_HeightPixels(cgs.media.qhFontMedium, 1.0f) * (cgi_Language_IsAsian() ? 1.2f : 1.0f );
 
 	missionInfo_Updated = qfalse;		// This will stop the text from flashing
 	cg.missionInfoFlashTime = 0;
@@ -199,7 +203,7 @@ void MissionInformation_Draw( centity_t *cent )
 	{
 		if (cent->gent->client->sess.mission_objectives[i].display)
 		{
-			totalY = missionYpos + (18 * (missionYcnt))+9;
+			totalY = missionYpos + (iYPixelsPerLine * (missionYcnt))+(iYPixelsPerLine/2);
 			if (obj_graphics[0])
 			{
 				totalY += 32 + 4;
@@ -230,7 +234,8 @@ void MissionInformation_Draw( centity_t *cent )
 	if (!missionYcnt)
 	{
 		cgi_SP_GetStringTextString( "INGAME_OBJNONE", text, sizeof(text) );
-		CG_DrawProportionalString(108, missionYpos, text, CG_SMALLFONT, colorTable[CT_LTBLUE1] );
+//		CG_DrawProportionalString(108, missionYpos, text, CG_SMALLFONT, colorTable[CT_LTBLUE1] );
+		cgi_R_Font_DrawString (108, missionYpos, text, colorTable[CT_LTBLUE1], cgs.media.qhFontMedium, -1, 1.0f);
 	}
 }
 
@@ -380,7 +385,7 @@ void CG_DrawInformation( void ) {
 		CG_DrawPic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, levelshot );
 	}
 
-	if ( g_eSavedGameJustLoaded != eFULL && !strcmp(s,"kejim_post") )//special case for first map!
+	if ( g_eSavedGameJustLoaded != eFULL && (!strcmp(s,"kejim_post") || !strcmp(s,"demo")) )//special case for first map!
 	{
 		char	text[1024]={0};
 		cgi_SP_GetStringTextString( "INGAME_ALONGTIME", text, sizeof(text) );

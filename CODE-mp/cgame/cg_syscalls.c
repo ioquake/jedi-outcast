@@ -244,9 +244,19 @@ void trap_R_Font_DrawString(int ox, int oy, const char *text, const float *rgba,
 	syscall( CG_R_FONT_DRAWSTRING, ox, oy, text, rgba, setIndex, iCharLimit, PASSFLOAT(scale));
 }
 
-unsigned int trap_AnyLanguage_ReadCharFromString( const char **ppText )
+qboolean trap_Language_IsAsian(void)
 {
-	return syscall( CG_ANYLANGUAGE_READCHARFROMSTRING, ppText);
+	return syscall( CG_LANGUAGE_ISASIAN );
+}
+
+qboolean trap_Language_UsesSpaces(void)
+{
+	return syscall( CG_LANGUAGE_USESSPACES );
+}
+
+unsigned int trap_AnyLanguage_ReadCharFromString( const char *psText, int *piAdvanceCount, qboolean *pbIsTrailingPunctuation/* = NULL*/ )
+{
+	return syscall( CG_ANYLANGUAGE_READCHARFROMSTRING, psText, piAdvanceCount, pbIsTrailingPunctuation);
 }
 
 void	trap_R_ClearScene( void ) {
@@ -659,10 +669,34 @@ qboolean trap_G2API_GetBoltMatrix_NoReconstruct(void *ghoul2, const int modelInd
 	return (qboolean)(syscall(CG_G2_GETBOLT_NOREC, ghoul2, modelIndex, boltIndex, matrix, angles, position, frameNum, modelList, scale));
 }
 
+qboolean trap_G2API_GetBoltMatrix_NoRecNoRot(void *ghoul2, const int modelIndex, const int boltIndex, mdxaBone_t *matrix,
+								const vec3_t angles, const vec3_t position, const int frameNum, qhandle_t *modelList, vec3_t scale)
+{ //Same as above but force it to not reconstruct the skeleton before getting the bolt position
+	return (qboolean)(syscall(CG_G2_GETBOLT_NOREC_NOROT, ghoul2, modelIndex, boltIndex, matrix, angles, position, frameNum, modelList, scale));
+}
+
 int trap_G2API_InitGhoul2Model(void **ghoul2Ptr, const char *fileName, int modelIndex, qhandle_t customSkin,
 						  qhandle_t customShader, int modelFlags, int lodBias)
 {
 	return syscall(CG_G2_INITGHOUL2MODEL, ghoul2Ptr, fileName, modelIndex, customSkin, customShader, modelFlags, lodBias);
+}
+
+void trap_G2API_CollisionDetect ( 
+	CollisionRecord_t *collRecMap, 
+	void* ghoul2, 
+	const vec3_t angles, 
+	const vec3_t position,
+	int frameNumber, 
+	int entNum, 
+	const vec3_t rayStart, 
+	const vec3_t rayEnd, 
+	const vec3_t scale, 
+	int traceFlags, 
+	int useLod,
+	float fRadius
+	)
+{
+	syscall ( CG_G2_COLLISIONDETECT, collRecMap, ghoul2, angles, position, frameNumber, entNum, rayStart, rayEnd, scale, traceFlags, useLod, PASSFLOAT(fRadius) );
 }
 
 void trap_G2API_CleanGhoul2Models(void **ghoul2Ptr)

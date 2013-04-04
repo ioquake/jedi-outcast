@@ -30,9 +30,11 @@ void SV_GetChallenge( netadr_t from ) {
 	challenge_t	*challenge;
 
 	// ignore if we are in single player
+	/*
 	if ( Cvar_VariableValue( "g_gametype" ) == GT_SINGLE_PLAYER || Cvar_VariableValue("ui_singlePlayerActive")) {
 		return;
 	}
+	*/
 
 	oldest = 0;
 	oldestTime = 0x7fffffff;
@@ -932,8 +934,10 @@ SV_Disconnect_f
 The client is going to disconnect, so remove the connection immediately  FIXME: move to game?
 =================
 */
+const char *SV_GetStripEdString(char *refSection, char *refName);
 static void SV_Disconnect_f( client_t *cl ) {
-	SV_DropClient( cl, "disconnected" );
+//	SV_DropClient( cl, "disconnected" );
+	SV_DropClient( cl, SV_GetStripEdString("SVINGAME","DISCONNECTED") );
 }
 
 /*

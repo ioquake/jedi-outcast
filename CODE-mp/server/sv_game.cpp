@@ -15,6 +15,10 @@
 
 botlib_export_t	*botlib_export;
 
+#ifdef G2_COLLISION_ENABLED
+extern CMiniHeap *G2VertSpaceServer;
+#endif
+
 void SV_GameError( const char *string ) {
 	Com_Error( ERR_DROP, "%s", string );
 }
@@ -931,6 +935,11 @@ int SV_GameSystemCalls( int *args ) {
 		gG2_GBMNoReconstruct = qtrue;
 		return G2API_GetBoltMatrix(*((CGhoul2Info_v *)args[1]), args[2], args[3], (mdxaBone_t *)VMA(4), (const float *)VMA(5),(const float *)VMA(6), args[7], (qhandle_t *)VMA(8), (float *)VMA(9));
 
+	case G_G2_GETBOLT_NOREC_NOROT:
+		gG2_GBMNoReconstruct = qtrue;
+		gG2_GBMUseSPMethod = qtrue;
+		return G2API_GetBoltMatrix(*((CGhoul2Info_v *)args[1]), args[2], args[3], (mdxaBone_t *)VMA(4), (const float *)VMA(5),(const float *)VMA(6), args[7], (qhandle_t *)VMA(8), (float *)VMA(9));
+
 	case G_G2_INITGHOUL2MODEL:
 		RicksCrazyOnServer=true;
 		return	G2API_InitGhoul2Model((CGhoul2Info_v **)VMA(1), (const char *)VMA(2), args[3], (qhandle_t) args[4],
@@ -987,6 +996,23 @@ int SV_GameSystemCalls( int *args ) {
 	case G_G2_CLEANMODELS:
 		G2API_CleanGhoul2Models((CGhoul2Info_v **)VMA(1));
 	//	G2API_CleanGhoul2Models((CGhoul2Info_v **)args[1]);
+		return 0;
+
+	case G_G2_COLLISIONDETECT:
+#ifdef G2_COLLISION_ENABLED
+		G2API_CollisionDetect ( (CollisionRecord_t*)VMA(1), *((CGhoul2Info_v *)args[2]), 
+								   (const float*)VMA(3),
+								   (const float*)VMA(4),
+								   args[5],
+								   args[6],
+								   (float*)VMA(7),
+								   (float*)VMA(8),
+								   (float*)VMA(9),
+								   G2VertSpaceServer,
+								   args[10],
+								   args[11],
+								   VMF(12) );
+#endif
 		return 0;
 	
 	default:
@@ -1082,23 +1108,7 @@ void SV_InitGameProgs( void ) {
 
 	if ( !Cvar_VariableValue("fs_restrict") && !Sys_CheckCD() ) 
 	{
-		int iLanguage = Cvar_VariableValue("sp_language");
-		//rww - we don't have an actual cvar object for sp_language to use here.
-
-		if (iLanguage)	// dunno if SP files are loaded at this point if no CD...
-		{
-			switch (iLanguage)
-			{
-				case SP_LANGUAGE_GERMAN:
-					Com_Error( ERR_NEED_CD, "Spiel CD nicht im Laufwerk" );
-					break;	// keep compiler happy
-				case SP_LANGUAGE_FRENCH:
-					Com_Error( ERR_NEED_CD, "CD de jeu pas dans le lecteur" );
-					break;	// keep compiler happy
-			}
-		}
-
-		Com_Error( ERR_NEED_CD, "Game CD not in drive" );		
+		Com_Error( ERR_NEED_CD, SP_GetStringTextString("CON_TEXT_NEED_CD") ); //"Game CD not in drive" );		
 	}
 
 	// load the dll or bytecode

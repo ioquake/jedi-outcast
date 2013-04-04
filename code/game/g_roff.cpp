@@ -480,7 +480,8 @@ void G_Roff( gentity_t *ent )
 #ifdef _DEBUG
 	if ( g_developer->integer )
 	{
-		Com_Printf( S_COLOR_GREEN"ROFF dat: o:<%.2f %.2f %.2f> a:<%.2f %.2f %.2f>\n", 
+		Com_Printf( S_COLOR_GREEN"ROFF dat: num: %d o:<%.2f %.2f %.2f> a:<%.2f %.2f %.2f>\n", 
+					ent->roff_ctr,
 					org[0], org[1], org[2],
 					ang[0], ang[1], ang[2] );
 	}
@@ -527,7 +528,6 @@ void G_Roff( gentity_t *ent )
 		// Store what the next apos->trBase should be
 		VectorAdd( ent->pos2, ang, ent->pos2 );
 
-
 		// Set up the origin interpolation
 		//-------------------------------------
 		VectorScale( org, roff->mLerp, ent->s.pos.trDelta );
@@ -540,6 +540,15 @@ void G_Roff( gentity_t *ent )
 
 		//make it true linear... FIXME: sticks around after ROFF is done, but do we really care?
 		ent->alt_fire = qtrue;
+
+		if ( !ent->e_ThinkFunc 
+			&& ent->s.eType != ET_MISSILE
+			&& ent->s.eType != ET_ITEM
+			&& ent->s.eType != ET_MOVER )
+		{//will never set currentAngles & currentOrigin itself
+			EvaluateTrajectory( &ent->s.apos, level.time, ent->currentAngles );
+			EvaluateTrajectory( &ent->s.pos, level.time, ent->currentOrigin );
+		}
 	}
 
 	// See if the ROFF playback is done

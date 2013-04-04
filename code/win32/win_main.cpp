@@ -1022,27 +1022,22 @@ static void QuickMemTest(void)
 		{
 			// err...
 			//
-			LPCSTR psContinue	= "Your machine failed to allocate %dMB in a memory test, which may mean you'll have problems running this game all the way through.\n\nContinue anyway?";
-			LPCSTR psNoMem		= "Insufficient memory to run this game!\n";
-
-			switch (Language_GetIntegerValue())
-			{
-				case SP_LANGUAGE_GERMAN:
-
-					psContinue	= "Ihr Computer konnte bei einem Speichertest keine %dMB reservieren, daher werden Sie mit dem Starten des Spiels Probleme haben.\n\nDennoch fortsetzen?";
-					psNoMem		= "Unzureichender Speicher zum Starten!\n";
-					break;
-
-				case SP_LANGUAGE_FRENCH:
-
-					psContinue	= "Votre système n'a pu allouer %d Mo lors d'une vérification de la mémoire, ce qui signifie que vous aurez peut-être du mal à faire fonctionner ce jeu. \n\nSouhaitez-vous continuer malgré tout ?";
-					psNoMem		= "Mémoire insuffisante pour lancer ce jeu !\n";
-					break;
-			}
+			extern qboolean Language_IsAsian(void);
+			LPCSTR psContinue = Language_IsAsian() ? 
+								"Your machine failed to allocate %dMB in a memory test, which may mean you'll have problems running this game all the way through.\n\nContinue anyway?"
+								: 
+								SP_GetStringTextString("CON_TEXT_FAILED_MEMTEST");
+								// ( since it's too much hassle doing MBCS code pages and decodings etc for MessageBox command )
 
 			#define GetYesNo(psQuery)	(!!(MessageBox(NULL,psQuery,"Query",MB_YESNO|MB_ICONWARNING|MB_TASKMODAL)==IDYES))
 			if (!GetYesNo(va(psContinue,iMemTestMegs)))
 			{
+				LPCSTR psNoMem = Language_IsAsian() ?
+								"Insufficient memory to run this game!\n"
+								:
+								SP_GetStringTextString("CON_TEXT_INSUFFICIENT_MEMORY");
+								// ( since it's too much hassle doing MBCS code pages and decodings etc for MessageBox command )
+
 				Com_Error( ERR_FATAL, psNoMem );
 			}
 		}

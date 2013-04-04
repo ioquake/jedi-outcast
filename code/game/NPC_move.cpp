@@ -64,7 +64,7 @@ qboolean NPC_ClearPathToGoal( vec3_t dir, gentity_t *goal )
 	if ( goal->svFlags & SVF_NAVGOAL )
 	{
 		//Okay, didn't get all the way there, let's see if we got close enough:
-		if ( NAV_HitNavGoal( trace.endpos, NPC->mins, NPC->maxs, goal->currentOrigin, NPCInfo->goalRadius ) )
+		if ( NAV_HitNavGoal( trace.endpos, NPC->mins, NPC->maxs, goal->currentOrigin, NPCInfo->goalRadius, FlyingCreature( NPC ) ) )
 		{
 			//VectorSubtract(goal->currentOrigin, NPC->currentOrigin, dir);
 			return qtrue;
@@ -292,7 +292,7 @@ qboolean NPC_GetMoveDirectionAltRoute( vec3_t out, float *distance, qboolean try
 			memcpy( &tempInfo, &frameNavInfo, sizeof( tempInfo ) );
 			if ( NAVNEW_AvoidCollision( NPC, NPCInfo->goalEntity, tempInfo, qtrue, 5 ) == qfalse )
 			{//revert to macro nav
-				//Can't get straight to goal, deump tempInfo and use macro nav
+				//Can't get straight to goal, dump tempInfo and use macro nav
 				if ( NAVNEW_MoveToGoal( NPC, frameNavInfo ) == WAYPOINT_NONE )
 				{
 					//Can't reach goal, just face

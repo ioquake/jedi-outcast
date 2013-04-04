@@ -675,7 +675,10 @@ gentity_t *LaunchItem( gitem_t *item, vec3_t origin, vec3_t velocity, char *targ
 	if ( item->giType == IT_WEAPON )
 	{
 		// give weapon items zero pitch, a random yaw, and rolled onto their sides...but would be bad to do this for a bowcaster
-		if ( item->giTag != WP_BOWCASTER )
+		if ( item->giTag != WP_BOWCASTER
+			&& item->giTag != WP_THERMAL
+			&& item->giTag != WP_TRIP_MINE
+			&& item->giTag != WP_DET_PACK )
 		{
 			VectorSet( dropped->s.angles, 0, crandom() * 180, 90.0f );
 			G_SetAngles( dropped, dropped->s.angles );

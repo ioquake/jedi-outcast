@@ -854,7 +854,7 @@ netField_t	entityStateFields[] =
 { NETF(teamowner), 8 },
 { NETF(shouldtarget), 1 },
 { NETF(powerups), 16 },
-{ NETF(modelGhoul2), 4 },
+{ NETF(modelGhoul2), 5 },
 { NETF(g2radius), 8 },
 { NETF(modelindex), -8 },
 { NETF(otherEntityNum2), GENTITYNUM_BITS },
@@ -1235,6 +1235,9 @@ netField_t	playerStateFields[] =
 { PSF(rocketTargetTime), 32 },
 { PSF(holocronBits), 32 },
 { PSF(isJediMaster), 1 },
+{ PSF(forceRestricted), 1 },
+{ PSF(trueJedi), 1 },
+{ PSF(trueNonJedi), 1 },
 { PSF(fallingToDeath), 32 },
 { PSF(electrifyTime), 32 },
 

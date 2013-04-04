@@ -175,6 +175,12 @@ void SP_misc_model_health_power_converter( gentity_t *ent );
 
 void SP_fx_runner( gentity_t *ent );
 
+#ifdef ANIMENT_SPAWNER
+void SP_misc_animent_spawner(gentity_t *ent);
+void SP_target_screenshake(gentity_t *ent);
+void SP_target_escapetrig(gentity_t *ent);
+#endif
+
 void SP_misc_holocron(gentity_t *ent);
 
 void SP_shooter_blaster( gentity_t *ent );
@@ -262,6 +268,11 @@ spawn_t	spawns[] = {
 	{"misc_model_health_power_converter", SP_misc_model_health_power_converter},
 
 	{"fx_runner", SP_fx_runner},
+#ifdef ANIMENT_SPAWNER
+	{"misc_animent_spawner", SP_misc_animent_spawner},
+	{"target_screenshake", SP_target_screenshake},
+	{"target_escapetrig", SP_target_escapetrig},
+#endif
 
 	{"misc_holocron", SP_misc_holocron},
 
@@ -733,6 +744,16 @@ Every map should have exactly one worldspawn.
 "music"		music wav file
 "gravity"	800 is default gravity
 "message"	Text to print during connection process
+
+BSP Options
+"gridsize"     size of lighting grid to "X Y Z". default="64 64 128"
+"ambient"      scale of global light (from _color)
+"fog"          shader name of the global fog texture - must include the full path, such as "textures/rj/fog1"
+"distancecull" value for vis for the maximum viewing distance
+"chopsize"     value for bsp on the maximum polygon / portal size
+"ls_Xr"	override lightstyle X with this pattern for Red.
+"ls_Xg"	green (valid patterns are "a-z")
+"ls_Xb"	blue (a is OFF, z is ON)
 */
 void SP_worldspawn( void ) 
 {

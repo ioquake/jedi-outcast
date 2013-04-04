@@ -22,76 +22,8 @@
 static char		sys_cmdline[MAX_STRING_CHARS];
 clientStatic_t	cls;
 
-// enable this for executable checksumming
-#ifdef FINAL_BUILD
-#define SPANK_MONKEYS
-#endif
 static int	sys_monkeySpank;
 static int	sys_checksum;
-
-
-static unsigned	busyCount = 0;
-static bool		otherTasksRunning = false;
-unsigned		otherTaskTime = 0;
-
-#pragma optimize("", off)
-
-void busyFunction(void)
-{
-	float	a = MEM_THRESHOLD;
-	float	b = 9343;
-	short	c = 4;
-
-	while((int)b > (float)(b-1))
-	{
-		a = a + b / c;
-		busyCount++;
-	}
-}
-
-void CheckProcessTime(void)
-{
-	HANDLE		threadHandle;
-	int			threadId;
-	FILETIME	creationTime;		// thread creation time
-	FILETIME	exitTime;			// thread exit time
-	FILETIME	kernelTime;			// thread kernel-mode time
-	FILETIME	userTime;			// thread user-mode time
-//	char		temp[1024];
-
-	busyCount = 0;
-	threadHandle = CreateThread(
-	   NULL,	// LPSECURITY_ATTRIBUTES lpsa,
-	   0,		// DWORD cbStack,
-	   (LPTHREAD_START_ROUTINE)busyFunction,	// LPTHREAD_START_ROUTINE lpStartAddr,
-	   0,			// LPVOID lpvThreadParm,
-	   CREATE_SUSPENDED,			//   DWORD fdwCreate,
-	   (unsigned long *)&threadId );
-
-	SetThreadPriority(threadHandle, THREAD_PRIORITY_IDLE);
-	ResumeThread(threadHandle);
-	while(busyCount < 10)
-	{
-		Sleep(100);
-	}
-	Sleep(1000);
-
-	TerminateThread(threadHandle, 0);
-	GetThreadTimes(threadHandle, &creationTime, &exitTime, &kernelTime, &userTime);
-	CloseHandle(threadHandle);
-
-//	sprintf(temp, "Time = %u\n", userTime.dwLowDateTime);
-//	OutputDebugString(temp);
-
-	otherTaskTime = userTime.dwLowDateTime;
-	if (userTime.dwLowDateTime < 7500000)
-	{
-		otherTasksRunning = true;
-//		OutputDebugString("WARNING: possibly running on a system with another task\n");
-	}
-}
-
-#pragma optimize("", on)
 
 
 void *Sys_GetBotAIAPI (void *parms ) {
@@ -100,7 +32,10 @@ void *Sys_GetBotAIAPI (void *parms ) {
 
 void Conbuf_AppendText( const char *pMsg )
 {
-	printf(pMsg);
+	char		msg[4096];
+	strcpy(msg, pMsg);
+	printf(Q_CleanStr(msg));
+	printf("\n");
 }
 
 /*
@@ -236,136 +171,6 @@ int Sys_MonkeyShouldBeSpanked( void ) {
 	return sys_monkeySpank;
 }
 
-/*
-==================
-Sys_CodeInMemoryChecksum
-==================
-*/
-#define MakePtr( cast, ptr, addValue ) (cast)( (DWORD)(ptr) + (addValue) )
-
-int Sys_CodeInMemoryChecksum( void *codeBase ) {
-	PIMAGE_DOS_HEADER dosHeader;
-	PIMAGE_NT_HEADERS pNTHeader;
-	PIMAGE_SECTION_HEADER section;
-
-	dosHeader = (PIMAGE_DOS_HEADER)codeBase;
-	pNTHeader = MakePtr( PIMAGE_NT_HEADERS, dosHeader, dosHeader->e_lfanew );
-
-	// First, verify that the e_lfanew field gave us a reasonable
-	// pointer, then verify the PE signature.
-	if ( IsBadReadPtr(pNTHeader, sizeof(IMAGE_NT_HEADERS)) ||
-	     pNTHeader->Signature != IMAGE_NT_SIGNATURE )
-	{
-		//printf("Unhandled EXE type, or invalid .EXE\n");
-		return 0;
-	}
-	// first section oughta be the code section
-	section = (PIMAGE_SECTION_HEADER)(pNTHeader+1);
-	/*
-	// the name of the code section should be .text
-	if ( Q_stricmp( section->Name, ".text" ) ) {
-		return 0;
-	}
-	*/
-
-	return Com_BlockChecksum( ((byte *) codeBase) + section->VirtualAddress, section->SizeOfRawData );
-}
-
-/*
-==================
-Sys_ChecksumExe
-==================
-*/
-
-// make sure this string is unique in the executable
-//					   01234567890123
-byte *exeChecksumId = (unsigned char *)"q3monkeyid\0\0\0\0";
-
-void Sys_ChecksumExe( void *codeBase ) {
-	TCHAR szPathOrig[_MAX_PATH], szPathClone[_MAX_PATH];
-	STARTUPINFO si;
-	TCHAR szCmdLine[512];
-	HANDLE hfile, hProcessOrig;
-	PROCESS_INFORMATION pi;
-	int l, i, n;
-	FILE *f;
-	byte *buf, *ptr;
-
-	// Is this the original EXE or the clone EXE?
-	if ( Q_stricmp(__argv[1], "monkey") ) {
-		// Original EXE: Spawn clone EXE to delete this EXE
-
-		GetModuleFileName(NULL, szPathOrig, _MAX_PATH);
-		GetTempPath(_MAX_PATH, szPathClone);
-		GetTempFileName(szPathClone, __TEXT("Del"), 0, szPathClone); 
-		CopyFile(szPathOrig, szPathClone, FALSE);
-
-		// Open the clone EXE using FILE_FLAG_DELETE_ON_CLOSE
-		hfile = CreateFile(szPathClone, 0, FILE_SHARE_READ, NULL,   	                       
-								OPEN_EXISTING, FILE_FLAG_DELETE_ON_CLOSE, NULL);
-		// Spawn the clone EXE passing it our EXE's process handle
-		// and the full path name to the original EXE file.
-		hProcessOrig = OpenProcess(SYNCHRONIZE, TRUE,
-									GetCurrentProcessId());
-									wsprintf(szCmdLine, __TEXT("%s monkey %d %d \"%s\""), szPathClone,
-												sys_checksum, hProcessOrig, szPathOrig);
-		ZeroMemory(&si, sizeof(si));
-		si.cb = sizeof(si);
-		CreateProcess(NULL, szCmdLine, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
-		CloseHandle(hProcessOrig);
-		CloseHandle(hfile);
-	} else {
-		// Clone EXE: When original EXE terminates, overwrite it with a new one
-		sys_checksum = atoi( __argv[2] );
-		hProcessOrig = (HANDLE) atoi( __argv[3] );
-		WaitForSingleObject(hProcessOrig, INFINITE);
-		CloseHandle(hProcessOrig);
-		// open the original executable
-		f = fopen( __argv[4], "rb" );
-		if ( !f ) {
-			return;
-		}
-		fseek (f, 0, SEEK_END);
-		l = ftell (f);
-		fseek (f, 0, SEEK_SET);
-		buf = (unsigned char *)malloc(l);
-		if ( fread(buf, l, 1, f) != 1 ) {
-			return;
-		}
-		fclose(f);
-		// search for the exe name string, nice brute force
-		n = strlen((const char *)exeChecksumId);
-		for ( i = 0; i < l; i++ ) {
-			if ( !Q_strncmp((const char *)(buf + i), (const char *)exeChecksumId, n) ) {
-				break;
-			}
-		}
-		if ( i >= l ) {
-			return;
-		}
-		ptr = buf + i;
-		// write checksum into exe memory image
-		ptr[0] = (sys_checksum >> 24) & 0xFF;
-		ptr[1] = (sys_checksum >> 16) & 0xFF;
-		ptr[2] = (sys_checksum >>  8) & 0xFF;
-		ptr[3] = (sys_checksum >>  0) & 0xFF;
-		ptr[4] = ptr[5] = ptr[6] = ptr[7] = ptr[8] = ptr[9] = 0;
-		// write out new exe with checksum
-		f = fopen( __argv[4], "wb" );
-		if ( !f ) {
-			return;
-		}
-		if ( fwrite(buf, l, 1, f) != 1 ) {
-			return;
-		}
-		fclose(f);
-		free(buf);
-		// The system will delete the clone EXE automatically 
-		// because it was opened with FILE_FLAG_DELETE_ON_CLOSE
-	}
-	//
-	exit(0);
-}
 
 /*
 ==================
@@ -373,89 +178,124 @@ Sys_VerifyCodeChecksum
 ==================
 */
 void Sys_VerifyCodeChecksum( void *codeBase ) {
-	// NOTE: should not checksum code in debug mode because the memory image changes
-	//		 as soon as you set a break point!
-#if defined(SPANK_MONKEYS) && !defined(_DEBUG)
-	int exeChecksum;
+}
 
-	// if the checksum is not yet stored in the executable
-	if ( exeChecksumId[4] != 0 ) {
-		// spawn another process that will replace this executable with one that has a checksum
-		Sys_ChecksumExe( codeBase );
-		return;
-	}
+/*
+===============
+PrintMatches
 
-	exeChecksum = (exeChecksumId[0] << 24) | (exeChecksumId[1] << 16) | (exeChecksumId[2] << 8) | exeChecksumId[3];
-	if ( exeChecksum != sys_checksum ) {
-		sys_monkeySpank = qtrue;
+===============
+*/
+static char g_consoleField1[256];
+static char g_consoleField2[256];
+
+static void PrintMatches( const char *s ) {
+	if ( !Q_stricmpn( s, g_consoleField1, strlen( g_consoleField1 ) ) ) {
+		printf( "    %s\n", s );
 	}
-#endif
 }
 
 //qboolean stdin_active = qtrue;
 char *Sys_ConsoleInput(void)
 {
-    static char text[256];
-    static int     len=0;
-	fd_set	fdset;
-    struct timeval timeout;
+	const char ClearLine[] = "\r                                                                               \r";
 
-//	if (!com_dedicated || !com_dedicated->value)
-//		return NULL;
-
-//	if (!stdin_active)
-//		return NULL;
-
-//	FD_ZERO(&fdset);
-//	FD_SET(0, &fdset); // stdin
-//	timeout.tv_sec = 0;
-//	timeout.tv_usec = 0;
-//	if (select (1, &fdset, NULL, NULL, &timeout) == -1 || !FD_ISSET(0, &fdset))
-//		return NULL;
-
-	if (!kbhit()) return NULL;
-	if (len == 0) memset(text,0,sizeof(text));
-
-	text[len] = getch();
+	static int	len=0;
+	static bool bPendingExtended = false;
 	
-	switch (text[len])
+	if (!kbhit()) return NULL;
+
+	if (len == 0) memset(g_consoleField1,0,sizeof(g_consoleField1));
+	
+	g_consoleField1[len] = getch();
+	
+	if (bPendingExtended)
 	{
+		switch (g_consoleField1[len])
+		{
+			case 'H':	//up
+				strcpy(g_consoleField1, g_consoleField2);
+				printf(ClearLine);
+				printf("%s",g_consoleField1);
+				len = strlen(g_consoleField1);
+			break;
+
+			case 'K':	//left
+			break;
+
+			case 'M':	//right
+			break;
+
+			case 'P':	//down
+			break;
+		}
+		g_consoleField1[len] = 0;	//erase last key hit
+		bPendingExtended = false;
+	}
+	else
+	switch ((unsigned char) g_consoleField1[len])
+	{
+	case 0x00:	//fkey is next
+	case 0xe0:	//extended = arrow keys
+		g_consoleField1[len] = 0;	//erase last key hit
+		bPendingExtended = true;
+		break;
 	case 8: // backspace
-		printf("%c %c",text[len],text[len]);
-		text[len] = 0;
+		printf("%c %c",g_consoleField1[len],g_consoleField1[len]);
+		g_consoleField1[len] = 0;
 		if (len > 0) len--;
-		text[len] = 0;
+		g_consoleField1[len] = 0;
+		break;
+	case 9:	//Tab
+		if (len) {
+			g_consoleField1[len] = 0;	//erase last key hit
+			printf( "\n");
+			// run through again, printing matches
+			Cmd_CommandCompletion( PrintMatches );
+			Cvar_CommandCompletion( PrintMatches );
+			printf( "\n%s", g_consoleField1);
+		}
 		break;
 	case 27: // esc	
 		// clear the line
+		printf(ClearLine);
 		len = 0;
-		printf("\n");
 		break;
-	case '\r':
+	case '\r':	//enter
+		g_consoleField1[len] = 0;	//erase last key hit
 		printf("\n");
-		text[len] = 0;
-		len = 0;
-		return text;
+		if (len) {
+			len = 0;
+			strcpy(g_consoleField2, g_consoleField1);
+			return g_consoleField1;
+		}
+		break;
+	case 'v' - 'a' + 1:	// ctrl-v is paste
+		g_consoleField1[len] = 0;	//erase last key hit
+		char *cbd;
+		cbd = Sys_GetClipboardData();
+		if (cbd) {
+			strncpy (&g_consoleField1[len], cbd, sizeof(g_consoleField1) );
+			printf("%s",cbd);
+			len += strlen(cbd);
+			Z_Free( cbd );
+			if (len == sizeof(g_consoleField1))
+			{
+				len = 0;
+				return g_consoleField1;
+			}
+		}
+		break;
 	default:
-		printf("%c",text[len]);
+		printf("%c",g_consoleField1[len]);
 		len++;
-		if (len == sizeof(text))
+		if (len == sizeof(g_consoleField1))
 		{
 			len = 0;
-			return text;
+			return g_consoleField1;
 		}
 		break;
 	}
-//	len = read (0, text, sizeof(text));
-//	if (len == 0) { // eof!
-//		stdin_active = qfalse;
-//		return NULL;
-//	}
-
-//	if (len < 1)
-//		return NULL;
-//	len = strlen(text);
-//	text[len-1] = 0;    // rip off the /n and terminate
 
 	return NULL;
 }
@@ -509,7 +349,7 @@ void QDECL Sys_Error( const char *error, ... ) {
 
 //	Sys_DestroyConsole();
 	Com_ShutdownZoneMemory();
-// 	Com_ShutdownHunkMemory();
+ 	Com_ShutdownHunkMemory();
 
 	exit (1);
 }
@@ -524,7 +364,7 @@ void Sys_Quit( void ) {
 	IN_Shutdown();
 //	Sys_DestroyConsole();
 	Com_ShutdownZoneMemory();
-// 	Com_ShutdownHunkMemory();
+ 	Com_ShutdownHunkMemory();
 
 	exit (0);
 }
@@ -1247,7 +1087,8 @@ EVENT LOOP
 #define	MASK_QUED_EVENTS	( MAX_QUED_EVENTS - 1 )
 
 sysEvent_t	eventQue[MAX_QUED_EVENTS];
-int			eventHead, eventTail;
+static int	eventHead=0;
+static int	eventTail=0;
 byte		sys_packetReceived[MAX_MSGLEN];
 
 /*
@@ -1529,50 +1370,6 @@ void Sys_Init( void ) {
 	Cvar_Set( "username", Sys_GetCurrentUser() );
 
 	IN_Init();		// FIXME: not in dedicated?
-}
-
-// do a quick mem test to check for any potential future mem problems...
-//
-void QuickMemTest(void)
-{
-//	if (!Sys_LowPhysicalMemory())
-	{
-		const int iMemTestMegs = 64;	// useful search label
-		// special test, 
-		void *pvData = malloc(iMemTestMegs * 1024 * 1024);
-		if (pvData)
-		{
-			free(pvData);
-		}
-		else
-		{
-			// err...
-			//
-			LPCSTR psContinue	= "Your machine failed to allocate %dMB in a memory test, which may mean you'll have problems running this game all the way through.\n\nContinue anyway?";
-			LPCSTR psNoMem		= "Insufficient memory to run this game!\n";
-
-			switch (Language_GetIntegerValue())
-			{
-				case SP_LANGUAGE_GERMAN:
-
-					psContinue	= "Ihr Computer konnte bei einem Speichertest keine %dMB reservieren, daher werden Sie mit dem Starten des Spiels Probleme haben.\n\nDennoch fortsetzen?";
-					psNoMem		= "Unzureichender Speicher zum Starten!\n";
-					break;
-
-				case SP_LANGUAGE_FRENCH:
-
-					psContinue	= "Votre système n'a pu allouer %d Mo lors d'une vérification de la mémoire, ce qui signifie que vous aurez peut-être du mal à faire fonctionner ce jeu. \n\nSouhaitez-vous continuer malgré tout ?";
-					psNoMem		= "Mémoire insuffisante pour lancer ce jeu !\n";
-					break;
-			}
-
-			#define GetYesNo(psQuery)	(!!(MessageBox(NULL,psQuery,"Query",MB_YESNO|MB_ICONWARNING|MB_TASKMODAL)==IDYES))
-			if (!GetYesNo(va(psContinue,iMemTestMegs)))
-			{
-				Com_Error( ERR_FATAL, psNoMem );
-			}
-		}
-	}
 }
 
 

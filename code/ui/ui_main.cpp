@@ -176,6 +176,36 @@ void _UI_Refresh( int realtime )
 }
 
 /*
+===============
+UI_LoadMods
+===============
+*/
+static void UI_LoadMods() {
+	int		numdirs;
+	char	dirlist[2048];
+	char	*dirptr;
+  char  *descptr;
+	int		i;
+	int		dirlen;
+
+	uiInfo.modCount = 0;
+	numdirs = FS_GetFileList( "$modlist", "", dirlist, sizeof(dirlist) );
+	dirptr  = dirlist;
+	for( i = 0; i < numdirs; i++ ) {
+		dirlen = strlen( dirptr ) + 1;
+		descptr = dirptr + dirlen;
+		uiInfo.modList[uiInfo.modCount].modName = String_Alloc(dirptr);
+		uiInfo.modList[uiInfo.modCount].modDescr = String_Alloc(descptr);
+		dirptr += dirlen + strlen(descptr) + 1;
+		uiInfo.modCount++;
+		if (uiInfo.modCount >= MAX_MODS) {
+			break;
+		}
+	}
+
+}
+
+/*
 ================
 vmMain
 
@@ -286,16 +316,13 @@ const char *UI_FeederItemText(float feederID, int index, int column, qhandle_t *
 			return s_savedata[index].currentSaveFileDateTimeString;
 		}
 	}
-	if (feederID == FEEDER_MODS) 
-	{
-		return "";
-	}
 /*	if (feederID == FEEDER_MAPS) 
 	{
 		int actual;
 		return UI_SelectedMap(index, &actual);
 	} 
-	else if (feederID == FEEDER_MODS) 
+	else 
+*/	if (feederID == FEEDER_MODS) 
 	{
 		if (index >= 0 && index < uiInfo.modCount) 
 		{
@@ -309,6 +336,7 @@ const char *UI_FeederItemText(float feederID, int index, int column, qhandle_t *
 			}
 		}
 	} 
+/*
 	else if (feederID == FEEDER_DEMOS) 
 	{
 		if (index >= 0 && index < uiInfo.demoCount) 
@@ -414,7 +442,7 @@ static qboolean UI_DeferMenuScript ( const char **args )
 		}
 
 		// Defer if the video options were modified
-		deferred = Cvar_VariableValue ( "ui_r_modified" ) ? qtrue : qfalse;
+		deferred = Cvar_VariableIntegerValue( "ui_r_modified" ) ? qtrue : qfalse;
 
 		if ( deferred )
 		{
@@ -512,8 +540,6 @@ static qboolean UI_RunMenuScript ( const char **args )
 			ui.Cmd_ExecuteText( EXEC_APPEND, va("save %s\n", fileName));
 			s_savegame.saveFileCnt = -1;	//force a refresh the next time around
 		}
-		// FIXME BOB - do we want this?
-		/*
 		else if (Q_stricmp(name, "LoadMods") == 0) 
 		{
 			UI_LoadMods();
@@ -521,12 +547,17 @@ static qboolean UI_RunMenuScript ( const char **args )
 		else if (Q_stricmp(name, "RunMod") == 0) 
 		{
 			Cvar_Set( "fs_game", uiInfo.modList[uiInfo.modIndex].modName);
+extern	void FS_Restart( void );
+			FS_Restart();
 			Cbuf_ExecuteText( EXEC_APPEND, "vid_restart;" );
 		} 
+		// FIXME BOB - do we want this?
+		/*
 		else if (Q_stricmp(name, "RunDemo") == 0) 
 		{
 			Cbuf_ExecuteText( EXEC_APPEND, va("demo %s\n", uiInfo.demoList[uiInfo.demoIndex]));
-		} */
+		} 
+		*/
 		else if (Q_stricmp(name, "Quit") == 0) 
 		{
 			Cbuf_ExecuteText( EXEC_NOW, "quit");
@@ -588,11 +619,22 @@ static qboolean UI_RunMenuScript ( const char **args )
 		else if (Q_stricmp(name, "startgame") == 0) 
 		{
 			Menus_CloseAll();
+			if ( Cvar_VariableIntegerValue("com_demo") )
+			{
 #ifdef FINAL_BUILD
-			ui.Cmd_ExecuteText( EXEC_APPEND, "map kejim_post\n");
+				ui.Cmd_ExecuteText( EXEC_APPEND, "map demo\n");
 #else
-			ui.Cmd_ExecuteText( EXEC_APPEND, "devmap kejim_post\n");
+				ui.Cmd_ExecuteText( EXEC_APPEND, "devmap demo\n");
 #endif
+			}
+			else
+			{
+#ifdef FINAL_BUILD
+				ui.Cmd_ExecuteText( EXEC_APPEND, "map kejim_post\n");
+#else
+				ui.Cmd_ExecuteText( EXEC_APPEND, "devmap kejim_post\n");
+#endif
+			}
 		} 
 		else if (Q_stricmp(name, "startmap") == 0) 
 		{
@@ -779,9 +821,9 @@ void Key_GetBindingBuf( int keynum, char *buf, int buflen );
 
 static qboolean UI_Crosshair_HandleKey(int flags, float *special, int key) 
 {
-  if (key == K_MOUSE1 || key == K_MOUSE2 || key == K_ENTER || key == K_KP_ENTER) 
+  if (key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER) 
   {
-		if (key == K_MOUSE2) 
+		if (key == A_MOUSE2) 
 		{
 			uiInfo.currentCrosshair--;
 		} else {
@@ -886,6 +928,10 @@ void _UI_Init( qboolean inGameLoad )
 	uiInfo.uiDC.textWidth			= &Text_Width;
 	uiInfo.uiDC.feederItemImage		= &UI_FeederItemImage;
 	uiInfo.uiDC.feederItemText		= &UI_FeederItemText;
+#ifdef _IMMERSION
+	uiInfo.uiDC.registerForce		= &trap_FF_Register;
+	uiInfo.uiDC.startForce			= &trap_FF_Start;
+#endif // _IMMERSION
 	uiInfo.uiDC.ownerDrawHandleKey	= &UI_OwnerDrawHandleKey;
 
 	UI_Load();
@@ -913,22 +959,7 @@ void _UI_Init( qboolean inGameLoad )
 	Cvar_Set("ui_mousePitch", (trap_Cvar_VariableValue("m_pitch") >= 0) ? "0" : "1");
 
 	Cvar_Set("cg_endcredits", "0");	// Reset value
-
-	// FIXME BOB - is this needed?
-/*
-	uiInfo.serverStatus.currentServerCinematic = -1;
-	uiInfo.previewMovie = -1;
-
-	if (trap_Cvar_VariableValue("ui_TeamArenaFirstRun") == 0) {
-		Cvar_Set("s_volume", "0.8");
-		Cvar_Set("s_musicvolume", "0.5");
-		Cvar_Set("ui_TeamArenaFirstRun", "1");
-	}
-
-	Cvar_Register(NULL, "debug_protocol", "", 0 );
-
-	Cvar_Set("ui_actualNetGameType", va("%d", ui_netGameType.integer));
-	*/
+	Cvar_Set("ui_hidelang",	"0");	//default to western, taiwanese config will set to hide european and show taiwanese on menu
 }
 
 
@@ -1367,6 +1398,53 @@ qboolean Asset_Parse(char **buffer)
 			continue;
 		}
 
+#ifdef _IMMERSION
+
+		if (Q_stricmp(token, "menuEnterForce") == 0)
+		{
+			if (!PC_ParseStringMem((const char **) &tempStr))
+			{
+				PC_ParseWarning("Bad 1st parameter for keyword 'menuEnterForce'");
+				return qfalse;
+			}
+			uiInfo.uiDC.Assets.menuEnterForce = trap_FF_Register( tempStr );
+			continue;
+		}
+
+		if (Q_stricmp(token, "menuExitForce") == 0)
+		{
+			if (!PC_ParseStringMem((const char **) &tempStr))
+			{
+				PC_ParseWarning("Bad 1st parameter for keyword 'menuExitForce'");
+				return qfalse;
+			}
+			uiInfo.uiDC.Assets.menuExitForce = trap_FF_Register( tempStr );
+			continue;
+		}
+
+		if (Q_stricmp(token, "itemFocusForce") == 0)
+		{
+			if (!PC_ParseStringMem((const char **) &tempStr))
+			{
+				PC_ParseWarning("Bad 1st parameter for keyword 'itemFocusForce'");
+				return qfalse;
+			}
+			uiInfo.uiDC.Assets.itemFocusForce = trap_FF_Register( tempStr );
+			continue;
+		}
+
+		if (Q_stricmp(token, "menuBuzzForce") == 0)
+		{
+			if (!PC_ParseStringMem((const char **) &tempStr))
+			{
+				PC_ParseWarning("Bad 1st parameter for keyword 'menuBuzzForce'");
+				return qfalse;
+			}
+			uiInfo.uiDC.Assets.menuBuzzForce = trap_FF_Register( tempStr );
+			continue;
+		}
+
+#endif // _IMMERSION
 		if (Q_stricmp(token, "cursor") == 0) 
 		{
 			if (!PC_ParseStringMem((const char **) &uiInfo.uiDC.Assets.cursorStr))
@@ -1461,6 +1539,13 @@ static void UI_Update(const char *name)
 		ui.Cmd_ExecuteText( EXEC_APPEND, "snd_restart\n" );
 		return;
 	}
+#ifdef _IMMERSION
+	if (Q_stricmp(name, "ff") == 0) 
+	{
+		ui.Cmd_ExecuteText( EXEC_APPEND, "ff_restart\n");
+		return;
+	}
+#endif // _IMMERSION
 
 	if (Q_stricmp(name, "ui_SetName") == 0) 
 	{
@@ -2195,7 +2280,7 @@ void _UI_KeyEvent( int key, qboolean down )
 		menuDef_t *menu = Menu_GetFocused();
 		if (menu) 
 		{
-			if (key == K_ESCAPE && down && !Menus_AnyFullScreenVisible()) 
+			if (key == A_ESCAPE && down && !Menus_AnyFullScreenVisible()) 
 			{
 				Menus_CloseAll();
 			} 
@@ -2500,8 +2585,8 @@ UI_ResetDefaults
 */
 void UI_ResetDefaults( void )
 {
-	ui.Cmd_ExecuteText( EXEC_APPEND, "exec default.cfg\n");
 	ui.Cmd_ExecuteText( EXEC_APPEND, "cvar_restart\n");
+	ui.Cmd_ExecuteText( EXEC_APPEND, "exec default.cfg\n");
 	ui.Cmd_ExecuteText( EXEC_APPEND, "vid_restart\n" );
 	Cvar_Set("com_introPlayed", "1" );
 }

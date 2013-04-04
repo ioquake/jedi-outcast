@@ -6,532 +6,350 @@ key up events are sent even if in console mode
 
 */
 
-field_t	historyEditLines[COMMAND_HISTORY];
-
-int			nextHistoryLine;		// the last line in the history buffer, not masked
-int			historyLine;	// the line being displayed from history buffer
-							// will be <= nextHistoryLine
-
-field_t		g_consoleField;
 field_t		chatField;
 qboolean	chat_team;
 
 int			chat_playerNum;
 
+keyGlobals_t	kg;										
 
-qboolean	key_overstrikeMode;
-
-qboolean	anykeydown;
-qkey_t		keys[MAX_KEYS];
-
-
-typedef struct {
-	char	*name;
-	int		keynum;
-} keyname_t;
-
-
-// names not in this list can either be lowercase ascii, or '0xnn' hex sequences
-keyname_t keynames[] =
-{
-	{"TAB", K_TAB},
-	{"ENTER", K_ENTER},
-	{"ESCAPE", K_ESCAPE},
-	{"SPACE", K_SPACE},
-	{"BACKSPACE", K_BACKSPACE},
-	{"UPARROW", K_UPARROW},
-	{"DOWNARROW", K_DOWNARROW},
-	{"LEFTARROW", K_LEFTARROW},
-	{"RIGHTARROW", K_RIGHTARROW},
-
-	{"ALT", K_ALT},
-	{"CTRL", K_CTRL},
-	{"SHIFT", K_SHIFT},
-
-	{"COMMAND", K_COMMAND},
-
-	{"CAPSLOCK", K_CAPSLOCK},
-
-	
-	{"F1", K_F1},
-	{"F2", K_F2},
-	{"F3", K_F3},
-	{"F4", K_F4},
-	{"F5", K_F5},
-	{"F6", K_F6},
-	{"F7", K_F7},
-	{"F8", K_F8},
-	{"F9", K_F9},
-	{"F10", K_F10},
-	{"F11", K_F11},
-	{"F12", K_F12},
-
-	{"INS", K_INS},
-	{"DEL", K_DEL},
-	{"PGDN", K_PGDN},
-	{"PGUP", K_PGUP},
-	{"HOME", K_HOME},
-	{"END", K_END},
-
-	{"MOUSE1", K_MOUSE1},
-	{"MOUSE2", K_MOUSE2},
-	{"MOUSE3", K_MOUSE3},
-	{"MOUSE4", K_MOUSE4},
-	{"MOUSE5", K_MOUSE5},
-
-	{"MWHEELUP",	K_MWHEELUP },
-	{"MWHEELDOWN",	K_MWHEELDOWN },
-
-	{"JOY1", K_JOY1},
-	{"JOY2", K_JOY2},
-	{"JOY3", K_JOY3},
-	{"JOY4", K_JOY4},
-	{"JOY5", K_JOY5},
-	{"JOY6", K_JOY6},
-	{"JOY7", K_JOY7},
-	{"JOY8", K_JOY8},
-	{"JOY9", K_JOY9},
-	{"JOY10", K_JOY10},
-	{"JOY11", K_JOY11},
-	{"JOY12", K_JOY12},
-	{"JOY13", K_JOY13},
-	{"JOY14", K_JOY14},
-	{"JOY15", K_JOY15},
-	{"JOY16", K_JOY16},
-	{"JOY17", K_JOY17},
-	{"JOY18", K_JOY18},
-	{"JOY19", K_JOY19},
-	{"JOY20", K_JOY20},
-	{"JOY21", K_JOY21},
-	{"JOY22", K_JOY22},
-	{"JOY23", K_JOY23},
-	{"JOY24", K_JOY24},
-	{"JOY25", K_JOY25},
-	{"JOY26", K_JOY26},
-	{"JOY27", K_JOY27},
-	{"JOY28", K_JOY28},
-	{"JOY29", K_JOY29},
-	{"JOY30", K_JOY30},
-	{"JOY31", K_JOY31},
-	{"JOY32", K_JOY32},
-
-	{"AUX1", K_AUX1},
-	{"AUX2", K_AUX2},
-	{"AUX3", K_AUX3},
-	{"AUX4", K_AUX4},
-	{"AUX5", K_AUX5},
-	{"AUX6", K_AUX6},
-	{"AUX7", K_AUX7},
-	{"AUX8", K_AUX8},
-	{"AUX9", K_AUX9},
-	{"AUX10", K_AUX10},
-	{"AUX11", K_AUX11},
-	{"AUX12", K_AUX12},
-	{"AUX13", K_AUX13},
-	{"AUX14", K_AUX14},
-	{"AUX15", K_AUX15},
-	{"AUX16", K_AUX16},
-
-	{"KP_HOME",			K_KP_HOME },
-	{"KP_UPARROW",		K_KP_UPARROW },
-	{"KP_PGUP",			K_KP_PGUP },
-	{"KP_LEFTARROW",	K_KP_LEFTARROW },
-	{"KP_5",			K_KP_5 },
-	{"KP_RIGHTARROW",	K_KP_RIGHTARROW },
-	{"KP_END",			K_KP_END },
-	{"KP_DOWNARROW",	K_KP_DOWNARROW },
-	{"KP_PGDN",			K_KP_PGDN },
-	{"KP_ENTER",		K_KP_ENTER },
-	{"KP_INS",			K_KP_INS },
-	{"KP_DEL",			K_KP_DEL },
-	{"KP_SLASH",		K_KP_SLASH },
-	{"KP_MINUS",		K_KP_MINUS },
-	{"KP_PLUS",			K_KP_PLUS },
-	{"KP_NUMLOCK",		K_KP_NUMLOCK },
-	{"KP_STAR",			K_KP_STAR },
-	{"KP_EQUALS",		K_KP_EQUALS },
-
-	{"PAUSE", K_PAUSE},
-	
-	{"SEMICOLON", ';'},	// because a raw semicolon seperates commands
-
-	{NULL,0}
+// do NOT blithely change any of the key names (3rd field) here, since they have to match the key binds
+//	in the CFG files, they're also prepended with "KEYNAME_" when looking up StripEd references
+//
+keyname_t keynames[MAX_KEYS] =							
+{														
+	{ 0x00, 0x00, NULL, A_NULL, false									},					  
+	{ 0x01, 0x01, "SHIFT", A_SHIFT, false 								},					       
+	{ 0x02, 0x02, "CTRL", A_CTRL, false   								},					       
+	{ 0x03, 0x03, "ALT", A_ALT, false									},					       
+	{ 0x04, 0x04, "CAPSLOCK", A_CAPSLOCK, false							},					       
+	{ 0x05, 0x05, "KP_NUMLOCK", A_NUMLOCK, false						},					       
+	{ 0x06, 0x06, "SCROLLLOCK", A_SCROLLLOCK, false						},					       
+	{ 0x07, 0x07, "PAUSE", A_PAUSE, false								},					       
+	{ 0x08, 0x08, "BACKSPACE", A_BACKSPACE, false						},					       
+	{ 0x09, 0x09, "TAB", A_TAB, false									},					       
+	{ 0x0a, 0x0a, "ENTER", A_ENTER, false								},					       
+	{ 0x0b, 0x0b, "KP_PLUS", A_KP_PLUS, false							},					       
+	{ 0x0c, 0x0c, "KP_MINUS", A_KP_MINUS, false							},					       
+	{ 0x0d, 0x0d, "KP_ENTER", A_KP_ENTER, false							},					       
+	{ 0x0e, 0x0e, "KP_DEL", A_KP_PERIOD, false							},					       
+	{ 0x0f, 0x0f, NULL, A_PRINTSCREEN, false							},
+	{ 0x10, 0x10, "KP_INS", A_KP_0, false								},					       
+	{ 0x11, 0x11, "KP_END", A_KP_1, false								},					       
+	{ 0x12, 0x12, "KP_DOWNARROW", A_KP_2, false							},					       
+	{ 0x13, 0x13, "KP_PGDN", A_KP_3, false								},					       
+	{ 0x14, 0x14, "KP_LEFTARROW", A_KP_4, false							},					       
+	{ 0x15, 0x15, "KP_5", A_KP_5, false									},					       
+	{ 0x16, 0x16, "KP_RIGHTARROW", A_KP_6, false						},					       
+	{ 0x17, 0x17, "KP_HOME", A_KP_7, false								},					       
+	{ 0x18, 0x18, "KP_UPARROW", A_KP_8, false							},					       
+	{ 0x19, 0x19, "KP_PGUP", A_KP_9, false								},					       
+	{ 0x1a, 0x1a, "CONSOLE", A_CONSOLE, false 							},					       
+	{ 0x1b, 0x1b, "ESCAPE", A_ESCAPE, false								},					       
+	{ 0x1c, 0x1c, "F1", A_F1, true										},					       
+	{ 0x1d, 0x1d, "F2", A_F2, true										},					       
+	{ 0x1e, 0x1e, "F3", A_F3, true										},					       
+	{ 0x1f, 0x1f, "F4", A_F4, true										},					       
+			    													        
+	{ 0x20, 0x20, "SPACE", A_SPACE, false								},
+	{ (word)'!', (word)'!', NULL, A_PLING, false		  				},
+	{ (word)'"', (word)'"', NULL, A_DOUBLE_QUOTE, false  				},
+	{ (word)'#', (word)'#', NULL, A_HASH, false		  					},
+	{ (word)'$', (word)'$', NULL, A_STRING, false						},
+	{ (word)'%', (word)'%', NULL, A_PERCENT, false						},
+	{ (word)'&', (word)'&', NULL, A_AND, false							},
+	{ 0x27, 0x27, NULL, A_SINGLE_QUOTE, false							},
+	{ (word)'(', (word)'(', NULL, A_OPEN_BRACKET, false					},
+	{ (word)')', (word)')', NULL, A_CLOSE_BRACKET, false				},
+	{ (word)'*', (word)'*', NULL, A_STAR, false							},
+	{ (word)'+', (word)'+', NULL, A_PLUS, false							},
+	{ (word)',', (word)',', NULL, A_COMMA, false						},
+	{ (word)'-', (word)'-', NULL, A_MINUS, false						},
+	{ (word)'.', (word)'.', NULL, A_PERIOD, false						},
+	{ (word)'/', (word)'/', NULL, A_FORWARD_SLASH, false				},
+	{ (word)'0', (word)'0', NULL, A_0, false							},
+	{ (word)'1', (word)'1', NULL, A_1, false							},
+	{ (word)'2', (word)'2', NULL, A_2, false							},
+	{ (word)'3', (word)'3', NULL, A_3, false							},
+	{ (word)'4', (word)'4', NULL, A_4, false							},
+	{ (word)'5', (word)'5', NULL, A_5, false							},
+	{ (word)'6', (word)'6', NULL, A_6, false							},
+	{ (word)'7', (word)'7', NULL, A_7, false							},
+	{ (word)'8', (word)'8', NULL, A_8, false							},
+	{ (word)'9', (word)'9', NULL, A_9, false							},
+	{ (word)':', (word)':', NULL, A_COLON, false						},
+	{ (word)';', (word)';', "SEMICOLON", A_SEMICOLON, false				},
+	{ (word)'<', (word)'<', NULL, A_LESSTHAN, false						},
+	{ (word)'=', (word)'=', NULL, A_EQUALS, false						},
+	{ (word)'>', (word)'>', NULL, A_GREATERTHAN, false					},
+	{ (word)'?', (word)'?', NULL, A_QUESTION, false						},
+			    													
+	{ (word)'@', (word)'@', NULL, A_AT, false							},	   	            
+	{ (word)'A', (word)'a', NULL, A_CAP_A, false						},		            
+	{ (word)'B', (word)'b', NULL, A_CAP_B, false						},		            
+	{ (word)'C', (word)'c', NULL, A_CAP_C, false						},		            
+	{ (word)'D', (word)'d', NULL, A_CAP_D, false						},		            
+	{ (word)'E', (word)'e', NULL, A_CAP_E, false						},		            
+	{ (word)'F', (word)'f', NULL, A_CAP_F, false						},		            
+	{ (word)'G', (word)'g', NULL, A_CAP_G, false						},		            
+	{ (word)'H', (word)'h', NULL, A_CAP_H, false						},		            
+	{ (word)'I', (word)'i', NULL, A_CAP_I, false						},		            
+	{ (word)'J', (word)'j', NULL, A_CAP_J, false						},		            
+	{ (word)'K', (word)'k', NULL, A_CAP_K, false						},		            
+	{ (word)'L', (word)'l', NULL, A_CAP_L, false						},		            
+	{ (word)'M', (word)'m', NULL, A_CAP_M, false						},		            
+	{ (word)'N', (word)'n', NULL, A_CAP_N, false						},		            
+	{ (word)'O', (word)'o', NULL, A_CAP_O, false						},		            
+	{ (word)'P', (word)'p', NULL, A_CAP_P, false						},		            
+	{ (word)'Q', (word)'q', NULL, A_CAP_Q, false						},		            
+	{ (word)'R', (word)'r', NULL, A_CAP_R, false						},		            
+	{ (word)'S', (word)'s', NULL, A_CAP_S, false						},		            
+	{ (word)'T', (word)'t', NULL, A_CAP_T, false						},		            
+	{ (word)'U', (word)'u', NULL, A_CAP_U, false						},		            
+	{ (word)'V', (word)'v', NULL, A_CAP_V, false						},		            
+	{ (word)'W', (word)'w', NULL, A_CAP_W, false						},		            
+	{ (word)'X', (word)'x', NULL, A_CAP_X, false						},		            
+	{ (word)'Y', (word)'y', NULL, A_CAP_Y, false						},		            
+	{ (word)'Z', (word)'z', NULL, A_CAP_Z, false						},		            
+	{ (word)'[', (word)'[', NULL, A_OPEN_SQUARE, false					},					    
+	{ 0x5c, 0x5c, NULL, A_BACKSLASH, false								},					    
+	{ (word)']', (word)']', NULL, A_CLOSE_SQUARE, false 				},					    
+	{ (word)'^', (word)'^', NULL, A_CARET, false		 				},					    
+	{ (word)'_', (word)'_', NULL, A_UNDERSCORE, false					},					    
+			    													   
+	{ 0x60, 0x60, NULL, A_LEFT_SINGLE_QUOTE, false						},
+	{ (word)'A', (word)'a', NULL, A_LOW_A, false						},           
+	{ (word)'B', (word)'b', NULL, A_LOW_B, false						},           
+	{ (word)'C', (word)'c', NULL, A_LOW_C, false						},           
+	{ (word)'D', (word)'d', NULL, A_LOW_D, false						},           
+	{ (word)'E', (word)'e', NULL, A_LOW_E, false						},           
+	{ (word)'F', (word)'f', NULL, A_LOW_F, false						},           
+	{ (word)'G', (word)'g', NULL, A_LOW_G, false						},           
+	{ (word)'H', (word)'h', NULL, A_LOW_H, false						},           
+	{ (word)'I', (word)'i', NULL, A_LOW_I, false						},           
+	{ (word)'J', (word)'j', NULL, A_LOW_J, false						},           
+	{ (word)'K', (word)'k', NULL, A_LOW_K, false						},           
+	{ (word)'L', (word)'l', NULL, A_LOW_L, false						},           
+	{ (word)'M', (word)'m', NULL, A_LOW_M, false						},           
+	{ (word)'N', (word)'n', NULL, A_LOW_N, false						},           
+	{ (word)'O', (word)'o', NULL, A_LOW_O, false						},           
+	{ (word)'P', (word)'p', NULL, A_LOW_P, false						},           
+	{ (word)'Q', (word)'q', NULL, A_LOW_Q, false						},           
+	{ (word)'R', (word)'r', NULL, A_LOW_R, false						},           
+	{ (word)'S', (word)'s', NULL, A_LOW_S, false						},           
+	{ (word)'T', (word)'t', NULL, A_LOW_T, false						},           
+	{ (word)'U', (word)'u', NULL, A_LOW_U, false						},           
+	{ (word)'V', (word)'v', NULL, A_LOW_V, false						},           
+	{ (word)'W', (word)'w', NULL, A_LOW_W, false						},           
+	{ (word)'X', (word)'x', NULL, A_LOW_X, false						},           
+	{ (word)'Y', (word)'y', NULL, A_LOW_Y, false						},           
+	{ (word)'Z', (word)'z', NULL, A_LOW_Z, false						},           
+	{ (word)'{', (word)'{', NULL, A_OPEN_BRACE, false					},
+	{ (word)'|', (word)'|', NULL, A_BAR, false							},
+	{ (word)'}', (word)'}', NULL, A_CLOSE_BRACE, false					},
+	{ (word)'~', (word)'~', NULL, A_TILDE, false						},
+	{ 0x7f, 0x7f, "DEL", A_DELETE, false								},
+			    													               
+	{ 0x80, 0x80, "EURO", A_EURO, false  								},
+	{ 0x81, 0x81, "SHIFT", A_SHIFT2, false								},
+	{ 0x82, 0x82, "CTRL", A_CTRL2, false								},
+	{ 0x83, 0x83, "ALT", A_ALT2, false									},
+	{ 0x84, 0x84, "F5", A_F5, true										},
+	{ 0x85, 0x85, "F6", A_F6, true										},
+	{ 0x86, 0x86, "F7", A_F7, true										},
+	{ 0x87, 0x87, "F8", A_F8, true										},
+	{ 0x88, 0x88, "CIRCUMFLEX", A_CIRCUMFLEX, false  					},
+	{ 0x89, 0x89, "MWHEELUP", A_MWHEELUP, false							},
+	{ 0x8a, 0x9a, NULL, A_CAP_SCARON, false								},	// ******
+	{ 0x8b, 0x8b, "MWHEELDOWN", A_MWHEELDOWN, false						},
+	{ 0x8c, 0x9c, NULL, A_CAP_OE, false									},	// ******
+	{ 0x8d, 0x8d, "MOUSE1", A_MOUSE1, false								},
+	{ 0x8e, 0x8e, "MOUSE2", A_MOUSE2, false								},
+	{ 0x8f, 0x8f, "INS", A_INSERT, false								},
+	{ 0x90, 0x90, "HOME", A_HOME, false									},
+	{ 0x91, 0x91, "PGUP", A_PAGE_UP, false								},
+	{ 0x92, 0x92, NULL, A_RIGHT_SINGLE_QUOTE, false						},
+	{ 0x93, 0x93, NULL, A_LEFT_DOUBLE_QUOTE, false						},
+	{ 0x94, 0x94, NULL, A_RIGHT_DOUBLE_QUOTE, false						},
+	{ 0x95, 0x95, "F9", A_F9, true										},
+	{ 0x96, 0x96, "F10", A_F10, true									},
+	{ 0x97, 0x97, "F11", A_F11, true									},
+	{ 0x98, 0x98, "F12", A_F12, true									},
+	{ 0x99, 0x99, NULL, A_TRADEMARK, false								},
+	{ 0x8a, 0x9a, NULL, A_LOW_SCARON, false								},	// ******
+	{ 0x9b, 0x9b, "SHIFT_ENTER", A_ENTER, false							},
+	{ 0x8c, 0x9c, NULL, A_LOW_OE, false									},	// ******
+	{ 0x9d, 0x9d, "END", A_END, false									},
+	{ 0x9e, 0x9e, "PGDN", A_PAGE_DOWN, false							},
+	{ 0x9f, 0xff, NULL, A_CAP_YDIERESIS, false							},	// ******
+			    													
+	{ 0xa0, 0,	  "SHIFT_SPACE", A_SPACE, false							},
+	{ 0xa1, 0xa1, NULL, A_EXCLAMDOWN, false								},	// upside down '!' - undisplayable
+	{ (word)(byte)'¢', (word)(byte)'¢', NULL, A_CENT, false	  			},
+	{ (word)(byte)'£', (word)(byte)'£', NULL, A_POUND, false	  		},
+	{ 0xa4, 0,    "SHIFT_KP_ENTER", A_KP_ENTER, false					},
+	{ (word)(byte)'¥', (word)(byte)'¥', NULL, A_YEN, false		  		},
+	{ 0xa6, 0xa6, "MOUSE3", A_MOUSE3, false								},
+	{ 0xa7, 0xa7, "MOUSE4", A_MOUSE4, false								},
+	{ 0xa8, 0xa8, "MOUSE5", A_MOUSE5, false								},
+	{ (word)(byte)'©', (word)(byte)'©', NULL, A_COPYRIGHT, false 		},
+	{ 0xaa, 0xaa, "UPARROW", A_CURSOR_UP, false							},
+	{ 0xab, 0xab, "DOWNARROW", A_CURSOR_DOWN, false						},
+	{ 0xac, 0xac, "LEFTARROW", A_CURSOR_LEFT, false						},
+	{ 0xad, 0xad, "RIGHTARROW", A_CURSOR_RIGHT, false					},
+	{ (word)(byte)'®', (word)(byte)'®', NULL, A_REGISTERED, false		},
+	{ 0xaf, 0,	  NULL, A_UNDEFINED_7, false							},
+	{ 0xb0, 0,	  NULL, A_UNDEFINED_8, false							},
+	{ 0xb1, 0,	  NULL, A_UNDEFINED_9, false							},
+	{ 0xb2, 0,	  NULL, A_UNDEFINED_10, false							},
+	{ 0xb3, 0,	  NULL, A_UNDEFINED_11, false							},
+	{ 0xb4, 0,	  NULL, A_UNDEFINED_12, false							},
+	{ 0xb5, 0,	  NULL, A_UNDEFINED_13, false							},
+	{ 0xb6, 0,	  NULL, A_UNDEFINED_14, false							},
+	{ 0xb7, 0,	  NULL, A_UNDEFINED_15, false							},
+	{ 0xb8, 0,	  NULL, A_UNDEFINED_16, false							},
+	{ 0xb9, 0,	  NULL, A_UNDEFINED_17, false							},
+	{ 0xba, 0,	  NULL, A_UNDEFINED_18, false							},
+	{ 0xbb, 0,	  NULL, A_UNDEFINED_19, false							},
+	{ 0xbc, 0,	  NULL, A_UNDEFINED_20, false							},
+	{ 0xbd, 0,	  NULL, A_UNDEFINED_21, false							},
+	{ 0xbe, 0,	  NULL, A_UNDEFINED_22, false							},
+	{ (word)(byte)'¿', (word)(byte)'¿', NULL, A_QUESTION_DOWN, false	},
+			    		                       
+	{ (word)(byte)'À', (word)(byte)'à', NULL, A_CAP_AGRAVE, false		},
+	{ (word)(byte)'Á', (word)(byte)'á', NULL, A_CAP_AACUTE, false		},
+	{ (word)(byte)'Â', (word)(byte)'â', NULL, A_CAP_ACIRCUMFLEX, false	},
+	{ (word)(byte)'Ã', (word)(byte)'ã', NULL, A_CAP_ATILDE, false		},
+	{ (word)(byte)'Ä', (word)(byte)'ä', NULL, A_CAP_ADIERESIS, false	},
+	{ (word)(byte)'Å', (word)(byte)'å', NULL, A_CAP_ARING, false		},
+	{ (word)(byte)'Æ', (word)(byte)'æ', NULL, A_CAP_AE, false			},
+	{ (word)(byte)'Ç', (word)(byte)'ç', NULL, A_CAP_CCEDILLA, false		},
+	{ (word)(byte)'È', (word)(byte)'è', NULL, A_CAP_EGRAVE, false		},
+	{ (word)(byte)'É', (word)(byte)'é', NULL, A_CAP_EACUTE, false		},
+	{ (word)(byte)'Ê', (word)(byte)'ê', NULL, A_CAP_ECIRCUMFLEX, false	},
+	{ (word)(byte)'Ë', (word)(byte)'ë', NULL, A_CAP_EDIERESIS, false	},
+	{ (word)(byte)'Ì', (word)(byte)'ì', NULL, A_CAP_IGRAVE, false		},
+	{ (word)(byte)'Í', (word)(byte)'í', NULL, A_CAP_IACUTE, false		},
+	{ (word)(byte)'Î', (word)(byte)'î', NULL, A_CAP_ICIRCUMFLEX, false	},
+	{ (word)(byte)'Ï', (word)(byte)'ï', NULL, A_CAP_IDIERESIS, false	},
+	{ (word)(byte)'Ð', (word)(byte)'ð', NULL, A_CAP_ETH, false			},
+	{ (word)(byte)'Ñ', (word)(byte)'ñ', NULL, A_CAP_NTILDE, false		},
+	{ (word)(byte)'Ò', (word)(byte)'ò', NULL, A_CAP_OGRAVE, false		},
+	{ (word)(byte)'Ó', (word)(byte)'ó', NULL, A_CAP_OACUTE, false		},
+	{ (word)(byte)'Ô', (word)(byte)'ô', NULL, A_CAP_OCIRCUMFLEX, false	},
+	{ (word)(byte)'Õ', (word)(byte)'õ', NULL, A_CAP_OTILDE, false		},
+	{ (word)(byte)'Ö', (word)(byte)'ö', NULL, A_CAP_ODIERESIS, false	},
+	{ (word)(byte)'×', (word)(byte)'×', "KP_STAR", A_MULTIPLY, false 	},
+	{ (word)(byte)'Ø', (word)(byte)'ø', NULL, A_CAP_OSLASH, false		},  
+	{ (word)(byte)'Ù', (word)(byte)'ù', NULL, A_CAP_UGRAVE, false		},  
+	{ (word)(byte)'Ú', (word)(byte)'ú', NULL, A_CAP_UACUTE, false		},  
+	{ (word)(byte)'Û', (word)(byte)'û', NULL, A_CAP_UCIRCUMFLEX, false	},  
+	{ (word)(byte)'Ü', (word)(byte)'ü', NULL, A_CAP_UDIERESIS, false	},  
+	{ (word)(byte)'Ý', (word)(byte)'ý', NULL, A_CAP_YACUTE, false		},  
+	{ (word)(byte)'Þ', (word)(byte)'þ', NULL, A_CAP_THORN, false		},  
+	{ (word)(byte)'ß', (word)(byte)'ß', NULL, A_GERMANDBLS, false 		},
+			    		                       
+	{ (word)(byte)'À', (word)(byte)'à', NULL, A_LOW_AGRAVE, false		},		 
+	{ (word)(byte)'Á', (word)(byte)'á', NULL, A_LOW_AACUTE, false		},		 
+	{ (word)(byte)'Â', (word)(byte)'â', NULL, A_LOW_ACIRCUMFLEX, false	},		 
+	{ (word)(byte)'Ã', (word)(byte)'ã', NULL, A_LOW_ATILDE, false		},		 
+	{ (word)(byte)'Ä', (word)(byte)'ä', NULL, A_LOW_ADIERESIS, false	},		 
+	{ (word)(byte)'Å', (word)(byte)'å', NULL, A_LOW_ARING, false		},		 
+	{ (word)(byte)'Æ', (word)(byte)'æ', NULL, A_LOW_AE, false			},		 
+	{ (word)(byte)'Ç', (word)(byte)'ç', NULL, A_LOW_CCEDILLA, false		},		 
+	{ (word)(byte)'È', (word)(byte)'è', NULL, A_LOW_EGRAVE, false		},		 
+	{ (word)(byte)'É', (word)(byte)'é', NULL, A_LOW_EACUTE, false		},		 
+	{ (word)(byte)'Ê', (word)(byte)'ê', NULL, A_LOW_ECIRCUMFLEX, false	},		 
+	{ (word)(byte)'Ë', (word)(byte)'ë', NULL, A_LOW_EDIERESIS, false	},		 
+	{ (word)(byte)'Ì', (word)(byte)'ì', NULL, A_LOW_IGRAVE, false		},		 
+	{ (word)(byte)'Í', (word)(byte)'í', NULL, A_LOW_IACUTE, false		},		 
+	{ (word)(byte)'Î', (word)(byte)'î', NULL, A_LOW_ICIRCUMFLEX, false	},		 
+	{ (word)(byte)'Ï', (word)(byte)'ï', NULL, A_LOW_IDIERESIS, false	},		 
+	{ (word)(byte)'Ð', (word)(byte)'ð', NULL, A_LOW_ETH, false			},		 
+	{ (word)(byte)'Ñ', (word)(byte)'ñ', NULL, A_LOW_NTILDE, false		},		 
+	{ (word)(byte)'Ò', (word)(byte)'ò', NULL, A_LOW_OGRAVE, false		},		 
+	{ (word)(byte)'Ó', (word)(byte)'ó', NULL, A_LOW_OACUTE, false		},		 
+	{ (word)(byte)'Ô', (word)(byte)'ô', NULL, A_LOW_OCIRCUMFLEX, false	},		 
+	{ (word)(byte)'Õ', (word)(byte)'õ', NULL, A_LOW_OTILDE, false		},		 
+	{ (word)(byte)'Ö', (word)(byte)'ö', NULL, A_LOW_ODIERESIS, false	},		 
+	{ (word)(byte)'÷', (word)(byte)'÷', "KP_SLASH", A_DIVIDE, false 	},		 
+	{ (word)(byte)'Ø', (word)(byte)'ø', NULL, A_LOW_OSLASH, false		},		 
+	{ (word)(byte)'Ù', (word)(byte)'ù', NULL, A_LOW_UGRAVE, false		},		 
+	{ (word)(byte)'Ú', (word)(byte)'ú', NULL, A_LOW_UACUTE, false		},		 
+	{ (word)(byte)'Û', (word)(byte)'û', NULL, A_LOW_UCIRCUMFLEX, false	},		 
+	{ (word)(byte)'Ü', (word)(byte)'ü', NULL, A_LOW_UDIERESIS, false	},		 
+	{ (word)(byte)'Ý', (word)(byte)'ý', NULL, A_LOW_YACUTE, false		},		 
+	{ (word)(byte)'Þ', (word)(byte)'þ', NULL, A_LOW_THORN, false		},		 
+	{ 0x9f, 0xff, NULL, A_LOW_YDIERESIS, false							},	// *******
+																		
+	{ 0x100, 0x100, "JOY0", A_JOY0, false								},
+	{ 0x101, 0x101, "JOY1", A_JOY1, false								},
+	{ 0x102, 0x102, "JOY2", A_JOY2, false								},
+	{ 0x103, 0x103, "JOY3", A_JOY3, false								},
+	{ 0x104, 0x104, "JOY4", A_JOY4, false								},
+	{ 0x105, 0x105, "JOY5", A_JOY5, false								},
+	{ 0x106, 0x106, "JOY6", A_JOY6, false								},
+	{ 0x107, 0x107, "JOY7", A_JOY7, false								},
+	{ 0x108, 0x108, "JOY8", A_JOY8, false								},
+	{ 0x109, 0x109, "JOY9", A_JOY9, false								},
+	{ 0x10a, 0x10a, "JOY10", A_JOY10, false								},
+	{ 0x10b, 0x10b, "JOY11", A_JOY11, false								},
+	{ 0x10c, 0x10c, "JOY12", A_JOY12, false								},
+	{ 0x10d, 0x10d, "JOY13", A_JOY13, false								},
+	{ 0x10e, 0x10e, "JOY14", A_JOY14, false								},
+	{ 0x10f, 0x10f, "JOY15", A_JOY15, false								},
+	{ 0x110, 0x110, "JOY16", A_JOY16, false								},
+	{ 0x111, 0x111, "JOY17", A_JOY17, false								},
+	{ 0x112, 0x112, "JOY18", A_JOY18, false								},
+	{ 0x113, 0x113, "JOY19", A_JOY19, false								},
+	{ 0x114, 0x114, "JOY20", A_JOY20, false								},
+	{ 0x115, 0x115, "JOY21", A_JOY21, false								},
+	{ 0x116, 0x116, "JOY22", A_JOY22, false								},
+	{ 0x117, 0x117, "JOY23", A_JOY23, false								},
+	{ 0x118, 0x118, "JOY24", A_JOY24, false								},
+	{ 0x119, 0x119, "JOY25", A_JOY25, false								},
+	{ 0x11a, 0x11a, "JOY26", A_JOY26, false								},
+	{ 0x11b, 0x11b, "JOY27", A_JOY27, false								},
+	{ 0x11c, 0x11c, "JOY28", A_JOY28, false								},
+	{ 0x11d, 0x11d, "JOY29", A_JOY29, false								},
+	{ 0x11e, 0x11e, "JOY30", A_JOY30, false								},
+	{ 0x11f, 0x11f, "JOY31", A_JOY31, false								},
+		    	    												
+	{ 0x120, 0x120, "AUX0", A_AUX0, false								},
+	{ 0x121, 0x121, "AUX1", A_AUX1, false								},
+	{ 0x122, 0x122, "AUX2", A_AUX2, false								},
+	{ 0x123, 0x123, "AUX3", A_AUX3, false								},
+	{ 0x124, 0x124, "AUX4", A_AUX4, false								},
+	{ 0x125, 0x125, "AUX5", A_AUX5, false								},
+	{ 0x126, 0x126, "AUX6", A_AUX6, false								},
+	{ 0x127, 0x127, "AUX7", A_AUX7, false								},
+	{ 0x128, 0x128, "AUX8", A_AUX8, false								},
+	{ 0x129, 0x129, "AUX9", A_AUX9, false								},
+	{ 0x12a, 0x12a, "AUX10", A_AUX10, false								},
+	{ 0x12b, 0x12b, "AUX11", A_AUX11, false								},
+	{ 0x12c, 0x12c, "AUX12", A_AUX12, false								},
+	{ 0x12d, 0x12d, "AUX13", A_AUX13, false								},
+	{ 0x12e, 0x12e, "AUX14", A_AUX14, false								},
+	{ 0x12f, 0x12f, "AUX15", A_AUX15, false								},
+	{ 0x130, 0x130, "AUX16", A_AUX16, false								},
+	{ 0x131, 0x131, "AUX17", A_AUX17, false								},
+	{ 0x132, 0x132, "AUX18", A_AUX18, false								},
+	{ 0x133, 0x133, "AUX19", A_AUX19, false								},
+	{ 0x134, 0x134, "AUX20", A_AUX20, false								},
+	{ 0x135, 0x135, "AUX21", A_AUX21, false								},
+	{ 0x136, 0x136, "AUX22", A_AUX22, false								},
+	{ 0x137, 0x137, "AUX23", A_AUX23, false								},
+	{ 0x138, 0x138, "AUX24", A_AUX24, false								},
+	{ 0x139, 0x139, "AUX25", A_AUX25, false								},
+	{ 0x13a, 0x13a, "AUX26", A_AUX26, false								},
+	{ 0x13b, 0x13b, "AUX27", A_AUX27, false								},
+	{ 0x13c, 0x13c, "AUX28", A_AUX28, false								},
+	{ 0x13d, 0x13d, "AUX29", A_AUX29, false								},
+	{ 0x13e, 0x13e, "AUX30", A_AUX30, false								},
+	{ 0x13f, 0x13f, "AUX31", A_AUX31, false								}
 };
 
-//english printed keynames, for when we want what's printed to be different
-//from the "technical" bind label
-keyname_t keynames_e[] =
-{
-	{"TAB", K_TAB},
-	{"ENTER", K_ENTER},
-	{"ESCAPE", K_ESCAPE},
-	{"SPACE", K_SPACE},
-	{"BACKSPACE", K_BACKSPACE},
-	{"UP", K_UPARROW},
-	{"DOWN", K_DOWNARROW},
-	{"LEFT", K_LEFTARROW},
-	{"RIGHT", K_RIGHTARROW},
 
-	{"ALT", K_ALT},
-	{"CTRL", K_CTRL},
-	{"SHIFT", K_SHIFT},
-
-	{"COMMAND", K_COMMAND},
-
-	{"CAPSLOCK", K_CAPSLOCK},
-
-	
-	{"F1", K_F1},
-	{"F2", K_F2},
-	{"F3", K_F3},
-	{"F4", K_F4},
-	{"F5", K_F5},
-	{"F6", K_F6},
-	{"F7", K_F7},
-	{"F8", K_F8},
-	{"F9", K_F9},
-	{"F10", K_F10},
-	{"F11", K_F11},
-	{"F12", K_F12},
-
-	{"INS", K_INS},
-	{"DEL", K_DEL},
-	{"PGDN", K_PGDN},
-	{"PGUP", K_PGUP},
-	{"HOME", K_HOME},
-	{"END", K_END},
-
-	{"MOUSE1", K_MOUSE1},
-	{"MOUSE2", K_MOUSE2},
-	{"MOUSE3", K_MOUSE3},
-	{"MOUSE4", K_MOUSE4},
-	{"MOUSE5", K_MOUSE5},
-
-	{"MWHEELUP",	K_MWHEELUP },
-	{"MWHEELDOWN",	K_MWHEELDOWN },
-
-	{"JOY1", K_JOY1},
-	{"JOY2", K_JOY2},
-	{"JOY3", K_JOY3},
-	{"JOY4", K_JOY4},
-	{"JOY5", K_JOY5},
-	{"JOY6", K_JOY6},
-	{"JOY7", K_JOY7},
-	{"JOY8", K_JOY8},
-	{"JOY9", K_JOY9},
-	{"JOY10", K_JOY10},
-	{"JOY11", K_JOY11},
-	{"JOY12", K_JOY12},
-	{"JOY13", K_JOY13},
-	{"JOY14", K_JOY14},
-	{"JOY15", K_JOY15},
-	{"JOY16", K_JOY16},
-	{"JOY17", K_JOY17},
-	{"JOY18", K_JOY18},
-	{"JOY19", K_JOY19},
-	{"JOY20", K_JOY20},
-	{"JOY21", K_JOY21},
-	{"JOY22", K_JOY22},
-	{"JOY23", K_JOY23},
-	{"JOY24", K_JOY24},
-	{"JOY25", K_JOY25},
-	{"JOY26", K_JOY26},
-	{"JOY27", K_JOY27},
-	{"JOY28", K_JOY28},
-	{"JOY29", K_JOY29},
-	{"JOY30", K_JOY30},
-	{"JOY31", K_JOY31},
-	{"JOY32", K_JOY32},
-
-	{"AUX1", K_AUX1},
-	{"AUX2", K_AUX2},
-	{"AUX3", K_AUX3},
-	{"AUX4", K_AUX4},
-	{"AUX5", K_AUX5},
-	{"AUX6", K_AUX6},
-	{"AUX7", K_AUX7},
-	{"AUX8", K_AUX8},
-	{"AUX9", K_AUX9},
-	{"AUX10", K_AUX10},
-	{"AUX11", K_AUX11},
-	{"AUX12", K_AUX12},
-	{"AUX13", K_AUX13},
-	{"AUX14", K_AUX14},
-	{"AUX15", K_AUX15},
-	{"AUX16", K_AUX16},
-
-	{"KP_HOME",			K_KP_HOME },
-	{"KP_UP",		K_KP_UPARROW },
-	{"KP_PGUP",			K_KP_PGUP },
-	{"KP_LEFT",	K_KP_LEFTARROW },
-	{"KP_5",			K_KP_5 },
-	{"KP_RIGHT",	K_KP_RIGHTARROW },
-	{"KP_END",			K_KP_END },
-	{"KP_DOWN",	K_KP_DOWNARROW },
-	{"KP_PGDN",			K_KP_PGDN },
-	{"KP_ENTER",		K_KP_ENTER },
-	{"KP_INS",			K_KP_INS },
-	{"KP_DEL",			K_KP_DEL },
-	{"KP_SLASH",		K_KP_SLASH },
-	{"KP_MINUS",		K_KP_MINUS },
-	{"KP_PLUS",			K_KP_PLUS },
-	{"KP_NUMLOCK",		K_KP_NUMLOCK },
-	{"KP_STAR",			K_KP_STAR },
-	{"KP_EQUALS",		K_KP_EQUALS },
-
-	{"PAUSE", K_PAUSE},
-	
-	{"SEMICOLON", ';'},	// because a raw semicolon seperates commands
-
-	{NULL,0}
-};
-
-keyname_t keynames_d[] =	//deutsch
-{
-	{"TAB", K_TAB},
-	{"EINGABETASTE", K_ENTER},
-	{"ESC", K_ESCAPE},
-	{"LEERTASTE", K_SPACE},
-	{"RÜCKTASTE", K_BACKSPACE},
-	{"PFEILT.AUF", K_UPARROW},
-	{"PFEILT.UNTEN", K_DOWNARROW},
-	{"PFEILT.LINKS", K_LEFTARROW},
-	{"PFEILT.RECHTS", K_RIGHTARROW},
-
-	{"ALT", K_ALT},
-	{"STRG", K_CTRL},
-	{"UMSCHALT", K_SHIFT},
-
-	{"FESTSTELLT", K_CAPSLOCK},
-
-	{"F1", K_F1},
-	{"F2", K_F2},
-	{"F3", K_F3},
-	{"F4", K_F4},
-	{"F5", K_F5},
-	{"F6", K_F6},
-	{"F7", K_F7},
-	{"F8", K_F8},
-	{"F9", K_F9},
-	{"F10", K_F10},
-	{"F11", K_F11},
-	{"F12", K_F12},
-
-	{"EINFG", K_INS},
-	{"ENTF", K_DEL},
-	{"BILD-AB", K_PGDN},
-	{"BILD-AUF", K_PGUP},
-	{"POS1", K_HOME},
-	{"ENDE", K_END},
-
-	{"MAUS1", K_MOUSE1},
-	{"MAUS2", K_MOUSE2},
-	{"MAUS3", K_MOUSE3},
-	{"MAUS4", K_MOUSE4},
-	{"MAUS5", K_MOUSE5},
-
-	{"MRADOBEN",	K_MWHEELUP },
-	{"MRADUNTEN",	K_MWHEELDOWN },
-
-	{"JOY1", K_JOY1},
-	{"JOY2", K_JOY2},
-	{"JOY3", K_JOY3},
-	{"JOY4", K_JOY4},
-	{"JOY5", K_JOY5},
-	{"JOY6", K_JOY6},
-	{"JOY7", K_JOY7},
-	{"JOY8", K_JOY8},
-	{"JOY9", K_JOY9},
-	{"JOY10", K_JOY10},
-	{"JOY11", K_JOY11},
-	{"JOY12", K_JOY12},
-	{"JOY13", K_JOY13},
-	{"JOY14", K_JOY14},
-	{"JOY15", K_JOY15},
-	{"JOY16", K_JOY16},
-	{"JOY17", K_JOY17},
-	{"JOY18", K_JOY18},
-	{"JOY19", K_JOY19},
-	{"JOY20", K_JOY20},
-	{"JOY21", K_JOY21},
-	{"JOY22", K_JOY22},
-	{"JOY23", K_JOY23},
-	{"JOY24", K_JOY24},
-	{"JOY25", K_JOY25},
-	{"JOY26", K_JOY26},
-	{"JOY27", K_JOY27},
-	{"JOY28", K_JOY28},
-	{"JOY29", K_JOY29},
-	{"JOY30", K_JOY30},
-	{"JOY31", K_JOY31},
-	{"JOY32", K_JOY32},
-
-	{"AUX1", K_AUX1},
-	{"AUX2", K_AUX2},
-	{"AUX3", K_AUX3},
-	{"AUX4", K_AUX4},
-	{"AUX5", K_AUX5},
-	{"AUX6", K_AUX6},
-	{"AUX7", K_AUX7},
-	{"AUX8", K_AUX8},
-	{"AUX9", K_AUX9},
-	{"AUX10", K_AUX10},
-	{"AUX11", K_AUX11},
-	{"AUX12", K_AUX12},
-	{"AUX13", K_AUX13},
-	{"AUX14", K_AUX14},
-	{"AUX15", K_AUX15},
-	{"AUX16", K_AUX16},
-
-	{"ZB_POS1",			K_KP_HOME },
-	{"ZB_PFEILT.AUF",	K_KP_UPARROW },
-	{"ZB_BILD-AUF",		K_KP_PGUP },
-	{"ZB_PFEILT.LINKS",	K_KP_LEFTARROW },
-	{"ZB_5",			K_KP_5 },
-	{"ZB_PFEILT.RECHTS",K_KP_RIGHTARROW },
-	{"ZB_ENDE",			K_KP_END },
-	{"ZB_PFEILT.UNTEN",	K_KP_DOWNARROW },
-	{"ZB_BILD-AB",		K_KP_PGDN },
-	{"ZB_ENTER",		K_KP_ENTER },
-	{"ZB_EINFG",		K_KP_INS },
-	{"ZB_ENTF",			K_KP_DEL },
-	{"ZB_SLASH",		K_KP_SLASH },
-	{"ZB_MINUS",		K_KP_MINUS },
-	{"ZB_PLUS",			K_KP_PLUS },
-	{"ZB_NUM",			K_KP_NUMLOCK },
-	{"ZB_*",			K_KP_STAR },
-	{"ZB_EQUALS",		K_KP_EQUALS },
-
-	{"PAUSE", K_PAUSE},
-	
-	{"COMMAND", K_COMMAND},	//mac
-	{NULL,0}
-};	//end german
-
-keyname_t keynames_f[] =	//french
-{
-	{"TAB", K_TAB},
-	{"ENTREE",	K_ENTER},
-	{"ECHAP",	K_ESCAPE},
-	{"ESPACE",	K_SPACE},
-	{"RETOUR",	K_BACKSPACE},
-	{"HAUT",	K_UPARROW},
-	{"BAS",		K_DOWNARROW},
-	{"GAUCHE",	K_LEFTARROW},
-	{"DROITE",	K_RIGHTARROW},
-
-	{"ALT",		K_ALT},
-	{"CTRL",	K_CTRL},
-	{"MAJ",		K_SHIFT},
-
-	{"VERRMAJ", K_CAPSLOCK},
-	
-	{"F1", K_F1},
-	{"F2", K_F2},
-	{"F3", K_F3},
-	{"F4", K_F4},
-	{"F5", K_F5},
-	{"F6", K_F6},
-	{"F7", K_F7},
-	{"F8", K_F8},
-	{"F9", K_F9},
-	{"F10", K_F10},
-	{"F11", K_F11},
-	{"F12", K_F12},
-
-	{"INSER", K_INS},
-	{"SUPPR", K_DEL},
-	{"PGBAS", K_PGDN},
-	{"PGHAUT", K_PGUP},
-	{"ORIGINE", K_HOME},
-	{"FIN", K_END},
-
-	{"SOURIS1", K_MOUSE1},
-	{"SOURIS2", K_MOUSE2},
-	{"SOURIS3", K_MOUSE3},
-	{"SOURIS4", K_MOUSE4},
-	{"SOURIS5", K_MOUSE5},
-
-	{"MOLETTEHT.",	K_MWHEELUP },
-	{"MOLETTEBAS",	K_MWHEELDOWN },
-
-	{"JOY1", K_JOY1},
-	{"JOY2", K_JOY2},
-	{"JOY3", K_JOY3},
-	{"JOY4", K_JOY4},
-	{"JOY5", K_JOY5},
-	{"JOY6", K_JOY6},
-	{"JOY7", K_JOY7},
-	{"JOY8", K_JOY8},
-	{"JOY9", K_JOY9},
-	{"JOY10", K_JOY10},
-	{"JOY11", K_JOY11},
-	{"JOY12", K_JOY12},
-	{"JOY13", K_JOY13},
-	{"JOY14", K_JOY14},
-	{"JOY15", K_JOY15},
-	{"JOY16", K_JOY16},
-	{"JOY17", K_JOY17},
-	{"JOY18", K_JOY18},
-	{"JOY19", K_JOY19},
-	{"JOY20", K_JOY20},
-	{"JOY21", K_JOY21},
-	{"JOY22", K_JOY22},
-	{"JOY23", K_JOY23},
-	{"JOY24", K_JOY24},
-	{"JOY25", K_JOY25},
-	{"JOY26", K_JOY26},
-	{"JOY27", K_JOY27},
-	{"JOY28", K_JOY28},
-	{"JOY29", K_JOY29},
-	{"JOY30", K_JOY30},
-	{"JOY31", K_JOY31},
-	{"JOY32", K_JOY32},
-
-	{"AUX1", K_AUX1},
-	{"AUX2", K_AUX2},
-	{"AUX3", K_AUX3},
-	{"AUX4", K_AUX4},
-	{"AUX5", K_AUX5},
-	{"AUX6", K_AUX6},
-	{"AUX7", K_AUX7},
-	{"AUX8", K_AUX8},
-	{"AUX9", K_AUX9},
-	{"AUX10", K_AUX10},
-	{"AUX11", K_AUX11},
-	{"AUX12", K_AUX12},
-	{"AUX13", K_AUX13},
-	{"AUX14", K_AUX14},
-	{"AUX15", K_AUX15},
-	{"AUX16", K_AUX16},
-
-	{"PN_ORIGINE",		K_KP_HOME },
-	{"PN_HAUT",			K_KP_UPARROW },
-	{"PN_PGBAS",		K_KP_PGUP },
-	{"PN_GAUCHE",		K_KP_LEFTARROW },
-	{"PN_5",			K_KP_5 },
-	{"PN_DROITE",		K_KP_RIGHTARROW },
-	{"PN_FIN",			K_KP_END },
-	{"PN_BAS",			K_KP_DOWNARROW },
-	{"PN_PGBAS",		K_KP_PGDN },
-	{"PN_ENTR",			K_KP_ENTER },
-	{"PN_INSER",		K_KP_INS },
-	{"PN_SUPPR",		K_KP_DEL },
-	{"PN_SLASH",		K_KP_SLASH },
-	{"PN_MOINS",		K_KP_MINUS },
-	{"PN_PLUS",			K_KP_PLUS },
-	{"PN_VERRNUM",		K_KP_NUMLOCK },
-	{"PN_*",			K_KP_STAR },
-	{"PN_EQUALS",		K_KP_EQUALS },
-
-	{"PAUSE", K_PAUSE},
-	
-	{"COMMAND", K_COMMAND},	//mac
-
-	{"POINT-VIRGULE",	';' },	// because a raw semicolon seperates commands
-
-	{NULL,0}
-};	//end french
 
 /*
 =============================================================================
@@ -614,7 +432,7 @@ void Field_VariableSizeDraw( field_t *edit, int x, int y, int width, int size, q
 		return;		// off blink
 	}
 
-	if ( key_overstrikeMode ) {
+	if ( kg.key_overstrikeMode ) {
 		cursorChar = 11;
 	} else {
 		cursorChar = 10;
@@ -680,14 +498,14 @@ void Field_KeyDownEvent( field_t *edit, int key ) {
 	int		len;
 
 	// shift-insert is paste
-	if ( ( ( key == K_INS ) || ( key == K_KP_INS ) ) && keys[K_SHIFT].down ) {
+	if ( ( ( key == A_INSERT ) || ( key == A_KP_0 ) ) && kg.keys[A_SHIFT].down ) {
 		Field_Paste( edit );
 		return;
 	}
 
 	len = strlen( edit->buffer );
 
-	if ( key == K_DEL ) {
+	if ( key == A_DELETE ) {
 		if ( edit->cursor < len ) {
 			memmove( edit->buffer + edit->cursor, 
 				edit->buffer + edit->cursor + 1, len - edit->cursor );
@@ -695,7 +513,7 @@ void Field_KeyDownEvent( field_t *edit, int key ) {
 		return;
 	}
 
-	if ( key == K_RIGHTARROW ) 
+	if ( key == A_CURSOR_RIGHT ) 
 	{
 		if ( edit->cursor < len ) {
 			edit->cursor++;
@@ -708,7 +526,7 @@ void Field_KeyDownEvent( field_t *edit, int key ) {
 		return;
 	}
 
-	if ( key == K_LEFTARROW ) 
+	if ( key == A_CURSOR_LEFT ) 
 	{
 		if ( edit->cursor > 0 ) {
 			edit->cursor--;
@@ -720,18 +538,20 @@ void Field_KeyDownEvent( field_t *edit, int key ) {
 		return;
 	}
 
-	if ( key == K_HOME || ( tolower(key) == 'a' && keys[K_CTRL].down ) ) {
+	if ( key == A_HOME || ( keynames[key].lower == 'a' && kg.keys[A_CTRL].down ) ) 
+	{
 		edit->cursor = 0;
 		return;
 	}
 
-	if ( key == K_END || ( tolower(key) == 'e' && keys[K_CTRL].down ) ) {
+	if ( key == A_END || ( keynames[key].lower == 'e' && kg.keys[A_CTRL].down ) ) 
+	{
 		edit->cursor = len;
 		return;
 	}
 
-	if ( key == K_INS ) {
-		key_overstrikeMode = (qboolean)!key_overstrikeMode;
+	if ( key == A_INSERT ) {
+		kg.key_overstrikeMode = (qboolean)!kg.key_overstrikeMode;
 		return;
 	}
 }
@@ -788,7 +608,7 @@ void Field_CharEvent( field_t *edit, int ch ) {
 		return;
 	}
 
-	if ( key_overstrikeMode ) {	
+	if ( kg.key_overstrikeMode ) {	
 		if ( edit->cursor == MAX_EDIT_LINE - 1 )
 			return;
 		edit->buffer[edit->cursor] = ch;
@@ -884,18 +704,18 @@ static void keyConcatArgs( void ) {
 	char	*arg;
 
 	for ( i = 1 ; i < Cmd_Argc() ; i++ ) {
-		Q_strcat( g_consoleField.buffer, sizeof( g_consoleField.buffer ), " " );
+		Q_strcat( kg.g_consoleField.buffer, sizeof( kg.g_consoleField.buffer ), " " );
 		arg = Cmd_Argv( i );
 		while (*arg) {
 			if (*arg == ' ') {
-				Q_strcat( g_consoleField.buffer, sizeof( g_consoleField.buffer ),  "\"");
+				Q_strcat( kg.g_consoleField.buffer, sizeof( kg.g_consoleField.buffer ),  "\"");
 				break;
 			}
 			arg++;
 		}
-		Q_strcat( g_consoleField.buffer, sizeof( g_consoleField.buffer ),  Cmd_Argv( i ) );
+		Q_strcat( kg.g_consoleField.buffer, sizeof( kg.g_consoleField.buffer ),  Cmd_Argv( i ) );
 		if (*arg == ' ') {
-			Q_strcat( g_consoleField.buffer, sizeof( g_consoleField.buffer ),  "\"");
+			Q_strcat( kg.g_consoleField.buffer, sizeof( kg.g_consoleField.buffer ),  "\"");
 		}
 	}
 }
@@ -910,7 +730,7 @@ static void ConcatRemaining( const char *src, const char *start ) {
 	}
 
 	str += strlen(start);
-	Q_strcat( g_consoleField.buffer, sizeof( g_consoleField.buffer ), str);
+	Q_strcat( kg.g_consoleField.buffer, sizeof( kg.g_consoleField.buffer ), str);
 }
 
 
@@ -926,7 +746,7 @@ void CompleteCommand( void )
 	field_t		*edit;
 	field_t		temp;
 
-	edit = &g_consoleField;
+	edit = &kg.g_consoleField;
 
 	// only look at the first token for completion purposes
 	Cmd_TokenizeString( edit->buffer );
@@ -954,7 +774,7 @@ void CompleteCommand( void )
 	if ( matchCount == 1 ) {
 		Com_sprintf( edit->buffer, sizeof( edit->buffer ), "\\%s", shortestMatch );
 		if ( Cmd_Argc() == 1 ) {
-			Q_strcat( g_consoleField.buffer, sizeof( g_consoleField.buffer ), " " );
+			Q_strcat( kg.g_consoleField.buffer, sizeof( kg.g_consoleField.buffer ), " " );
 		} else {
 			ConcatRemaining( temp.buffer, completionString );
 		}
@@ -984,52 +804,52 @@ Handles history and console scrollback
 */
 void Console_Key (int key) {
 	// ctrl-L clears screen
-	if ( key == 'l' && keys[K_CTRL].down ) {
+	if ( keynames[ key ].lower == 'l' && kg.keys[A_CTRL].down ) {
 		Cbuf_AddText ("clear\n");
 		return;
 	}
 
 	// enter finishes the line
-	if ( key == K_ENTER || key == K_KP_ENTER ) {
+	if ( key == A_ENTER || key == A_KP_ENTER ) {
 		// if not in the game explicitly prepent a slash if needed
-		if ( cls.state != CA_ACTIVE && g_consoleField.buffer[0] != '\\' 
-			&& g_consoleField.buffer[0] != '/' ) {
+		if ( cls.state != CA_ACTIVE && kg.g_consoleField.buffer[0] != '\\' 
+			&& kg.g_consoleField.buffer[0] != '/' ) {
 			char	temp[MAX_STRING_CHARS];
 
-			Q_strncpyz( temp, g_consoleField.buffer, sizeof( temp ) );
-			Com_sprintf( g_consoleField.buffer, sizeof( g_consoleField.buffer ), "\\%s", temp );
-			g_consoleField.cursor++;
+			Q_strncpyz( temp, kg.g_consoleField.buffer, sizeof( temp ) );
+			Com_sprintf( kg.g_consoleField.buffer, sizeof( kg.g_consoleField.buffer ), "\\%s", temp );
+			kg.g_consoleField.cursor++;
 		}
 		else
 		{	// Added this to automatically make explicit commands not need slashes.
 			CompleteCommand();
 		}
 
-		Com_Printf ( "]%s\n", g_consoleField.buffer );
+		Com_Printf ( "]%s\n", kg.g_consoleField.buffer );
 
 		// leading slash is an explicit command
-		if ( g_consoleField.buffer[0] == '\\' || g_consoleField.buffer[0] == '/' ) {
-			Cbuf_AddText( g_consoleField.buffer+1 );	// valid command
+		if ( kg.g_consoleField.buffer[0] == '\\' || kg.g_consoleField.buffer[0] == '/' ) {
+			Cbuf_AddText( kg.g_consoleField.buffer+1 );	// valid command
 			Cbuf_AddText ("\n");
 		} else {
 			// other text will be chat messages
-			if ( !g_consoleField.buffer[0] ) {
+			if ( !kg.g_consoleField.buffer[0] ) {
 				return;	// empty lines just scroll the console without adding to history
 			} else {
 				Cbuf_AddText ("cmd say ");
-				Cbuf_AddText( g_consoleField.buffer );
+				Cbuf_AddText( kg.g_consoleField.buffer );
 				Cbuf_AddText ("\n");
 			}
 		}
 
 		// copy line to history buffer
-		historyEditLines[nextHistoryLine % COMMAND_HISTORY] = g_consoleField;
-		nextHistoryLine++;
-		historyLine = nextHistoryLine;
+		kg.historyEditLines[kg.nextHistoryLine % COMMAND_HISTORY] = kg.g_consoleField;
+		kg.nextHistoryLine++;
+		kg.historyLine = kg.nextHistoryLine;
 
-		Field_Clear( &g_consoleField );
+		Field_Clear( &kg.g_consoleField );
 
-		g_consoleField.widthInChars = g_console_field_width;
+		kg.g_consoleField.widthInChars = g_console_field_width;
 
 		if ( cls.state == CA_DISCONNECTED ) {
 			SCR_UpdateScreen ();	// force an update, because the command
@@ -1039,57 +859,57 @@ void Console_Key (int key) {
 
 	// command completion
 
-	if (key == K_TAB) {
+	if (key == A_TAB) {
 		CompleteCommand();
 		return;
 	}
 
 	// command history (ctrl-p ctrl-n for unix style)
 
-	if ( ( key == K_UPARROW ) || ( key == K_KP_UPARROW ) ||
-		 ( ( tolower(key) == 'p' ) && keys[K_CTRL].down ) ) {
-		if ( nextHistoryLine - historyLine < COMMAND_HISTORY 
-			&& historyLine > 0 ) {
-			historyLine--;
+	if ( ( key == A_CURSOR_UP ) || ( ( keynames[ key ].lower == 'p' ) && kg.keys[A_CTRL].down ) ) 
+	{
+		if ( kg.nextHistoryLine - kg.historyLine < COMMAND_HISTORY && kg.historyLine > 0 ) 
+		{
+			kg.historyLine--;
 		}
-		g_consoleField = historyEditLines[ historyLine % COMMAND_HISTORY ];
+		kg.g_consoleField = kg.historyEditLines[ kg.historyLine % COMMAND_HISTORY ];
 		return;
 	}
 
-	if ( ( key == K_DOWNARROW ) || ( key == K_KP_DOWNARROW ) ||
-		 ( ( tolower(key) == 'n' ) && keys[K_CTRL].down ) ) {
-		if (historyLine == nextHistoryLine)
+	if ( ( key == A_CURSOR_DOWN ) || ( ( keynames[ key ].lower == 'n' ) && kg.keys[A_CTRL].down ) ) 
+	{
+		if (kg.historyLine == kg.nextHistoryLine)
 			return;
-		historyLine++;
-		g_consoleField = historyEditLines[ historyLine % COMMAND_HISTORY ];
+		kg.historyLine++;
+		kg.g_consoleField = kg.historyEditLines[ kg.historyLine % COMMAND_HISTORY ];
 		return;
 	}
 
 	// console scrolling
-	if ( key == K_PGUP ) {
+	if ( key == A_PAGE_UP ) {
 		Con_PageUp();
 		return;
 	}
 
-	if ( key == K_PGDN ) {
+	if ( key == A_PAGE_DOWN ) {
 		Con_PageDown();
 		return;
 	}
 
 	// ctrl-home = top of console
-	if ( key == K_HOME && keys[K_CTRL].down ) {
+	if ( key == A_HOME && kg.keys[A_CTRL].down ) {
 		Con_Top();
 		return;
 	}
 
 	// ctrl-end = bottom of console
-	if ( key == K_END && keys[K_CTRL].down ) {
+	if ( key == A_END && kg.keys[A_CTRL].down ) {
 		Con_Bottom();
 		return;
 	}
 
 	// pass to the normal editline routine
-	Field_KeyDownEvent( &g_consoleField, key );
+	Field_KeyDownEvent( &kg.g_consoleField, key );
 }
 
 //============================================================================
@@ -1107,13 +927,13 @@ void Message_Key( int key ) {
 	char	buffer[MAX_STRING_CHARS];
 
 
-	if (key == K_ESCAPE) {
+	if (key == A_ESCAPE) {
 		cls.keyCatchers &= ~KEYCATCH_MESSAGE;
 		Field_Clear( &chatField );
 		return;
 	}
 
-	if ( key == K_ENTER || key == K_KP_ENTER )
+	if ( key == A_ENTER || key == A_KP_ENTER )
 	{
 		if ( chatField.buffer[0] && cls.state == CA_ACTIVE ) {
 			if (chat_playerNum != -1 )
@@ -1142,12 +962,12 @@ void Message_Key( int key ) {
 
 
 qboolean Key_GetOverstrikeMode( void ) {
-	return key_overstrikeMode;
+	return kg.key_overstrikeMode;
 }
 
 
 void Key_SetOverstrikeMode( qboolean state ) {
-	key_overstrikeMode = state;
+	kg.key_overstrikeMode = state;
 }
 
 
@@ -1161,7 +981,7 @@ qboolean Key_IsDown( int keynum ) {
 		return qfalse;
 	}
 
-	return keys[keynum].down;
+	return kg.keys[ keynames[keynum].upper ].down;
 }
 
 
@@ -1174,53 +994,157 @@ the given string.  Single ascii characters return themselves, while
 the K_* names are matched up.
 
 0x11 will be interpreted as raw hex, which will allow new controlers
-
 to be configured even if they don't have defined names.
 ===================
 */
 int Key_StringToKeynum( char *str ) {
-	keyname_t	*kn;
+	int			i;
 	
-	if ( !str || !str[0] ) {
+	if ( !str || !str[0] ) 
+	{
 		return -1;
 	}
-	if ( !str[1] ) {
-		return str[0];
+	// If single char bind, presume ascii char bind
+	if ( !str[1] ) 
+	{
+		return keynames[ (unsigned char)str[0] ].upper;
+	}
+
+	// scan for a text match
+	for ( i = 0 ; i < MAX_KEYS ; i++ ) 
+	{
+		if ( keynames[i].name && !stricmp( str, keynames[i].name ) )
+		{
+			return keynames[i].keynum;
+		}
 	}
 
 	// check for hex code
-	if ( str[0] == '0' && str[1] == 'x' && strlen( str ) == 4) {
+	if ( str[0] == '0' && str[1] == 'x' && strlen( str ) == 4) 
+	{
 		int		n1, n2;
 		
 		n1 = str[2];
-		if ( n1 >= '0' && n1 <= '9' ) {
+		if ( n1 >= '0' && n1 <= '9' ) 
+		{
 			n1 -= '0';
-		} else if ( n1 >= 'a' && n1 <= 'f' ) {
-			n1 = n1 - 'a' + 10;
-		} else {
+		}
+		else if ( n1 >= 'A' && n1 <= 'F' ) 
+		{
+			n1 = n1 - 'A' + 10;
+		}
+		else 
+		{
 			n1 = 0;
 		}
 
 		n2 = str[3];
-		if ( n2 >= '0' && n2 <= '9' ) {
+		if ( n2 >= '0' && n2 <= '9' ) 
+		{
 			n2 -= '0';
-		} else if ( n2 >= 'a' && n2 <= 'f' ) {
-			n2 = n2 - 'a' + 10;
-		} else {
+		}
+		else if ( n2 >= 'A' && n2 <= 'F' ) 
+		{
+			n2 = n2 - 'A' + 10;
+		}
+		else 
+		{
 			n2 = 0;
 		}
-
 		return n1 * 16 + n2;
-	}
-
-	// scan for a text match
-	for ( kn=keynames ; kn->name ; kn++ ) {
-		if ( !Q_stricmp( str,kn->name ) )
-			return kn->keynum;
 	}
 
 	return -1;
 }
+
+
+static char tinyString[16];
+static const char *Key_KeynumValid( int keynum )
+{
+	if ( keynum == -1 ) 
+	{
+		return "<KEY NOT FOUND>";
+	}
+	if ( keynum < 0 || keynum >= MAX_KEYS ) 
+	{
+		return "<OUT OF RANGE>";
+	}
+	return NULL;
+}
+
+static const char *Key_KeyToName( int keynum )
+{
+	return keynames[keynum].name;
+}
+
+
+static const char *Key_KeyToAscii( int keynum )
+{
+	if(!keynames[keynum].lower)
+	{
+		return(NULL);
+	}
+	if(keynum == A_SPACE)
+	{
+		tinyString[0] = (char)A_SHIFT_SPACE;
+	}
+	else if(keynum == A_ENTER)
+	{
+		tinyString[0] = (char)A_SHIFT_ENTER;
+	}
+	else if(keynum == A_KP_ENTER)
+	{
+		tinyString[0] = (char)A_SHIFT_KP_ENTER;
+	}
+	else
+	{
+		tinyString[0] = keynames[keynum].upper;
+	}
+	tinyString[1] = 0;
+	return tinyString;
+}
+
+static const char *Key_KeyToHex( int keynum )
+{
+	int		i, j;
+
+	i = keynum >> 4;
+	j = keynum & 15;
+
+	tinyString[0] = '0';
+	tinyString[1] = 'x';
+	tinyString[2] = i > 9 ? i - 10 + 'A' : i + '0';
+	tinyString[3] = j > 9 ? j - 10 + 'A' : j + '0';
+	tinyString[4] = 0;
+
+	return tinyString;
+}
+
+// Returns the ascii code of the keynum
+const char *Key_KeynumToAscii( int keynum ) 
+{
+	const char	*name;
+
+	name = Key_KeynumValid(keynum);
+
+	// check for printable ascii
+	if ( !name && keynum > 0 && keynum < 256 ) 
+	{
+		name = Key_KeyToAscii(keynum);
+	}
+	// Check for name (for JOYx and AUXx buttons)
+	if ( !name )
+	{
+		name = Key_KeyToName(keynum);
+	}
+	// Fallback to hex number
+	if ( !name )
+	{
+		name = Key_KeyToHex(keynum);
+	}
+	return name;
+}
+
 
 /*
 ===================
@@ -1230,60 +1154,31 @@ Returns a string (either a single ascii char, a K_* name, or a 0x11 hex string) 
 given keynum.
 ===================
 */
-extern cvar_t *sp_language;
-char *Key_KeynumToString( int keynum, qboolean bTranslate ) //note: translate is only called for menu display not configs
+// Returns a console/config file friendly name for the key
+const char *Key_KeynumToString( int keynum ) 
 {
-	keyname_t	*kn;	
-	static	char	tinystr[5];
-	int			i, j;
+	const char	*name;
 
-	if ( keynum == -1 ) {
-		return "<KEY NOT FOUND>";
+	name = Key_KeynumValid(keynum);
+
+	// Check for friendly name
+	if ( !name )
+	{
+		name = Key_KeyToName(keynum);
 	}
-
-	if ( keynum < 0 || keynum > 255 ) {
-		return "<OUT OF RANGE>";
+	// check for printable ascii
+	if ( !name && keynum > 0 && keynum < 256) 
+	{
+		name = Key_KeyToAscii(keynum);
 	}
-
-	// check for printable ascii (don't use quote)
-	if ( keynum > 32 && keynum < 127 && keynum != '"' && keynum != ';' ) {
-		tinystr[0] = keynum;
-		tinystr[1] = 0;
-		return tinystr;
+	// Fallback to hex number
+	if ( !name )
+	{
+		name = Key_KeyToHex(keynum);
 	}
-
-	kn=keynames;	//init to english
-	if (bTranslate) {
-		if ( sp_language->integer == SP_LANGUAGE_GERMAN ) {
-			kn=keynames_d;	//use german
-		} else if ( sp_language->integer == SP_LANGUAGE_FRENCH ) {
-			kn=keynames_f;	//use french
-		}
-		else //rww - this is actually English and doesn't need to be "translated".
-		{    //however, certain key names are too long to display right, this does the trick.
-			kn=keynames_e;
-		}
-	}
-
-	// check for a key string
-	for ( ; kn->name ; kn++ ) {
-		if (keynum == kn->keynum) {
-			return kn->name;
-		}
-	}
-
-	// make a hex string
-	i = keynum >> 4;
-	j = keynum & 15;
-
-	tinystr[0] = '0';
-	tinystr[1] = 'x';
-	tinystr[2] = i > 9 ? i - 10 + 'a' : i + '0';
-	tinystr[3] = j > 9 ? j - 10 + 'a' : j + '0';
-	tinystr[4] = 0;
-
-	return tinystr;
+	return name;
 }
+
 
 
 /*
@@ -1297,12 +1192,16 @@ void Key_SetBinding( int keynum, const char *binding ) {
 	}
 
 	// free old bindings
-	if ( keys[ keynum ].binding ) {
-		Z_Free( keys[ keynum ].binding );
+	if ( kg.keys[ keynames[keynum].upper ].binding ) {
+		Z_Free( kg.keys[ keynames[keynum].upper ].binding );
+		kg.keys[ keynames[keynum].upper ].binding = NULL;
 	}
-		
+			
 	// allocate memory for new binding
-	keys[keynum].binding = CopyString( binding );
+	if (binding)
+	{
+		kg.keys[ keynames[keynum].upper ].binding = CopyString( binding );
+	}
 
 	// consider this like modifying an archived cvar, so the
 	// file write will be triggered at the next oportunity
@@ -1320,7 +1219,7 @@ char *Key_GetBinding( int keynum ) {
 		return "";
 	}
 
-	return keys[ keynum ].binding;
+	return kg.keys[ keynum ].binding;
 }
 
 /* 
@@ -1334,7 +1233,7 @@ int Key_GetKey(const char *binding) {
 
   if (binding) {
   	for (i=0 ; i<256 ; i++) {
-      if (keys[i].binding && Q_stricmp(binding, keys[i].binding) == 0) {
+      if (kg.keys[i].binding && Q_stricmp(binding, kg.keys[i].binding) == 0) {
         return i;
       }
     }
@@ -1376,10 +1275,15 @@ void Key_Unbindall_f (void)
 {
 	int		i;
 	
-	for (i=0 ; i<256 ; i++)
-		if (keys[i].binding)
+	for (i = 0; i < MAX_KEYS ; i++)
+	{
+		if (kg.keys[i].binding)
+		{
 			Key_SetBinding (i, "");
+		}
+	}
 }
+
 
 
 /*
@@ -1408,8 +1312,8 @@ void Key_Bind_f (void)
 
 	if (c == 2)
 	{
-		if (keys[b].binding)
-			Com_Printf ("\"%s\" = \"%s\"\n", Cmd_Argv(1), keys[b].binding );
+		if (kg.keys[b].binding)
+			Com_Printf ("\"%s\" = \"%s\"\n", Cmd_Argv(1), kg.keys[b].binding );
 		else
 			Com_Printf ("\"%s\" is not bound\n", Cmd_Argv(1) );
 		return;
@@ -1438,15 +1342,14 @@ void Key_WriteBindings( fileHandle_t f ) {
 	int		i;
 
 	FS_Printf (f, "unbindall\n" );
-
-	for (i=0 ; i<256 ; i++) {
-		if (keys[i].binding && keys[i].binding[0] ) {
-			FS_Printf (f, "bind %s \"%s\"\n", Key_KeynumToString(i, qfalse), keys[i].binding);
-
+	for (i=0 ; i<MAX_KEYS ; i++) {
+		if (kg.keys[i].binding && kg.keys[i].binding[0] ) {
+			FS_Printf (f, "bind %s \"%s\"\n", Key_KeynumToString(i), kg.keys[i].binding);
 		}
-
 	}
 }
+
+
 
 
 /*
@@ -1458,12 +1361,13 @@ Key_Bindlist_f
 void Key_Bindlist_f( void ) {
 	int		i;
 
-	for ( i = 0 ; i < 256 ; i++ ) {
-		if ( keys[i].binding && keys[i].binding[0] ) {
-			Com_Printf( "%s \"%s\"\n", Key_KeynumToString(i, qfalse), keys[i].binding );
+	for ( i = 0 ; i < MAX_KEYS ; i++ ) {
+		if ( kg.keys[i].binding && kg.keys[i].binding[0] ) {
+			Com_Printf( "Key : %s (%s) \"%s\"\n", Key_KeynumToAscii(i), Key_KeynumToString(i), kg.keys[i].binding );
 		}
 	}
 }
+
 
 /*
 ===================
@@ -1534,30 +1438,36 @@ void CL_KeyEvent (int key, qboolean down, unsigned time) {
 	char	cmd[1024];
 
 	// update auto-repeat status and BUTTON_ANY status
-	keys[key].down = down;
-
-	if (down) {
-		keys[key].repeats++;
-		if ( keys[key].repeats == 1) {
-			anykeydown = (qboolean)(((int)anykeydown)+1);
+	kg.keys[ keynames[key].upper ].down = down;
+	if (down)
+	{
+		kg.keys[ keynames[key].upper ].repeats++;
+		if ( kg.keys[ keynames[key].upper ].repeats == 1)
+		{
+			kg.anykeydown = qtrue;
+			kg.keyDownCount++;
 		}
-	} else {
-		keys[key].repeats = 0;
-		anykeydown = (qboolean)(((int)anykeydown)-1);
-		if (anykeydown < 0) {
-			anykeydown = (qboolean)0;
+	}
+	else
+	{
+		kg.keys[ keynames[key].upper ].repeats = 0;
+		kg.keyDownCount--;
+		if(kg.keyDownCount <= 0)
+		{
+			kg.anykeydown = qfalse;
+			kg.keyDownCount = 0;
 		}
 	}
 
 	// console key is hardcoded, so the user can never unbind it
-	if (key == '`' || key == '~') {
+	if (key == A_CONSOLE) {
 		if (!down) {
 			return;
 
 		}
 #ifdef FINAL_BUILD
-		if (!(cls.keyCatchers & KEYCATCH_CONSOLE) && !keys[K_SHIFT].down )	//we're not in the console
-		{//so we require the control keys to get in
+		if (!(cls.keyCatchers & KEYCATCH_CONSOLE) && !kg.keys[A_SHIFT].down )	//we're not in the console
+		{//so we require the control kg.keys to get in
 			return;
 		}
 #endif
@@ -1566,18 +1476,18 @@ void CL_KeyEvent (int key, qboolean down, unsigned time) {
 	}
 
 
-	// keys can still be used for bound actions
-	if ( down && ( key < 128 || key == K_MOUSE1 ) && ( clc.demoplaying || cls.state == CA_CINEMATIC ) && !cls.keyCatchers) {
+	// kg.keys can still be used for bound actions
+	if ( down && /*( key < 128 || key == A_MOUSE1 ) && */ ( clc.demoplaying || cls.state == CA_CINEMATIC ) && !cls.keyCatchers) {
 
 		if (Cvar_VariableValue ("com_cameraMode") == 0) {
 			Cvar_Set ("nextdemo","");
-			key = K_ESCAPE;
+			key = A_ESCAPE;
 		}
 	}
 
 
 	// escape is always handled special
-	if ( key == K_ESCAPE && down ) {
+	if ( key == A_ESCAPE && down ) {
 		if ( cls.keyCatchers & KEYCATCH_MESSAGE ) {
 			// clear message mode
 			Message_Key( key );
@@ -1614,7 +1524,7 @@ void CL_KeyEvent (int key, qboolean down, unsigned time) {
 	// an action started before a mode switch.
 	//
 	if (!down) {
-		kb = keys[key].binding;
+		kb = kg.keys[ keynames[key].upper ].binding;
 
 		CL_AddKeyUpCommands( key, kb );
 
@@ -1645,43 +1555,41 @@ void CL_KeyEvent (int key, qboolean down, unsigned time) {
 		Console_Key( key );
 	} else {
 		// send the bound action
-		kb = keys[key].binding;
-		if ( !kb ) {
-			if (key >= 200) {
-				Com_Printf ("%s is unbound, use controls menu to set.\n"
-					, Key_KeynumToString( key, qfalse  ) );
-			}
-		} else if (kb[0] == '+') {	
-			int i;
-			char button[1024], *buttonPtr;
-			buttonPtr = button;
-			for ( i = 0; ; i++ ) {
-				if ( kb[i] == ';' || !kb[i] ) {
-					*buttonPtr = '\0';
-					if ( button[0] == '+') {
-						// button commands add keynum and time as parms so that multiple
-						// sources can be discriminated and subframe corrected
-						Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", button, key, time);
-						Cbuf_AddText (cmd);
-					} else {
-						// down-only command
-						Cbuf_AddText (button);
-						Cbuf_AddText ("\n");
+		kb = kg.keys[ keynames[key].upper ].binding;
+		if (kb)
+		{
+			if (kb[0] == '+') {	
+				int i;
+				char button[1024], *buttonPtr;
+				buttonPtr = button;
+				for ( i = 0; ; i++ ) {
+					if ( kb[i] == ';' || !kb[i] ) {
+						*buttonPtr = '\0';
+						if ( button[0] == '+') {
+							// button commands add keynum and time as parms so that multiple
+							// sources can be discriminated and subframe corrected
+							Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", button, key, time);
+							Cbuf_AddText (cmd);
+						} else {
+							// down-only command
+							Cbuf_AddText (button);
+							Cbuf_AddText ("\n");
+						}
+						buttonPtr = button;
+						while ( (kb[i] <= ' ' || kb[i] == ';') && kb[i] != 0 ) {
+							i++;
+						}
 					}
-					buttonPtr = button;
-					while ( (kb[i] <= ' ' || kb[i] == ';') && kb[i] != 0 ) {
-						i++;
+					*buttonPtr++ = kb[i];
+					if ( !kb[i] ) {
+						break;
 					}
 				}
-				*buttonPtr++ = kb[i];
-				if ( !kb[i] ) {
-					break;
-				}
+			} else {
+				// down-only command
+				Cbuf_AddText (kb);
+				Cbuf_AddText ("\n");
 			}
-		} else {
-			// down-only command
-			Cbuf_AddText (kb);
-			Cbuf_AddText ("\n");
 		}
 	}
 }
@@ -1703,7 +1611,7 @@ void CL_CharEvent( int key ) {
 	// distribute the key down event to the apropriate handler
 	if ( cls.keyCatchers & KEYCATCH_CONSOLE )
 	{
-		Field_CharEvent( &g_consoleField, key );
+		Field_CharEvent( &kg.g_consoleField, key );
 	}
 	else if ( cls.keyCatchers & KEYCATCH_UI )
 	{
@@ -1715,7 +1623,7 @@ void CL_CharEvent( int key ) {
 	}
 	else if ( cls.state == CA_DISCONNECTED )
 	{
-		Field_CharEvent( &g_consoleField, key );
+		Field_CharEvent( &kg.g_consoleField, key );
 	}
 }
 
@@ -1729,15 +1637,15 @@ void Key_ClearStates (void)
 {
 	int		i;
 
-	anykeydown = qfalse;
+	kg.anykeydown = qfalse;
 
 	for ( i=0 ; i < MAX_KEYS ; i++ ) {
-		if ( keys[i].down ) {
+		if ( kg.keys[i].down ) {
 			CL_KeyEvent( i, qfalse, 0 );
 
 		}
-		keys[i].down = (qboolean)0;
-		keys[i].repeats = 0;
+		kg.keys[i].down = (qboolean)0;
+		kg.keys[i].repeats = 0;
 	}
 }
 

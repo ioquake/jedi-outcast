@@ -69,8 +69,18 @@ static void GetClipboardData( char *buf, int buflen ) {
 Key_KeynumToStringBuf
 ====================
 */
-void Key_KeynumToStringBuf( int keynum, char *buf, int buflen ) {
-	Q_strncpyz( buf, Key_KeynumToString( keynum, qtrue ), buflen );
+// only ever called by binding-display code, therefore returns non-technical "friendly" names 
+//	in any language that don't necessarily match those in the config file...
+//
+void Key_KeynumToStringBuf( int keynum, char *buf, int buflen ) 
+{
+	const char *psKeyName = Key_KeynumToString( keynum/*, qtrue */);
+
+	// see if there's a more friendly (or localised) name...
+	//
+	const char *psKeyNameFriendly = SP_GetStringTextString( va("KEYNAMES_KEYNAME_%s",psKeyName) );
+
+	Q_strncpyz( buf, (psKeyNameFriendly && psKeyNameFriendly[0]) ? psKeyNameFriendly : psKeyName, buflen );
 }
 
 /*
@@ -190,6 +200,8 @@ CL_InitUI
 void CL_InitUI( void ) {
 	uiimport_t	uii;
 
+	SP_Register("keynames", 0/*SP_REGISTER_REQUIRED*/);	// reference is KEYNAMES
+
 	memset( &uii, 0, sizeof( uii ) );
 
 	uii.Printf = Com_Printf;
@@ -229,6 +241,7 @@ void CL_InitUI( void ) {
 	uii.R_Font_HeightPixels		= re.Font_HeightPixels;
 	uii.R_Font_DrawString		= re.Font_DrawString;
 	uii.Language_IsAsian		= re.Language_IsAsian;
+	uii.Language_UsesSpaces		= re.Language_UsesSpaces;
 	uii.AnyLanguage_ReadCharFromString = re.AnyLanguage_ReadCharFromString;
 
 	uii.SG_GetSaveImage			= SG_GetSaveImage;

@@ -298,6 +298,10 @@ void WP_FireBlasterMissile( gentity_t *ent, vec3_t start, vec3_t dir, qboolean a
 	int	damage		= BLASTER_DAMAGE;
 	gentity_t *missile;
 
+	if (ent->s.eType == ET_GRAPPLE)
+	{ //animent
+		damage = 10;
+	}
 	// NOTENOTE Vehicle models are not yet implemented
 /*	if ( ent->client && ent->client->ps.vehicleModel != 0 )
 	{
@@ -549,10 +553,20 @@ void WP_DisruptorAltFire( gentity_t *ent )
 
 	VectorCopy( muzzle, muzzle2 ); // making a backup copy
 
-	VectorCopy( ent->client->ps.origin, start );
-	start[2] += ent->client->ps.viewheight;//By eyes
+	if (ent->client)
+	{
+		VectorCopy( ent->client->ps.origin, start );
+		start[2] += ent->client->ps.viewheight;//By eyes
 
-	count = ( level.time - ent->client->ps.weaponChargeTime ) / DISRUPTOR_CHARGE_UNIT;
+		count = ( level.time - ent->client->ps.weaponChargeTime ) / DISRUPTOR_CHARGE_UNIT;
+	}
+	else
+	{
+		VectorCopy( ent->r.currentOrigin, start );
+		start[2] += 24;
+
+		count = ( 100 ) / DISRUPTOR_CHARGE_UNIT;
+	}
 
 	count *= 2;
 
@@ -652,7 +666,10 @@ void WP_DisruptorAltFire( gentity_t *ent )
 	
 				if ( LogAccuracyHit( traceEnt, ent )) 
 				{
-					ent->client->accuracy_hits++;
+					if (ent->client)
+					{
+						ent->client->accuracy_hits++;
+					}
 				}
 			} 
 			else 
@@ -739,6 +756,12 @@ static void WP_FireDisruptor( gentity_t *ent, qboolean altFire )
 	if (!ent || !ent->client || ent->client->ps.zoomMode != 1)
 	{ //do not ever let it do the alt fire when not zoomed
 		altFire = qfalse;
+	}
+
+	if (ent && ent->s.eType == ET_GRAPPLE && !ent->client)
+	{ //special case for animents
+		WP_DisruptorAltFire( ent );
+		return;
 	}
 
 	if ( altFire )
@@ -2829,6 +2852,107 @@ void FireWeapon( gentity_t *ent, qboolean altFire ) {
 	}
 
 	G_LogWeaponFire(ent->s.number, ent->s.weapon);
+}
+
+void AnimEntCalcMuzzlePoint ( gentity_t *ent, vec3_t forward, vec3_t right, vec3_t up, vec3_t muzzlePoint ) 
+{
+	int weapontype;
+	vec3_t muzzleOffPoint;
+
+	weapontype = ent->s.weapon;
+	VectorCopy( ent->s.pos.trBase, muzzlePoint );
+
+	VectorCopy(WP_MuzzlePoint[weapontype], muzzleOffPoint);
+
+	if (weapontype > WP_NONE && weapontype < WP_NUM_WEAPONS)
+	{	// Use the table to generate the muzzlepoint;
+		{	// Crouching.  Use the add-to-Z method to adjust vertically.
+			VectorMA(muzzlePoint, muzzleOffPoint[0], forward, muzzlePoint);
+			VectorMA(muzzlePoint, muzzleOffPoint[1], right, muzzlePoint);
+			muzzlePoint[2] += 24 + muzzleOffPoint[2];
+		}
+	}
+
+	// snap to integer coordinates for more efficient network bandwidth usage
+	SnapVector( muzzlePoint );
+}
+
+void AnimEntFireWeapon( gentity_t *ent, qboolean altFire )
+{
+	vec3_t modifiedAngles;
+	VectorCopy(ent->s.apos.trBase, modifiedAngles);
+//	modifiedAngles[PITCH] = -modifiedAngles[PITCH];
+	if (modifiedAngles[PITCH] < -180)
+	{
+		modifiedAngles[PITCH] += 90;
+	}
+	AngleVectors( modifiedAngles, forward, right, up );
+
+	AnimEntCalcMuzzlePoint ( ent, forward, right, up, muzzle );
+
+	//rww - NOTE: I have only tested the bryar, blaster, and disruptor for weapon firing.
+	//Other routines will likely have a client pointer reference in them and cause a crash.
+
+	// fire the specific weapon
+	switch( ent->s.weapon )
+	{
+	case WP_STUN_BATON:
+		WP_FireStunBaton( ent, altFire );
+		break;
+
+	case WP_SABER:
+		break;
+
+	case WP_BRYAR_PISTOL:
+		WP_FireBryarPistol( ent, altFire );
+		break;
+
+	case WP_BLASTER:
+		WP_FireBlaster( ent, altFire );
+		break;
+
+	case WP_DISRUPTOR:
+		WP_FireDisruptor( ent, altFire );
+		break;
+
+	case WP_BOWCASTER:
+		WP_FireBowcaster( ent, altFire );
+		break;
+
+	case WP_REPEATER:
+		WP_FireRepeater( ent, altFire );
+		break;
+
+	case WP_DEMP2:
+		WP_FireDEMP2( ent, altFire );
+		break;
+
+	case WP_FLECHETTE:
+		WP_FireFlechette( ent, altFire );
+		break;
+
+	case WP_ROCKET_LAUNCHER:
+		WP_FireRocket( ent, altFire );
+		break;
+
+	case WP_THERMAL:
+		WP_FireThermalDetonator( ent, altFire );
+		break;
+
+	case WP_TRIP_MINE:
+		WP_PlaceLaserTrap( ent, altFire );
+		break;
+
+	case WP_DET_PACK:
+		WP_DropDetPack( ent, altFire );
+		break;
+
+	case WP_EMPLACED_GUN:
+		WP_FireEmplaced( ent, altFire );
+		break;
+	default:
+		break;
+	}
 }
 
 //---------------------------------------------------------

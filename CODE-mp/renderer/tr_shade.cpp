@@ -394,7 +394,247 @@ static void DrawMultitextured( shaderCommands_t *input, int stage ) {
 	GL_SelectTexture( 0 );
 }
 
+inline int VectorToInt(vec3_t vec)
+{
+	int			tmp, retval;
 
+	_asm
+	{
+		push	edx
+		mov		edx, [vec]
+		fld		dword ptr[edx + 0]
+		fld		dword ptr[edx + 4]
+		fld		dword ptr[edx + 8]
+
+		mov		eax, 0xff00
+
+		fistp	tmp	   
+		mov		al, byte ptr [tmp]
+		shl		eax, 16
+		
+		fistp	tmp
+		mov		ah, byte ptr [tmp]
+
+		fistp	tmp
+		mov		al, byte ptr [tmp]
+
+		mov		[retval], eax
+		pop		edx
+	}
+	return(retval);
+}
+
+/*
+===================
+NewProjectDlightTexture
+
+Perform dynamic lighting with another rendering pass
+===================
+*/
+static void NewProjectDlightTexture( void ) 
+{
+	int			i, l;
+	vec3_t		origin, projOrigin, projToVert;
+	float		*texCoords;
+	byte		*colors;
+	byte		clipBits[SHADER_MAX_VERTEXES];
+	MAC_STATIC	float	texCoordsArray[SHADER_MAX_VERTEXES][2];
+	byte		colorArray[SHADER_MAX_VERTEXES][4];
+	unsigned	hitIndexes[SHADER_MAX_INDEXES];
+	int			numIndexes;
+	float		scale;
+	float		radius;
+	vec3_t		floatColor, coefBasis2, coefBasis3;
+    float		texcoord0, texcoord1, coef = 0.0085f * 30.0f, invRadius = 1.0f;
+
+	if ( !backEnd.refdef.num_dlights ) 
+	{
+		return;
+	}
+	for ( l = 0 ; l < backEnd.refdef.num_dlights ; l++ ) 
+	{
+		dlight_t	*dl;
+
+		if ( !( tess.dlightBits & ( 1 << l ) ) ) 
+		{
+			continue;	// this surface definately doesn't have any of this light
+		}
+
+		{
+	        colors = colorArray[0];
+	        texCoords = texCoordsArray[0];
+		}
+		
+        dl = &backEnd.refdef.dlights[l];
+		VectorCopy( dl->transformed, origin );
+		VectorCopy( dl->mProjTransformed, projOrigin );
+		invRadius = 1.0f / dl->mProjRadius;
+		VectorScale(dl->mBasis2, coef * invRadius, coefBasis2);
+		VectorScale(dl->mBasis3, coef * invRadius, coefBasis3);
+		radius = dl->radius;
+		scale = 1.0f / radius;
+
+		int intcolor;
+		floatColor[0] = dl->color[0] * 255;
+		floatColor[1] = dl->color[1] * 255;
+		floatColor[2] = dl->color[2] * 255;
+
+		intcolor = VectorToInt(floatColor);
+
+//		RB_BypassXYZCollapse(); // do the copy into tess, because something wants to read it
+
+		for ( i = 0 ; i < tess.numVertexes ; i++, texCoords += 2, colors += 4 ) 
+		{
+			vec3_t	dist, dest;
+			int		clip;
+			float	modulate;
+
+			backEnd.pc.c_dlightVertexes++;
+
+			VectorSubtract( origin, tess.xyz[i], dist );
+			clip = 0;
+
+			if (dl->mType == DLIGHT_PROJECTED)
+			{
+				// if this vertex is behind the projection origin of the light, give it texcoords of some unlit corner of the light texture
+				//so it appears unlit
+				VectorSubtract(tess.xyz[i], projOrigin, projToVert);
+				// use the actual radius of the light here
+				texCoords[0] = texcoord0 = 0.5f + DotProduct(dist,coefBasis2);
+				texCoords[1] = texcoord1 = 0.5f + DotProduct(dist,coefBasis3);
+			}
+			else
+			{
+				texCoords[0] = texcoord0 = 0.5f + dist[0] * scale;
+				texCoords[1] = texcoord1 = 0.5f + dist[1] * scale;
+			}
+
+			if ( texcoord0 < 0.0f ) 
+			{
+				clip |= 1;
+			}
+			else if ( texcoord0 > 1.0f ) 
+			{
+				clip |= 2;
+			}
+			if ( texcoord1 < 0.0f ) 
+			{
+				clip |= 4;
+			}
+			else if ( texcoord1 > 1.0f ) 
+			{
+				clip |= 8;
+			}
+			clipBits[i] = clip;
+			if (dl->mType == DLIGHT_PROJECTED)
+			{
+				*(int *)colors = intcolor;
+			}
+			else
+			{
+				// modulate the strength based on the height and color
+				if ( dist[2] > radius ) 
+				{
+					clip |= 16;
+					modulate = 0;
+				}
+				else if ( dist[2] < -radius ) 
+				{
+					clip |= 32;
+					modulate = 0;
+				}
+				else 
+				{
+					if ( dist[2] < 0.0f ) 
+					{
+						dist[2] = -dist[2];
+					}
+					if ( dist[2] < radius * 0.5f ) 
+					{
+						modulate = 1.0f;
+					}
+					else 
+					{
+						modulate = 2.0 * (radius - dist[2]) * scale;
+					}
+				}
+				VectorScale(floatColor, modulate, dest);
+				*(int *)colors = VectorToInt(dest);
+			}
+		}
+
+//		RB_BypassIndeciesCollapse(); // need to get indecies sorted if they aren't already
+
+		// build a list of triangles that need light
+		numIndexes = 0;
+		for ( i = 0 ; i < tess.numIndexes ; i += 3 ) 
+		{
+			int		a, b, c;
+
+			a = tess.indexes[i];
+			b = tess.indexes[i + 1];
+			c = tess.indexes[i + 2];
+			if ( clipBits[a] & clipBits[b] & clipBits[c] ) 
+			{
+				continue;	// not lighted
+			}
+			hitIndexes[numIndexes] = a;
+			hitIndexes[numIndexes + 1] = b;
+			hitIndexes[numIndexes + 2] = c;
+			numIndexes += 3;
+		}
+		if ( !numIndexes ) 
+		{
+			continue;
+		}
+
+		if ( qglActiveTextureARB ) 
+		{
+			GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
+
+			GL_SelectTexture( 0 );
+			R_BindAnimatedImage( tess.shader->stages[tess.shader->lastNonDetailStage]->bundle );
+			GL_SelectTexture( 1 );
+			qglEnable( GL_TEXTURE_2D );
+			GL_TexEnv( GL_MODULATE );
+
+			qglEnableClientState( GL_COLOR_ARRAY );
+			qglEnableClientState( GL_TEXTURE_COORD_ARRAY );
+
+			{
+				qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, colorArray );
+				qglTexCoordPointer( 2, GL_FLOAT, 0, texCoordsArray[0] );
+			}
+
+			GL_Bind( tr.dlightImage );
+
+			R_DrawElements( numIndexes, hitIndexes );
+
+			// turn off the multitexture unit
+			qglDisable( GL_TEXTURE_2D );
+			GL_SelectTexture( 0 );
+		}
+		else
+		{
+			qglEnableClientState( GL_COLOR_ARRAY );
+			qglEnableClientState( GL_TEXTURE_COORD_ARRAY );
+
+			{
+				qglColorPointer( 4, GL_UNSIGNED_BYTE, 0, colorArray );
+				qglTexCoordPointer( 2, GL_FLOAT, 0, texCoordsArray[0] );
+			}
+
+			GL_Bind( tr.dlightImage );
+			// include GLS_DEPTHFUNC_EQUAL so alpha tested surfaces don't add light
+			// where they aren't rendered
+			GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
+
+			R_DrawElements( numIndexes, hitIndexes );
+		}
+		backEnd.pc.c_totalIndexes += numIndexes;
+		backEnd.pc.c_dlightIndexes += numIndexes;
+	}
+}
 
 /*
 ===================
@@ -418,6 +658,12 @@ static void ProjectDlightTexture( void ) {
 	vec3_t	floatColor;
 
 	if ( !backEnd.refdef.num_dlights ) {
+		return;
+	}
+
+	if (r_newDLights->integer)
+	{
+		NewProjectDlightTexture();
 		return;
 	}
 

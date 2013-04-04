@@ -8,13 +8,15 @@
 #include "../client/client.h"
 #include "win_local.h"
 
+// The only directly referenced keycode - the console key (which gives different ascii codes depending on locale)
+#define CONSOLE_SCAN_CODE	0x29
+
+
 WinVars_t	g_wv;
 
 #ifndef WM_MOUSEWHEEL
 #define WM_MOUSEWHEEL (WM_MOUSELAST+1)  // message that will be supported by the OS 
 #endif
-
-extern cvar_t		*k_language;
 
 static UINT MSH_MOUSEWHEEL;
 
@@ -98,143 +100,155 @@ static void VID_AppActivate(BOOL fActive, BOOL minimize)
 	}
 }
 
-//==========================================================================
-
-static byte s_scantokey[128] = 
-					{ 
-//  0           1       2       3       4       5       6       7 
-//  8           9       A       B       C       D       E       F 
-	0  ,    27,     '1',    '2',    '3',    '4',    '5',    '6', 
-	'7',    '8',    '9',    '0',    '-',    '=',    K_BACKSPACE, 9, // 0 
-	'q',    'w',    'e',    'r',    't',    'y',    'u',    'i', 
-	'o',    'p',    '[',    ']',    13 ,    K_CTRL,'a',  's',      // 1 
-	'd',    'f',    'g',    'h',    'j',    'k',    'l',    ';', 
-	'\'' ,    '`',    K_SHIFT,'\\',  'z',    'x',    'c',    'v',      // 2 
-	'b',    'n',    'm',    ',',    '.',    '/',    K_SHIFT,'*', 
-	K_ALT,' ',   K_CAPSLOCK  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
-	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
-	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
-	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             0,              K_F11, 
-	K_F12,0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 5
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
-}; 
-
-static byte s_scantokey_german[128] = 
-					{ 
-//  0           1       2       3       4       5       6       7 
-//  8           9       A       B       C       D       E       F 
-	0  ,    27,     '1',    '2',    '3',    '4',    '5',    '6', 
-	'7',    '8',    '9',    '0',    '?',    '\'',    K_BACKSPACE, 9, // 0 
-	'q',    'w',    'e',    'r',    't',    'z',    'u',    'i', 
-	'o',    'p',    '=',    '+',    13 ,    K_CTRL, 'a',  's',      // 1 
-	'd',    'f',    'g',    'h',    'j',    'k',    'l',    '[', 
-	']' ,    '`',    K_SHIFT,'#',  'y',    'x',    'c',    'v',      // 2 
-	'b',    'n',    'm',    ',',    '.',    '-',    K_SHIFT,'*', 
-	K_ALT,' ',   K_CAPSLOCK  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
-	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
-	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
-	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             '<',              K_F11, 
-	K_F12,0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 5
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
-}; 
-
-static byte s_scantokey_french[128] = 
-					{ 
-//  0           1       2       3       4       5       6       7 
-//  8           9       A       B       C       D       E       F 
-	0  ,    27,     '1',    '2',    '3',    '4',    '5',    '6', 
-	'7',    '8',    '9',    '0',    ')',    '=',    K_BACKSPACE, 9, // 0 
-	'a',    'z',    'e',    'r',    't',    'y',    'u',    'i', 
-	'o',    'p',	'^',	'$',    13 ,    K_CTRL, 'q',  's',      // 1
-	'd',    'f',    'g',    'h',    'j',    'k',    'l',    'm', 
-	'%' ,    '`',    K_SHIFT,'*',  'w',    'x',    'c',    'v',      // 2 
-	'b',    'n',    ',',    ';',    ':',    '!',    K_SHIFT,'*', 
-	K_ALT,' ',   K_CAPSLOCK  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
-	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
-	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
-	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             '<',              K_F11, 
-	K_F12,0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 5
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
-}; 
-
-static byte s_scantokey_spanish[128] = 
-{ 
-//  0           1       2       3       4       5       6       7 
-//  8           9       A       B       C       D       E       F 
-	0  ,    27,     '1',    '2',    '3',    '4',    '5',    '6', 
-	'7',    '8',    '9',    '0',    '\'',    '!',    K_BACKSPACE, 9, // 0 
-	'q',    'w',    'e',    'r',    't',    'y',    'u',    'i', 
-	'o',    'p',    '[',    ']',    13 ,    K_CTRL, 'a',  's',      // 1 
-	'd',    'f',    'g',    'h',    'j',    'k',    'l',    '=', 
-	'{' ,    '`',    K_SHIFT,'}',  'z',    'x',    'c',    'v',      // 2 
-	'b',    'n',    'm',    ',',    '.',    '-',    K_SHIFT,'*', 
-	K_ALT,' ',   K_CAPSLOCK  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
-	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
-	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
-	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             '<',              K_F11, 
-	K_F12,0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 5
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
-}; 
-
-static byte s_scantokey_italian[128] = 
-{ 
-//  0           1       2       3       4       5       6       7 
-//  8           9       A       B       C       D       E       F 
-	0  ,    27,     '1',    '2',    '3',    '4',    '5',    '6', 
-	'7',    '8',    '9',    '0',    '\'',    '^',    K_BACKSPACE, 9, // 0 
-	'q',    'w',    'e',    'r',    't',    'y',    'u',    'i', 
-	'o',    'p',    '[',    ']',    13 ,    K_CTRL, 'a',  's',      // 1 
-	'd',    'f',    'g',    'h',    'j',    'k',    'l',    '@', 
-	'#' ,    '`',    K_SHIFT,'=',  'z',    'x',    'c',    'v',      // 2 
-	'b',    'n',    'm',    ',',    '.',    '-',    K_SHIFT,'*', 
-	K_ALT,' ',   K_CAPSLOCK  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
-	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
-	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
-	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             '<',              K_F11, 
-	K_F12,0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 5
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
-	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
-}; 
-
-/*
-// returns true if key should be ignored because NUMLOCK is on and therefore KP arrows should be numbers only...
-//
-qboolean SwallowBadNumLockedKPKey( int iKey )
+static byte virtualKeyConvert[0x92][2] =
 {
-	switch (iKey)
-	{
-		case K_KP_HOME:
-		case K_KP_UPARROW:
-		case K_KP_PGUP:
-		case K_KP_LEFTARROW:
-		case K_KP_RIGHTARROW:
-		case K_KP_END:
-		case K_KP_DOWNARROW:
-		case K_KP_PGDN:
-
-			if (GetKeyState(VK_NUMLOCK) & 0x8001)
-			{
-				return qtrue;
-			}
-	}
-
-	return qfalse;
-}
-*/
+	{ 0,				0				},     
+	{ A_MOUSE1,			A_MOUSE1		}, // VK_LBUTTON 01 Left mouse button  
+	{ A_MOUSE2,			A_MOUSE2		}, // VK_RBUTTON 02 Right mouse button  
+	{ 0,				0				}, // VK_CANCEL 03 Control-break processing  
+	{ A_MOUSE3,			A_MOUSE3		}, // VK_MBUTTON 04 Middle mouse button (three-button mouse)  
+	{ A_MOUSE4,			A_MOUSE4		}, // VK_XBUTTON1 05 Windows 2000/XP: X1 mouse button 
+	{ A_MOUSE5,			A_MOUSE5		}, // VK_XBUTTON2 06 Windows 2000/XP: X2 mouse button 
+	{ 0,				0				}, // 07 Undefined  
+	{ A_BACKSPACE,		A_BACKSPACE		}, // VK_BACK 08 BACKSPACE key  
+	{ A_TAB,			A_TAB			}, // VK_TAB 09 TAB key  
+	{ 0,				0				}, // 0A Reserved  
+	{ 0,				0				}, // 0B Reserved  
+	{ A_KP_5,			0				}, // VK_CLEAR 0C CLEAR key  
+	{ A_ENTER, 			A_KP_ENTER 		}, // VK_RETURN 0D ENTER key  
+	{ 0,				0				}, // 0E Undefined  
+	{ 0,				0				}, // 0F Undefined  
+	{ A_SHIFT,			A_SHIFT			}, // VK_SHIFT 10 SHIFT key  
+	{ A_CTRL,			A_CTRL			}, // VK_CONTROL 11 CTRL key  
+	{ A_ALT,			A_ALT			}, // VK_MENU 12 ALT key  
+	{ A_PAUSE,			A_PAUSE			}, // VK_PAUSE 13 PAUSE key  
+	{ A_CAPSLOCK,		A_CAPSLOCK		}, // VK_CAPITAL 14 CAPS LOCK key  
+	{ 0,				0				}, // VK_KANA 15 IME Kana mode 
+	{ 0,				0				}, // 16 Undefined  
+	{ 0,				0				}, // VK_JUNJA 17 IME Junja mode 
+	{ 0,				0				}, // VK_FINAL 18 IME final mode 
+	{ 0,				0				}, // VK_KANJI 19 IME Kanji mode 
+	{ 0,				0				}, // 1A Undefined  
+	{ A_ESCAPE,			A_ESCAPE		}, // VK_ESCAPE 1B ESC key  
+	{ 0,				0				}, // VK_CONVERT 1C IME convert 
+	{ 0,				0				}, // VK_NONCONVERT 1D IME nonconvert 
+	{ 0,				0				}, // VK_ACCEPT 1E IME accept 
+	{ 0,				0				}, // VK_MODECHANGE 1F IME mode change request 
+	{ A_SPACE,			A_SPACE			}, // VK_SPACE 20 SPACEBAR  
+	{ A_KP_9,			A_PAGE_UP		}, // VK_PRIOR 21 PAGE UP key  
+	{ A_KP_3,			A_PAGE_DOWN		}, // VK_NEXT 22 PAGE DOWN key  
+	{ A_KP_1,			A_END			}, // VK_END 23 END key  
+	{ A_KP_7,			A_HOME			}, // VK_HOME 24 HOME key  
+	{ A_KP_4,			A_CURSOR_LEFT	}, // VK_LEFT 25 LEFT ARROW key  
+	{ A_KP_8,			A_CURSOR_UP   	}, // VK_UP 26 UP ARROW key  
+	{ A_KP_6,			A_CURSOR_RIGHT	}, // VK_RIGHT 27 RIGHT ARROW key  
+	{ A_KP_2,			A_CURSOR_DOWN	}, // VK_DOWN 28 DOWN ARROW key  
+	{ 0,				0				}, // VK_SELECT 29 SELECT key  
+	{ 0,				0				}, // VK_PRINT 2A PRINT key 
+	{ 0,				0				}, // VK_EXECUTE 2B EXECUTE key  
+	{ A_PRINTSCREEN,	A_PRINTSCREEN	}, // VK_SNAPSHOT 2C PRINT SCREEN key  
+	{ A_KP_0,			A_INSERT		}, // VK_INSERT 2D INS key  
+	{ A_KP_PERIOD,		A_DELETE		}, // VK_DELETE 2E DEL key  
+	{ 0,				0				}, // VK_HELP 2F HELP key  
+	{ A_0,				A_0				}, // 30 0 key  
+	{ A_1,				A_1				}, // 31 1 key  
+	{ A_2,				A_2				}, // 32 2 key  
+	{ A_3,				A_3				}, // 33 3 key  
+	{ A_4,				A_4				}, // 34 4 key  
+	{ A_5,				A_5				}, // 35 5 key  
+	{ A_6,				A_6				}, // 36 6 key  
+	{ A_7,				A_7				}, // 37 7 key  
+	{ A_8,				A_8				}, // 38 8 key  
+	{ A_9,				A_9				}, // 39 9 key  
+	{ 0,				0				}, // 3A Undefined  
+	{ 0,				0				}, // 3B Undefined  
+	{ 0,				0				}, // 3C Undefined  
+	{ 0,				0				}, // 3D Undefined  
+	{ 0,				0				}, // 3E Undefined  
+	{ 0,				0				}, // 3F Undefined  
+	{ 0,				0				}, // 40 Undefined  
+	{ A_CAP_A,			A_CAP_A			}, // 41 A key  
+	{ A_CAP_B,			A_CAP_B			}, // 42 B key  
+	{ A_CAP_C,			A_CAP_C			}, // 43 C key  
+	{ A_CAP_D,			A_CAP_D			}, // 44 D key  
+	{ A_CAP_E,			A_CAP_E			}, // 45 E key  
+	{ A_CAP_F,			A_CAP_F			}, // 46 F key  
+	{ A_CAP_G,			A_CAP_G			}, // 47 G key  
+	{ A_CAP_H,			A_CAP_H			}, // 48 H key  
+	{ A_CAP_I,			A_CAP_I			}, // 49 I key  
+	{ A_CAP_J,			A_CAP_J			}, // 4A J key  
+	{ A_CAP_K,			A_CAP_K			}, // 4B K key  
+	{ A_CAP_L,			A_CAP_L			}, // 4C L key  
+	{ A_CAP_M,			A_CAP_M			}, // 4D M key  
+	{ A_CAP_N,			A_CAP_N			}, // 4E N key  
+	{ A_CAP_O,			A_CAP_O			}, // 4F O key  
+	{ A_CAP_P,			A_CAP_P			}, // 50 P key  
+	{ A_CAP_Q,			A_CAP_Q			}, // 51 Q key  
+	{ A_CAP_R,			A_CAP_R			}, // 52 R key  
+	{ A_CAP_S,			A_CAP_S			}, // 53 S key  
+	{ A_CAP_T,			A_CAP_T			}, // 54 T key  
+	{ A_CAP_U,			A_CAP_U			}, // 55 U key  
+	{ A_CAP_V,			A_CAP_V			}, // 56 V key  
+	{ A_CAP_W,			A_CAP_W			}, // 57 W key  
+	{ A_CAP_X,			A_CAP_X			}, // 58 X key  
+	{ A_CAP_Y,			A_CAP_Y			}, // 59 Y key  
+	{ A_CAP_Z,			A_CAP_Z			}, // 5A Z key  
+	{ 0,				0				}, // VK_LWIN 5B Left Windows key (Microsoft® Natural® keyboard)  
+	{ 0,				0				}, // VK_RWIN 5C Right Windows key (Natural keyboard)  
+	{ 0,				0				}, // VK_APPS 5D Applications key (Natural keyboard)  
+	{ 0,				0				}, // 5E Reserved  
+	{ 0,				0				}, // VK_SLEEP 5F Computer Sleep key 
+	{ A_KP_0,			A_KP_0			}, // VK_NUMPAD0 60 Numeric keypad 0 key  
+	{ A_KP_1,			A_KP_1			}, // VK_NUMPAD1 61 Numeric keypad 1 key  
+	{ A_KP_2,			A_KP_2			}, // VK_NUMPAD2 62 Numeric keypad 2 key  
+	{ A_KP_3,			A_KP_3			}, // VK_NUMPAD3 63 Numeric keypad 3 key  
+	{ A_KP_4,			A_KP_4			}, // VK_NUMPAD4 64 Numeric keypad 4 key  
+	{ A_KP_5,			A_KP_5			}, // VK_NUMPAD5 65 Numeric keypad 5 key  
+	{ A_KP_6,			A_KP_6			}, // VK_NUMPAD6 66 Numeric keypad 6 key  
+	{ A_KP_7,			A_KP_7			}, // VK_NUMPAD7 67 Numeric keypad 7 key  
+	{ A_KP_8,			A_KP_8			}, // VK_NUMPAD8 68 Numeric keypad 8 key  
+	{ A_KP_9,			A_KP_9			}, // VK_NUMPAD9 69 Numeric keypad 9 key  
+	{ A_MULTIPLY,		A_MULTIPLY		}, // VK_MULTIPLY 6A Multiply key  
+	{ A_KP_PLUS, 		A_KP_PLUS 		}, // VK_ADD 6B Add key  
+	{ 0,				0				}, // VK_SEPARATOR 6C Separator key  
+	{ A_KP_MINUS,		A_KP_MINUS		}, // VK_SUBTRACT 6D Subtract key  
+	{ A_KP_PERIOD,		A_KP_PERIOD		}, // VK_DECIMAL 6E Decimal key  
+	{ A_DIVIDE,			A_DIVIDE		}, // VK_DIVIDE 6F Divide key  
+	{ A_F1,				A_F1			}, // VK_F1 70 F1 key  
+	{ A_F2,				A_F2			}, // VK_F2 71 F2 key  
+	{ A_F3,				A_F3			}, // VK_F3 72 F3 key  
+	{ A_F4,				A_F4			}, // VK_F4 73 F4 key  
+	{ A_F5,				A_F5			}, // VK_F5 74 F5 key  
+	{ A_F6,				A_F6			}, // VK_F6 75 F6 key  
+	{ A_F7,				A_F7			}, // VK_F7 76 F7 key  
+	{ A_F8,				A_F8			}, // VK_F8 77 F8 key  
+	{ A_F9,				A_F9			}, // VK_F9 78 F9 key  
+	{ A_F10,			A_F10			}, // VK_F10 79 F10 key  
+	{ A_F11,			A_F11			}, // VK_F11 7A F11 key  
+	{ A_F12,			A_F12			}, // VK_F12 7B F12 key  
+	{ 0,				0				}, // VK_F13 7C F13 key  
+	{ 0,				0				}, // VK_F14 7D F14 key  
+	{ 0,				0				}, // VK_F15 7E F15 key  
+	{ 0,				0				}, // VK_F16 7F F16 key  
+	{ 0,				0				}, // VK_F17 80H F17 key  
+	{ 0,				0				}, // VK_F18 81H F18 key  
+	{ 0,				0				}, // VK_F19 82H F19 key  
+	{ 0,				0				}, // VK_F20 83H F20 key  
+	{ 0,				0				}, // VK_F21 84H F21 key  
+	{ 0,				0				}, // VK_F22 85H F22 key  
+	{ 0,				0				}, // VK_F23 86H F23 key  
+	{ 0,				0				}, // VK_F24 87H F24 key  
+	{ 0,				0				}, // 88 Unassigned
+	{ 0,				0				}, // 89 Unassigned
+	{ 0,				0				}, // 8A Unassigned
+	{ 0,				0				}, // 8B Unassigned
+	{ 0,				0				}, // 8C Unassigned
+	{ 0,				0				}, // 8D Unassigned
+	{ 0,				0				}, // 8E Unassigned
+	{ 0,				0				}, // 8F Unassigned
+	{ A_NUMLOCK,		A_NUMLOCK		}, // VK_NUMLOCK 90 NUM LOCK key  
+	{ A_SCROLLLOCK,		A_SCROLLLOCK	}  // VK_SCROLL 91 
+};
 
 /*
 =======
@@ -243,82 +257,35 @@ MapKey
 Map from windows to quake keynums
 =======
 */
-static int MapKey (int key)
+static int MapKey (ulong key, word wParam)
 {
-	int result;
-	int modified;
-	qboolean is_extended;
+	ulong	result, scan, extended;
 
-//	Com_Printf( "0x%x\n", key);
-
-	modified = ( key >> 16 ) & 255;
-
-	if ( modified > 127 )
-		return 0;
-
-	if ( key & ( 1 << 24 ) )
+	// Check for the console key (hard code to the key you would expect)
+	scan = ( key >> 16 ) & 0xff;
+	if(scan == CONSOLE_SCAN_CODE)
 	{
-		is_extended = qtrue;
-	}
-	else
-	{
-		is_extended = qfalse;
+		return(A_CONSOLE);
 	}
 
-	result = s_scantokey[modified];
-	if ( !Q_stricmp(k_language->string, "deutsch") ) {
-		result = s_scantokey_german[modified];
-	} else if ( !Q_stricmp(k_language->string, "francais") ) {
-		result = s_scantokey_french[modified];
-	} else if ( !Q_stricmp(k_language->string, "espanol") ) {
-		result = s_scantokey_spanish[modified];
-	} else if ( !Q_stricmp(k_language->string, "italiano") ) {
-		result = s_scantokey_italian[modified];
-	}
-
-	if ( !is_extended )
+	// Try to convert the virtual key directly
+	result = 0;
+	extended = (key >> 24) & 1;
+	if(wParam > 0 && wParam <= VK_SCROLL)
 	{
-		switch ( result )
-		{
-		case K_HOME:
-			return K_KP_HOME;
-		case K_UPARROW:
-			return K_KP_UPARROW;
-		case K_PGUP:
-			return K_KP_PGUP;
-		case K_LEFTARROW:
-			return K_KP_LEFTARROW;
-		case K_RIGHTARROW:
-			return K_KP_RIGHTARROW;
-		case K_END:
-			return K_KP_END;
-		case K_DOWNARROW:
-			return K_KP_DOWNARROW;
-		case K_PGDN:
-			return K_KP_PGDN;
-		case K_INS:
-			return K_KP_INS;
-		case K_DEL:
-			return K_KP_DEL;
-		default:
-			return result;
-		}
+		result = virtualKeyConvert[wParam][extended];
 	}
-	else
+	// Get the unshifted ascii code (if any)
+	if(!result)
 	{
-		switch ( result )
-		{
-		case K_PAUSE:
-			return K_KP_NUMLOCK;
-		case 0x0D:
-			return K_KP_ENTER;
-		case 0x2F:
-			return K_KP_SLASH;
-		case 0xAF:
-			return K_KP_PLUS;
-		}
-		return result;
+		result = MapVirtualKey(wParam, 2) & 0xff;
 	}
+	// Output any debug prints
+//	if(in_debug && in_debug->integer & 1)
+//	{
+//		Com_Printf("WM_KEY: %x : %x : %x\n", key, wParam, result);
+//	}
+	return(result);
 }
 
 
@@ -341,18 +308,19 @@ LONG WINAPI MainWndProc (
     WPARAM  wParam,
     LPARAM  lParam)
 {
+	byte	code;
 
 	if ( uMsg == MSH_MOUSEWHEEL )
 	{
 		if ( ( ( int ) wParam ) > 0 )
 		{
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_MWHEELUP, qtrue, 0, NULL );
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_MWHEELUP, qfalse, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, A_MWHEELUP, qtrue, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, A_MWHEELUP, qfalse, 0, NULL );
 		}
 		else
 		{
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_MWHEELDOWN, qtrue, 0, NULL );
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_MWHEELDOWN, qfalse, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, A_MWHEELDOWN, qtrue, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, A_MWHEELDOWN, qfalse, 0, NULL );
 		}
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
 	}
@@ -367,13 +335,13 @@ LONG WINAPI MainWndProc (
 		//
 		if ( ( short ) HIWORD( wParam ) > 0 )
 		{
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_MWHEELUP, qtrue, 0, NULL );
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_MWHEELUP, qfalse, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, A_MWHEELUP, qtrue, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, A_MWHEELUP, qfalse, 0, NULL );
 		}
 		else
 		{
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_MWHEELDOWN, qtrue, 0, NULL );
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_MWHEELDOWN, qfalse, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, A_MWHEELDOWN, qtrue, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, A_MWHEELDOWN, qfalse, 0, NULL );
 		}
 		break;
 
@@ -509,7 +477,7 @@ LONG WINAPI MainWndProc (
 		break;
 
 	case WM_SYSKEYDOWN:
-		if ( wParam == 13 )
+		if ( wParam == VK_RETURN )
 		{
 			if ( sr_fullscreen )
 			{
@@ -520,16 +488,40 @@ LONG WINAPI MainWndProc (
 		}
 		// fall through
 	case WM_KEYDOWN:
-		Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, MapKey( lParam ), qtrue, 0, NULL );
+		code = MapKey( lParam, wParam );
+		if(code)
+		{
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, code, qtrue, 0, NULL );
+		}
 		break;
 
 	case WM_SYSKEYUP:
 	case WM_KEYUP:
-		Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, MapKey( lParam ), qfalse, 0, NULL );
+		code = MapKey( lParam, wParam );
+		if(code)
+		{
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, code, qfalse, 0, NULL );
+		}
 		break;
 
 	case WM_CHAR:
-		Sys_QueEvent( g_wv.sysMsgTime, SE_CHAR, wParam, 0, 0, NULL );
+		if(((lParam >> 16) & 0xff) != CONSOLE_SCAN_CODE)
+		{
+			Sys_QueEvent( g_wv.sysMsgTime, SE_CHAR, wParam, 0, 0, NULL );
+		}
+		// Output any debug prints
+//		if(in_debug && in_debug->integer & 2)
+//		{
+//			Com_Printf("WM_CHAR: %x\n", wParam);
+//		}
+		break;
+
+	case WM_POWERBROADCAST:
+		if (wParam == PBT_APMQUERYSUSPEND)
+		{
+			Com_Printf("Cannot go into hibernate / standby mode while game is running!\n");
+			return BROADCAST_QUERY_DENY;
+		}
 		break;
     }
 

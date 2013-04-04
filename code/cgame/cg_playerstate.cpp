@@ -87,6 +87,9 @@ void CG_CheckAmmo( void )
 	// play a sound on transitions
 	if ( cg.lowAmmoWarning != previous ) {
 		cgi_S_StartLocalSound( cgs.media.noAmmoSound, CHAN_LOCAL_SOUND ); //"sound/weapons/noammo.wav"
+#ifdef _IMMERSION
+		cgi_FF_Start( cgs.media.noAmmoForce, FF_CLIENT_LOCAL );
+#endif // _IMMERSION
 	}
 }
 
@@ -185,6 +188,9 @@ void CG_DamageFeedback( int yawByte, int pitchByte, int damage ) {
 	cg.damageValue = kick;
 	cg.v_dmg_time = cg.time + DAMAGE_TIME;
 	cg.damageTime = cg.snap->serverTime;
+#ifdef _IMMERSION
+	cgi_FF_Start( cgi_FF_Register( "fffx/player/damage", FF_CHANNEL_DAMAGE ), cg.snap->ps.clientNum );
+#endif // _IMMERSION
 }
 
 

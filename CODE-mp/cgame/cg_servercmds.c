@@ -61,6 +61,8 @@ static void CG_ParseScores( void ) {
 		cg.numScores = MAX_CLIENTS;
 	}
 
+	cg.numScores = readScores;
+
 	cg.teamScores[0] = atoi( CG_Argv( 2 ) );
 	cg.teamScores[1] = atoi( CG_Argv( 3 ) );
 
@@ -525,7 +527,7 @@ void CG_KillCEntityInstances()
 		cg_entities[i].frame_minus2_refreshed = 0;
 		cg_entities[i].dustTrailTime = 0;
 		cg_entities[i].ghoul2weapon = NULL;
-		cg_entities[i].torsoBolt = 0;
+//		cg_entities[i].torsoBolt = 0;
 		cg_entities[i].trailTime = 0;
 		cg_entities[i].frame_hold_time = 0;
 		cg_entities[i].frame_hold_refreshed = 0;

@@ -903,7 +903,14 @@ extern void G_ChangeMap (const char *mapname, const char *spawntarget, qboolean 
 void target_level_change_use(gentity_t *self, gentity_t *other, gentity_t *activator)
 {
 	G_ActivateBehavior(self,BSET_USE);
-	G_ChangeMap( self->message, self->target, (self->spawnflags&1) );
+	if( self->message && !Q_stricmp( "disconnect", self->message ) )
+	{
+		gi.SendConsoleCommand( "disconnect\n");
+	}
+	else
+	{
+		G_ChangeMap( self->message, self->target, (self->spawnflags&1) );
+	}
 	if (self->spawnflags&2)	//HIDEINFO
 	{
 		gi.cvar_set("cg_missionstatusscreen", "0");

@@ -74,7 +74,7 @@ typedef enum //# setType_e
 	SET_LOCKYAW,//## %s="off"  # Lock legs to a certain yaw angle (or "off" or "auto" uses current)
 	SET_FULLNAME,//## %s="NULL" # This name will appear when ent is scanned by tricorder
 	SET_VIEWENTITY,//## %s="NULL" # Make the player look through this ent's eyes - also shunts player movement control to this ent
-	SET_LOOPSOUND,//## %s="NULL" # Looping sound to play on entity
+	SET_LOOPSOUND,//## %s="FILENAME" !!"W:\game\base\!!#sound\*.*" # Looping sound to play on entity
 	SET_ICARUS_FREEZE,//## %s="NULL" # Specify name of entity to freeze - !!!NOTE!!! since the ent is frozen, it cannot unfreeze itself, you must have some other entity unfreeze a frozen ent!!!
 	SET_ICARUS_UNFREEZE,//## %s="NULL" # Specify name of entity to unfreeze - !!!NOTE!!! since the ent is frozen, it cannot unfreeze itself, you must have some other entity unfreeze a frozen ent!!!
 

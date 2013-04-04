@@ -57,7 +57,7 @@ BSC32=bscmake.exe
 LINK32=link.exe
 # ADD BASE LINK32 advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /map /debug /machine:I386
 # SUBTRACT BASE LINK32 /incremental:yes /nodefaultlib
-# ADD LINK32 advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /map:"Release/jk2mp.map" /debug /machine:I386
+# ADD LINK32 ALut.lib OpenAL32.lib advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /map:"Release/jk2mp.map" /debug /machine:I386
 # SUBTRACT LINK32 /pdb:none
 
 !ELSEIF  "$(CFG)" == "jk2mp - Win32 Debug JK2"
@@ -86,7 +86,7 @@ BSC32=bscmake.exe
 LINK32=link.exe
 # ADD BASE LINK32 advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /profile /map /debug /machine:I386
 # SUBTRACT BASE LINK32 /nodefaultlib
-# ADD LINK32 ./debug/jk2/smrtheap.obj advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /map:"Debug/jk2mp.map" /debug /machine:I386
+# ADD LINK32 ./debug/jk2/smrtheap.obj ALut.lib OpenAL32.lib advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /map:"Debug/jk2mp.map" /debug /machine:I386
 # SUBTRACT LINK32 /profile
 
 !ELSEIF  "$(CFG)" == "jk2mp - Win32 Final JK2"
@@ -116,7 +116,7 @@ BSC32=bscmake.exe
 LINK32=link.exe
 # ADD BASE LINK32 advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /map:"Release/jk2mp.map" /debug /machine:I386 /out:".\Release/jk2mp.exe"
 # SUBTRACT BASE LINK32 /pdb:none
-# ADD LINK32 advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /map:"Final/jk2mp.map" /machine:I386
+# ADD LINK32 ALut.lib OpenAL32.lib advapi32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib ole32.lib /nologo /stack:0x800000 /subsystem:windows /map:"Final/jk2mp.map" /machine:I386
 # SUBTRACT LINK32 /pdb:none /debug
 
 !ENDIF 
@@ -159,6 +159,14 @@ SOURCE=.\ui\ui_public.h
 # PROP Default_Filter "ico;cur;bmp;dlg;rc2;rct;bin;cnt;rtf;gif;jpg;jpeg;jpe"
 # Begin Source File
 
+SOURCE=.\EaxMan.dll
+# End Source File
+# Begin Source File
+
+SOURCE=.\OpenAL32.dll
+# End Source File
+# Begin Source File
+
 SOURCE=.\win32\qe3.ico
 # End Source File
 # Begin Source File
@@ -176,6 +184,14 @@ SOURCE=.\win32\winquake.rc
 
 !ENDIF 
 
+# End Source File
+# Begin Source File
+
+SOURCE=.\OpenAL32.lib
+# End Source File
+# Begin Source File
+
+SOURCE=.\ALut.lib
 # End Source File
 # End Group
 # Begin Group "Client"
@@ -343,10 +359,6 @@ SOURCE=.\qcommon\cm_polylib.h
 # Begin Source File
 
 SOURCE=.\qcommon\cm_public.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\qcommon\cm_shader.cpp
 # End Source File
 # Begin Source File
 
@@ -762,6 +774,46 @@ SOURCE=.\mp3code\upsf.c
 # Begin Source File
 
 SOURCE=.\mp3code\wavep.c
+# End Source File
+# End Group
+# Begin Group "EAX"
+
+# PROP Default_Filter ""
+# Begin Source File
+
+SOURCE=.\client\eax\eax.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\eax\EaxMan.h
+# End Source File
+# End Group
+# Begin Group "OpenAL"
+
+# PROP Default_Filter ""
+# Begin Source File
+
+SOURCE=.\client\OpenAL\al.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\OpenAL\alc.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\OpenAL\alctypes.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\OpenAL\altypes.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\OpenAL\alu.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\OpenAL\alut.h
 # End Source File
 # End Group
 # Begin Source File

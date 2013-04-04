@@ -152,10 +152,19 @@ static int LAN_AddServer(int source, const char *name, const char *address) {
 		case AS_FAVORITES :
 			count = &cls.numfavoriteservers;
 			servers = &cls.favoriteServers[0];
+/*			if (!name || !*name)
+			{
+				name = "?";
+			}
+*/
 			break;
 	}
 	if (servers && *count < max) {
 		NET_StringToAdr( address, &adr );
+		if (adr.type == NA_BAD)
+		{
+			return -1;
+		}
 		for ( i = 0; i < *count; i++ ) {
 			if (NET_CompareAdr(servers[i].adr, adr)) {
 				break;
@@ -204,7 +213,7 @@ static void LAN_RemoveServer(int source, const char *addr) {
 		netadr_t comp;
 		NET_StringToAdr( addr, &comp );
 		for (i = 0; i < *count; i++) {
-			if (NET_CompareAdr( comp, servers[i].adr)) {
+			if (servers[i].adr.type==NA_BAD || NET_CompareAdr( comp, servers[i].adr)) {
 				int j = i;
 				while (j < *count - 1) {
 					Com_Memcpy(&servers[j], &servers[j+1], sizeof(servers[j]));
@@ -320,7 +329,12 @@ static void LAN_GetServerInfo( int source, int n, char *buf, int buflen ) {
 		Info_SetValueForKey( info, "gametype", va("%i",server->gameType));
 		Info_SetValueForKey( info, "nettype", va("%i",server->netType));
 		Info_SetValueForKey( info, "addr", NET_AdrToString(server->adr));
-		Info_SetValueForKey( info, "sv_allowAnonymous", va("%i", server->allowAnonymous));
+//		Info_SetValueForKey( info, "sv_allowAnonymous", va("%i", server->allowAnonymous));
+		Info_SetValueForKey( info, "needpass", va("%i", server->needPassword ) );
+		Info_SetValueForKey( info, "truejedi", va("%i", server->trueJedi ) );
+		Info_SetValueForKey( info, "wdisable", va("%i", server->weaponDisable ) );
+		Info_SetValueForKey( info, "fdisable", va("%i", server->forceDisable ) );
+//		Info_SetValueForKey( info, "pure", va("%i", server->pure ) );
 		Q_strncpyz(buf, info, buflen);
 	} else {
 		if (buf) {
@@ -640,9 +654,20 @@ static void GetClipboardData( char *buf, int buflen ) {
 Key_KeynumToStringBuf
 ====================
 */
-static void Key_KeynumToStringBuf( int keynum, char *buf, int buflen ) {
-	Q_strncpyz( buf, Key_KeynumToString( keynum, qtrue ), buflen );
+// only ever called by binding-display code, therefore returns non-technical "friendly" names 
+//	in any language that don't necessarily match those in the config file...
+//
+void Key_KeynumToStringBuf( int keynum, char *buf, int buflen ) 
+{
+	const char *psKeyName = Key_KeynumToString( keynum/*, qtrue */);
+
+	// see if there's a more friendly (or localised) name...
+	//
+	const char *psKeyNameFriendly = SP_GetStringTextString( va("KEYNAMES_KEYNAME_%s",psKeyName) );
+
+	Q_strncpyz( buf, (psKeyNameFriendly && psKeyNameFriendly[0]) ? psKeyNameFriendly : psKeyName, buflen );
 }
+
 
 /*
 ====================
@@ -1045,8 +1070,14 @@ int CL_UISystemCalls( int *args ) {
 		re.Font_DrawString( args[1], args[2], (const char *)VMA(3), (const float *) VMA(4), args[5], args[6], VMF(7) );
 		return 0;
 
+	case UI_LANGUAGE_ISASIAN:
+		return re.Language_IsAsian();
+
+	case UI_LANGUAGE_USESSPACES:
+		return re.Language_UsesSpaces();
+
 	case UI_ANYLANGUAGE_READCHARFROMSTRING:
-		return re.AnyLanguage_ReadCharFromString( (const char **)VMA(1) );
+		return re.AnyLanguage_ReadCharFromString( (const char *)VMA(1), (int *) VMA(2), (qboolean *) VMA(3) );
 
 	case UI_MEMSET:
 		Com_Memset( VMA(1), args[2], args[3] );
@@ -1181,7 +1212,6 @@ void CL_ShutdownUI( void ) {
 CL_InitUI
 ====================
 */
-#define UI_OLD_API_VERSION	4
 
 void CL_InitUI( void ) {
 	int		v;
@@ -1202,12 +1232,7 @@ void CL_InitUI( void ) {
 
 	// sanity check
 	v = VM_Call( uivm, UI_GETAPIVERSION );
-	if (v == UI_OLD_API_VERSION) {
-//		Com_Printf(S_COLOR_YELLOW "WARNING: loading old Quake III Arena User Interface version %d\n", v );
-		// init for this gamestate
-		VM_Call( uivm, UI_INIT, (cls.state >= CA_AUTHORIZING && cls.state < CA_ACTIVE));
-	}
-	else if (v != UI_API_VERSION) {
+	if (v != UI_API_VERSION) {
 		Com_Error( ERR_DROP, "User Interface is version %d, expected %d", v, UI_API_VERSION );
 		cls.uiStarted = qfalse;
 	}

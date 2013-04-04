@@ -149,6 +149,68 @@ int						s_rawend;
 portable_samplepair_t	s_rawsamples[MAX_RAW_SAMPLES];
 
 
+/**************************************************************************************************\
+*
+*	Open AL Specific
+*
+\**************************************************************************************************/
+
+int			s_UseOpenAL	= false;		// Determines if using Open AL or the default software mixer
+ALfloat		listener_pos[3];		// Listener Position
+ALfloat		listener_ori[6];		// Listener Orientation
+int			s_numChannels;			// Number of AL Sources == Num of Channels
+short		s_rawdata[MAX_RAW_SAMPLES*4];	// Used for Raw Samples (Music etc...)
+
+channel_t *S_OpenALPickChannel(int entnum, int entchannel);
+void UpdateSingleShotSounds();
+void UpdateLoopingSounds();
+void UpdateRawSamples();
+
+// EAX Related
+ALboolean				s_bEAX;				// Is EAX 3.0 support is available
+bool					s_bEALFileLoaded;	// Has an .eal file been loaded for the current level
+bool					s_bInWater;			// Underwater effect currently active 
+int						s_EnvironmentID;	// EAGLE ID of current environment
+LPEAXMANAGER			s_lpEAXManager;		// Pointer to EAXManager object
+HINSTANCE				s_hEAXManInst;		// Handle of EAXManager DLL
+EAXSet					s_eaxSet;			// EAXSet() function
+EAXGet					s_eaxGet;			// EAXGet() function
+bool					s_eaxMorphing;		// Is EAX Morphing in progress
+int						s_eaxMorphStartTime;// EAX Morph start time
+int						s_eaxMorphCount;	// EAX Morph count (1 ... 10)
+EAXLISTENERPROPERTIES	s_eaxLPSource;		// Source EAX Parameters
+EAXLISTENERPROPERTIES	s_eaxLPCur;			// Current EAX Parameters
+EAXLISTENERPROPERTIES	s_eaxLPDest;		// Destination EAX Parameters
+char					s_LevelName[MAX_QPATH];		// Name of current level
+
+void InitEAXManager();
+void ReleaseEAXManager();
+bool LoadEALFile(char *szEALFilename);
+void UnloadEALFile();
+void UpdateEAXListener(bool bUseDefault, bool bUseMorphing);
+void UpdateEAXBuffer(channel_t *ch);
+void EALFileInit(char *level);
+void EAXMorph();
+bool EAX3ListenerInterpolate(EAXLISTENERPROPERTIES *lpStartEAX3LP, EAXLISTENERPROPERTIES *lpFinishEAX3LP,
+			float flRatio, EAXLISTENERPROPERTIES *lpResultEAX3LP, bool bCheckValues = false);
+void Clamp(EAXVECTOR *eaxVector);
+bool CheckEAX3LP(LPEAXLISTENERPROPERTIES lpEAX3LP);
+
+// EAX 3.0 GUIDS ... confidential information ...
+
+const GUID DSPROPSETID_EAX30_ListenerProperties 
+				= { 0xa8fa6882, 0xb476,	0x11d3,	{ 0xbd, 0xb9, 0x00, 0xc0, 0xf0, 0x2d, 0xdf, 0x87} };
+
+const GUID DSPROPSETID_EAX30_BufferProperties
+				= { 0xa8fa6881, 0xb476,	0x11d3, { 0xbd, 0xb9, 0x0, 0xc0, 0xf0, 0x2d, 0xdf, 0x87} };
+
+/**************************************************************************************************\
+*
+*	End of Open AL Specific
+*
+\**************************************************************************************************/
+
+
 
 // instead of clearing a whole channel_t struct, we're going to skip the MP3SlidingDecodeBuffer[] buffer in the middle...
 //
@@ -205,9 +267,17 @@ void S_SoundInfo_f(void) {
 S_Init
 ================
 */
-void S_Init( void ) {
+void S_Init( void )
+{
+	ALCcontext *ALCContext = NULL;
+	ALCdevice *ALCDevice = NULL;
+	ALfloat listenerPos[]={0.0,0.0,0.0};
+	ALfloat listenerVel[]={0.0,0.0,0.0};
+	ALfloat	listenerOri[]={0.0,0.0,-1.0, 0.0,1.0,0.0};
 	cvar_t	*cv;
 	qboolean	r;
+	int i,j;
+	channel_t *ch;
 
 	Com_Printf("\n------- sound initialization -------\n");
 
@@ -256,10 +326,108 @@ void S_Init( void ) {
 	Cmd_AddCommand("soundinfo", S_SoundInfo_f);
 	Cmd_AddCommand("soundstop", S_StopAllSounds);
 
-	r = SNDDMA_Init();
-	Com_Printf("------------------------------------\n");
 
-	if ( r ) {
+	cv = Cvar_Get("s_UseOpenAL" , "0",CVAR_ARCHIVE|CVAR_LATCH);
+	s_UseOpenAL = !!(cv->integer);
+
+	if (s_UseOpenAL)
+	{
+		ALCDevice = alcOpenDevice((ALubyte*)"DirectSound3D");
+		if (!ALCDevice)
+			return;
+ 
+		//Create context(s)
+		ALCContext = alcCreateContext(ALCDevice, NULL);
+		if (!ALCContext)
+			return;
+
+		//Set active context
+		alcMakeContextCurrent(ALCContext);		
+		if (alcGetError(ALCDevice) != ALC_NO_ERROR)
+			return;
+		
+		s_soundStarted = 1;
+		s_soundMuted = qtrue;
+		s_soundtime = 0;
+		s_paintedtime = 0;
+		s_rawend = 0;
+
+		S_StopAllSounds();
+
+		S_SoundInfo_f();
+
+		// Set default level name
+		memset(s_LevelName, 0, sizeof(s_LevelName));
+
+		// Set Listener attributes
+		alListenerfv(AL_POSITION,listenerPos);
+		alListenerfv(AL_VELOCITY,listenerVel);
+		alListenerfv(AL_ORIENTATION,listenerOri);
+
+		InitEAXManager();
+
+		memset(s_channels, 0, sizeof(s_channels));
+
+		s_numChannels = 0;
+
+		// Create as many AL Sources (up to 32) as possible
+		for (i = 0; i < 32; i++)
+		{
+			alGenSources(1, &s_channels[i].alSource);
+			if (alGetError() != AL_NO_ERROR)
+			{
+				// Reached limit of sources
+				break;
+			}
+			alSourcef(s_channels[i].alSource, AL_REFERENCE_DISTANCE, 400.0f);
+			if (alGetError() != AL_NO_ERROR)
+			{
+				break;
+			}
+			s_numChannels++;
+		}
+
+		// Generate AL Buffers for streaming audio playback (used for MP3s)
+		ch = s_channels + 1;
+		for (i = 1; i < s_numChannels; i++, ch++)
+		{
+			for (j = 0; j < NUM_STREAMING_BUFFERS; j++)
+			{
+				alGenBuffers(1, &(ch->buffers[j].BufferID));
+				ch->buffers[j].Status = UNQUEUED;
+				ch->buffers[j].Data = (char *)Z_Malloc(STREAMING_BUFFER_SIZE, TAG_SND_RAWDATA, qfalse);
+			}
+		}
+
+		// Open AL will always use 22K
+		dma.speed = 22050;
+
+		// These aren't really relevant for Open AL, but for completeness ...
+		dma.channels = 2;
+		dma.samplebits = 16;
+		dma.samples = 0;
+		dma.submission_chunk = 0;
+		dma.buffer = NULL;	
+
+		// Clamp sound volumes between 0.0f and 1.0f
+		if (s_volume->value < 0.f)
+			s_volume->value = 0.f;
+		if (s_volume->value > 1.f)
+			s_volume->value = 1.f;
+
+		if (s_musicVolume->value < 0.f)
+			s_musicVolume->value = 0.f;
+		if (s_musicVolume->value > 1.f)
+			s_musicVolume->value = 1.f;
+
+		return;
+	}
+	else
+	{
+		r = SNDDMA_Init();
+		Com_Printf("------------------------------------\n");
+
+		if ( r ) {
 		s_soundStarted = 1;
 		s_soundMuted = (qboolean)1;
 //		s_numSfx = 0;
@@ -270,19 +438,48 @@ void S_Init( void ) {
 		S_StopAllSounds ();
 
 		S_SoundInfo_f();
+		}
 	}
+}
+ 
+/*
+	Mutes / Unmutes all sound
+*/
+void S_MuteAllSounds(bool bMute)
+{
+	if (!s_soundStarted)
+		return;
 
+	if (!s_UseOpenAL)
+		return;
+
+	if (bMute)
+	{
+		alListenerf(AL_GAIN, 0.0f);
+	}
+	else
+	{
+		alListenerf(AL_GAIN, 1.0f);
+	}
 }
 
+void S_ChannelFree(channel_t *v)
+{
+	if (s_UseOpenAL)
+		return;
 
-void S_ChannelFree(channel_t *v) {
 	v->thesfx = NULL;
 	*(channel_t **)v = freelist;
 	freelist = (channel_t*)v;
 }
 
-channel_t*	S_ChannelMalloc() {
+channel_t*	S_ChannelMalloc()
+{
 	channel_t *v;
+
+	if (s_UseOpenAL)
+		return NULL;
+
 	if (freelist == NULL) {
 		return NULL;
 	}
@@ -292,8 +489,12 @@ channel_t*	S_ChannelMalloc() {
 	return v;
 }
 
-void S_ChannelSetup() {
+void S_ChannelSetup()
+{
 	channel_t *p, *q;
+
+	if (s_UseOpenAL)
+		return;
 
 	// clear all the sounds so they don't
 	Com_Memset( s_channels, 0, sizeof( s_channels ) );
@@ -313,12 +514,62 @@ void S_ChannelSetup() {
 // Shutdown sound engine
 // =======================================================================
 
-void S_Shutdown( void ) {
+void S_Shutdown( void )
+{
+	ALCcontext *ALCContext;
+	ALCdevice *ALCDevice;
+	channel_t *ch;
+	int i,j;
+
 	if ( !s_soundStarted ) {
 		return;
 	}
 
-	SNDDMA_Shutdown();
+	if (s_UseOpenAL)
+	{
+		// Release all the AL Sources (including Music channel (Source 0))
+		for (i = 0; i < s_numChannels; i++)
+		{
+			alDeleteSources(1, &(s_channels[i].alSource));
+		}
+
+		// Release all the AL Buffers here or not ?
+		S_FreeAllSFXMem();
+
+		// Release Streaming AL Buffers
+		ch = s_channels + 1;
+		for (i = 1; i < s_numChannels; i++, ch++)
+		{
+			for (j = 0; j < NUM_STREAMING_BUFFERS; j++)
+			{
+				alDeleteBuffers(1, &(ch->buffers[j].BufferID));
+				ch->buffers[j].BufferID = 0;
+				ch->buffers[j].Status = UNQUEUED;
+				if (ch->buffers[j].Data)
+				{
+					Z_Free(ch->buffers[j].Data);
+					ch->buffers[j].Data = NULL;
+				}
+			}
+		}
+		
+		// Get active context
+		ALCContext = alcGetCurrentContext();
+		// Get device for active context
+		ALCDevice = alcGetContextsDevice(ALCContext);
+		// Release context(s)
+		alcDestroyContext(ALCContext);
+		// Close device
+		alcCloseDevice(ALCDevice);
+
+		ReleaseEAXManager();
+
+		s_numChannels = 0;
+	}
+	else
+	{
+		SNDDMA_Shutdown();
+	}
 
 	s_soundStarted = 0;
 
@@ -500,6 +751,52 @@ void S_BeginRegistration( void )
 	}
 }
 
+void EALFileInit(char *level)
+{
+	long		lRoom;
+	char		name[MAX_QPATH];
+	char		szEALFilename[MAX_QPATH];
+	char		*szMapName;
+
+	// If an EAL File is already unloaded, remove it
+	if (s_bEALFileLoaded)
+	{
+		UnloadEALFile();
+	}
+
+	// Reset variables
+	s_bInWater = false;
+
+	// Try and load an EAL file for the new level
+	COM_StripExtension(level, name);
+
+	// Find the last occurence of the '/' character
+	szMapName = Q_strrchr(name, '/');
+	if (szMapName)
+	{
+		Com_sprintf(szEALFilename, MAX_QPATH, "eagle/%s.eal", ++szMapName);
+	}
+	else
+	{
+		Com_sprintf(szEALFilename, MAX_QPATH, "eagle/%s.eal", name);
+	}
+
+	s_bEALFileLoaded = LoadEALFile(szEALFilename);
+
+	if (s_bEALFileLoaded)
+	{
+		UpdateEAXListener(true, false);
+	}
+	else
+	{
+		if ((s_bEAX)&&(s_eaxSet))
+		{
+			lRoom = -10000;
+			s_eaxSet(&DSPROPSETID_EAX_ListenerProperties, DSPROPERTY_EAXLISTENER_ROOM,
+				NULL, &lRoom, sizeof(long));
+		}
+	}
+}
 
 /*
 ==================
@@ -537,8 +834,17 @@ sfxHandle_t	S_RegisterSound( const char *name)
 	if ( sfx->bDefaultSound )
 		return 0;
 
-	if ( sfx->pSoundData ) {		
-		return sfx - s_knownSfx;
+	if (s_UseOpenAL)
+	{
+		if ((sfx->pSoundData) || (sfx->Buffer))
+			return sfx - s_knownSfx;
+	}
+	else
+	{
+		if ( sfx->pSoundData )
+		{		
+			return sfx - s_knownSfx;
+		}
 	}
 
 	sfx->bInMemory = qfalse;
@@ -657,6 +963,9 @@ channel_t *S_PickChannel(int entnum, int entchannel)
 	channel_t	*ch, *ch_firstToDie;
 	qboolean	foundChan = qfalse;
 
+	if (s_UseOpenAL)
+		return S_OpenALPickChannel(entnum, entchannel);
+
 	if ( entchannel<0 ) {
 		Com_Error (ERR_DROP, "S_PickChannel: entchannel<0");
 	}
@@ -723,6 +1032,148 @@ channel_t *S_PickChannel(int entnum, int entchannel)
 
 
 /*
+	For use with Open AL
+
+	Allows more than one sound of the same type to emanate from the same entity - sounds much better
+	on hardware this way esp. rapid fire modes of weapons!
+*/
+channel_t *S_OpenALPickChannel(int entnum, int entchannel)
+{
+    int			ch_idx;
+	channel_t	*ch, *ch_firstToDie;
+	bool	foundChan = false;
+	float	source_pos[3];
+
+	if ( entchannel < 0 ) 
+	{
+		Com_Error (ERR_DROP, "S_PickChannel: entchannel<0");
+	}
+
+	// Check for replacement sound, or find the best one to replace
+
+    ch_firstToDie = s_channels + 1;	// channel 0 is reserved for Music
+
+	for (ch_idx = 1, ch = s_channels + ch_idx; ch_idx < s_numChannels; ch_idx++, ch++)
+	{
+		// See if the channel is free
+		if (!ch->thesfx)
+		{
+			ch_firstToDie = ch;
+			foundChan = true;
+			break;
+		}
+	}
+
+	if (!foundChan)
+	{
+		for (ch_idx = 1, ch = s_channels + ch_idx; ch_idx < s_numChannels; ch_idx++, ch++)
+		{
+			if (	(ch->entnum == entnum) && (ch->entchannel == entchannel) && (ch->entnum != listener_number) ) 
+			{
+				// Same entity and same type of sound effect (entchannel)
+				ch_firstToDie = ch;
+				foundChan = true;
+				break;
+			}
+		}
+	}
+
+	int longestDist;
+	int dist;
+
+	if (!foundChan)
+	{
+		// Find sound effect furthest from listener
+		ch = s_channels + 1;
+
+		if (ch->fixed_origin)
+		{
+			// Convert to Open AL co-ordinates
+			source_pos[0] = ch->origin[0];
+			source_pos[1] = ch->origin[2];
+			source_pos[2] = -ch->origin[1];
+
+			longestDist = ((listener_pos[0] - source_pos[0]) * (listener_pos[0] - source_pos[0])) +
+						  ((listener_pos[1] - source_pos[1]) * (listener_pos[1] - source_pos[1])) +
+						  ((listener_pos[2] - source_pos[2]) * (listener_pos[2] - source_pos[2]));
+		}
+		else
+		{
+			if (ch->entnum == listener_number)
+				longestDist = 0;
+			else
+			{
+				// Convert to Open AL co-ordinates
+				source_pos[0] = loopSounds[ch->entnum].origin[0];
+				source_pos[1] = loopSounds[ch->entnum].origin[2];
+				source_pos[2] = -loopSounds[ch->entnum].origin[1];
+
+				longestDist = ((listener_pos[0] - source_pos[0]) * (listener_pos[0] - source_pos[0])) +
+							  ((listener_pos[1] - source_pos[1]) * (listener_pos[1] - source_pos[1])) +
+							  ((listener_pos[2] - source_pos[2]) * (listener_pos[2] - source_pos[2]));
+			}
+		}
+
+		for (ch_idx = 2, ch = s_channels + ch_idx; ch_idx < s_numChannels; ch_idx++, ch++)
+		{
+			if (ch->fixed_origin)
+			{
+				// Convert to Open AL co-ordinates
+				source_pos[0] = ch->origin[0];
+				source_pos[1] = ch->origin[2];
+				source_pos[2] = -ch->origin[1];
+
+				dist = ((listener_pos[0] - source_pos[0]) * (listener_pos[0] - source_pos[0])) +
+					   ((listener_pos[1] - source_pos[1]) * (listener_pos[1] - source_pos[1])) +
+					   ((listener_pos[2] - source_pos[2]) * (listener_pos[2] - source_pos[2]));
+			}
+			else
+			{
+				if (ch->entnum == listener_number)
+					dist = 0;
+				else
+				{
+					// Convert to Open AL co-ordinates
+					source_pos[0] = loopSounds[ch->entnum].origin[0];
+					source_pos[1] = loopSounds[ch->entnum].origin[2];
+					source_pos[2] = -loopSounds[ch->entnum].origin[1];
+
+					dist = ((listener_pos[0] - source_pos[0]) * (listener_pos[0] - source_pos[0])) +
+					       ((listener_pos[1] - source_pos[1]) * (listener_pos[1] - source_pos[1])) +
+						   ((listener_pos[2] - source_pos[2]) * (listener_pos[2] - source_pos[2]));
+				}
+			}
+
+			if (dist > longestDist)
+			{
+				longestDist = dist;
+				ch_firstToDie = ch;
+			}
+		}
+	}
+
+	if (ch_firstToDie->bPlaying)
+	{
+		if (s_show->integer == 1) 
+		{
+			Com_Printf(S_COLOR_RED"***kicking %s\n", ch_firstToDie->thesfx->sSoundName );
+		}
+
+		// Stop sound
+		alSourceStop(ch_firstToDie->alSource);
+		ch_firstToDie->bPlaying = false;
+	}
+
+	// Reset channel variables
+	memset(&ch_firstToDie->MP3StreamHeader, 0, sizeof(MP3STREAM));
+	ch_firstToDie->bLooping = false;
+	ch_firstToDie->bProcessed = false;
+	ch_firstToDie->bStreaming = false;
+	
+    return ch_firstToDie;
+}
+
+/*
 ====================
 S_MuteSound
 
@@ -732,22 +1183,38 @@ Gets the specified ent/channel and mutes any sound currently playing on it
 void S_MuteSound(int entityNum, int entchannel)
 {
 	channel_t	*ch;
+	int	i;
 
 	if (entchannel < 1)
 	{
 		return;
 	}
 
-	ch = S_PickChannel( entityNum, entchannel );
-	
-	if (!ch)
+	if (s_UseOpenAL)
 	{
-		return;
+		ch = s_channels + 1;
+		for(i = 1; i < s_numChannels; i++,ch++)
+		{
+			if ((ch->entnum == entityNum) && (ch->entchannel == entchannel))
+			{
+				alSourcef(ch->alSource, AL_GAIN, 0.0f);
+				break;
+			}
+		}
 	}
+	else
+	{
+		ch = S_PickChannel( entityNum, entchannel );
+	
+		if (!ch)
+		{
+			return;
+		}
 
-	ch->master_vol = 0; //just kill the volume and leave the rest alone, as to not actually interrupt anything expecting the sound to go through
-	ch->leftvol = 0;
-	ch->rightvol = 0;
+		ch->master_vol = 0; //just kill the volume and leave the rest alone, as to not actually interrupt anything expecting the sound to go through
+		ch->leftvol = 0;
+		ch->rightvol = 0;
+	}
 }
 
 
@@ -767,7 +1234,8 @@ Entchannel 0 will never override a playing sound
 void S_StartSound(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle ) {
 	channel_t	*ch;
 	sfx_t		*sfx;
-//	int			i, oldest, chosen;
+	int			i;
+	int			curTime;
 
 	if ( !s_soundStarted || s_soundMuted ) {
 		return;
@@ -785,13 +1253,64 @@ void S_StartSound(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxH
 	if (sfx->bInMemory == qfalse) {
 		S_memoryLoad(sfx);
 	}
-	SND_TouchSFX(sfx);
+	
 
 	if ( s_show->integer == 1 ) {
 		Com_Printf( "%i : %s\n", s_paintedtime, sfx->sSoundName );
 	}
 
-//	Com_Printf("playing %s\n", sfx->soundName);
+	if (s_UseOpenAL)
+	{
+		// To avoid playing the same sound multiple times ...
+		if ((entityNum == ENTITYNUM_NONE) && (origin))
+		{
+			// Check if we have already started playing this sound within 50 milliseconds ago
+			ch = s_channels + 1;
+			curTime = Com_Milliseconds();
+			for (i = 1; i < s_numChannels; i++, ch++)
+			{
+				if ((ch->thesfx == sfx) && (curTime < (ch->thesfx->iLastTimeUsed + 50)))
+				{
+					return;
+				}
+			}
+		}
+		else if (entchannel == CHAN_WEAPON)
+		{
+			// Check if we are playing a 'charging' sound, if so, stop it now ..
+			ch = s_channels + 1;
+			for (i = 1; i < s_numChannels; i++, ch++)
+			{
+				if ((ch->entnum == entityNum) && (ch->entchannel == CHAN_WEAPON) && (ch->thesfx) && (strstr(strlwr(ch->thesfx->sSoundName), "altcharge") != NULL))
+				{
+					// Stop this sound
+					alSourceStop(ch->alSource);
+					alSourcei(ch->alSource, AL_BUFFER, NULL);
+					ch->bPlaying = false;
+					ch->thesfx = NULL;
+					break;
+				}
+			}
+		}
+		else
+		{
+			ch = s_channels + 1;
+			for (i = 1; i < s_numChannels; i++, ch++)
+			{
+				if ((ch->entnum == entityNum) && (ch->thesfx) && (strstr(strlwr(ch->thesfx->sSoundName), "falling") != NULL))
+				{
+					// Stop this sound
+					alSourceStop(ch->alSource);
+					alSourcei(ch->alSource, AL_BUFFER, NULL);
+					ch->bPlaying = false;
+					ch->thesfx = NULL;
+					break;
+				}
+			}
+		}
+	}
+
+	SND_TouchSFX(sfx);
 
 // pick a channel to play on
 //---------------------------------	
@@ -835,7 +1354,11 @@ void S_StartSound(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxH
 		ch->fixed_origin = qfalse;
 	}
 
-	ch->master_vol = 240;
+	if (s_UseOpenAL)
+		ch->master_vol = 255;
+	else
+		ch->master_vol = 240;
+
 	ch->entnum = entityNum;
 	ch->thesfx = sfx;
 	ch->startSample = START_SAMPLE_IMMEDIATE;
@@ -933,15 +1456,18 @@ void S_ClearSoundBuffer( void ) {
 
 	s_rawend = 0;
 
-	if (dma.samplebits == 8)
-		clear = 0x80;
-	else
-		clear = 0;
+	if (!s_UseOpenAL)
+	{
+		if (dma.samplebits == 8)
+			clear = 0x80;
+		else
+			clear = 0;
 
-	SNDDMA_BeginPainting ();
-	if (dma.buffer)
-		Com_Memset(dma.buffer, clear, dma.samples * dma.samplebits/8);
-	SNDDMA_Submit ();
+		SNDDMA_BeginPainting ();
+		if (dma.buffer)
+			Com_Memset(dma.buffer, clear, dma.samples * dma.samplebits/8);
+		SNDDMA_Submit ();
+	}
 }
 
 
@@ -950,13 +1476,32 @@ void S_ClearSoundBuffer( void ) {
 S_StopAllSounds
 ==================
 */
-void S_StopAllSounds(void) {
+void S_StopAllSounds(void)
+{
+	channel_t *ch;
+	int i;
+
 	if ( !s_soundStarted ) {
 		return;
 	}
 
 	// stop the background music
 	S_StopBackgroundTrack();
+
+	if (s_UseOpenAL)
+	{
+		ch = s_channels;
+		for (i = 0; i < s_numChannels; i++, ch++)
+		{
+			alSourceStop(s_channels[i].alSource);
+			ch->thesfx = NULL;
+			memset(&ch->MP3StreamHeader, 0, sizeof(MP3STREAM));
+			ch->bLooping = false;
+			ch->bProcessed = false;
+			ch->bPlaying = false;
+			ch->bStreaming = false;
+		}
+	}
 
 	S_ClearSoundBuffer ();
 }
@@ -1028,6 +1573,31 @@ void S_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocit
 	loopSounds[entityNum].doppler = qfalse;
 	loopSounds[entityNum].oldDopplerScale = 1.0;
 	loopSounds[entityNum].dopplerScale = 1.0;
+
+	if (s_UseOpenAL)
+	{
+		if ((loopSounds[entityNum].bPlaying) && (loopSounds[entityNum].sfx != sfx))
+		{
+			// Find the channel that is playing this sound, and stop it
+			channel_t *ch;
+			ch = s_channels + 1;
+			for (int i = 1; i < s_numChannels; i++, ch++)
+			{
+				if ((ch->bLooping) && (ch->entnum == entityNum))
+				{
+					alSourceStop(ch->alSource);
+
+					ch->bPlaying = false;
+					ch->thesfx = NULL;
+
+					loopSounds[entityNum].bPlaying = false;
+
+					break;
+				}
+			}
+		}
+	}
+	
 	loopSounds[entityNum].sfx = sfx;
 /*
 	if (VectorLengthSquared(velocity)>0.0) {
@@ -1127,8 +1697,17 @@ static qboolean LoopSound_ChannelInit(loopSound_t *pLoopSound, int iLeftVol, int
 	}
 
 	numLoopChannels++;
-	if (numLoopChannels == MAX_CHANNELS) {
-		return qfalse;
+
+	if (s_UseOpenAL)
+	{
+		if (numLoopChannels == s_numChannels)
+			return qfalse;
+	}
+	else
+	{
+		if (numLoopChannels == MAX_CHANNELS) {
+			return qfalse;
+		}
 	}
 
 	return qtrue;
@@ -1342,10 +1921,39 @@ S_UpdateEntityPosition
 let the sound system know where an entity currently is
 ======================
 */
-void S_UpdateEntityPosition( int entityNum, const vec3_t origin ) {
+void S_UpdateEntityPosition( int entityNum, const vec3_t origin )
+{
+	ALfloat pos[3];
+	channel_t *ch;
+	int i;
+
 	if ( entityNum < 0 || entityNum > MAX_GENTITIES ) {
 		Com_Error( ERR_DROP, "S_UpdateEntityPosition: bad entitynum %i", entityNum );
 	}
+
+	if (s_UseOpenAL)
+	{
+		if (entityNum == listener_number)
+			return;
+
+		ch = s_channels;
+		for (i = 0; i < s_numChannels; i++, ch++)
+		{
+			if ((s_channels[i].bPlaying) & (s_channels[i].entnum == entityNum))
+			{
+				pos[0] = origin[0];
+				pos[1] = origin[2];
+				pos[2] = -origin[1];
+				alSourcefv(s_channels[i].alSource, AL_POSITION, pos);
+	
+				if (s_bEALFileLoaded)
+				{
+					UpdateEAXBuffer(ch);
+				}
+			}
+		}
+	}
+
 	VectorCopy( origin, loopSounds[entityNum].origin );
 }
 
@@ -1357,44 +1965,129 @@ S_Respatialize
 Change the volumes of all the playing sounds for changes in their positions
 ============
 */
-void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int inwater ) {
+void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int inwater )
+{
+	EAXOCCLUSIONPROPERTIES eaxOCProp;
+	unsigned int ulEnvironment;
 	int			i;
 	channel_t	*ch;
 	vec3_t		origin;
+	char		*mapname;
 
 	if ( !s_soundStarted || s_soundMuted ) {
 		return;
 	}
 
-	listener_number = entityNum;
-	VectorCopy(head, listener_origin);
-	VectorCopy(axis[0], listener_axis[0]);
-	VectorCopy(axis[1], listener_axis[1]);
-	VectorCopy(axis[2], listener_axis[2]);
-
-	// update spatialization for dynamic sounds	
-	ch = s_channels;
-	for ( i = 0 ; i < MAX_CHANNELS ; i++, ch++ ) {
-		if ( !ch->thesfx ) {
-			continue;
+	if (s_UseOpenAL)
+	{
+		// Check if a new level has been loaded - if so, try and load the appropriate EAL file
+		mapname = cl.mapname;
+		if ((mapname) && (strcmp(mapname, s_LevelName) != 0))
+		{
+			EALFileInit(mapname);
+			strcpy(s_LevelName, mapname);
 		}
-		// anything coming from the view entity will always be full volume
-		if (ch->entnum == listener_number) {
-			ch->leftvol = ch->master_vol;
-			ch->rightvol = ch->master_vol;
-		} else {
-			if (ch->fixed_origin) {
-				VectorCopy( ch->origin, origin );
-			} else {
-				VectorCopy( loopSounds[ ch->entnum ].origin, origin );
-			}
 
-			S_SpatializeOrigin (origin, ch->master_vol, &ch->leftvol, &ch->rightvol);
+		listener_number = entityNum;
+		
+		listener_pos[0] = head[0];
+		listener_pos[1] = head[2];
+		listener_pos[2] = -head[1];
+		alListenerfv(AL_POSITION, listener_pos);
+
+		listener_ori[0] = axis[0][0];
+		listener_ori[1] = axis[0][2];
+		listener_ori[2] = -axis[0][1];
+		listener_ori[3] = axis[2][0];
+		listener_ori[4] = axis[2][2];
+		listener_ori[5] = -axis[2][1];
+		alListenerfv(AL_ORIENTATION, listener_ori);
+
+		// Update EAX effects here
+		if (s_bEALFileLoaded)
+		{
+			// Check if the Listener is underwater
+			if (inwater)
+			{
+				// Check if we have already applied Underwater effect
+				if (!s_bInWater)
+				{
+					// Apply Underwater Reverb effect, and occlude *all* Sources			
+					ulEnvironment = EAX_ENVIRONMENT_UNDERWATER;
+					s_eaxSet(&DSPROPSETID_EAX_ListenerProperties, DSPROPERTY_EAXLISTENER_ENVIRONMENT,
+						NULL, &ulEnvironment, sizeof(unsigned int));
+					s_EnvironmentID = 999;
+
+					eaxOCProp.lOcclusion = -3000;
+					eaxOCProp.flOcclusionLFRatio = 0.0f;
+					eaxOCProp.flOcclusionRoomRatio = 1.37f;
+					eaxOCProp.flOcclusionDirectRatio = 1.0f;
+
+					ch = s_channels + 1;
+					for (i = 1; i < s_numChannels; i++, ch++)
+					{
+						s_eaxSet(&DSPROPSETID_EAX_BufferProperties, DSPROPERTY_EAXBUFFER_OCCLUSIONPARAMETERS,
+							ch->alSource, &eaxOCProp, sizeof(EAXOCCLUSIONPROPERTIES));
+					}
+
+					s_bInWater = true;
+				}
+			}
+			else
+			{
+				// Not underwater ... check if the underwater effect is still present
+				if (s_bInWater)
+				{
+					// Remove underwater Reverb effect, and reset Occlusion / Obstruction amount on all Sources
+					UpdateEAXListener(false, false);
+
+					ch = s_channels + 1;
+					for (i = 1; i < s_numChannels; i++, ch++)
+					{
+						UpdateEAXBuffer(ch);
+					}
+
+					s_bInWater = false;
+				}
+				else
+				{
+					UpdateEAXListener(false, true);
+				}
+			}
 		}
 	}
+	else
+	{
+		listener_number = entityNum;
+		VectorCopy(head, listener_origin);
+		VectorCopy(axis[0], listener_axis[0]);
+		VectorCopy(axis[1], listener_axis[1]);
+		VectorCopy(axis[2], listener_axis[2]);
 
-	// add loopsounds
-	S_AddLoopSounds ();
+		// update spatialization for dynamic sounds	
+		ch = s_channels;
+		for ( i = 0 ; i < MAX_CHANNELS ; i++, ch++ ) {
+			if ( !ch->thesfx ) {
+				continue;
+			}
+			// anything coming from the view entity will always be full volume
+			if (ch->entnum == listener_number) {
+				ch->leftvol = ch->master_vol;
+				ch->rightvol = ch->master_vol;
+			} else {
+				if (ch->fixed_origin) {
+					VectorCopy( ch->origin, origin );
+				} else {
+					VectorCopy( loopSounds[ ch->entnum ].origin, origin );
+				}
+
+				S_SpatializeOrigin (origin, ch->master_vol, &ch->leftvol, &ch->rightvol);
+			}
+		}
+
+		// add loopsounds
+		S_AddLoopSounds ();
+	}
 }
 
 
@@ -1452,24 +2145,48 @@ void S_Update( void ) {
 		return;
 	}
 
-	//
-	// debugging output
-	//
-	if ( s_show->integer == 2 ) {
-		total = 0;
-		ch = s_channels;
-		for (i=0 ; i<MAX_CHANNELS; i++, ch++) {
-			if (ch->thesfx && (ch->leftvol || ch->rightvol) ) {
-				Com_Printf ("%f %f %s\n", ch->leftvol, ch->rightvol, ch->thesfx->sSoundName);
-				total++;
+	if (s_UseOpenAL)
+	{
+		//
+		// debugging output
+		//
+		if ( s_show->integer == 2 )
+		{
+			total = 0;
+			ch = s_channels + 1;
+			for (i=1 ; i<s_numChannels; i++, ch++) {
+				if (ch->thesfx && (ch->leftvol || ch->rightvol) ) {
+					Com_Printf ("%s\n", ch->thesfx->sSoundName);
+					total++;
+				}
 			}
 		}
+	}
+	else
+	{
+		//
+		// debugging output
+		//
+		if ( s_show->integer == 2 ) {
+			total = 0;
+			ch = s_channels;
+			for (i=0 ; i<MAX_CHANNELS; i++, ch++) {
+				if (ch->thesfx && (ch->leftvol || ch->rightvol) ) {
+					Com_Printf ("%f %f %s\n", ch->leftvol, ch->rightvol, ch->thesfx->sSoundName);
+					total++;
+				}
+			}
 		
-		Com_Printf ("----(%i)---- painted: %i\n", total, s_paintedtime);
+			Com_Printf ("----(%i)---- painted: %i\n", total, s_paintedtime);
+		}
 	}
 
-	// add raw data from streamed samples
-	S_UpdateBackgroundTrack();
+	// The Open AL code, handles background music in the S_UpdateRawSamples function
+	if (!s_UseOpenAL)
+	{
+		// add raw data from streamed samples
+		S_UpdateBackgroundTrack();
+	}
 
 	// mix some sound
 	S_Update_();
@@ -1526,58 +2243,571 @@ void S_Update_(void) {
 	float			ma, op;
 	float			thisTime, sane;
 	static			int ot = -1;
+	channel_t		*ch;
+	int				i, j;
+	int				source;
+	float			pos[3];
 
 	if ( !s_soundStarted || s_soundMuted ) {
 		return;
 	}
 
-	thisTime = Com_Milliseconds();
+	if (s_UseOpenAL)
+	{
+		UpdateSingleShotSounds();
 
-	// Updates s_soundtime
-	S_GetSoundtime();
+		ch = s_channels + 1;
+		for ( i = 1; i < s_numChannels; i++, ch++ )
+		{
+			if ( !ch->thesfx || (ch->bPlaying))
+				continue;			
+	
+			source = ch - s_channels;
 
-	if (s_soundtime == ot) {
-		return;
+			// Get position of source
+			if (ch->fixed_origin)
+			{
+				pos[0] = ch->origin[0];
+				pos[1] = ch->origin[2];
+				pos[2] = -ch->origin[1];
+				alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, AL_FALSE);
+			}
+			else
+			{
+				if (ch->entnum == listener_number)
+				{
+					pos[0] = 0.0f;
+					pos[1] = 0.0f;
+					pos[2] = 0.0f;
+					alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, AL_TRUE);
+				}
+				else
+				{
+					// Get position of Entity
+					pos[0] = loopSounds[ ch->entnum ].origin[0];
+					pos[1] = loopSounds[ ch->entnum ].origin[2];
+					pos[2] = -loopSounds[ ch->entnum ].origin[1];
+					alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, AL_FALSE);
+				}
+			}
+	
+			alSourcefv(s_channels[source].alSource, AL_POSITION, pos);
+
+			alSourcei(s_channels[source].alSource, AL_LOOPING, AL_FALSE);
+			alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.0f);
+
+			if (s_bEALFileLoaded)
+				UpdateEAXBuffer(ch);
+
+			int nBytesDecoded = 0;
+			int nTotalBytesDecoded = 0;
+			int nBuffersToAdd = 0;
+
+			if (ch->thesfx->pMP3StreamHeader)
+			{
+				memcpy(&ch->MP3StreamHeader, ch->thesfx->pMP3StreamHeader,	sizeof(ch->MP3StreamHeader));
+				ch->iMP3SlidingDecodeWritePos = 0;
+				ch->iMP3SlidingDecodeWindowPos= 0;
+
+				// Reset streaming buffers status's
+				for (i = 0; i < NUM_STREAMING_BUFFERS; i++)
+					ch->buffers[i].Status = UNQUEUED;
+
+				// Decode (STREAMING_BUFFER_SIZE / 1152) MP3 frames for each of the NUM_STREAMING_BUFFERS AL Buffers
+				for (i = 0; i < NUM_STREAMING_BUFFERS; i++)
+				{
+					nTotalBytesDecoded = 0;
+					
+					for (j = 0; j < (STREAMING_BUFFER_SIZE / 1152); j++)
+					{
+						nBytesDecoded = C_MP3Stream_Decode(&ch->MP3StreamHeader);
+
+						memcpy(ch->buffers[i].Data + nTotalBytesDecoded, ch->MP3StreamHeader.bDecodeBuffer, nBytesDecoded);
+
+						nTotalBytesDecoded += nBytesDecoded;
+					}
+
+					if (nTotalBytesDecoded != STREAMING_BUFFER_SIZE)
+					{
+						memset(ch->buffers[i].Data + nTotalBytesDecoded, 0, (STREAMING_BUFFER_SIZE - nTotalBytesDecoded));
+						break;
+					}
+				}
+
+				if (i >= NUM_STREAMING_BUFFERS)
+					nBuffersToAdd = NUM_STREAMING_BUFFERS;
+				else
+					nBuffersToAdd = i + 1;
+
+				// Make sure queue is empty first
+				alSourcei(s_channels[source].alSource, AL_BUFFER, NULL);
+
+				for (i = 0; i < nBuffersToAdd; i++)
+				{
+					// Copy decoded data to AL Buffer
+					alBufferData(ch->buffers[i].BufferID, AL_FORMAT_MONO16, ch->buffers[i].Data, STREAMING_BUFFER_SIZE, 22050);
+			
+					// Queue AL Buffer on Source
+					alSourceQueueBuffers(s_channels[source].alSource, 1, &(ch->buffers[i].BufferID));
+					if (alGetError() == AL_NO_ERROR)
+					{
+						ch->buffers[i].Status = QUEUED;
+					}
+				}
+
+				// Clear error state, and check for successful Play call
+				alGetError();
+				alSourcePlay(s_channels[source].alSource);
+				if (alGetError() == AL_NO_ERROR)
+					s_channels[source].bPlaying = true;
+
+				// Record start time for Lip-syncing
+				s_channels[source].iStartTime = Com_Milliseconds();
+
+				ch->bStreaming = true;
+
+				return;
+			}
+			else
+			{
+				// Attach buffer to source
+				alSourcei(s_channels[source].alSource, AL_BUFFER, ch->thesfx->Buffer);
+
+				ch->bStreaming = false;
+
+				// Clear error state, and check for successful Play call
+				alGetError();
+				alSourcePlay(s_channels[source].alSource);
+				if (alGetError() == AL_NO_ERROR)
+					s_channels[source].bPlaying = true;
+			}
+		}
+
+		UpdateLoopingSounds();
+
+		UpdateRawSamples();
+
+		EAXMorph();
 	}
-	ot = s_soundtime;
+	else
+	{
+		thisTime = Com_Milliseconds();
 
-	// clear any sound effects that end before the current time,
-	// and start any new sounds
-	S_ScanChannelStarts();
+		// Updates s_soundtime
+		S_GetSoundtime();
 
-	sane = thisTime - lastTime;
-	if (sane<11) {
-		sane = 11;			// 85hz
+		if (s_soundtime == ot) {
+			return;
+		}
+		ot = s_soundtime;
+
+		// clear any sound effects that end before the current time,
+		// and start any new sounds
+		S_ScanChannelStarts();
+
+		sane = thisTime - lastTime;
+		if (sane<11) {
+			sane = 11;			// 85hz
+		}
+
+		ma = s_mixahead->value * dma.speed;
+		op = s_mixPreStep->value + sane*dma.speed*0.01;
+
+		if (op < ma) {
+			ma = op;
+		}
+
+		// mix ahead of current position
+		endtime = s_soundtime + ma;
+
+		// mix to an even submission block size
+		endtime = (endtime + dma.submission_chunk-1)
+			& ~(dma.submission_chunk-1);
+
+		// never mix more than the complete buffer
+		samps = dma.samples >> (dma.channels-1);
+		if (endtime - s_soundtime > samps)
+			endtime = s_soundtime + samps;
+
+
+
+		SNDDMA_BeginPainting ();
+
+		S_PaintChannels (endtime);
+
+		SNDDMA_Submit ();
+
+		lastTime = thisTime;
+	}
+}
+
+void UpdateSingleShotSounds()
+{
+	int i, j, k;
+	ALint state;
+	ALint processed;
+	channel_t *ch;
+
+	// Firstly, check if any single-shot sounds have completed, or if they need more data (for streaming Sources),
+	// and/or if any of the currently playing (non-Ambient) looping sounds need to be stopped
+	ch = s_channels ;
+	for (i = 0; i < s_numChannels; i++, ch++)
+	{
+		ch->bProcessed = false;
+
+		if (s_channels[i].bPlaying)
+		{
+			if (ch->bLooping)
+			{
+				// Looping Sound
+				if (loopSounds[ch->entnum].active == false)
+				{
+					alSourceStop(s_channels[i].alSource);
+
+					s_channels[i].bPlaying = false;
+					s_channels[i].thesfx = NULL;
+					loopSounds[ch->entnum].bPlaying = false;
+				}
+			}
+			else
+			{
+				// Single-shot
+				if (s_channels[i].bStreaming == false)
+				{
+					alGetSourcei(s_channels[i].alSource, AL_SOURCE_STATE, &state);
+					if (state == AL_STOPPED)
+					{
+						s_channels[i].thesfx = NULL;
+						s_channels[i].bPlaying = false;
+					}
+				}
+				else
+				{	
+					// Process streaming sample
+	
+					// Procedure :-
+					// if more data to play
+					//		if any UNQUEUED Buffers
+					//			fill them with data
+					//		(else ?)
+					//			get number of buffers processed
+					//			fill them with data
+					//		restart playback if it has stopped (buffer underrun)
+					// else
+					//		free channel
+					
+					int nBytesDecoded;
+
+					if (ch->thesfx->pMP3StreamHeader)
+					{
+						if (ch->MP3StreamHeader.iSourceBytesRemaining == 0)
+						{
+							// Finished decoding data - if the source has finished playing then we're done
+							alGetSourcei(ch->alSource, AL_SOURCE_STATE, &state);
+							if (state == AL_STOPPED)
+							{
+								// Attach NULL buffer to Source to remove any buffers left in the queue
+								alSourcei(ch->alSource, AL_BUFFER, NULL);
+								ch->thesfx = NULL;
+								ch->bPlaying = false;
+							}
+							// Move on to next channel ...
+							continue;
+						}
+
+						// Check to see if any Buffers have been processed
+						alGetSourcei(ch->alSource, AL_BUFFERS_PROCESSED, &processed);
+
+						ALuint buffer;
+						while (processed)
+						{
+							alSourceUnqueueBuffers(ch->alSource, 1, &buffer);			
+							for (j = 0; j < NUM_STREAMING_BUFFERS; j++)
+							{
+								if (ch->buffers[j].BufferID == buffer)
+								{
+									ch->buffers[j].Status = UNQUEUED;
+									break;
+								}
+							}
+							processed--;
+						}
+
+						int nTotalBytesDecoded = 0;
+
+						for (j = 0; j < NUM_STREAMING_BUFFERS; j++)
+						{
+							if ((ch->buffers[j].Status == UNQUEUED) & (ch->MP3StreamHeader.iSourceBytesRemaining > 0))
+							{
+								nTotalBytesDecoded = 0;
+			
+								for (k = 0; k < (STREAMING_BUFFER_SIZE / 1152); k++)
+								{
+									nBytesDecoded = C_MP3Stream_Decode(&ch->MP3StreamHeader);
+									if (nBytesDecoded > 0)
+									{
+										memcpy(ch->buffers[j].Data + nTotalBytesDecoded, ch->MP3StreamHeader.bDecodeBuffer, nBytesDecoded);
+										nTotalBytesDecoded += nBytesDecoded;
+									}
+									else
+									{
+										// Make sure that iSourceBytesRemaining is 0
+										if (ch->MP3StreamHeader.iSourceBytesRemaining != 0)
+										{
+											ch->MP3StreamHeader.iSourceBytesRemaining = 0;
+											break;
+										}
+									}
+								}
+
+								if (nTotalBytesDecoded != STREAMING_BUFFER_SIZE)
+								{
+									memset(ch->buffers[j].Data + nTotalBytesDecoded, 0, (STREAMING_BUFFER_SIZE - nTotalBytesDecoded));
+
+									// Move data to buffer
+									alBufferData(ch->buffers[j].BufferID, AL_FORMAT_MONO16, ch->buffers[j].Data, STREAMING_BUFFER_SIZE, 22050);
+
+									// Queue Buffer on Source
+									alSourceQueueBuffers(ch->alSource, 1, &(ch->buffers[j].BufferID));
+
+									// Update status of Buffer
+									ch->buffers[j].Status = QUEUED;
+
+									break;
+								}
+								else
+								{
+									// Move data to buffer
+									alBufferData(ch->buffers[j].BufferID, AL_FORMAT_MONO16, ch->buffers[j].Data, STREAMING_BUFFER_SIZE, 22050);
+
+									// Queue Buffer on Source
+									alSourceQueueBuffers(ch->alSource, 1, &(ch->buffers[j].BufferID));
+									
+									// Update status of Buffer
+									ch->buffers[j].Status = QUEUED;
+								}
+							}
+						}
+
+						// Get state of Buffer
+						alGetSourcei(ch->alSource, AL_SOURCE_STATE, &state);
+						if (state != AL_PLAYING)
+						{
+							alSourcePlay(ch->alSource);
+#ifdef _DEBUG
+							char szString[256];
+							sprintf(szString,"[%d] Restarting playback of single-shot streaming MP3 sample - still have %d bytes to decode\n", i, ch->MP3StreamHeader.iSourceBytesRemaining);
+							OutputDebugString(szString);
+#endif
+						}
+					}
+				}
+			}
+		}
+	}		
+}
+
+
+
+
+void UpdateLoopingSounds()
+{
+	int i;
+	ALuint source;
+	channel_t *ch;
+	loopSound_t	*loop;
+	float pos[3];
+	float fVolume = 0.003922;	// 1.f / 255.f
+
+#ifdef _DEBUG
+	// Clear AL Error State
+	alGetError();
+#endif
+
+	for ( i = 0 ; i < MAX_GENTITIES ; i++) 
+	{
+		loop = &loopSounds[i];
+
+		if ((loop->bPlaying)|(!loop->active))
+			continue;
+
+ 		ch = S_PickChannel(i, CHAN_AUTO);
+
+		// Play sound on channel
+		ch->master_vol = 255;
+		ch->entnum = i;
+		ch->thesfx = loop->sfx;
+		ch->entchannel = CHAN_AUTO;
+
+		ch->fixed_origin = qfalse;
+		ch->origin[0] = 0.f;
+		ch->origin[1] = 0.f;
+		ch->origin[2] = 0.f;
+
+		ch->bLooping = true;
+			
+		source = ch - s_channels;
+		alSourcei(s_channels[source].alSource, AL_BUFFER, ch->thesfx->Buffer);
+
+		if (ch->entnum == listener_number)
+		{
+			// Make Source Head Relative and set position to 0,0,0 (on top of the listener)
+			alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, AL_TRUE);
+			alSourcefv(s_channels[source].alSource, AL_POSITION, ch->origin);
+		}
+		else
+		{
+			pos[0] = loop->origin[0];
+			pos[1] = loop->origin[2];
+			pos[2] = -loop->origin[1];
+			alSourcefv(s_channels[source].alSource, AL_POSITION, pos);
+			alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, AL_FALSE);
+		}
+
+		alSourcei(s_channels[source].alSource, AL_LOOPING, AL_TRUE);
+		alSourcef(s_channels[source].alSource, AL_GAIN, (float)(ch->master_vol) * s_volume->value * fVolume);
+		
+		if (s_bEALFileLoaded)
+			UpdateEAXBuffer(ch);
+
+		alGetError();
+		alSourcePlay(s_channels[source].alSource);
+		if (alGetError() == AL_NO_ERROR)
+		{
+			ch->bPlaying = true;
+			loop->bPlaying = true;
+		}
+	}
+}
+
+void UpdateRawSamples()
+{
+	ALuint buffer;
+	ALint size;
+	ALint processed;
+	ALint state;
+	int i,j,src;
+
+
+#ifdef _DEBUG
+	char szString[256];
+	// Clear Open AL Error
+	alGetError();
+#endif
+
+	S_UpdateBackgroundTrack();
+
+	// Find out how many buffers have been processed (played) by the Source
+	alGetSourcei(s_channels[0].alSource, AL_BUFFERS_PROCESSED, &processed);
+
+	while (processed)
+	{
+		// Unqueue each buffer, determine the length of the buffer, and then delete it
+		alSourceUnqueueBuffers(s_channels[0].alSource, 1, &buffer);
+		alGetBufferi(buffer, AL_SIZE, &size);
+		alDeleteBuffers(1, &buffer);
+		
+		// Update sg.soundtime (+= number of samples played (number of bytes / 4))
+		s_soundtime += (size >> 2);
+
+		processed--;
 	}
 
-	ma = s_mixahead->value * dma.speed;
-	op = s_mixPreStep->value + sane*dma.speed*0.01;
+//	S_UpdateBackgroundTrack();
 
-	if (op < ma) {
-		ma = op;
+	// Add new data to a new Buffer and queue it on the Source
+	if (s_rawend > s_paintedtime)
+	{
+		size = (s_rawend - s_paintedtime)<<2;
+		if (size > (MAX_RAW_SAMPLES<<2))
+		{
+			OutputDebugString("UpdateRawSamples :- Raw Sample buffer has overflowed !!!\n");
+//			s_rawend = s_paintedtime + MAX_RAW_SAMPLES;
+//			size = MAX_RAW_SAMPLES<<2;
+			size = MAX_RAW_SAMPLES<<2;
+			s_paintedtime = s_rawend - MAX_RAW_SAMPLES;
+		}
+
+		// Copy samples from RawSamples to audio buffer (sg.rawdata)
+		for (i = s_paintedtime, j = 0; i < s_rawend; i++, j+=2)
+		{
+			src = i & (MAX_RAW_SAMPLES - 1);
+			s_rawdata[j] = (short)(s_rawsamples[src].left>>8);
+			s_rawdata[j+1] = (short)(s_rawsamples[src].right>>8);
+		}
+
+		// Need to generate more than 1 buffer for music playback
+		// iterations = 0;
+		// largestBufferSize = (MAX_RAW_SAMPLES / 4) * 4
+		// while (size)
+		//	generate a buffer
+		//	if size > largestBufferSize
+		//		copy sg.rawdata + ((iterations * largestBufferSize)>>1) to buffer
+		//		size -= largestBufferSize
+		//	else
+		//		copy remainder
+		//		size = 0
+		//	queue the buffer
+		//  iterations++;
+
+		int iterations = 0;
+		int largestBufferSize = MAX_RAW_SAMPLES;	// in bytes (== quarter of Raw Samples data)
+		while (size)
+		{
+			alGenBuffers(1, &buffer);
+
+			if (size > largestBufferSize)
+			{
+				alBufferData(buffer, AL_FORMAT_STEREO16, (char*)(s_rawdata + ((iterations * largestBufferSize)>>1)), largestBufferSize, 22050);
+				size -= largestBufferSize;
+			}
+			else
+			{
+				alBufferData(buffer, AL_FORMAT_STEREO16, (char*)(s_rawdata + ((iterations * largestBufferSize)>>1)), size, 22050);
+				size = 0;
+			}
+
+			alSourceQueueBuffers(s_channels[0].alSource, 1, &buffer);
+			iterations++;
+		}
+
+		// Update paintedtime
+		s_paintedtime = s_rawend;
+		
+		// Check that the Source is actually playing
+		alGetSourcei(s_channels[0].alSource, AL_SOURCE_STATE, &state);
+		if (state != AL_PLAYING)
+		{
+			// Stopped playing ... due to buffer underrun
+			// Unqueue any buffers still on the Source (they will be PROCESSED), and restart playback
+			alGetSourcei(s_channels[0].alSource, AL_BUFFERS_PROCESSED, &processed);
+#ifdef _DEBUG
+			sprintf(szString, "RawSamples Source stopped with %d buffer processed\n", processed);
+			OutputDebugString(szString);
+#endif
+			while (processed)
+			{
+				alSourceUnqueueBuffers(s_channels[0].alSource, 1, &buffer);
+				processed--;
+				alGetBufferi(buffer, AL_SIZE, &size);
+				alDeleteBuffers(1, &buffer);
+		
+				// Update sg.soundtime (+= number of samples played (number of bytes / 4))
+				s_soundtime += (size >> 2);
+			}
+
+#ifdef _DEBUG
+			OutputDebugString("Restarting / Starting playback of Raw Samples\n");
+#endif
+
+			alSourcePlay(s_channels[0].alSource);
+		}
 	}
 
-	// mix ahead of current position
-	endtime = s_soundtime + ma;
-
-	// mix to an even submission block size
-	endtime = (endtime + dma.submission_chunk-1)
-		& ~(dma.submission_chunk-1);
-
-	// never mix more than the complete buffer
-	samps = dma.samples >> (dma.channels-1);
-	if (endtime - s_soundtime > samps)
-		endtime = s_soundtime + samps;
-
-
-
-	SNDDMA_BeginPainting ();
-
-	S_PaintChannels (endtime);
-
-	SNDDMA_Submit ();
-
-	lastTime = thisTime;
+#ifdef _DEBUG
+	if (alGetError() != AL_NO_ERROR)
+		OutputDebugString("OAL Error : UpdateRawSamples\n");
+#endif
 }
 
 /*
@@ -2419,3 +3649,639 @@ qboolean SND_RegisterAudio_LevelLoadEnd(qboolean bDeleteEverythingNotUsedThisLev
 	return bAtLeastOneSoundDropped;
 }
 
+/****************************************************************************************************\
+*
+*	EAX Related
+*
+\****************************************************************************************************/
+
+/*
+	Initialize the EAX Manager
+*/
+void InitEAXManager()
+{
+	LPEAXMANAGERCREATE lpEAXManagerCreateFn;
+	HRESULT hr;
+
+	// Check for EAX 3.0 support
+	s_bEAX = alIsExtensionPresent((ALubyte*)"EAX3.0");
+	if (s_bEAX)
+	{
+		s_eaxSet = (EAXSet)alGetProcAddress((ALubyte*)"EAXSet");
+		if (s_eaxSet == NULL)
+			s_bEAX = false;
+		s_eaxGet = (EAXGet)alGetProcAddress((ALubyte*)"EAXGet");
+		if (s_eaxGet == NULL)
+			s_bEAX = false;
+	}
+
+	// If we have detected EAX support, then try and load the EAX Manager DLL
+	if (s_bEAX)
+	{
+		s_hEAXManInst = LoadLibrary("EAXMan.dll");
+		if (s_hEAXManInst)
+		{
+			lpEAXManagerCreateFn = (LPEAXMANAGERCREATE)GetProcAddress(s_hEAXManInst, "EaxManagerCreate");
+			if (lpEAXManagerCreateFn)
+			{
+				hr = lpEAXManagerCreateFn(&s_lpEAXManager);
+				if (hr == EM_OK)
+					return;
+			}
+		}
+	}
+
+	// If the EAXManager library was loaded (and there was a problem), then unload it
+	if (s_hEAXManInst)
+	{
+		FreeLibrary(s_hEAXManInst);
+		s_hEAXManInst = NULL;
+	}
+
+	s_lpEAXManager = NULL;
+	s_bEAX = false;
+
+	return;
+}
+
+/*
+	Release the EAX Manager
+*/
+void ReleaseEAXManager()
+{
+	s_bEAX = false;
+	if (s_lpEAXManager)
+	{
+		s_lpEAXManager->Release();
+		s_lpEAXManager = NULL;
+	}
+	if (s_hEAXManInst)
+	{
+		FreeLibrary(s_hEAXManInst);
+		s_hEAXManInst = NULL;
+	}
+}
+
+
+/*
+	Try to load the given .eal file
+*/
+bool LoadEALFile(char *szEALFilename)
+{
+	char		*ealData = NULL;
+	int			result;
+	HRESULT		hr;
+	char		szFullEALFilename[MAX_QPATH];
+
+	if ((!s_lpEAXManager) || (!s_bEAX))
+	{
+		return false;
+	}
+
+	s_EnvironmentID = 0xFFFFFFFF;
+
+	// Load EAL file from PAK file
+	result = FS_ReadFile(szEALFilename, (void **)&ealData);
+	if ((ealData) && (result != -1))
+	{
+		hr = s_lpEAXManager->LoadDataSet(ealData, EMFLAG_LOADFROMMEMORY);
+	
+		// Unload EAL file
+		FS_FreeFile (ealData);
+	
+		if (hr == EM_OK)
+			return true;
+	}
+	else
+	{
+		// Failed to load via Quake loader, try manually
+		Com_sprintf(szFullEALFilename, MAX_QPATH, "base/%s", szEALFilename);
+		hr = s_lpEAXManager->LoadDataSet(szFullEALFilename, 0);
+		if (hr == EM_OK)
+			return true;
+	}
+
+	return false;
+}
+
+/*
+	Unload current .eal file
+*/
+void UnloadEALFile()
+{
+	HRESULT hr;
+
+	if ((!s_lpEAXManager) || (!s_bEAX))
+		return;
+
+	hr = s_lpEAXManager->FreeDataSet(0);
+
+	return;
+}
+
+/*
+	Updates the current EAX Reverb setting, based on the location of the listener
+*/
+void UpdateEAXListener(bool bUseDefault, bool bUseMorphing)
+{
+	HRESULT hr;
+	EMPOINT EMPoint;
+	long lID;
+
+	if ((!s_lpEAXManager) || (!s_bEAX))
+		return;
+
+	if (bUseDefault)
+	{
+		// Get Default EAX Listener attributes
+		hr = s_lpEAXManager->GetEnvironmentAttributes(EMFLAG_IDDEFAULT, &s_eaxLPSource);
+		if (hr == EM_OK)
+		{
+			s_eaxLPSource.flAirAbsorptionHF = 0.0f;
+			s_eaxSet(&DSPROPSETID_EAX_ListenerProperties, DSPROPERTY_EAXLISTENER_ALLPARAMETERS,
+				NULL, &s_eaxLPSource, sizeof(EAXLISTENERPROPERTIES));
+
+			s_eaxLPCur = s_eaxLPSource;
+			s_eaxLPDest = s_eaxLPSource;
+
+			s_EnvironmentID = EMFLAG_IDDEFAULT;
+
+			s_eaxMorphStartTime = 0;
+			s_eaxMorphCount = 0;
+
+			return;
+		}
+		return;
+	}
+	
+	// Convert Listener co-ordinate to left-handed system
+	EMPoint.fX = listener_pos[0];
+	EMPoint.fY = listener_pos[1];
+	EMPoint.fZ = -listener_pos[2];
+
+	hr = s_lpEAXManager->GetListenerDynamicAttributes(0, &EMPoint, &lID, EMFLAG_LOCKPOSITION);
+	if (hr == EM_OK)
+	{
+		if (lID != s_EnvironmentID)
+		{
+			// Get EAX Preset info.
+			hr = s_lpEAXManager->GetEnvironmentAttributes(lID, &s_eaxLPDest);
+			s_eaxLPDest.flAirAbsorptionHF = 0.0f;
+			if (hr == EM_OK)
+			{
+				if (bUseMorphing)
+				{
+					// Morph to the new Destination from the Current Settings
+					s_eaxLPSource = s_eaxLPCur;
+					s_eaxMorphCount = 0;
+					s_eaxMorphStartTime = Com_Milliseconds();
+					s_eaxMorphing = true;
+				}
+				else
+				{
+					// Set Environment
+					s_eaxSet(&DSPROPSETID_EAX_ListenerProperties, DSPROPERTY_EAXLISTENER_ALLPARAMETERS,
+						NULL, &s_eaxLPDest, sizeof(EAXLISTENERPROPERTIES));
+					
+					s_eaxLPSource = s_eaxLPCur = s_eaxLPDest;
+					s_eaxMorphing = false;
+				}
+
+				s_EnvironmentID = lID;
+			}
+		}
+	}
+
+	return;
+}
+
+
+/*
+	Updates the EAX Buffer related effects on the given Source
+*/
+void UpdateEAXBuffer(channel_t *ch)
+{
+	HRESULT hr;
+	EMPOINT EMSourcePoint;
+	EMPOINT EMVirtualSourcePoint;
+	EAXOBSTRUCTIONPROPERTIES eaxOBProp;
+	EAXOCCLUSIONPROPERTIES eaxOCProp;
+
+	// If EAX Manager is not initialized, or there is no EAX support, or the listener
+	// is underwater, return
+	if ((!s_lpEAXManager) || (!s_bEAX) || (s_bInWater))
+		return;
+	
+	// Set Occlusion Direct Ratio to the default value (it won't get set by the current version of
+	// EAX Manager)
+	eaxOCProp.flOcclusionDirectRatio = EAXBUFFER_DEFAULTOCCLUSIONDIRECTRATIO;
+
+	// Convert Source co-ordinate to left-handed system
+	if (ch->fixed_origin)
+	{
+		// Converting from Quake -> DS3D (for EAGLE) ... swap Y and Z
+		EMSourcePoint.fX = ch->origin[0];
+		EMSourcePoint.fY = ch->origin[2];
+		EMSourcePoint.fZ = ch->origin[1];
+	}
+	else
+	{
+		if (ch->entnum == listener_number)
+		{
+			// Source at same position as listener
+			// Probably won't be any Occlusion / Obstruction effect -- unless the listener is underwater
+			// Converting from Open AL -> DS3D (for EAGLE) ... invert Z
+			EMSourcePoint.fX = listener_pos[0];
+			EMSourcePoint.fY = listener_pos[1];
+			EMSourcePoint.fZ = -listener_pos[2];
+		}
+		else
+		{
+			// Get position of Entity
+			// Converting from Quake -> DS3D (for EAGLE) ... swap Y and Z
+			EMSourcePoint.fX = loopSounds[ ch->entnum ].origin[0];
+			EMSourcePoint.fY = loopSounds[ ch->entnum ].origin[2];
+			EMSourcePoint.fZ = loopSounds[ ch->entnum ].origin[1];
+		}
+	}
+
+	hr = s_lpEAXManager->GetSourceDynamicAttributes(0, &EMSourcePoint, &eaxOBProp.lObstruction, &eaxOBProp.flObstructionLFRatio,
+		&eaxOCProp.lOcclusion, &eaxOCProp.flOcclusionLFRatio, &eaxOCProp.flOcclusionRoomRatio, &EMVirtualSourcePoint, 0);
+	if (hr == EM_OK)
+	{	
+		// Set EAX effect !
+		s_eaxSet(&DSPROPSETID_EAX_BufferProperties, DSPROPERTY_EAXBUFFER_OBSTRUCTIONPARAMETERS,
+			ch->alSource, &eaxOBProp, sizeof(EAXOBSTRUCTIONPROPERTIES));
+
+		s_eaxSet(&DSPROPSETID_EAX_BufferProperties, DSPROPERTY_EAXBUFFER_OCCLUSIONPARAMETERS,
+			ch->alSource, &eaxOCProp, sizeof(EAXOCCLUSIONPROPERTIES));
+	}
+
+	return;
+}
+
+
+void EAXMorph()
+{
+	int curPos;
+	int curTime;
+	float flRatio;
+
+	if ((!s_bEAX) || (!s_eaxMorphing))
+		return;
+
+	// Get current time
+	curTime = Com_Milliseconds();
+
+	curPos = ((curTime - s_eaxMorphStartTime) / 100);
+
+	if (curPos >= 10)
+	{
+		// Finished morphing
+		s_eaxMorphing = false;
+		s_eaxLPSource = s_eaxLPDest;
+		s_eaxLPCur = s_eaxLPDest;
+
+		s_eaxSet(&DSPROPSETID_EAX_ListenerProperties, DSPROPERTY_EAXLISTENER_ALLPARAMETERS,
+			NULL, &s_eaxLPSource, sizeof(EAXLISTENERPROPERTIES));
+	}
+	else
+	{
+		if (curPos > s_eaxMorphCount)
+		{
+			// Next morph step
+			flRatio = (float)curPos / 10.f;
+
+			EAX3ListenerInterpolate(&s_eaxLPSource, &s_eaxLPDest, flRatio, &s_eaxLPCur);
+
+			s_eaxSet(&DSPROPSETID_EAX_ListenerProperties, DSPROPERTY_EAXLISTENER_ALLPARAMETERS,
+				NULL, &s_eaxLPCur, sizeof(EAXLISTENERPROPERTIES));
+
+			s_eaxMorphCount = curPos;
+		}
+	}
+}
+
+/***********************************************************************************************\
+*
+* Definition of the EAXMorph function - EAX3ListenerInterpolate
+*
+\***********************************************************************************************/
+
+/*
+	EAX3ListenerInterpolate
+	lpStart			- Initial EAX 3 Listener parameters
+	lpFinish		- Final EAX 3 Listener parameters
+	flRatio			- Ratio Destination : Source (0.0 == Source, 1.0 == Destination)
+	lpResult		- Interpolated EAX 3 Listener parameters
+	bCheckValues	- Check EAX 3.0 parameters are in range, default = false (no checking)
+*/
+bool EAX3ListenerInterpolate(LPEAXLISTENERPROPERTIES lpStart, LPEAXLISTENERPROPERTIES lpFinish,
+						float flRatio, LPEAXLISTENERPROPERTIES lpResult, bool bCheckValues)
+{
+	EAXVECTOR StartVector, FinalVector;
+
+	float flInvRatio;
+
+	if (bCheckValues)
+	{
+		if (!CheckEAX3LP(lpStart))
+			return false;
+
+		if (!CheckEAX3LP(lpFinish))
+			return false;
+	}
+
+	if (flRatio >= 1.0f)
+	{
+		memcpy(lpResult, lpFinish, sizeof(EAXLISTENERPROPERTIES));
+		return true;
+	}
+	else if (flRatio <= 0.0f)
+	{
+		memcpy(lpResult, lpStart, sizeof(EAXLISTENERPROPERTIES));
+		return true;
+	}
+
+	flInvRatio = (1.0f - flRatio);
+
+	// Environment
+	lpResult->ulEnvironment = 26;	// (UNDEFINED environment)
+
+	// Environment Size
+	if (lpStart->flEnvironmentSize == lpFinish->flEnvironmentSize)
+		lpResult->flEnvironmentSize = lpStart->flEnvironmentSize;
+	else
+		lpResult->flEnvironmentSize = (float)exp( (log(lpStart->flEnvironmentSize) * flInvRatio) + (log(lpFinish->flEnvironmentSize) * flRatio) );
+	
+	// Environment Diffusion
+	if (lpStart->flEnvironmentDiffusion == lpFinish->flEnvironmentDiffusion)
+		lpResult->flEnvironmentDiffusion = lpStart->flEnvironmentDiffusion;
+	else
+		lpResult->flEnvironmentDiffusion = (lpStart->flEnvironmentDiffusion * flInvRatio) + (lpFinish->flEnvironmentDiffusion * flRatio);
+	
+	// Room
+	if (lpStart->lRoom == lpFinish->lRoom)
+		lpResult->lRoom = lpStart->lRoom;
+	else
+		lpResult->lRoom = (int)( ((float)lpStart->lRoom * flInvRatio) + ((float)lpFinish->lRoom * flRatio) );
+	
+	// Room HF
+	if (lpStart->lRoomHF == lpFinish->lRoomHF)
+		lpResult->lRoomHF = lpStart->lRoomHF;
+	else
+		lpResult->lRoomHF = (int)( ((float)lpStart->lRoomHF * flInvRatio) + ((float)lpFinish->lRoomHF * flRatio) );
+	
+	// Room LF
+	if (lpStart->lRoomLF == lpFinish->lRoomLF)
+		lpResult->lRoomLF = lpStart->lRoomLF;
+	else
+		lpResult->lRoomLF = (int)( ((float)lpStart->lRoomLF * flInvRatio) + ((float)lpFinish->lRoomLF * flRatio) );
+	
+	// Decay Time
+	if (lpStart->flDecayTime == lpFinish->flDecayTime)
+		lpResult->flDecayTime = lpStart->flDecayTime;
+	else
+		lpResult->flDecayTime = (float)exp( (log(lpStart->flDecayTime) * flInvRatio) + (log(lpFinish->flDecayTime) * flRatio) );
+	
+	// Decay HF Ratio
+	if (lpStart->flDecayHFRatio == lpFinish->flDecayHFRatio)
+		lpResult->flDecayHFRatio = lpStart->flDecayHFRatio;
+	else
+		lpResult->flDecayHFRatio = (float)exp( (log(lpStart->flDecayHFRatio) * flInvRatio) + (log(lpFinish->flDecayHFRatio) * flRatio) );
+	
+	// Decay LF Ratio
+	if (lpStart->flDecayLFRatio == lpFinish->flDecayLFRatio)
+		lpResult->flDecayLFRatio = lpStart->flDecayLFRatio;
+	else
+		lpResult->flDecayLFRatio = (float)exp( (log(lpStart->flDecayLFRatio) * flInvRatio) + (log(lpFinish->flDecayLFRatio) * flRatio) );
+	
+	// Reflections
+	if (lpStart->lReflections == lpFinish->lReflections)
+		lpResult->lReflections = lpStart->lReflections;
+	else
+		lpResult->lReflections = (int)( ((float)lpStart->lReflections * flInvRatio) + ((float)lpFinish->lReflections * flRatio) );
+	
+	// Reflections Delay
+	if (lpStart->flReflectionsDelay == lpFinish->flReflectionsDelay)
+		lpResult->flReflectionsDelay = lpStart->flReflectionsDelay;
+	else
+		lpResult->flReflectionsDelay = (float)exp( (log(lpStart->flReflectionsDelay+0.0001) * flInvRatio) + (log(lpFinish->flReflectionsDelay+0.0001) * flRatio) );
+
+	// Reflections Pan
+
+	// To interpolate the vector correctly we need to ensure that both the initial and final vectors vectors are clamped to a length of 1.0f
+	StartVector = lpStart->vReflectionsPan;
+	FinalVector = lpFinish->vReflectionsPan;
+
+	Clamp(&StartVector);
+	Clamp(&FinalVector);
+
+	if (lpStart->vReflectionsPan.x == lpFinish->vReflectionsPan.x)
+		lpResult->vReflectionsPan.x = lpStart->vReflectionsPan.x;
+	else
+		lpResult->vReflectionsPan.x = FinalVector.x + (flInvRatio * (StartVector.x - FinalVector.x));
+	
+	if (lpStart->vReflectionsPan.y == lpFinish->vReflectionsPan.y)
+		lpResult->vReflectionsPan.y = lpStart->vReflectionsPan.y;
+	else
+		lpResult->vReflectionsPan.y = FinalVector.y + (flInvRatio * (StartVector.y - FinalVector.y));
+	
+	if (lpStart->vReflectionsPan.z == lpFinish->vReflectionsPan.z)
+		lpResult->vReflectionsPan.z = lpStart->vReflectionsPan.z;
+	else
+		lpResult->vReflectionsPan.z = FinalVector.z + (flInvRatio * (StartVector.z - FinalVector.z));
+	
+	// Reverb
+	if (lpStart->lReverb == lpFinish->lReverb)
+		lpResult->lReverb = lpStart->lReverb;
+	else
+		lpResult->lReverb = (int)( ((float)lpStart->lReverb * flInvRatio) + ((float)lpFinish->lReverb * flRatio) );
+	
+	// Reverb Delay
+	if (lpStart->flReverbDelay == lpFinish->flReverbDelay)
+		lpResult->flReverbDelay = lpStart->flReverbDelay;
+	else
+		lpResult->flReverbDelay = (float)exp( (log(lpStart->flReverbDelay+0.0001) * flInvRatio) + (log(lpFinish->flReverbDelay+0.0001) * flRatio) );
+	
+	// Reverb Pan
+
+	// To interpolate the vector correctly we need to ensure that both the initial and final vectors are clamped to a length of 1.0f	
+	StartVector = lpStart->vReverbPan;
+	FinalVector = lpFinish->vReverbPan;
+
+	Clamp(&StartVector);
+	Clamp(&FinalVector);
+
+	if (lpStart->vReverbPan.x == lpFinish->vReverbPan.x)
+		lpResult->vReverbPan.x = lpStart->vReverbPan.x;
+	else
+		lpResult->vReverbPan.x = FinalVector.x + (flInvRatio * (StartVector.x - FinalVector.x));
+	
+	if (lpStart->vReverbPan.y == lpFinish->vReverbPan.y)
+		lpResult->vReverbPan.y = lpStart->vReverbPan.y;
+	else
+		lpResult->vReverbPan.y = FinalVector.y + (flInvRatio * (StartVector.y - FinalVector.y));
+	
+	if (lpStart->vReverbPan.z == lpFinish->vReverbPan.z)
+		lpResult->vReverbPan.z = lpStart->vReverbPan.z;
+	else
+		lpResult->vReverbPan.z = FinalVector.z + (flInvRatio * (StartVector.z - FinalVector.z));
+	
+	// Echo Time
+	if (lpStart->flEchoTime == lpFinish->flEchoTime)
+		lpResult->flEchoTime = lpStart->flEchoTime;
+	else
+		lpResult->flEchoTime = (float)exp( (log(lpStart->flEchoTime) * flInvRatio) + (log(lpFinish->flEchoTime) * flRatio) );
+	
+	// Echo Depth
+	if (lpStart->flEchoDepth == lpFinish->flEchoDepth)
+		lpResult->flEchoDepth = lpStart->flEchoDepth;
+	else
+		lpResult->flEchoDepth = (lpStart->flEchoDepth * flInvRatio) + (lpFinish->flEchoDepth * flRatio);
+
+	// Modulation Time
+	if (lpStart->flModulationTime == lpFinish->flModulationTime)
+		lpResult->flModulationTime = lpStart->flModulationTime;
+	else
+		lpResult->flModulationTime = (float)exp( (log(lpStart->flModulationTime) * flInvRatio) + (log(lpFinish->flModulationTime) * flRatio) );
+	
+	// Modulation Depth
+	if (lpStart->flModulationDepth == lpFinish->flModulationDepth)
+		lpResult->flModulationDepth = lpStart->flModulationDepth;
+	else
+		lpResult->flModulationDepth = (lpStart->flModulationDepth * flInvRatio) + (lpFinish->flModulationDepth * flRatio);
+	
+	// Air Absorption HF
+	if (lpStart->flAirAbsorptionHF == lpFinish->flAirAbsorptionHF)
+		lpResult->flAirAbsorptionHF = lpStart->flAirAbsorptionHF;
+	else
+		lpResult->flAirAbsorptionHF = (lpStart->flAirAbsorptionHF * flInvRatio) + (lpFinish->flAirAbsorptionHF * flRatio);
+	
+	// HF Reference
+	if (lpStart->flHFReference == lpFinish->flHFReference)
+		lpResult->flHFReference = lpStart->flHFReference;
+	else
+		lpResult->flHFReference = (float)exp( (log(lpStart->flHFReference) * flInvRatio) + (log(lpFinish->flHFReference) * flRatio) );
+	
+	// LF Reference
+	if (lpStart->flLFReference == lpFinish->flLFReference)
+		lpResult->flLFReference = lpStart->flLFReference;
+	else
+		lpResult->flLFReference = (float)exp( (log(lpStart->flLFReference) * flInvRatio) + (log(lpFinish->flLFReference) * flRatio) );
+	
+	// Room Rolloff Factor
+	if (lpStart->flRoomRolloffFactor == lpFinish->flRoomRolloffFactor)
+		lpResult->flRoomRolloffFactor = lpStart->flRoomRolloffFactor;
+	else
+		lpResult->flRoomRolloffFactor = (lpStart->flRoomRolloffFactor * flInvRatio) + (lpFinish->flRoomRolloffFactor * flRatio);
+	
+	// Flags
+	lpResult->ulFlags = (lpStart->ulFlags & lpFinish->ulFlags);
+
+	// Clamp Delays
+	if (lpResult->flReflectionsDelay > EAXLISTENER_MAXREFLECTIONSDELAY)
+		lpResult->flReflectionsDelay = EAXLISTENER_MAXREFLECTIONSDELAY;
+
+	if (lpResult->flReverbDelay > EAXLISTENER_MAXREVERBDELAY)
+		lpResult->flReverbDelay = EAXLISTENER_MAXREVERBDELAY;
+
+	return true;
+}
+
+
+/*
+	CheckEAX3LP
+	Checks that the parameters in the EAX 3 Listener Properties structure are in-range
+*/
+bool CheckEAX3LP(LPEAXLISTENERPROPERTIES lpEAX3LP)
+{
+	if ( (lpEAX3LP->lRoom < EAXLISTENER_MINROOM) || (lpEAX3LP->lRoom > EAXLISTENER_MAXROOM) )
+		return false;
+
+	if ( (lpEAX3LP->lRoomHF < EAXLISTENER_MINROOMHF) || (lpEAX3LP->lRoomHF > EAXLISTENER_MAXROOMHF) )
+		return false;
+
+	if ( (lpEAX3LP->lRoomLF < EAXLISTENER_MINROOMLF) || (lpEAX3LP->lRoomLF > EAXLISTENER_MAXROOMLF) )
+		return false;
+
+	if ( (lpEAX3LP->ulEnvironment < EAXLISTENER_MINENVIRONMENT) || (lpEAX3LP->ulEnvironment > EAXLISTENER_MAXENVIRONMENT) )
+		return false;
+
+	if ( (lpEAX3LP->flEnvironmentSize < EAXLISTENER_MINENVIRONMENTSIZE) || (lpEAX3LP->flEnvironmentSize > EAXLISTENER_MAXENVIRONMENTSIZE) )
+		return false;
+
+	if ( (lpEAX3LP->flEnvironmentDiffusion < EAXLISTENER_MINENVIRONMENTDIFFUSION) || (lpEAX3LP->flEnvironmentDiffusion > EAXLISTENER_MAXENVIRONMENTDIFFUSION) )
+		return false;
+
+	if ( (lpEAX3LP->flDecayTime < EAXLISTENER_MINDECAYTIME) || (lpEAX3LP->flDecayTime > EAXLISTENER_MAXDECAYTIME) )
+		return false;
+
+	if ( (lpEAX3LP->flDecayHFRatio < EAXLISTENER_MINDECAYHFRATIO) || (lpEAX3LP->flDecayHFRatio > EAXLISTENER_MAXDECAYHFRATIO) )
+		return false;
+
+	if ( (lpEAX3LP->flDecayLFRatio < EAXLISTENER_MINDECAYLFRATIO) || (lpEAX3LP->flDecayLFRatio > EAXLISTENER_MAXDECAYLFRATIO) )
+		return false;
+
+	if ( (lpEAX3LP->lReflections < EAXLISTENER_MINREFLECTIONS) || (lpEAX3LP->lReflections > EAXLISTENER_MAXREFLECTIONS) )
+		return false;
+
+	if ( (lpEAX3LP->flReflectionsDelay < EAXLISTENER_MINREFLECTIONSDELAY) || (lpEAX3LP->flReflectionsDelay > EAXLISTENER_MAXREFLECTIONSDELAY) )
+		return false;
+
+	if ( (lpEAX3LP->lReverb < EAXLISTENER_MINREVERB) || (lpEAX3LP->lReverb > EAXLISTENER_MAXREVERB) )
+		return false;
+
+	if ( (lpEAX3LP->flReverbDelay < EAXLISTENER_MINREVERBDELAY) || (lpEAX3LP->flReverbDelay > EAXLISTENER_MAXREVERBDELAY) )
+		return false;
+
+	if ( (lpEAX3LP->flEchoTime < EAXLISTENER_MINECHOTIME) || (lpEAX3LP->flEchoTime > EAXLISTENER_MAXECHOTIME) )
+		return false;
+
+	if ( (lpEAX3LP->flEchoDepth < EAXLISTENER_MINECHODEPTH) || (lpEAX3LP->flEchoDepth > EAXLISTENER_MAXECHODEPTH) )
+		return false;
+
+	if ( (lpEAX3LP->flModulationTime < EAXLISTENER_MINMODULATIONTIME) || (lpEAX3LP->flModulationTime > EAXLISTENER_MAXMODULATIONTIME) )
+		return false;
+
+	if ( (lpEAX3LP->flModulationDepth < EAXLISTENER_MINMODULATIONDEPTH) || (lpEAX3LP->flModulationDepth > EAXLISTENER_MAXMODULATIONDEPTH) )
+		return false;
+
+	if ( (lpEAX3LP->flAirAbsorptionHF < EAXLISTENER_MINAIRABSORPTIONHF) || (lpEAX3LP->flAirAbsorptionHF > EAXLISTENER_MAXAIRABSORPTIONHF) )
+		return false;
+
+	if ( (lpEAX3LP->flHFReference < EAXLISTENER_MINHFREFERENCE) || (lpEAX3LP->flHFReference > EAXLISTENER_MAXHFREFERENCE) )
+		return false;
+
+	if ( (lpEAX3LP->flLFReference < EAXLISTENER_MINLFREFERENCE) || (lpEAX3LP->flLFReference > EAXLISTENER_MAXLFREFERENCE) )
+		return false;
+
+	if ( (lpEAX3LP->flRoomRolloffFactor < EAXLISTENER_MINROOMROLLOFFFACTOR) || (lpEAX3LP->flRoomRolloffFactor > EAXLISTENER_MAXROOMROLLOFFFACTOR) )
+		return false;
+
+	if (lpEAX3LP->ulFlags & EAXLISTENERFLAGS_RESERVED)
+		return false;
+
+	return true;
+}
+
+/*
+	Clamp
+	Clamps the length of the vector to 1.0f
+*/
+void Clamp(EAXVECTOR *eaxVector)
+{
+	float flMagnitude;
+	float flInvMagnitude;
+
+	flMagnitude = (float)sqrt((eaxVector->x*eaxVector->x) + (eaxVector->y*eaxVector->y) + (eaxVector->z*eaxVector->z));
+
+	if (flMagnitude <= 1.0f)
+		return;
+
+	flInvMagnitude = 1.0f / flMagnitude;
+
+	eaxVector->x *= flInvMagnitude;
+	eaxVector->y *= flInvMagnitude;
+	eaxVector->z *= flInvMagnitude;
+}

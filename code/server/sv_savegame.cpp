@@ -102,6 +102,18 @@ LPCSTR SG_GetChidText(unsigned long chid)
 }
 
 
+static const char *GetString_FailedToOpenSaveGame(const char *psFilename, qboolean bOpen)
+{
+	static char sTemp[256];
+
+	strcpy(sTemp,S_COLOR_RED);
+	
+	const char *psReference = bOpen ? "MENUS3_FAILED_TO_OPEN_SAVEGAME" : "MENUS3_FAILED_TO_CREATE_SAVEGAME";
+	Q_strncpyz(sTemp + strlen(sTemp), va( SP_GetStringTextString(psReference), psFilename),sizeof(sTemp));
+	strcat(sTemp,"\n");
+	return sTemp;
+}
+
 // (copes with up to 8 ptr returns at once)
 //
 static LPCSTR SG_AddSavePath( LPCSTR psPathlessBaseName )
@@ -150,7 +162,7 @@ static qboolean SG_Create( LPCSTR psPathlessBaseName )
 
 	if(!fhSaveGame)
 	{
-		Com_Printf(S_COLOR_RED "Failed to create new savegame file \"%s\"\n", psLocalFilename );
+		Com_Printf(GetString_FailedToOpenSaveGame(psLocalFilename,qfalse));//S_COLOR_RED "Failed to create new savegame file \"%s\"\n", psLocalFilename );
 		return qfalse;
 	}
 
@@ -230,7 +242,7 @@ qboolean SG_Open( LPCSTR psPathlessBaseName )
 	if (!fhSaveGame)
 	{
 //		Com_Printf(S_COLOR_RED "Failed to open savegame file %s\n", psLocalFilename);
-		Com_DPrintf("Failed to open savegame file %s\n", psLocalFilename);
+		Com_DPrintf(GetString_FailedToOpenSaveGame(psLocalFilename, qtrue));
 
 		return qfalse;
 	}
@@ -381,11 +393,13 @@ void SV_LoadGame_f(void)
 		
 	Com_Printf (S_COLOR_CYAN "Loading game \"%s\"...\n", psFilename);
 
-		gbAlreadyDoingLoad = qtrue;
-			SG_ReadSavegame(psFilename);
-		//gbAlreadyDoingLoad = qfalse; //	do NOT do this here now, need to wait until client spawn
-
-	Com_Printf (S_COLOR_CYAN "Done.\n");	
+	gbAlreadyDoingLoad = qtrue;
+	if (!SG_ReadSavegame(psFilename)) {
+		gbAlreadyDoingLoad = qfalse; //	do NOT do this here now, need to wait until client spawn, unless the load failed.
+	} else
+	{
+		Com_Printf (S_COLOR_CYAN "Done.\n");	
+	}
 }
 
 qboolean SG_GameAllowedToSaveHere(qboolean inCamera);
@@ -918,7 +932,7 @@ qboolean SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
 
 	if(!SG_Create( "current" ))
 	{
-		Com_Printf (S_COLOR_RED "Failed to create savegame\n");
+		Com_Printf (GetString_FailedToOpenSaveGame("current",qfalse));//S_COLOR_RED "Failed to create savegame\n");
 		SG_WipeSavegame( "current" );
 		sv_testsave->value = fPrevTestSave;
 		return qfalse;
@@ -954,7 +968,7 @@ qboolean SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
 	SG_Close();
 	if (gbSGWriteFailed)
 	{
-		Com_Printf (S_COLOR_RED "Failed to write savegame!\n");
+		Com_Printf (GetString_FailedToOpenSaveGame("current",qfalse));//S_COLOR_RED "Failed to write savegame!\n");
 		SG_WipeSavegame( "current" );
 		sv_testsave->value = fPrevTestSave;
 		return qfalse;
@@ -979,7 +993,7 @@ qboolean SG_ReadSavegame(const char *psPathlessBaseName)
 
 	if (!SG_Open( psPathlessBaseName ))
 	{
-		Com_Printf (S_COLOR_RED "Failed to open savegame \"%s\"\n", psPathlessBaseName);
+		Com_Printf (GetString_FailedToOpenSaveGame(psPathlessBaseName, qtrue));//S_COLOR_RED "Failed to open savegame \"%s\"\n", psPathlessBaseName);
 		sv_testsave->value = fPrevTestSave;
 		return qfalse;
 	}
@@ -1020,7 +1034,7 @@ qboolean SG_ReadSavegame(const char *psPathlessBaseName)
 
 	if(!SG_Close())
 	{
-		Com_Printf (S_COLOR_RED "Failed to close savegame\n");
+		Com_Printf (GetString_FailedToOpenSaveGame(psPathlessBaseName,qfalse));//S_COLOR_RED "Failed to close savegame\n");
 		sv_testsave->value = fPrevTestSave;
 		return qfalse;
 	}

@@ -394,12 +394,6 @@ qboolean BG_LegalizedForcePowers(char *powerOut, int maxRank, qboolean freeSaber
 		}
 	}
 
-	if (final_Powers[FP_SABERATTACK] < 1)
-	{
-		final_Powers[FP_SABERDEFEND] = 0;
-		final_Powers[FP_SABERTHROW] = 0;
-	}
-
 	if (freeSaber)
 	{
 		if (final_Powers[FP_SABERATTACK] < 1)
@@ -416,11 +410,37 @@ qboolean BG_LegalizedForcePowers(char *powerOut, int maxRank, qboolean freeSaber
 		final_Powers[FP_LEVITATION] = 1;
 	}
 
+	/*
 	if (fpDisabled)
 	{
 		final_Powers[FP_LEVITATION] = 1;
 		final_Powers[FP_SABERATTACK] = 3;
 		final_Powers[FP_SABERDEFEND] = 3;
+		final_Powers[FP_SABERTHROW] = 0;
+	}
+	*/
+	//Ahh. I have no idea why I did this, but I would say that it makes me a very bad man.
+	if (fpDisabled)
+	{ //If we specifically have attack or def disabled, force them up to level 3. It's the way
+	  //things work for the case of all powers disabled.
+	  //If jump is disabled, down-cap it to level 1. Otherwise don't do a thing.
+		if (fpDisabled & (1 << FP_LEVITATION))
+		{
+			final_Powers[FP_LEVITATION] = 1;
+		}
+		if (fpDisabled & (1 << FP_SABERATTACK))
+		{
+			final_Powers[FP_SABERATTACK] = 3;
+		}
+		if (fpDisabled & (1 << FP_SABERDEFEND))
+		{
+			final_Powers[FP_SABERDEFEND] = 3;
+		}
+	}
+
+	if (final_Powers[FP_SABERATTACK] < 1)
+	{
+		final_Powers[FP_SABERDEFEND] = 0;
 		final_Powers[FP_SABERTHROW] = 0;
 	}
 
@@ -1276,6 +1296,11 @@ qboolean BG_CanUseFPNow(int gametype, playerState_t *ps, int time, forcePowers_t
 		return qfalse;
 	}
 
+	if ( ps->forceRestricted || ps->trueNonJedi )
+	{
+		return qfalse;
+	}
+
 	if (ps->duelInProgress)
 	{
 		if (power != FP_SABERATTACK && power != FP_SABERDEFEND && power != FP_SABERTHROW &&
@@ -1581,13 +1606,39 @@ qboolean BG_CanItemBeGrabbed( int gametype, const entityState_t *ent, const play
 
 	item = &bg_itemlist[ent->modelindex];
 
-	if (ps && ps->isJediMaster && item && (item->giType == IT_WEAPON || item->giType == IT_AMMO))
+	if ( ps )
 	{
-		return qfalse;
+		if ( ps->trueJedi )
+		{//force powers and saber only
+			if ( item->giType != IT_TEAM //not a flag
+				&& item->giType != IT_ARMOR//not shields
+				&& (item->giType != IT_WEAPON || item->giTag != WP_SABER)//not a saber
+				&& (item->giType != IT_HOLDABLE || item->giTag != HI_SEEKER)//not a seeker
+				&& (item->giType != IT_POWERUP || item->giTag == PW_YSALAMIRI) )//not a force pick-up
+			{
+				return qfalse;
+			}
+		}
+		else if ( ps->trueNonJedi )
+		{//can't pick up force powerups
+			if ( (item->giType == IT_POWERUP && item->giTag != PW_YSALAMIRI) //if a powerup, can only can pick up ysalamiri
+				|| (item->giType == IT_HOLDABLE && item->giTag == HI_SEEKER)//if holdable, cannot pick up seeker 
+				|| (item->giType == IT_WEAPON && item->giTag == WP_SABER ) )//or if it's a saber
+			{
+				return qfalse;
+			}
+		}
+		if ( ps->isJediMaster && item && (item->giType == IT_WEAPON || item->giType == IT_AMMO))
+		{//jedi master cannot pick up weapons
+			return qfalse;
+		}
+		if ( ps->duelInProgress )
+		{ //no picking stuff up while in a duel, no matter what the type is
+			return qfalse;
+		}
 	}
-
-	if (ps && ps->duelInProgress)
-	{ //no picking stuff up while in a duel, no matter what the type is
+	else
+	{//safety return since below code assumes a non-null ps
 		return qfalse;
 	}
 
@@ -2131,6 +2182,8 @@ void BG_PlayerStateToEntityState( playerState_t *ps, entityState_t *s, qboolean 
 	s->isJediMaster = ps->isJediMaster;
 
 	s->time2 = ps->holocronBits;
+
+	s->fireflag = ps->fd.saberAnimLevel;
 }
 
 /*
@@ -2269,6 +2322,8 @@ void BG_PlayerStateToEntityStateExtraPolate( playerState_t *ps, entityState_t *s
 	s->isJediMaster = ps->isJediMaster;
 
 	s->time2 = ps->holocronBits;
+
+	s->fireflag = ps->fd.saberAnimLevel;
 }
 
 /*

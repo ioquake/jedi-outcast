@@ -1843,6 +1843,37 @@ void Reached_Train( gentity_t *ent ) {
 			ent->s.apos.trType = TR_NONLINEAR_STOP;
 		}
 	}
+	else 
+	{
+		if (( next->spawnflags & 4 ))
+		{//yaw
+			vec3_t angs;
+
+			vectoangles( move, angs );
+			AnglesSubtract( angs, ent->currentAngles, angs );
+
+			for ( int i = 0; i < 3; i++ )
+			{
+				AngleNormalize360( angs[i] );
+			}
+			VectorCopy( ent->currentAngles, ent->s.apos.trBase );
+			ent->s.apos.trDelta[YAW] = angs[YAW] * 0.5f;
+			if (( next->spawnflags & 8 ))
+			{//roll, too
+				ent->s.apos.trDelta[ROLL] = angs[YAW] * -0.1f;
+			}
+			ent->s.apos.trTime = level.time;
+			ent->s.apos.trDuration = 2000;
+			if ( ent->alt_fire )
+			{
+				ent->s.apos.trType = TR_LINEAR_STOP;
+			}
+			else
+			{
+				ent->s.apos.trType = TR_NONLINEAR_STOP;
+			}
+		}
+	}
 
 	// This is for the tie fighter shooting gallery on doom detention, you could see them waiting under the bay, but the architecture couldn't easily be changed..
 	if (( next->spawnflags & 2 ))
@@ -1942,7 +1973,7 @@ void Think_SetupTrainTargets( gentity_t *ent ) {
 
 
 
-/*QUAKED path_corner (.5 .3 0) (-8 -8 -8) (8 8 8) TURN_TRAIN INVISIBLE
+/*QUAKED path_corner (.5 .3 0) (-8 -8 -8) (8 8 8) TURN_TRAIN INVISIBLE YAW_TRAIN ROLL_TRAIN
 
 TURN_TRAIN	func_train moving on this path will turn to face the next path_corner within 2 seconds
 INVISIBLE - train will become invisible ( but still solid ) when it reaches this path_corner.  
@@ -2031,7 +2062,7 @@ void SP_func_train (gentity_t *self) {
 	{
 		if ( VALIDSTRING( noise ) )
 		{
-			self->s.loopSound = G_SoundIndex( noise );
+			self->s.loopSound = cgi_S_RegisterSound( noise );//G_SoundIndex( noise );
 		}
 	}
 

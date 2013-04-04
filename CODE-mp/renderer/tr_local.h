@@ -36,14 +36,35 @@ long myftol( float f );
 #define MAX_STATE_NAME 32
 
 // can't be increased without changing bit packing for drawsurfs
+typedef enum
+{
+	DLIGHT_VERTICAL	= 0,
+	DLIGHT_PROJECTED
+} eDLightTypes;
 
 typedef struct dlight_s {
-	vec3_t	origin;
-	vec3_t	color;				// range from 0.0 to 1.0, should be color normalized
-	float	radius;
+	eDLightTypes	mType;
 
-	vec3_t	transformed;		// origin in local coordinate system
-	int		additive;			// texture detail is lost tho when the lightmap is dark
+	vec3_t			origin;
+	vec3_t			mProjOrigin;		// projected light's origin
+
+	vec3_t			color;				// range from 0.0 to 1.0, should be color normalized
+
+	float			radius;
+	float			mProjRadius;		// desired radius of light 
+
+	int				additive;			// texture detail is lost tho when the lightmap is dark
+
+	vec3_t			transformed;		// origin in local coordinate system
+	vec3_t			mProjTransformed;	// projected light's origin in local coordinate system
+
+	vec3_t			mDirection;
+	vec3_t			mBasis2;
+	vec3_t			mBasis3;
+
+	vec3_t			mTransDirection;
+	vec3_t			mTransBasis2;
+	vec3_t			mTransBasis3;
 } dlight_t;
 
 
@@ -440,6 +461,7 @@ Ghoul2 Insert End
 	deformStage_t	deforms[MAX_SHADER_DEFORMS];
 
 	int			numUnfoggedPasses;
+	int			lastNonDetailStage;
 	shaderStage_t	*stages[MAX_SHADER_STAGES];		
 
 	void		(*optimalStageIteratorFunc)( void );
@@ -806,8 +828,13 @@ typedef struct {
 	vec3_t		lightGridSize;
 	vec3_t		lightGridInverseSize;
 	int			lightGridBounds[3];
+
+	int			lightGridOffsets[8];
+
+	vec3_t		lightGridStep;
+
 	mgrid_t			*lightGridData;
-	unsigned short	*lightGridArray;
+	word		*lightGridArray;
 	int			numGridArrayElements;
 
 
@@ -1118,6 +1145,8 @@ extern cvar_t	*r_drawSun;				// controls drawing of sun quad
 extern cvar_t	*r_dynamiclight;		// dynamic lights enabled/disabled
 extern cvar_t	*r_dlightBacks;			// dlight non-facing surfaces for continuity
 
+extern	cvar_t	*r_newDLights;
+
 extern	cvar_t	*r_norefresh;			// bypasses the ref rendering
 extern	cvar_t	*r_drawentities;		// disable/enable entity rendering
 extern	cvar_t	*r_drawworld;			// disable/enable world rendering
@@ -1209,7 +1238,6 @@ extern	cvar_t	*r_printShaders;
 Ghoul2 Insert Start
 */
 extern	cvar_t	*r_noServerGhoul2;
-extern	cvar_t	*r_noGhoul2;
 /*
 Ghoul2 Insert End
 */

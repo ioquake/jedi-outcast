@@ -1723,31 +1723,10 @@ free fall from their spawn points
 void FinishSpawningItem( gentity_t *ent ) {
 	trace_t		tr;
 	vec3_t		dest;
-	int			wDisable = 0;
 //	gitem_t		*item;
 
 //	VectorSet( ent->r.mins, -ITEM_RADIUS, -ITEM_RADIUS, -ITEM_RADIUS );
 //	VectorSet( ent->r.maxs, ITEM_RADIUS, ITEM_RADIUS, ITEM_RADIUS );
-
-	if (g_gametype.integer == GT_TOURNAMENT)
-	{
-		wDisable = g_duelWeaponDisable.integer;
-	}
-	else
-	{
-		wDisable = g_weaponDisable.integer;
-	}
-
-	if (ent->item->giType == IT_WEAPON &&
-		wDisable &&
-		(wDisable & (1 << ent->item->giTag)))
-	{
-		if (g_gametype.integer != GT_JEDIMASTER)
-		{
-			G_FreeEntity( ent );
-			return;
-		}
-	}
 
 	if (g_gametype.integer != GT_JEDIMASTER)
 	{
@@ -2027,8 +2006,30 @@ be on an entity that hasn't spawned yet.
 ============
 */
 void G_SpawnItem (gentity_t *ent, gitem_t *item) {
+	int wDisable = 0;
+
 	G_SpawnFloat( "random", "0", &ent->random );
 	G_SpawnFloat( "wait", "0", &ent->wait );
+
+	if (g_gametype.integer == GT_TOURNAMENT)
+	{
+		wDisable = g_duelWeaponDisable.integer;
+	}
+	else
+	{
+		wDisable = g_weaponDisable.integer;
+	}
+
+	if (item->giType == IT_WEAPON &&
+		wDisable &&
+		(wDisable & (1 << item->giTag)))
+	{
+		if (g_gametype.integer != GT_JEDIMASTER)
+		{
+			G_FreeEntity( ent );
+			return;
+		}
+	}
 
 	RegisterItem( item );
 	if ( G_ItemDisabled(item) )

@@ -724,45 +724,27 @@ static rserr_t GLW_SetMode( int mode,
 	{
 		if ( colorbits == 0 || ( !cdsFullscreen && colorbits >= 15 ) )
 		{
-			const char *psErrorTitle_English =	"Low Desktop Color Depth";
-			const char *psErrorBody_English = 	"It is highly unlikely that a correct windowed\n"
+			// since I can't be bothered trying to mess around with asian codepages and MBCS stuff for a windows
+			//	error box that'll only appear if something's seriously fucked then I'm going to fallback to
+			//	english text when these would otherwise be used...
+			//
+			char sErrorHead[1024];	// ott
+
+			extern qboolean Language_IsAsian(void);
+			Q_strncpyz(sErrorHead, Language_IsAsian() ? "Low Desktop Color Depth" : SP_GetStringTextString("CON_TEXT_LOW_DESKTOP_COLOUR_DEPTH"), sizeof(sErrorHead) );
+
+			const char *psErrorBody = Language_IsAsian() ?
+												"It is highly unlikely that a correct windowed\n"
 												"display can be initialized with the current\n"
 												"desktop display depth.  Select 'OK' to try\n"
 												"anyway.  Select 'Cancel' to try a fullscreen\n"
-												"mode instead.";
-			
-			const char *psErrorTitle_German =	"Falsche Desktop-Farbtiefe";
-			const char *psErrorBody_German = 	"Es ist unwahrscheinlich, dass bei der momentanen\n"
-												"Desktop-Farbiefe ein Fenstermodus initialisiert\n"
-												"werden kann. Mit 'OK' versuchen Sie es dennoch,\n"
-												"mit 'Abbrechen' wechselt das Spiel in den\n"
-												"Vollbildmodus.";
-
-			const char *psErrorTitle_French =	"Basse Intensité De la Couleur DeskTop";
-			const char *psErrorBody_French = 	"Il est fortement peu probable qu'un correct windowed\n"
-												"l'affichage peut être initialisé avec la profondeur\n"
-												"de bureau actuelle d'affichage. Choisissez 'OK'\n"
-												"pour essayer de toute façon. Choisissez 'ANNUL'\n"
-												"pour essayer a fullscreen le mode à la place.";
-
-			const char *psHeadText = psErrorTitle_English;
-			const char *psBodyText = psErrorBody_English;
-			
-			if (Language_GetIntegerValue() == SP_LANGUAGE_GERMAN)
-			{
-				psHeadText = psErrorTitle_German;
-				psBodyText = psErrorBody_German;
-			}
-			else
-			if (Language_GetIntegerValue() == SP_LANGUAGE_FRENCH)
-			{
-				psHeadText = psErrorTitle_French;
-				psBodyText = psErrorBody_French;
-			}
+												"mode instead."
+												:
+												SP_GetStringTextString("CON_TEXT_TRY_ANYWAY");
 
 			if ( MessageBox( NULL, 							
-						psBodyText,
-						psHeadText,
+						psErrorBody,
+						sErrorHead,
 						MB_OKCANCEL | MB_ICONEXCLAMATION ) != IDOK )
 			{
 				return RSERR_INVALID_MODE;
@@ -1461,6 +1443,12 @@ extern qboolean Sys_LowPhysicalMemory();
 		else
 		{
 			ri.Cvar_Set( "r_textureMode", "GL_LINEAR_MIPMAP_NEAREST" );
+		}
+		
+		if ( strstr( buf, "kyro" ) )	
+		{
+			ri.Cvar_Set( "r_ext_texture_filter_anisotropic", "0");	//KYROs have it avail, but suck at it!
+			ri.Cvar_Set( "r_ext_preferred_tc_method", "1");			//(Use DXT1 instead of DXT5 - same quality but much better performance on KYRO)
 		}
 		
 		//this must be a really sucky card!

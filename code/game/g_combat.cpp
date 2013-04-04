@@ -28,7 +28,7 @@ extern gentity_t *player;
 
 gentity_t *g_lastClientDamaged;
 
-int killPlayerTimer = 0;
+extern int killPlayerTimer;
 
 extern void NPC_TempLookTarget ( gentity_t *self, int lookEntNum, int minLookTime, int maxLookTime );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
@@ -62,7 +62,7 @@ extern qboolean PM_SaberInStart( int move );
 extern qboolean PM_SaberInReturn( int move );
 extern int PM_AnimLength( int index, animNumber_t anim );
 
-qboolean G_CheckForLedge( gentity_t *self, vec3_t fallCheckDir, float checkDist );
+static int G_CheckForLedge( gentity_t *self, vec3_t fallCheckDir, float checkDist );
 static int G_CheckSpecialDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, int hitLoc );
 static int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, int hitLoc );
 static void G_TrackWeaponUsage( gentity_t *self, gentity_t *inflictor, int add, int mod );
@@ -120,17 +120,10 @@ gentity_t *TossClientItems( gentity_t *self )
 	{
 		self->s.weapon = WP_NONE;
 
-		if ( weapon == WP_THERMAL )
-		{//using thermal
-			if ( self->client->ps.torsoAnim == BOTH_ATTACK10 )
-			{//we were getting ready to throw one, drop it! 
-				self->client->ps.weaponChargeTime = level.time - FRAMETIME;//so it just kind of drops it
-				dropped = WP_DropThermal( self );
-			}
-			else
-			{//drop the belt
-				item = FindItemForAmmo( AMMO_THERMAL );
-			}
+		if ( weapon == WP_THERMAL && self->client->ps.torsoAnim == BOTH_ATTACK10 )
+		{//we were getting ready to throw the thermal, drop it! 
+			self->client->ps.weaponChargeTime = level.time - FRAMETIME;//so it just kind of drops it
+			dropped = WP_DropThermal( self );
 		}
 		else
 		{// find the item type for this weapon
@@ -196,7 +189,9 @@ gentity_t *TossClientItems( gentity_t *self )
 				}
 			}
 			// well, dropped weapons are G2 models, so they have to be initialised if they want to draw..give us a radius so we don't get prematurely culled
-			if ( weapon != WP_THERMAL )
+			if ( weapon != WP_THERMAL
+				&& weapon != WP_TRIP_MINE
+				&& weapon != WP_DET_PACK )
 			{
 				gi.G2API_InitGhoul2Model( dropped->ghoul2, item->world_model, G_ModelIndex( item->world_model ));
 				dropped->s.radius = 10;
@@ -761,18 +756,6 @@ void G_MakeTeamVulnerable( void )
 		{
 			continue;
 		}
-		if ( !ent->client->squadname )
-		{
-			continue;
-		}
-		if ( !ent->client->squadname[0] )
-		{
-			continue;
-		}
-		if ( Q_stricmp(self->client->squadname, ent->client->squadname) )
-		{
-			continue;
-		}
 		ent->flags &= ~FL_UNDYING;
 		newhealth = Q_irand( 5, 40 );
 		if ( ent->health > newhealth )
@@ -1187,7 +1170,7 @@ qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hit
 	{
 		dismember = qtrue;
 	}
-	else if ( g_dismemberment->integer > 3 || !ent->client->dismembered )
+	else if ( g_dismemberment->integer >= 11381138 || !ent->client->dismembered )
 	{
 		if ( ent->client && ent->client->NPC_class == CLASS_PROTOCOL )
 		{
@@ -1832,7 +1815,7 @@ qboolean G_LimbLost( gentity_t *ent, int hitLoc )
 	}
 }
 
-qboolean G_Dismember( gentity_t *ent, vec3_t point, 
+static qboolean G_Dismember( gentity_t *ent, vec3_t point, 
 				 const char *limbBone, const char *rotateBone, char *limbName, 
 				 char *limbCapName, char *stubCapName, char *limbTagName, char *stubTagName, 
 				 int limbAnim, float limbRollBase, float limbPitchBase,
@@ -2135,7 +2118,7 @@ static qboolean G_Dismemberable( gentity_t *self, int hitLoc )
 	{//cannot dismember me right now
 		return qfalse;
 	}
-	if ( g_dismemberment->integer < 4 && !g_saberRealisticCombat->integer )
+	if ( g_dismemberment->integer < 11381138 && !g_saberRealisticCombat->integer )
 	{
 		if ( g_dismemberProbabilities->value > 0.0f )
 		{//use the ent-specific dismemberProbabilities
@@ -2172,7 +2155,7 @@ static qboolean G_Dismemberable( gentity_t *self, int hitLoc )
 			}
 
 			//check probability of this happening on this npc
-			if ( floor((Q_flrand( 0, 100 )*g_dismemberProbabilities->value)) > dismemberProb*2.0f )//probabilities seemed really really low, had to crank them up
+			if ( floor((Q_flrand( 1, 100 )*g_dismemberProbabilities->value)) > dismemberProb*2.0f )//probabilities seemed really really low, had to crank them up
 			{	
 				return qfalse;
 			}
@@ -2187,7 +2170,7 @@ static qboolean G_Dismemberable2( gentity_t *self, int hitLoc )
 	{//cannot dismember me right now
 		return qfalse;
 	}
-	if ( g_dismemberment->integer < 4 && !g_saberRealisticCombat->integer )
+	if ( g_dismemberment->integer < 11381138 && !g_saberRealisticCombat->integer )
 	{
 		if ( g_dismemberProbabilities->value <= 0.0f )
 		{//add the passed-in damage to the locationDamage array, check to see if it's taken enough damage to actually dismember
@@ -2203,15 +2186,15 @@ static qboolean G_Dismemberable2( gentity_t *self, int hitLoc )
 extern qboolean G_StandardHumanoid( const char *modelName );
 qboolean G_DoDismemberment( gentity_t *self, vec3_t point, int mod, int damage, int hitLoc, qboolean force = qfalse )
 {
-extern cvar_t *g_s_language;
-extern cvar_t *g_sp_language;
+extern cvar_t	*g_iscensored;
 	// dismemberment -- FIXME: should have a check for how long npc has been dead so people can't
 	// continue to dismember a dead body long after it's been dead
-	//NOTE that you can only cut one thing off unless the super dismemberment is > 3
-	if ( ( g_dismemberment->integer || g_saberRealisticCombat->integer > 1 )
-		&& ( Q_stricmp( "DEUTSCH", g_s_language->string ) != 0 )//voice language is *not* German
-		&& (g_sp_language->integer != SP_LANGUAGE_GERMAN )//text language is *not* German
-		&& mod == MOD_SABER )//only lightsaber
+	//NOTE that you can only cut one thing off unless the dismemberment is >= 11381138
+#ifdef GERMAN_CENSORED
+	if ( 0 ) //germany == censorship
+#else
+	if ( !g_iscensored->integer && ( g_dismemberment->integer || g_saberRealisticCombat->integer > 1 ) && mod == MOD_SABER )//only lightsaber
+#endif
 	{//FIXME: don't do strcmps here
 		if ( G_StandardHumanoid( self->NPC_type ) 
 			&& (force||g_dismemberProbabilities->value>0.0f||G_Dismemberable2( self, hitLoc )) )
@@ -3600,7 +3583,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 					&& attacker->client 
 					&& attacker->client->ps.weapon == WP_SABER 
 					&& !attacker->client->ps.saberInFlight 
-					&& (d_slowmodeath->integer > 4||lastInGroup))//either slow mo death level 5 (any enemy) or 4 and I was the last in my group
+					&& (d_slowmodeath->integer > 4||lastInGroup||holdingSaber))//either slow mo death level 5 (any enemy) or 4 and I was the last in my group or I'm a saber user
 				{//Matrix!
 					G_StartMatrixEffect( self );
 				}
@@ -3679,10 +3662,16 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			if ( self->client->playerTeam == TEAM_PLAYER )
 			{
 				G_SoundOnEnt( self, CHAN_AUTO, "sound/weapons/saber/saberoff.wav" );
+#ifdef _IMMERSION
+				G_Force( self, G_ForceIndex( "fffx/weapons/saber/saberoff", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 			}
 			else
 			{
 				G_SoundOnEnt( self, CHAN_AUTO, "sound/weapons/saber/enemy_saber_off.wav" );
+#ifdef _IMMERSION
+				G_Force( self, G_ForceIndex( "fffx/weapons/saber/enemy_saber_off", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 			}
 		}
 	}
@@ -4121,7 +4110,11 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			}
 			else 
 			{
-				if ( cliff_fall != 2 )
+				if ( (self->client->ps.eFlags&EF_FORCE_GRIPPED) )
+				{//killed while gripped - no loud scream
+					G_AlertTeam( self, attacker, 512, 32 );
+				}
+				else if ( cliff_fall != 2 )
 				{
 					if ( meansOfDeath == MOD_KNOCKOUT || meansOfDeath == MOD_MELEE )
 					{
@@ -4623,7 +4616,7 @@ void G_ApplyKnockback( gentity_t *targ, vec3_t newDir, float knockback )
 	}
 }
 
-int G_CheckForLedge( gentity_t *self, vec3_t fallCheckDir, float checkDist )
+static int G_CheckForLedge( gentity_t *self, vec3_t fallCheckDir, float checkDist )
 {
 	vec3_t	start, end;
 	trace_t	tr;
@@ -4651,7 +4644,7 @@ int G_CheckForLedge( gentity_t *self, vec3_t fallCheckDir, float checkDist )
 	return 0;
 }
 
-void G_FriendlyFireReaction( gentity_t *self, gentity_t *other, int dflags )
+static void G_FriendlyFireReaction( gentity_t *self, gentity_t *other, int dflags )
 {
 	if ( (!player->client->ps.viewEntity || other->s.number != player->client->ps.viewEntity)) 
 	{//hit by a teammate
@@ -5052,7 +5045,10 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 	// check for godmode, completely getting out of the damage
 	if ( targ->flags & FL_GODMODE && !(dflags&DAMAGE_NO_PROTECTION) ) 
 	{
-		if ( targ->client && attacker->client && targ->client->playerTeam == attacker->client->playerTeam )
+		if ( targ->client 
+			&& attacker->client 
+			&& targ->client->playerTeam == attacker->client->playerTeam 
+			&& (!targ->NPC || !targ->NPC->charmedTime) )
 		{//complain, but don't turn on them
 			G_FriendlyFireReaction( targ, attacker, dflags );
 		}
@@ -5327,7 +5323,10 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 				
 				if ( yellAtAttacker )
 				{
-					G_FriendlyFireReaction( targ, attacker, dflags );
+					if ( !targ->NPC || !targ->NPC->charmedTime )
+					{
+						G_FriendlyFireReaction( targ, attacker, dflags );
+					}
 				}
 			}
 		}

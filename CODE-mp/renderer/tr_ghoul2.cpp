@@ -1610,6 +1610,7 @@ R_AddGHOULSurfaces
 */
 
 void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
+#ifndef DEDICATED
 	mdxaHeader_t	*aHeader;
 	shader_t		*cust_shader = 0;
 	int				fogNum = 0;
@@ -1625,8 +1626,8 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 	bool			setNewOrigin = false;
 	CGhoul2Info_v	&ghoul2 = *((CGhoul2Info_v *)ent->e.ghoul2);
 
-	// if we don't want server ghoul2 models and this is one, or we just don't want ghoul2 models at all, then return
-	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) || (r_noGhoul2->integer))
+	// if we don't want server ghoul2 models and this is one, then return
+	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) )
 	{
 		return;
 	}
@@ -1668,7 +1669,19 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 				VectorNormalize((float*)&ghoul2[i].mBltlist[ghoul2[i].mNewOrigin].position.matrix[1]);
 				VectorNormalize((float*)&ghoul2[i].mBltlist[ghoul2[i].mNewOrigin].position.matrix[2]);
 				mdxaBone_t		tempMatrix;
-				Inverse_Matrix(&ghoul2[i].mBltlist[ghoul2[i].mNewOrigin].position, &tempMatrix);
+				tempMatrix.matrix[0][0]=1.0f;
+				tempMatrix.matrix[0][1]=0.0f;
+				tempMatrix.matrix[0][2]=0.0f;
+				tempMatrix.matrix[0][3]=-ghoul2[i].mBltlist[ghoul2[i].mNewOrigin].position.matrix[0][3];
+				tempMatrix.matrix[1][0]=0.0f;
+				tempMatrix.matrix[1][1]=1.0f;
+				tempMatrix.matrix[1][2]=0.0f;
+				tempMatrix.matrix[1][3]=-ghoul2[i].mBltlist[ghoul2[i].mNewOrigin].position.matrix[1][3];
+				tempMatrix.matrix[2][0]=0.0f;
+				tempMatrix.matrix[2][1]=0.0f;
+				tempMatrix.matrix[2][2]=1.0f;
+				tempMatrix.matrix[2][3]=-ghoul2[i].mBltlist[ghoul2[i].mNewOrigin].position.matrix[2][3];
+				//Inverse_Matrix(&ghoul2[i].mBltlist[ghoul2[i].mNewOrigin].position, &tempMatrix);
 				Multiply_3x4Matrix(&rootMatrix, &tempMatrix, (mdxaBone_t*)&identityMatrix);
 
 				setNewOrigin = true;
@@ -1873,9 +1886,7 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 			else
 			{ // start the walk of the surface hierarchy	
 				CRenderSurface RS(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist, cust_shader, fogNum, personalModel, ghoul2[i].mTempBoneList, ent->e.renderfx, skin, currentModel, whichLod, ghoul2[i].mBltlist);
-#ifndef DEDICATED
 				RenderSurfaces(RS);
-#endif
 			}
 
 			// go through all the generated surfaces and create their bolt info if we need it.
@@ -1884,6 +1895,7 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 		}
 	}
 	Z_Free(modelList);
+#endif
 }	
 
 /*
@@ -1902,8 +1914,8 @@ void G2_ConstructGhoulSkeleton( CGhoul2Info_v &ghoul2, const int frameNum, qhand
 	bool			setNewOrigin = false;
 	mdxaBone_t		rootMatrix;
 
-	// if we don't want server ghoul2 models and this is one, or we just don't want ghoul2 models at all, then return
-	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) || (r_noGhoul2->integer))
+	// if we don't want server ghoul2 models and this is one, then return
+	if ((r_noServerGhoul2->integer && !(ghoul2[0].mCreationID & WF_CLIENTONLY)) )
 	{
 		return;
 	}
@@ -2206,7 +2218,6 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 	mdxmSurface_t		*surf;
 	int					version;
 	int					size;
-	shader_t			*sh;
 	mdxmSurfHierarchy_t	*surfInfo;
 
 #ifndef _M_IX86
@@ -2286,11 +2297,13 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 		{
 			LL(surfInfo->childIndexes[j]);
 		}
-#ifndef DEDICATED
+#ifdef DEDICATED
+		surfInfo->shaderIndex = 0;
+#else
+		shader_t	*sh;
 		// get the shader name
 		sh = R_FindShader( surfInfo->shader, lightmapsNone, stylesDefault, qtrue );
 		// insert it in the surface list
-#endif		
 		if ( sh->defaultShader ) 
 		{
 			surfInfo->shaderIndex = 0;
@@ -2299,6 +2312,7 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 		{
 			surfInfo->shaderIndex = sh->index;
 		}
+#endif		
 		RE_RegisterModels_StoreShaderRequest(mod_name, &surfInfo->shader[0], &surfInfo->shaderIndex);		
 
 		// find the next surface

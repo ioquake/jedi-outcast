@@ -748,7 +748,9 @@ void SetTeam( gentity_t *ent, char *s ) {
 	}
 	// they go to the end of the line for tournements
 	if ( team == TEAM_SPECTATOR ) {
-		client->sess.spectatorTime = level.time;
+		if ( (g_gametype.integer != GT_TOURNAMENT) || (oldTeam != TEAM_SPECTATOR) )	{//so you don't get dropped to the bottom of the queue for changing skins, etc.
+			client->sess.spectatorTime = level.time;
+		}
 	}
 
 	client->sess.sessionTeam = team;
@@ -827,10 +829,19 @@ void Cmd_Team_f( gentity_t *ent ) {
 		return;
 	}
 
+	if (gEscaping)
+	{
+		return;
+	}
+
 	// if they are playing a tournement game, count as a loss
 	if ( (g_gametype.integer == GT_TOURNAMENT )
-		&& ent->client->sess.sessionTeam == TEAM_FREE ) {
-		ent->client->sess.losses++;
+		&& ent->client->sess.sessionTeam == TEAM_FREE ) {//in a tournament game
+		//disallow changing teams
+		trap_SendServerCommand( ent-g_entities, "print \"Cannot switch teams in Duel\n\"" );
+		return;
+		//FIXME: why should this be a loss???
+		//ent->client->sess.losses++;
 	}
 
 	trap_Argv( 1, s, sizeof( s ) );
@@ -862,10 +873,15 @@ void Cmd_ForceChanged_f( gentity_t *ent )
 
 	strcpy(fpChStr, buf);
 
-	trap_SendServerCommand( ent-g_entities, va("print \"%s%s\n\"", S_COLOR_GREEN, fpChStr) );
+	trap_SendServerCommand( ent-g_entities, va("print \"%s%s\n\n\"", S_COLOR_GREEN, fpChStr) );
 
 	ent->client->ps.fd.forceDoInit = 1;
 argCheck:
+	if (g_gametype.integer == GT_TOURNAMENT)
+	{ //If this is duel, don't even bother changing team in relation to this.
+		return;
+	}
+
 	if (trap_Argc() > 1)
 	{
 		char	arg[MAX_TOKEN_CHARS];
@@ -914,6 +930,7 @@ void Cmd_Follow_f( gentity_t *ent ) {
 	// if they are playing a tournement game, count as a loss
 	if ( (g_gametype.integer == GT_TOURNAMENT )
 		&& ent->client->sess.sessionTeam == TEAM_FREE ) {
+		//WTF???
 		ent->client->sess.losses++;
 	}
 
@@ -937,7 +954,8 @@ void Cmd_FollowCycle_f( gentity_t *ent, int dir ) {
 
 	// if they are playing a tournement game, count as a loss
 	if ( (g_gametype.integer == GT_TOURNAMENT )
-		&& ent->client->sess.sessionTeam == TEAM_FREE ) {
+		&& ent->client->sess.sessionTeam == TEAM_FREE ) {\
+		//WTF???
 		ent->client->sess.losses++;
 	}
 	// first set them to spectator
@@ -1006,6 +1024,7 @@ static void G_SayTo( gentity_t *ent, gentity_t *other, int mode, int color, cons
 	if ( (g_gametype.integer == GT_TOURNAMENT )
 		&& other->client->sess.sessionTeam == TEAM_FREE
 		&& ent->client->sess.sessionTeam != TEAM_FREE ) {
+		//Hmm, maybe some option to do so if allowed?  Or at least in developer mode...
 		return;
 	}
 
@@ -1925,6 +1944,11 @@ void Cmd_ToggleSaber_f(gentity_t *ent)
 		return;
 	}
 
+	if (ent->client->ps.saberLockTime >= level.time)
+	{
+		return;
+	}
+
 	if (ent->client && ent->client->ps.weaponTime < 1)
 	{
 		if (ent->client->ps.saberHolstered)
@@ -2150,6 +2174,93 @@ void Cmd_EngageDuel_f(gentity_t *ent)
 	}
 }
 
+#ifdef _DEBUG
+extern stringID_table_t animTable[MAX_ANIMATIONS+1];
+void PM_SetAnim(int setAnimParts,int anim,int setAnimFlags, int blendTime);
+
+void Cmd_DebugSetSaberMove_f(gentity_t *self)
+{
+	int argNum = trap_Argc();
+	char arg[MAX_STRING_CHARS];
+
+	if (argNum < 2)
+	{
+		return;
+	}
+
+	trap_Argv( 1, arg, sizeof( arg ) );
+
+	if (!arg[0])
+	{
+		return;
+	}
+
+	self->client->ps.saberMove = atoi(arg);
+	self->client->ps.saberBlocked = BLOCKED_BOUNCE_MOVE;
+
+	if (self->client->ps.saberMove >= LS_MOVE_MAX)
+	{
+		self->client->ps.saberMove = LS_MOVE_MAX-1;
+	}
+
+	Com_Printf("Anim for move: %s\n", animTable[saberMoveData[self->client->ps.saberMove].animToUse].name);
+}
+
+void Cmd_DebugSetBodyAnim_f(gentity_t *self)
+{
+	int argNum = trap_Argc();
+	char arg[MAX_STRING_CHARS];
+	int i = 0;
+	pmove_t pmv;
+
+	if (argNum < 2)
+	{
+		return;
+	}
+
+	trap_Argv( 1, arg, sizeof( arg ) );
+
+	if (!arg[0])
+	{
+		return;
+	}
+
+	while (i < MAX_ANIMATIONS)
+	{
+		if (!Q_stricmp(arg, animTable[i].name))
+		{
+			break;
+		}
+		i++;
+	}
+
+	if (i == MAX_ANIMATIONS)
+	{
+		Com_Printf("Animation '%s' does not exist\n", arg);
+		return;
+	}
+
+	memset (&pmv, 0, sizeof(pmv));
+	pmv.ps = &self->client->ps;
+	pmv.animations = bgGlobalAnimations;
+	pmv.cmd = self->client->pers.cmd;
+	pmv.trace = trap_Trace;
+	pmv.pointcontents = trap_PointContents;
+	pmv.gametype = g_gametype.integer;
+
+	pm = &pmv;
+	PM_SetAnim(SETANIM_BOTH, i, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD, 0);
+
+	Com_Printf("Set body anim to %s\n", arg);
+}
+#endif
+
+void DismembermentTest(gentity_t *self);
+
+#ifdef _DEBUG
+void DismembermentByNum(gentity_t *self, int num);
+#endif
+
 /*
 =================
 ClientCommand
@@ -2359,9 +2470,28 @@ void ClientCommand( int clientNum ) {
 		Cmd_SetViewpos_f( ent );
 	else if (Q_stricmp (cmd, "stats") == 0)
 		Cmd_Stats_f( ent );
+	/*
 	else if (Q_stricmp(cmd, "#mm") == 0 && CheatsOk( ent ))
 	{
 		G_PlayerBecomeATST(ent);
+	}
+	*/
+	//I broke the ATST when I restructured it to use a single global anim set for all client animation.
+	//You can fix it, but you'll have to implement unique animations (per character) again.
+	else if (Q_stricmp(cmd, "headexplodey") == 0 && CheatsOk( ent ))
+	{
+		Cmd_Kill_f (ent);
+		if (ent->health < 1)
+		{
+			float presaveVel = ent->client->ps.velocity[2];
+			ent->client->ps.velocity[2] = 500;
+			DismembermentTest(ent);
+			ent->client->ps.velocity[2] = presaveVel;
+		}
+	}
+	else if (Q_stricmp(cmd, "g2animent") == 0 && CheatsOk( ent ))
+	{
+		G_CreateExampleAnimEnt(ent);
 	}
 	else if (Q_stricmp(cmd, "thedestroyer") == 0 && CheatsOk( ent ) && ent && ent->client && ent->client->ps.saberHolstered && ent->client->ps.weapon == WP_SABER)
 	{
@@ -2385,39 +2515,43 @@ void ClientCommand( int clientNum ) {
 		}
 	}
 #ifdef _DEBUG
-	else if (Q_stricmp(cmd, "gotocoord") == 0 && CheatsOk( ent ))
+	else if (Q_stricmp(cmd, "debugSetSaberMove") == 0)
 	{
-		char		x[64], y[64], z[64];
-		vec3_t		xyz;
-
-		if (trap_Argc() < 3)
+		Cmd_DebugSetSaberMove_f(ent);
+	}
+	else if (Q_stricmp(cmd, "debugSetBodyAnim") == 0)
+	{
+		Cmd_DebugSetBodyAnim_f(ent);
+	}
+	else if (Q_stricmp(cmd, "debugDismemberment") == 0)
+	{
+		Cmd_Kill_f (ent);
+		if (ent->health < 1)
 		{
-			return;
+			char	arg[MAX_STRING_CHARS];
+			int		iArg = 0;
+
+			if (trap_Argc() > 1)
+			{
+				trap_Argv( 1, arg, sizeof( arg ) );
+
+				if (arg[0])
+				{
+					iArg = atoi(arg);
+				}
+			}
+
+			DismembermentByNum(ent, iArg);
 		}
-
-		trap_Argv( 1, x, sizeof( x ) );
-		trap_Argv( 2, y, sizeof( y ) );
-		trap_Argv( 3, z, sizeof( z ) );
-
-		xyz[0] = atof(x);
-		xyz[1] = atof(y);
-		xyz[2] = atof(z);
-
-		VectorCopy(xyz, ent->client->ps.origin);
 	}
 #endif
 
-	/*
-	else if (Q_stricmp (cmd, "offwithmyhead") == 0)
-	{
-		DismembermentTest(ent);
-	}
-	*/
 	else
 	{
 		if (Q_stricmp(cmd, "addbot") == 0)
 		{ //because addbot isn't a recognized command unless you're the server, but it is in the menus regardless
-			trap_SendServerCommand( clientNum, va("print \"You can only add bots as the server.\n\"" ) );
+//			trap_SendServerCommand( clientNum, va("print \"You can only add bots as the server.\n\"" ) );
+			trap_SendServerCommand( clientNum, va("print \"%s.\n\"", G_GetStripEdString("SVINGAME", "ONLY_ADD_BOTS_AS_SERVER")));
 		}
 		else
 		{

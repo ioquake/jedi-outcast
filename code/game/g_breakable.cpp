@@ -608,7 +608,7 @@ void misc_model_breakable_init( gentity_t *ent )
 
 	if ( ent->spawnflags & 1 )
 	{//Blocks movement
-		ent->contents = CONTENTS_BODY|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;//Was CONTENTS_SOLID, but only architecture should be this
+		ent->contents = CONTENTS_SOLID|CONTENTS_OPAQUE|CONTENTS_BODY|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;//Was CONTENTS_SOLID, but only architecture should be this
 	}
 	else if ( ent->health )
 	{//Can only be shot

@@ -260,11 +260,16 @@ void SP_CreateSnow( gentity_t *ent )
 
 	G_SpawnInt( "count", "1000", &ent->count );
 
-	sprintf( temp, "snow init %i", ent->count );
+	cvar_t *r_weatherScale = gi.cvar( "r_weatherScale", "1", CVAR_ARCHIVE );
 
-	G_FindConfigstringIndex( temp, CS_WORLD_FX, MAX_WORLD_FX, qtrue );
+	if ( r_weatherScale->value > 0.0f )
+	{
+		sprintf( temp, "snow init %i", (int)( ent->count * r_weatherScale->value ));
 
-	level.worldFlags |= WF_SNOWING;
+		G_FindConfigstringIndex( temp, CS_WORLD_FX, MAX_WORLD_FX, qtrue );
+
+		level.worldFlags |= WF_SNOWING;
+	}
 }
 
 /*QUAKED fx_rain (1 0 0) (-16 -16 -16) (16 16 16)
@@ -279,11 +284,16 @@ void SP_CreateRain( gentity_t *ent )
 
 	G_SpawnInt( "count", "500", &ent->count );
 
-	sprintf( temp, "rain init %i", ent->count );
+	cvar_t *r_weatherScale = gi.cvar( "r_weatherScale", "1", CVAR_ARCHIVE );
 
-	G_FindConfigstringIndex( temp, CS_WORLD_FX, MAX_WORLD_FX, qtrue );
+	if ( r_weatherScale->value > 0.0f )
+	{
+		sprintf( temp, "rain init %i", (int)( ent->count * r_weatherScale->value ));
 
-	level.worldFlags |= WF_RAINING;
+		G_FindConfigstringIndex( temp, CS_WORLD_FX, MAX_WORLD_FX, qtrue );
+
+		level.worldFlags |= WF_RAINING;
+	}
 }
 
 

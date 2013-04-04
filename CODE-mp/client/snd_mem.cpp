@@ -15,6 +15,9 @@
 
 #include "snd_mp3.h"
 
+// Open AL
+extern int s_UseOpenAL;
+
 /*
 ===============================================================================
 
@@ -230,30 +233,48 @@ static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pDa
 		if (com_buildScript->integer)
 		{
 			fileHandle_t hFile;
+			//German
 			strncpy(psVoice,"chr_d",5);	// same number of letters as "chars"
-			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cache this file
+			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cache the wav
 			if (!hFile)
 			{
 				strcpy(&psFilename[iNameStrlen-3],"mp3");		//not there try mp3
-				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache this file
+				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache the mp3
 			}
 			if (hFile)
 			{
 				FS_FCloseFile(hFile);
 			}
-			strcpy(&psFilename[iNameStrlen-3],"wav");
+			strcpy(&psFilename[iNameStrlen-3],"wav");	//put it back to wav
 
+			//French
 			strncpy(psVoice,"chr_f",5);	// same number of letters as "chars"
-			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cahce this file
+			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cache the wav
 			if (!hFile)
 			{
 				strcpy(&psFilename[iNameStrlen-3],"mp3");		//not there try mp3
-				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache this file
+				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache the mp3
 			}
 			if (hFile)
 			{
 				FS_FCloseFile(hFile);
 			}
+			strcpy(&psFilename[iNameStrlen-3],"wav");	//put it back to wav
+
+			//Spanish
+			strncpy(psVoice,"chr_e",5);	// same number of letters as "chars"
+			FS_FOpenFileRead(psFilename, &hFile, qfalse);		//cache the wav
+			if (!hFile)
+			{
+				strcpy(&psFilename[iNameStrlen-3],"mp3");		//not there try mp3
+				FS_FOpenFileRead(psFilename, &hFile, qfalse);	//cache the mp3
+			}
+			if (hFile)
+			{
+				FS_FCloseFile(hFile);
+			}
+			strcpy(&psFilename[iNameStrlen-3],"wav");	//put it back to wav
+
 			strncpy(psVoice,"chars",5);	//put it back to chars
 		}
 
@@ -264,10 +285,13 @@ static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pDa
 		{				
 			strncpy(psVoice,"chr_d",5);	// same number of letters as "chars"
 		}
-		else
-		if (s_language && stricmp("FRANCAIS",s_language->string)==0)
+		else if (s_language && stricmp("FRANCAIS",s_language->string)==0)
 		{				
 			strncpy(psVoice,"chr_f",5);	// same number of letters as "chars"
+		}
+		else if (s_language && stricmp("ESPANOL",s_language->string)==0)
+		{				
+			strncpy(psVoice,"chr_e",5);	// same number of letters as "chars"
 		}
 		else
 		{
@@ -340,6 +364,7 @@ static qboolean S_LoadSound_Actual( sfx_t *sfx )
 	short		*samples;
 	wavinfo_t	info;
 	int			size;
+	ALuint		Buffer;
 
 	// player specific sounds are never directly loaded...
 	//
@@ -406,6 +431,27 @@ static qboolean S_LoadSound_Actual( sfx_t *sfx )
 
 				S_LoadSound_Finalize(&info,sfx,pbUnpackBuffer);
 
+				// Open AL
+				if (s_UseOpenAL)
+				{
+					// Clear Open AL Error state
+					alGetError();
+
+					// Generate AL Buffer
+					alGenBuffers(1, &Buffer);
+					if (alGetError() == AL_NO_ERROR)
+					{
+						// Copy audio data to AL Buffer
+						alBufferData(Buffer, AL_FORMAT_MONO16, sfx->pSoundData, sfx->iSoundLengthInSamples*2, 22050);
+						if (alGetError() == AL_NO_ERROR)
+						{
+							sfx->Buffer = Buffer;
+							Z_Free(sfx->pSoundData);
+							sfx->pSoundData = NULL;
+						}
+					}
+				}
+
 				Z_Free(pbUnpackBuffer);
 			}
 		}
@@ -451,6 +497,28 @@ static qboolean S_LoadSound_Actual( sfx_t *sfx )
 		sfx->iSoundLengthInSamples	= info.samples;
 		sfx->pSoundData = NULL;
 		ResampleSfx( sfx, info.rate, info.width, data + info.dataofs );		
+
+		// Open AL
+		if (s_UseOpenAL)
+		{
+			// Clear Open AL Error State
+			alGetError();
+
+			// Generate AL Buffer
+			alGenBuffers(1, &Buffer);
+			if (alGetError() == AL_NO_ERROR)
+			{
+				// Copy audio data to AL Buffer
+				alBufferData(Buffer, AL_FORMAT_MONO16, sfx->pSoundData, sfx->iSoundLengthInSamples*2, 22050);
+				if (alGetError() == AL_NO_ERROR)
+				{
+					// Store AL Buffer in sfx struct, and release sample data
+					sfx->Buffer = Buffer;
+					Z_Free(sfx->pSoundData);
+					sfx->pSoundData = NULL;
+				}
+			}
+		}
 
 		Z_Free(samples);
 	}

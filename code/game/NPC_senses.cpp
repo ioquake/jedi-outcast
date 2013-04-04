@@ -11,6 +11,7 @@
 	#include <float.h>
 #endif
 
+extern int eventClearTime;
 /*
 qboolean G_ClearLineOfSight(const vec3_t point1, const vec3_t point2, int ignore, int clipmask)
 
@@ -691,6 +692,11 @@ void ClearPlayerAlertEvents( void )
 	}
 	//make sure this never drops below zero... if it does, something very very bad happened
 	assert( level.numAlertEvents >= 0 );
+
+	if ( eventClearTime < level.time )
+	{//this is just a 200ms debouncer so things that generate constant alerts (like corpses and missiles) add an alert every 200 ms
+		eventClearTime = level.time + ALERT_CLEAR_TIME;
+	}
 }
 
 qboolean RemoveOldestAlert( void )

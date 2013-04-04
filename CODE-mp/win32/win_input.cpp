@@ -52,8 +52,6 @@ typedef struct {
 static	joystickInfo_t	joy;
 
 
-cvar_t	*k_language;
-
 cvar_t	*in_midi;
 cvar_t	*in_midiport;
 cvar_t	*in_midichannel;
@@ -408,30 +406,30 @@ void IN_DIMouse( int *mx, int *my ) {
 		switch (od.dwOfs) {
 		case DIMOFS_BUTTON0:
 			if (od.dwData & 0x80)
-				Sys_QueEvent( od.dwTimeStamp, SE_KEY, K_MOUSE1, qtrue, 0, NULL );
+				Sys_QueEvent( od.dwTimeStamp, SE_KEY, A_MOUSE1, qtrue, 0, NULL );
 			else
-				Sys_QueEvent( od.dwTimeStamp, SE_KEY, K_MOUSE1, qfalse, 0, NULL );
+				Sys_QueEvent( od.dwTimeStamp, SE_KEY, A_MOUSE1, qfalse, 0, NULL );
 			break;
 
 		case DIMOFS_BUTTON1:
 			if (od.dwData & 0x80)
-				Sys_QueEvent( od.dwTimeStamp, SE_KEY, K_MOUSE2, qtrue, 0, NULL );
+				Sys_QueEvent( od.dwTimeStamp, SE_KEY, A_MOUSE2, qtrue, 0, NULL );
 			else
-				Sys_QueEvent( od.dwTimeStamp, SE_KEY, K_MOUSE2, qfalse, 0, NULL );
+				Sys_QueEvent( od.dwTimeStamp, SE_KEY, A_MOUSE2, qfalse, 0, NULL );
 			break;
 			
 		case DIMOFS_BUTTON2:
 			if (od.dwData & 0x80)
-				Sys_QueEvent( od.dwTimeStamp, SE_KEY, K_MOUSE3, qtrue, 0, NULL );
+				Sys_QueEvent( od.dwTimeStamp, SE_KEY, A_MOUSE3, qtrue, 0, NULL );
 			else
-				Sys_QueEvent( od.dwTimeStamp, SE_KEY, K_MOUSE3, qfalse, 0, NULL );
+				Sys_QueEvent( od.dwTimeStamp, SE_KEY, A_MOUSE3, qfalse, 0, NULL );
 			break;
 
 		case DIMOFS_BUTTON3:
 			if (od.dwData & 0x80)
-				Sys_QueEvent( od.dwTimeStamp, SE_KEY, K_MOUSE4, qtrue, 0, NULL );
+				Sys_QueEvent( od.dwTimeStamp, SE_KEY, A_MOUSE4, qtrue, 0, NULL );
 			else
-				Sys_QueEvent( od.dwTimeStamp, SE_KEY, K_MOUSE4, qfalse, 0, NULL );
+				Sys_QueEvent( od.dwTimeStamp, SE_KEY, A_MOUSE4, qfalse, 0, NULL );
 			break;
 		}
 	}
@@ -549,29 +547,38 @@ void IN_StartupMouse( void )
 IN_MouseEvent
 ===========
 */
+#define MAX_MOUSE_BUTTONS	5
+
+static int mouseConvert[MAX_MOUSE_BUTTONS] =
+{
+	A_MOUSE1,
+	A_MOUSE2,
+	A_MOUSE3,
+	A_MOUSE4,
+	A_MOUSE5
+};
+
 void IN_MouseEvent (int mstate)
 {
 	int		i;
 
 	if ( !s_wmv.mouseInitialized )
-		return;
-
-// perform button actions
-	for  (i = 0 ; i < 5 ; i++ )
 	{
-		if ( (mstate & (1<<i)) &&
-			!(s_wmv.oldButtonState & (1<<i)) )
-		{
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_MOUSE1 + i, qtrue, 0, NULL );
-		}
+		return;
+	}
 
-		if ( !(mstate & (1<<i)) &&
-			(s_wmv.oldButtonState & (1<<i)) )
+	// perform button actions
+	for  (i = 0 ; i < MAX_MOUSE_BUTTONS ; i++ )
+	{
+		if ( (mstate & (1 << i)) && !(s_wmv.oldButtonState & (1 << i)) )
 		{
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_MOUSE1 + i, qfalse, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, mouseConvert[i], true, 0, NULL );
+		}
+		if ( !(mstate & (1 << i)) && (s_wmv.oldButtonState & (1 << i)) )
+		{
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, mouseConvert[i], false, 0, NULL );
 		}
 	}	
-
 	s_wmv.oldButtonState = mstate;
 }
 
@@ -656,8 +663,6 @@ void IN_Init( void ) {
 	in_debugJoystick		= Cvar_Get ("in_debugjoystick",			"0",		CVAR_TEMP);
 
 	joy_threshold			= Cvar_Get ("joy_threshold",			"0.15",		CVAR_ARCHIVE);
-
-	k_language              = Cvar_Get ("k_language",               "american", CVAR_ARCHIVE | CVAR_NORESTART);
 
 	IN_Startup();
 }
@@ -843,15 +848,15 @@ int JoyToI( int value ) {
 }
 
 int	joyDirectionKeys[16] = {
-	K_LEFTARROW, K_RIGHTARROW,
-	K_UPARROW, K_DOWNARROW,
-	K_JOY16, K_JOY17,
-	K_JOY18, K_JOY19,
-	K_JOY20, K_JOY21,
-	K_JOY22, K_JOY23,
+	A_CURSOR_LEFT, A_CURSOR_RIGHT,
+	A_CURSOR_UP, A_CURSOR_DOWN,
+	A_JOY16, A_JOY17,
+	A_JOY18, A_JOY19,
+	A_JOY20, A_JOY21,
+	A_JOY22, A_JOY23,
 
-	K_JOY24, K_JOY25,
-	K_JOY26, K_JOY27
+	A_JOY24, A_JOY25,
+	A_JOY26, A_JOY27
 };
 
 /*
@@ -898,10 +903,10 @@ void IN_JoyMove( void ) {
 	buttonstate = joy.ji.dwButtons;
 	for ( i=0 ; i < joy.jc.wNumButtons ; i++ ) {
 		if ( (buttonstate & (1<<i)) && !(joy.oldbuttonstate & (1<<i)) ) {
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_JOY1 + i, qtrue, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, A_JOY0 + i, qtrue, 0, NULL );
 		}
 		if ( !(buttonstate & (1<<i)) && (joy.oldbuttonstate & (1<<i)) ) {
-			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, K_JOY1 + i, qfalse, 0, NULL );
+			Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, A_JOY0 + i, qfalse, 0, NULL );
 		}
 	}
 	joy.oldbuttonstate = buttonstate;
@@ -968,11 +973,12 @@ static void MIDI_NoteOff( int note )
 {
 	int qkey;
 
-	qkey = note - 60 + K_AUX1;
+	qkey = note - 60 + A_AUX0;
 
-	if ( qkey > 255 || qkey < K_AUX1 )
+	if ( qkey < A_AUX0 )
+	{
 		return;
-
+	}
 	Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, qkey, qfalse, 0, NULL );
 }
 
@@ -981,13 +987,16 @@ static void MIDI_NoteOn( int note, int velocity )
 	int qkey;
 
 	if ( velocity == 0 )
+	{
 		MIDI_NoteOff( note );
+	}
 
-	qkey = note - 60 + K_AUX1;
+	qkey = note - 60 + A_AUX0;
 
-	if ( qkey > 255 || qkey < K_AUX1 )
+	if ( qkey < A_AUX0 )
+	{
 		return;
-
+	}
 	Sys_QueEvent( g_wv.sysMsgTime, SE_KEY, qkey, qtrue, 0, NULL );
 }
 

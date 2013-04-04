@@ -6,13 +6,7 @@
 #include "../game/q_shared.h"
 #include "qcommon.h"
 
-//#define _TESTCR_
 static int			bloc = 0;
-
-#ifdef _TESTCR_
-static int byteCount=0;
-static int bitCount=0;
-#endif
 
 void	Huff_putBit( int bit, byte *fout, int *offset) {
 	bloc = *offset;
@@ -240,9 +234,6 @@ void Huff_addRef(huff_t* huff, byte ch) {
 /* Get a symbol */
 int Huff_Receive (node_t *node, int *ch, byte *fin) {
 	while (node && node->symbol == INTERNAL_NODE) {
-#ifdef _TESTCR_
-		bitCount++;
-#endif
 		if (get_bit(fin)) {
 			node = node->right;
 		} else {
@@ -250,11 +241,9 @@ int Huff_Receive (node_t *node, int *ch, byte *fin) {
 		}
 	}
 	if (!node) {
-		Com_Error(ERR_DROP, "Illegal tree!\n");
+		return 0;
+//		Com_Error(ERR_DROP, "Illegal tree!\n");
 	}
-#ifdef _TESTCR_	
-	byteCount++;
-#endif
 	return (*ch = node->symbol);
 }
 
@@ -262,9 +251,6 @@ int Huff_Receive (node_t *node, int *ch, byte *fin) {
 void Huff_offsetReceive (node_t *node, int *ch, byte *fin, int *offset) {
 	bloc = *offset;
 	while (node && node->symbol == INTERNAL_NODE) {
-#ifdef _TESTCR_
-		bitCount++;
-#endif
 		if (get_bit(fin)) {
 			node = node->right;
 		} else {
@@ -272,11 +258,10 @@ void Huff_offsetReceive (node_t *node, int *ch, byte *fin, int *offset) {
 		}
 	}
 	if (!node) {
-		Com_Error(ERR_DROP, "Illegal tree!\n");
+		*ch = 0;
+		return;
+//		Com_Error(ERR_DROP, "Illegal tree!\n");
 	}
-#ifdef _TESTCR_	
-	byteCount++;
-#endif
 	*ch = node->symbol;
 	*offset = bloc;
 }
@@ -322,9 +307,9 @@ void Huff_Decompress(msg_t *mbuf, int offset) {
 	huff_t		huff;
 
 	size = mbuf->cursize - offset;
-	buffer = mbuf->data+ + offset;
+	buffer = mbuf->data + offset;
 
-	if (size<=0) {
+	if ( size <= 0 ) {
 		return;
 	}
 
@@ -337,13 +322,24 @@ void Huff_Decompress(msg_t *mbuf, int offset) {
 	huff.tree->parent = huff.tree->left = huff.tree->right = NULL;
 
 	cch = buffer[0]*256 + buffer[1];
+	// don't overflow with bad messages
+	if ( cch > mbuf->maxsize - offset ) {
+		cch = mbuf->maxsize - offset;
+	}
 	bloc = 16;
 
-	for (j=0; j<cch; j++) {
+	for ( j = 0; j < cch; j++ ) {
+		ch = 0;
+		// don't overflow reading from the messages
+		// FIXME: would it be better to have a overflow check in get_bit ?
+		if ( (bloc >> 3) > size ) {
+			seq[j] = 0;
+			break;
+		}
 		Huff_Receive(huff.tree, &ch, buffer);				/* Get a character */
-		if (ch == NYT) {								/* We got a NYT, get the symbol associated with it */
+		if ( ch == NYT ) {								/* We got a NYT, get the symbol associated with it */
 			ch = 0;
-			for (i = 0; i < 8; i++) {
+			for ( i = 0; i < 8; i++ ) {
 				ch = (ch<<1) + get_bit(buffer);
 			}
 		}
@@ -352,9 +348,8 @@ void Huff_Decompress(msg_t *mbuf, int offset) {
 
 		Huff_addRef(&huff, (byte)ch);								/* Increment node */
 	}
-
 	mbuf->cursize = cch + offset;
-	Com_Memcpy(mbuf->data+offset, seq, cch);
+	Com_Memcpy(mbuf->data + offset, seq, cch);
 }
 
 extern 	int oldsize;
@@ -400,11 +395,6 @@ void Huff_Compress(msg_t *mbuf, int offset) {
 
 void Huff_Init(huffman_t *huff) {
 
-#ifdef _TESTCR_
-	byteCount=0;
-	bitCount=0;
-#endif
-
 	Com_Memset(&huff->compressor, 0, sizeof(huff_t));
 	Com_Memset(&huff->decompressor, 0, sizeof(huff_t));
 
@@ -424,16 +414,3 @@ void Huff_Init(huffman_t *huff) {
 	huff->compressor.loc[NYT] = huff->compressor.tree;
 }
 
-float Huff_GetCR(void)
-{
-#ifdef _TESTCR_
-	if(!bitCount)
-	{
-		// No valid data.
-		return(-1.0f);
-	}
-	return(((float)byteCount*8.0f)/bitCount);
-#else
-	return(-1.0f);
-#endif
-}

@@ -62,7 +62,7 @@
 #define	GIANT_HEIGHT		48
 
 #define MAX_PRINTTEXT		128
-#define MAX_CAPTIONTEXT		 64
+#define MAX_CAPTIONTEXT		 32	// we don't need 64 now since we don't use this for scroll text, and I needed to change a hardwired 128 to 256, so...
 #define MAX_LCARSTEXT		128
 
 
@@ -362,7 +362,7 @@ typedef struct {
 	char		printText[MAX_PRINTTEXT][128];	
 	int			printTextY;			 	
 
-	char		captionText[MAX_CAPTIONTEXT][128];	
+	char		captionText[MAX_CAPTIONTEXT][256/*128*/];	// bosted for taiwanese squealy radio static speech in kejim post
 	int			captionTextY;
 
 	int			scrollTextLines;	// Number of lines being printed
@@ -594,6 +594,7 @@ extern	vmCvar_t		cg_panoNumShots;
 extern	vmCvar_t		fx_freeze;
 extern	vmCvar_t		fx_debug;
 
+extern	vmCvar_t		cg_missionInfoCentered;
 extern	vmCvar_t		cg_missionInfoFlashTime;
 extern	vmCvar_t		cg_hudFiles;
 
@@ -930,7 +931,7 @@ void	cgi_UpdateScreen( void );
 void	cgi_CM_LoadMap( const char *mapname );
 int		cgi_CM_NumInlineModels( void );
 clipHandle_t cgi_CM_InlineModel( int index );		// 0 = world, 1+ = bmodels
-clipHandle_t cgi_CM_TempBoxModel( const vec3_t mins, const vec3_t maxs );
+clipHandle_t cgi_CM_TempBoxModel( const vec3_t mins, const vec3_t maxs );//, const int contents );
 int		cgi_CM_PointContents( const vec3_t p, clipHandle_t model );
 int		cgi_CM_TransformedPointContents( const vec3_t p, clipHandle_t model, const vec3_t origin, const vec3_t angles );
 void	cgi_CM_BoxTrace( trace_t *results, const vec3_t start, const vec3_t end,
@@ -965,6 +966,15 @@ void	cgi_S_StartBackgroundTrack( const char *intro, const char *loop, qboolean b
 float	cgi_S_GetSampleLength( sfxHandle_t sfx);
 
 
+#ifdef _IMMERSION
+void	cgi_FF_Start( ffHandle_t ff, int clientNum );
+void	cgi_FF_Ensure( ffHandle_t ff, int clientNum );
+void	cgi_FF_Stop( ffHandle_t ff, int clientNum );
+void	cgi_FF_StopAll( void );
+void	cgi_FF_Shake( int intensity, int duration );
+ffHandle_t	cgi_FF_Register( const char *name, int channel );
+void	cgi_FF_AddLoopingForce( ffHandle_t handle, int entNum );
+#else
 // I've made these into ints instead of original typedefs to cut down on rebuild time
 //	if I update the module they're in. No point in rebuilding all CGAME modules...
 //
@@ -973,6 +983,7 @@ void	cgi_FF_EnsureFX( int iFX );
 void	cgi_FF_StopFX( int iFX );
 void	cgi_FF_StopAllFX( void );
 
+#endif // _IMMERSION
 
 
 
@@ -990,6 +1001,7 @@ int			cgi_R_Font_StrLenChars(const char *text);
 int			cgi_R_Font_HeightPixels(const int iFontIndex, const float scale = 1.0f);
 void		cgi_R_Font_DrawString(int ox, int oy, const char *text, const float *rgba, const int setIndex, int iMaxPixelWidth, const float scale = 1.0f);
 qboolean	cgi_Language_IsAsian(void);
+qboolean	cgi_Language_UsesSpaces(void);
 unsigned	cgi_AnyLanguage_ReadCharFromString( const char **ppText, qboolean *pbIsTrailingPunctuation = NULL );
 
 // a scene is built up by calls to R_ClearScene and the various R_Add functions.

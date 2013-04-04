@@ -312,6 +312,35 @@ extern void CG_RegisterNPCCustomSounds( clientInfo_t *ci );
 extern void CG_RegisterNPCEffects( team_t team );
 extern void CG_ParseAnimationSndFile( const char *filename, int animFileIndex );
 
+//#define CONVENIENT_ANIMATION_FILE_DEBUG_THING
+
+#ifdef CONVENIENT_ANIMATION_FILE_DEBUG_THING
+void SpewDebugStuffToFile(animation_t *bgGlobalAnimations)
+{
+	char BGPAFtext[40000];
+	fileHandle_t f;
+	int i = 0;
+
+	gi.FS_FOpenFile("file_of_debug_stuff_SP.txt", &f, FS_WRITE);
+
+	if (!f)
+	{
+		return;
+	}
+
+	BGPAFtext[0] = 0;
+
+	while (i < MAX_ANIMATIONS)
+	{
+		strcat(BGPAFtext, va("%i %i\n", i, bgGlobalAnimations[i].frameLerp));
+		i++;
+	}
+
+	gi.FS_Write(BGPAFtext, strlen(BGPAFtext), f);
+	gi.FS_FCloseFile(f);
+}
+#endif
+
 /*
 ======================
 CG_ParseAnimationFile
@@ -427,6 +456,13 @@ qboolean G_ParseAnimationFile( const char *af_filename )
 
 		animations[animNum].initialLerp = ceil(1000.0f / fabs(fps));
 	}
+
+#ifdef CONVENIENT_ANIMATION_FILE_DEBUG_THING
+	if (strstr(af_filename, "humanoid"))
+	{
+		SpewDebugStuffToFile(animations);
+	}
+#endif
 
 	return qtrue;
 }

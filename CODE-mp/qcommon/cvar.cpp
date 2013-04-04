@@ -150,6 +150,11 @@ void	Cvar_CommandCompletion( void(*callback)(const char *s) ) {
 	cvar_t		*cvar;
 	
 	for ( cvar = cvar_vars ; cvar ; cvar = cvar->next ) {
+		// Dont show internal cvars
+		if ( cvar->flags & CVAR_INTERNAL )
+		{
+			continue;
+		}
 		callback( cvar->name );
 	}
 }
@@ -463,11 +468,11 @@ qboolean Cvar_Command( void ) {
 	// perform a variable print or set
 	if ( Cmd_Argc() == 1 ) 
 	{
-		if (v->flags & CVAR_INTERNAL) // don't display
+/*		if (v->flags & CVAR_INTERNAL) // don't display
 		{
 			return qtrue;
 		}
-
+*/
 		Com_Printf ("\"%s\" is:\"%s" S_COLOR_WHITE "\" default:\"%s" S_COLOR_WHITE "\"\n", v->name, v->string, v->resetString );
 		if ( v->latchedString ) {
 			Com_Printf( "latched: \"%s\"\n", v->latchedString );
@@ -902,7 +907,7 @@ Reads in all archived cvars
 ============
 */
 void Cvar_Init (void) {
-	cvar_cheats = Cvar_Get("sv_cheats", "1", CVAR_ROM | CVAR_SYSTEMINFO );
+	cvar_cheats = Cvar_Get("sv_cheats", "0", CVAR_ROM | CVAR_SYSTEMINFO );
 
 	Cmd_AddCommand ("toggle", Cvar_Toggle_f);
 	Cmd_AddCommand ("set", Cvar_Set_f);

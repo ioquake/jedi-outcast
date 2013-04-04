@@ -995,10 +995,9 @@ Ghoul2 Insert Start
 Ghoul2 Insert End
 */
 
-	if (!r_noServerGhoul2 || !r_noGhoul2)
+	if (!r_noServerGhoul2)
 	{ //keep it from choking when it gets to these checks in the g2 code. Registering all r_ cvars for the server would be a Bad Thing though.
 		r_noServerGhoul2 = Cvar_Get( "r_noserverghoul2", "0", 0);
-		r_noGhoul2 = Cvar_Get( "r_noghoul2", "0", 0);
 	}
 
 	if ( !name || !name[0] ) {
@@ -1377,7 +1376,6 @@ static qboolean R_LoadMD3 (model_t *mod, int lod, void *buffer, const char *mod_
 	int					i, j;
 	md3Header_t			*pinmodel;
 	md3Surface_t		*surf;
-	md3Shader_t			*shader;
 	int					version;
 	int					size;
 
@@ -1508,6 +1506,7 @@ static qboolean R_LoadMD3 (model_t *mod, int lod, void *buffer, const char *mod_
 		}
 #ifndef DEDICATED
         // register the shaders
+		md3Shader_t		*shader;
         shader = (md3Shader_t *) ( (byte *)surf + surf->ofsShaders );
         for ( j = 0 ; j < surf->numShaders ; j++, shader++ ) {
             shader_t	*sh;
@@ -1584,7 +1583,6 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name, qbo
 
 	int					version;
 	int					size;
-	shader_t			*sh;
 
 	pinmodel = (md4Header_t *)buffer;
 	//
@@ -1690,6 +1688,7 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name, qbo
 			// change to surface identifier
 			surf->ident = SF_MD4;
 #ifndef DEDICATED		
+			shader_t	*sh;
 			// register the shaders
 			sh = R_FindShader( surf->shader, lightmapsNone, stylesDefault, qtrue );
 			if ( sh->defaultShader ) {

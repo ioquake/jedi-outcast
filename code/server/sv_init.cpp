@@ -198,7 +198,7 @@ void SV_SpawnServer( char *server, ForceReload_e eForceReload, qboolean bAllowSc
 	Com_Printf ("Server: %s\n",server);	
 
 	// init client structures and svs.numSnapshotEntities 
-	if ( !Cvar_VariableValue("sv_running") ) {
+	if ( !Cvar_VariableIntegerValue("sv_running") ) {
 		SV_Startup();
 	}		
 

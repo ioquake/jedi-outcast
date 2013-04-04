@@ -109,6 +109,7 @@ void CMod_LoadSubmodels( lump_t *l ) {
 		Com_Error (ERR_DROP, "Map with no models");
 	}
 
+	//FIXME: note that MAX_SUBMODELS - 1 is used for BOX_MODEL_HANDLE, if that slot gets used, that would be bad, no?
 	if ( count > MAX_SUBMODELS ) {
 		Com_Error( ERR_DROP, "MAX_SUBMODELS (%d) exceeded by %d", MAX_SUBMODELS, count-MAX_SUBMODELS );
 	}
@@ -892,7 +893,7 @@ To keep everything totally uniform, bounding boxes are turned into small
 BSP trees instead of being compared directly.
 ===================
 */
-clipHandle_t CM_TempBoxModel( const vec3_t mins, const vec3_t maxs ) {
+clipHandle_t CM_TempBoxModel( const vec3_t mins, const vec3_t maxs) {//, const int contents ) {
 	box_planes[0].dist = maxs[0];
 	box_planes[1].dist = -maxs[0];
 	box_planes[2].dist = mins[0];
@@ -908,6 +909,9 @@ clipHandle_t CM_TempBoxModel( const vec3_t mins, const vec3_t maxs ) {
 
 	VectorCopy( mins, box_brush->bounds[0] );
 	VectorCopy( maxs, box_brush->bounds[1] );
+
+	//FIXME: this is the "correct" way, but not the way JK2 was designed around... fix for further projects
+	//box_brush->contents = contents;
 
 	return BOX_MODEL_HANDLE;
 }

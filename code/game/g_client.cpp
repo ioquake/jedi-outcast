@@ -1623,11 +1623,11 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 		//
 		
 		ent->health = client->ps.stats[STAT_HEALTH] = client->ps.stats[STAT_MAX_HEALTH];
-		ent->client->dismemberProbHead = 1;
+		ent->client->dismemberProbHead = 0;
 		ent->client->dismemberProbArms = 5;
 		ent->client->dismemberProbHands = 20;
-		ent->client->dismemberProbWaist = 1;
-		ent->client->dismemberProbLegs = 1;
+		ent->client->dismemberProbWaist = 0;
+		ent->client->dismemberProbLegs = 0;
 
 		ent->client->ps.batteryCharge = 2500;
 

@@ -9,6 +9,7 @@
 
 #define GLYPH_MAX_KOREAN_SHADERS 3
 #define GLYPH_MAX_TAIWANESE_SHADERS 4
+#define GLYPH_MAX_JAPANESE_SHADERS 3
 #define GLYPH_MAX_ASIAN_SHADERS 4	// this MUST equal the larger of the above defines
 
 class CFontInfo
@@ -69,7 +70,9 @@ int RE_Font_StrLenPixels(const char *psText, const int iFontHandle, const float 
 int RE_Font_StrLenChars(const char *psText);
 int RE_Font_HeightPixels(const int iFontHandle, const float fScale = 1.0f);
 void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, const int iFontHandle, int iCharLimit, const float fScale = 1.0f);
-unsigned int AnyLanguage_ReadCharFromString( const char **ppsText );
+qboolean Language_IsAsian(void);
+qboolean Language_UsesSpaces(void);
+unsigned int AnyLanguage_ReadCharFromString( const char *psText, int *piAdvanceCount, qboolean *pbIsTrailingPunctuation/* = NULL*/ );
 
 
 

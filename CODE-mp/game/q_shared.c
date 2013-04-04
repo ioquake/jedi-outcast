@@ -568,6 +568,83 @@ int COM_ParseInfos( char *buf, int max, char infos[][MAX_INFO_STRING] ) {
 }
 #endif
 
+/*
+===============
+COM_ParseString
+===============
+*/
+qboolean COM_ParseString( const char **data, const char **s ) 
+{
+//	*s = COM_ParseExt( data, qtrue );
+	*s = COM_ParseExt( data, qfalse );
+	if ( s[0] == 0 ) 
+	{
+		Com_Printf("unexpected EOF\n");
+		return qtrue;
+	}
+	return qfalse;
+}
+
+/*
+===============
+COM_ParseInt
+===============
+*/
+qboolean COM_ParseInt( const char **data, int *i ) 
+{
+	const char	*token;
+
+	token = COM_ParseExt( data, qfalse );
+	if ( token[0] == 0 ) 
+	{
+		Com_Printf( "unexpected EOF\n" );
+		return qtrue;
+	}
+
+	*i = atoi( token );
+	return qfalse;
+}
+
+/*
+===============
+COM_ParseFloat
+===============
+*/
+qboolean COM_ParseFloat( const char **data, float *f ) 
+{
+	const char	*token;
+
+	token = COM_ParseExt( data, qfalse );
+	if ( token[0] == 0 ) 
+	{
+		Com_Printf( "unexpected EOF\n" );
+		return qtrue;
+	}
+
+	*f = atof( token );
+	return qfalse;
+}
+
+/*
+===============
+COM_ParseVec4
+===============
+*/
+qboolean COM_ParseVec4( const char **buffer, vec4_t *c) 
+{
+	int i;
+	float f;
+
+	for (i = 0; i < 4; i++) 
+	{
+		if (COM_ParseFloat(buffer, &f)) 
+		{
+			return qtrue;
+		}
+		(*c)[i] = f;
+	}
+	return qfalse;
+}
 
 /*
 ==================

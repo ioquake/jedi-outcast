@@ -138,7 +138,18 @@ void NPC_Jedi_PlayConfusionSound( gentity_t *self )
 {
 	if ( self->health > 0 )
 	{
-		G_AddVoiceEvent( self, Q_irand( EV_CONFUSE1, EV_CONFUSE2 ), 2000 );
+		if ( self->client && ( self->client->NPC_class == CLASS_TAVION || self->client->NPC_class == CLASS_DESANN ) )
+		{
+			G_AddVoiceEvent( self, Q_irand( EV_CONFUSE1, EV_CONFUSE3 ), 2000 );
+		}
+		else if ( Q_irand( 0, 1 ) )
+		{
+			G_AddVoiceEvent( self, Q_irand( EV_TAUNT1, EV_TAUNT3 ), 2000 );
+		}
+		else
+		{
+			G_AddVoiceEvent( self, Q_irand( EV_GLOAT1, EV_GLOAT3 ), 2000 );
+		}
 	}
 }
 
@@ -2976,9 +2987,11 @@ static void Jedi_FaceEnemy( qboolean doPitch )
 	CalcEntitySpot( NPC->enemy, SPOT_HEAD, enemy_eyes );
 
 	//Find the desired angles
-	if ( NPC->client->ps.legsAnim == BOTH_A2_STABBACK1 
-		|| NPC->client->ps.legsAnim == BOTH_CROUCHATTACKBACK1
-		|| NPC->client->ps.legsAnim == BOTH_ATTACK_BACK )
+	if ( !NPC->client->ps.saberInFlight 
+		&& (NPC->client->ps.legsAnim == BOTH_A2_STABBACK1 
+			|| NPC->client->ps.legsAnim == BOTH_CROUCHATTACKBACK1
+			|| NPC->client->ps.legsAnim == BOTH_ATTACK_BACK) 
+		)
 	{//point *away*
 		GetAnglesForDirection( enemy_eyes, eyes, angles );
 	}
@@ -5149,7 +5162,7 @@ static void Jedi_Attack( void )
 	}
 
 	if ( NPC->client->NPC_class == CLASS_TAVION 
-		|| (NPC->client->NPC_class == CLASS_DESANN&&g_spskill->integer) )
+		|| (g_spskill->integer && ( NPC->client->NPC_class == CLASS_DESANN || NPCInfo->rank >= Q_irand( RANK_CREWMAN, RANK_CAPTAIN ))))
 	{//Tavion will kick in force speed if the player does...
 		if ( NPC->enemy 
 			&& !NPC->enemy->s.number 

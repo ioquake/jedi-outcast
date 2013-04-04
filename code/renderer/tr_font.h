@@ -73,7 +73,7 @@ int RE_Font_HeightPixels(const int iFontHandle, const float fScale = 1.0f);
 void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, const int iFontHandle, int iMaxPixelWidth, const float fScale = 1.0f);
 unsigned int AnyLanguage_ReadCharFromString( const char **ppsText, qboolean *pbIsTrailingPunctuation = NULL);
 qboolean Language_IsAsian(void);
-
+qboolean Language_UsesSpaces(void);
 
 #endif	// #ifndef TR_FONT_H
 

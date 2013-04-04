@@ -192,6 +192,9 @@ typedef struct {
 	qboolean	soundRegistered;
 	qboolean	uiStarted;
 	qboolean	cgameStarted;
+#ifdef _IMMERSION
+	qboolean	forceStarted;
+#endif // _IMMERSION
 
 	int			framecount;
 	int			frametime;			// msec since last frame
@@ -327,7 +330,7 @@ void CL_WritePacket( void );
 void IN_CenterView (void);
 
 float CL_KeyState (kbutton_t *key);
-char *Key_KeynumToString( int keynum, qboolean bTranslate ); //note: translate is only called for menu display not configs
+const char *Key_KeynumToString( int keynum/*, qboolean bTranslate*/ ); //note: translate is only called for menu display not configs
 
 //
 // cl_parse.c

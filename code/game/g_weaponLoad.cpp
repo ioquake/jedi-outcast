@@ -134,6 +134,14 @@ void WPN_MissileHitSound(const char **holdBuf);
 void WPN_AltMissileHitSound(const char **holdBuf);
 void WPN_MuzzleEffect(const char **holdBuf);
 void WPN_AltMuzzleEffect(const char **holdBuf);
+//#ifdef _IMMERSION
+void WPN_FiringFrc(const char **holdBuf);
+void WPN_AltFiringFrc(const char **holdBuf);
+void WPN_ChargeFrc(const char **holdBuf);
+void WPN_AltChargeFrc(const char **holdBuf);
+void WPN_StopFrc(const char **holdBuf);
+void WPN_SelectFrc(const char **holdBuf);
+//#endif // _IMMERSION
 
 typedef struct 
 {
@@ -181,6 +189,14 @@ wpnParms_t WpnParms[] =
 	"altmissileHitSound",	WPN_AltMissileHitSound,
 	"muzzleEffect",			WPN_MuzzleEffect,
 	"altmuzzleEffect",		WPN_AltMuzzleEffect
+//#ifdef _IMMERSION
+,	"firingForce",		WPN_FiringFrc
+,	"altFiringForce",	WPN_AltFiringFrc
+,	"chargeForce",		WPN_ChargeFrc
+,	"altChargeForce",	WPN_AltChargeFrc
+,	"stopForce",		WPN_StopFrc
+,	"selectForce",		WPN_SelectFrc
+//#endif // _IMMERSION
 };
 
 const int WPN_PARM_MAX =  sizeof(WpnParms) / sizeof(WpnParms[0]);
@@ -534,6 +550,160 @@ void WPN_SelectSnd( const char **holdBuf )
 
 	Q_strncpyz( weaponData[wpnParms.weaponNum].selectSnd,tokenStr,len);
 }
+
+//#ifdef _IMMERSION
+
+//--------------------------------------------
+void WPN_FiringFrc( const char **holdBuf )
+{
+	const char	*tokenStr;
+	int		len;
+
+	if ( COM_ParseString( holdBuf,&tokenStr )) 
+	{
+		return;
+	}
+
+	len = strlen( tokenStr );
+	len++;
+
+	if (len > 64)
+	{
+		len = 64;
+		gi.Printf(S_COLOR_YELLOW"WARNING: firingFrc too long in external WEAPONS.DAT '%s'\n", tokenStr);
+	}
+
+#ifdef _IMMERSION
+	Q_strncpyz( weaponData[wpnParms.weaponNum].firingFrc,tokenStr,len);
+#endif
+}
+
+//--------------------------------------------
+void WPN_AltFiringFrc( const char **holdBuf )
+{
+	const char	*tokenStr;
+	int		len;
+
+	if ( COM_ParseString( holdBuf,&tokenStr )) 
+	{
+		return;
+	}
+
+	len = strlen( tokenStr );
+	len++;
+
+	if (len > 64)
+	{
+		len = 64;
+		gi.Printf(S_COLOR_YELLOW"WARNING: altFiringFrc too long in external WEAPONS.DAT '%s'\n", tokenStr);
+	}
+
+#ifdef _IMMERSION
+	Q_strncpyz( weaponData[wpnParms.weaponNum].altFiringFrc,tokenStr,len);
+#endif
+}
+
+//--------------------------------------------
+void WPN_ChargeFrc( const char **holdBuf )
+{
+	const char	*tokenStr;
+	int		len;
+
+	if ( COM_ParseString( holdBuf,&tokenStr )) 
+	{
+		return;
+	}
+
+	len = strlen( tokenStr );
+	len++;
+
+	if (len > 64)
+	{
+		len = 64;
+		gi.Printf(S_COLOR_YELLOW"WARNING: chargeFrc too long in external WEAPONS.DAT '%s'\n", tokenStr);
+	}
+
+#ifdef _IMMERSION
+	Q_strncpyz( weaponData[wpnParms.weaponNum].chargeFrc,tokenStr,len);
+#endif
+}
+
+//--------------------------------------------
+void WPN_AltChargeFrc( const char **holdBuf )
+{
+	const char	*tokenStr;
+	int		len;
+
+	if ( COM_ParseString( holdBuf,&tokenStr )) 
+	{
+		return;
+	}
+
+	len = strlen( tokenStr );
+	len++;
+
+	if (len > 64)
+	{
+		len = 64;
+		gi.Printf(S_COLOR_YELLOW"WARNING: altChargeFrc too long in external WEAPONS.DAT '%s'\n", tokenStr);
+	}
+
+#ifdef _IMMERSION
+	Q_strncpyz( weaponData[wpnParms.weaponNum].altChargeFrc,tokenStr,len);
+#endif
+}
+
+//--------------------------------------------
+void WPN_StopFrc( const char **holdBuf )
+{
+	const char	*tokenStr;
+	int		len;
+
+	if ( COM_ParseString( holdBuf,&tokenStr )) 
+	{
+		return;
+	}
+
+	len = strlen( tokenStr );
+	len++;
+
+	if (len > 64)
+	{
+		len = 64;
+		gi.Printf(S_COLOR_YELLOW"WARNING: stopFrc too long in external WEAPONS.DAT '%s'\n", tokenStr);
+	}
+
+#ifdef _IMMERSION
+	Q_strncpyz( weaponData[wpnParms.weaponNum].stopFrc,tokenStr,len);
+#endif
+}
+
+//--------------------------------------------
+void WPN_SelectFrc( const char **holdBuf )
+{
+	const char	*tokenStr;
+	int		len;
+
+	if ( COM_ParseString( holdBuf,&tokenStr )) 
+	{
+		return;
+	}
+
+	len = strlen( tokenStr );
+	len++;
+
+	if (len > 64)
+	{
+		len = 64;
+		gi.Printf(S_COLOR_YELLOW"WARNING: selectFrc too long in external WEAPONS.DAT '%s'\n", tokenStr);
+	}
+
+#ifdef _IMMERSION
+	Q_strncpyz( weaponData[wpnParms.weaponNum].selectFrc,tokenStr,len);
+#endif
+}
+
+//#endif // _IMMERSION
 
 //--------------------------------------------
 void WPN_FireTime(const char **holdBuf)

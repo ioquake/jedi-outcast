@@ -182,8 +182,6 @@ static LONG WINAPI ConWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 }
 
 extern	void CompleteCommand( void ) ;
-extern	int			nextHistoryLine;		// the last line in the history buffer, not masked
-extern	int			historyLine;	// the line being displayed from history buffer
 
 LONG WINAPI InputLineWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -210,44 +208,44 @@ LONG WINAPI InputLineWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 
 				Sys_Print( va( "]%s\n", inputBuffer ) );
 
-				strcpy(g_consoleField.buffer, inputBuffer);
-				historyEditLines[nextHistoryLine % COMMAND_HISTORY] = g_consoleField;
-				nextHistoryLine++;
-				historyLine = nextHistoryLine;
+				strcpy(kg.g_consoleField.buffer, inputBuffer);
+				kg.historyEditLines[kg.nextHistoryLine % COMMAND_HISTORY] = kg.g_consoleField;
+				kg.nextHistoryLine++;
+				kg.historyLine = kg.nextHistoryLine;
 
 				return 0;
 			}
 			else if (wParam == 9 )
 			{
 				GetWindowText( s_wcd.hwndInputLine, inputBuffer, sizeof( inputBuffer ) );
-				strcpy(g_consoleField.buffer, inputBuffer);
+				strcpy(kg.g_consoleField.buffer, inputBuffer);
 				CompleteCommand();
-				SetWindowText( s_wcd.hwndInputLine, g_consoleField.buffer);
-				SendMessage(s_wcd.hwndInputLine, EM_SETSEL, strlen(g_consoleField.buffer) , MAKELONG(0xffff, 0xffff) );
+				SetWindowText( s_wcd.hwndInputLine, kg.g_consoleField.buffer);
+				SendMessage(s_wcd.hwndInputLine, EM_SETSEL, strlen(kg.g_consoleField.buffer) , MAKELONG(0xffff, 0xffff) );
 			}
 
 		case WM_KEYDOWN:
 			if (wParam == VK_UP)
 			{
-				if ( nextHistoryLine - historyLine < COMMAND_HISTORY && historyLine > 0 ) 
+				if ( kg.nextHistoryLine - kg.historyLine < COMMAND_HISTORY && kg.historyLine > 0 ) 
 				{
-					historyLine--;
+					kg.historyLine--;
 				}
-				g_consoleField = historyEditLines[ historyLine % COMMAND_HISTORY ];
-				SetWindowText( s_wcd.hwndInputLine, g_consoleField.buffer);
-				SendMessage(s_wcd.hwndInputLine, EM_SETSEL, strlen(g_consoleField.buffer) , MAKELONG(0xffff, 0xffff) );
+				kg.g_consoleField = kg.historyEditLines[ kg.historyLine % COMMAND_HISTORY ];
+				SetWindowText( s_wcd.hwndInputLine, kg.g_consoleField.buffer);
+				SendMessage(s_wcd.hwndInputLine, EM_SETSEL, strlen(kg.g_consoleField.buffer) , MAKELONG(0xffff, 0xffff) );
 				return 0;
 			}
 			else if (wParam == VK_DOWN)
 			{
-				if (historyLine == nextHistoryLine)
+				if (kg.historyLine == kg.nextHistoryLine)
 				{
 					return 0;
 				}
-				historyLine++;
-				g_consoleField = historyEditLines[ historyLine % COMMAND_HISTORY ];
-				SetWindowText( s_wcd.hwndInputLine, g_consoleField.buffer);
-				SendMessage(s_wcd.hwndInputLine, EM_SETSEL, strlen(g_consoleField.buffer) , MAKELONG(0xffff, 0xffff) );
+				kg.historyLine++;
+				kg.g_consoleField = kg.historyEditLines[ kg.historyLine % COMMAND_HISTORY ];
+				SetWindowText( s_wcd.hwndInputLine, kg.g_consoleField.buffer);
+				SendMessage(s_wcd.hwndInputLine, EM_SETSEL, strlen(kg.g_consoleField.buffer) , MAKELONG(0xffff, 0xffff) );
 				return 0;
 			}
 			break;
@@ -562,7 +560,7 @@ void Sys_SetErrorText( const char *buf )
 	if ( !s_wcd.hwndErrorBox )
 	{
 		s_wcd.hwndErrorBox = CreateWindow( "static", NULL, WS_CHILD | WS_VISIBLE | SS_SUNKEN,
-													6, 5, 526, 30,
+													6, 5, s_wcd.windowWidth-20, 30,
 													s_wcd.hWnd, 
 													( HMENU ) ERRORBOX_ID,	// child window ID
 													g_wv.hInstance, NULL );

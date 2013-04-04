@@ -720,7 +720,7 @@ int PM_BrokenParryForAttack( int move )
 		return LS_V1_TR;
 		break;
 	case Q_T:
-		return LS_V1_B_;
+		return LS_V1_T_;
 		break;
 	case Q_TL:
 		return LS_V1_TL;
@@ -1142,6 +1142,7 @@ int PM_AttackForEnemyPos( qboolean allowFB )
 					&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 //can force jump
 					&& !(pm->gent->flags&FL_LOCK_PLAYER_WEAPONS) // yes this locked weapons check also includes force powers, if we need a separate check later I'll make one
 					&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=500) //on ground or just jumped
+					&& ( pm->ps->clientNum || pm->ps->legsAnim == BOTH_JUMP1 || pm->ps->legsAnim == BOTH_FORCEJUMP1 || pm->ps->legsAnim == BOTH_INAIR1 || pm->ps->legsAnim == BOTH_FORCEINAIR1 )//either an NPC or in a non-flip forward jump
 					&& ( (pm->ps->clientNum&&!PM_ControlledByPlayer()&&!Q_irand(0,2)) || pm->cmd.upmove || (pm->ps->pm_flags&PMF_JUMPING) ) )//jumping
 				{//flip over-forward down-attack
 					if ( (!pm->ps->clientNum||PM_ControlledByPlayer()) || 
@@ -1302,6 +1303,7 @@ int PM_SaberJumpAttackMove( void )
 int PM_SaberFlipOverAttackMove( void )
 {
 	//FIXME: check above for room enough to jump!
+	//FIXME: while in this jump, keep velocity[2] at a minimum until the end of the anim 
 	vec3_t fwdAngles, jumpFwd;
 
 	VectorCopy( pm->ps->viewangles, fwdAngles );
@@ -1408,6 +1410,7 @@ int PM_SaberAttackForMovement( int forwardmove, int rightmove, int move )
 						&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 //can force jump
 						&& !(pm->gent->flags&FL_LOCK_PLAYER_WEAPONS) // yes this locked weapons check also includes force powers, if we need a separate check later I'll make one
 						&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=500) //on ground or just jumped
+						&& ( pm->ps->clientNum || pm->ps->legsAnim == BOTH_JUMP1 || pm->ps->legsAnim == BOTH_FORCEJUMP1 || pm->ps->legsAnim == BOTH_INAIR1 || pm->ps->legsAnim == BOTH_FORCEINAIR1 )//either an NPC or in a non-flip forward jump
 						&& ((pm->ps->clientNum&&!PM_ControlledByPlayer()&&!Q_irand(0,2))||pm->cmd.upmove>0||pm->ps->pm_flags&PMF_JUMPING))//jumping
 					{//flip over-forward down-attack
 						if ( (!pm->ps->clientNum||PM_ControlledByPlayer()) || 
@@ -2146,7 +2149,7 @@ float PM_GetTimeScaleMod( gentity_t *gent )
 			{
 				return (1.0 / g_timescale->value);
 			}
-			else if ( gent && gent->client && (gent->client->NPC_class == CLASS_TAVION||gent->client->NPC_class == CLASS_DESANN) && gent->client->ps.forcePowersActive&(1<<FP_SPEED) )
+			else if ( gent && gent->client && gent->client->ps.forcePowersActive&(1<<FP_SPEED) )
 			{
 				return (1.0 / g_timescale->value);
 			}
@@ -3431,7 +3434,7 @@ void PM_TorsoAnimation( void )
 				&& pm->ps->weapon != WP_FLECHETTE
 				&& pm->ps->weapon != WP_ROCKET_LAUNCHER
 				&& ( PM_RunningAnim( pm->ps->legsAnim ) 
-					|| PM_WalkingAnim( pm->ps->legsAnim ) 
+					|| (PM_WalkingAnim( pm->ps->legsAnim ) && !pm->ps->clientNum)
 					|| PM_JumpingAnim( pm->ps->legsAnim )
 					|| PM_SwimmingAnim( pm->ps->legsAnim ) ) )
 			{//running w/1-handed or light 2-handed weapon uses full-body anim if you're not using the weapon right now

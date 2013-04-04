@@ -903,7 +903,7 @@ static void readQuadInfo( byte *qData )
             cinTable[currentHandle].drawY = 256;
         }
 		if (cinTable[currentHandle].CIN_WIDTH != 256 || cinTable[currentHandle].CIN_HEIGHT != 256) {
-			Com_Printf("HACK: approxmimating cinematic for Rage Pro or Voodoo\n");
+			Com_DPrintf("HACK: approxmimating cinematic for Rage Pro or Voodoo\n");
 		}
 	}
 }
@@ -1691,7 +1691,7 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 
 		qbPlayingInGameCinematic = qbInGame;
 
-		if ((s && s[0] == '1') || Q_stricmp(arg,"end.roq")==0) {
+		if ((s && s[0] == '1') || Q_stricmp(arg,"video/end.roq")==0) {
 			bits |= CIN_hold;
 		}
 		if (s && s[0] == '2') {
@@ -1712,7 +1712,18 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 		if (!stricmp(arg,"video/jk0101_sw.roq"))
 		{
 			psAudioFile = "music/cinematic_1";
-			hCrawl = re.RegisterShader( va("menu/video/tc_%d",sp_language->integer) );
+			if ( Cvar_VariableIntegerValue("com_demo") )
+			{
+				hCrawl = re.RegisterShader( "menu/video/tc_demo" );//demo version of text crawl
+			}
+			else
+			{
+				hCrawl = re.RegisterShader( va("menu/video/tc_%d",sp_language->integer) );
+				if (!hCrawl)
+				{
+					hCrawl = re.RegisterShader( "menu/video/tc_0" );//failed, so go back to english
+				}
+			}
 			bits |= CIN_hold;
 		}
 		else

@@ -76,7 +76,8 @@ DLL_ONLY=false
 
   # bk001205: no mo'  -I/usr/include/glide, no FX
   # bk001205: no mo'  -Dstricmp=strcasecmp, see q_shared.h
-  BASE_CFLAGS =  -pipe -fsigned-char -x c++ -D_JK2 -D_M_IX86 
+  #BASE_CFLAGS =  -pipe -fsigned-char -x c++ -D_JK2 -D_M_IX86  -I/home/drews/STLport-4.5.3/stlport -I/opt/intel/compiler50/ia32/include
+  BASE_CFLAGS =  -pipe -fsigned-char -Kc++ -D_JK2 -D_M_IX86  -I/opt/intel/compiler50/ia32/include
   # rcg010216: DLL_ONLY for PPC
   ifeq ($(strip $(DLL_ONLY)),true)
     BASE_CFLAGS += -DDLL_ONLY
@@ -104,7 +105,8 @@ DLL_ONLY=false
       #NEWPGCC=/usr/local/gcc-2.95.2/bin/gcc # bk001205
       #NEWPGCC=/loki/global/x86/bin/gcc
       #NEWPGCC=/usr/bin/gcc 
-      NEWPGCC=/usr/local/bin/gcc
+      #NEWPGCC=/usr/local/bin/gcc
+      NEWPGCC=/opt/intel/compiler50/ia32/bin/icc
       CC=$(shell if [ -f $(NEWPGCC) ]; then echo $(NEWPGCC); else echo pgcc; fi )
       CXX=/usr/bin/g++
 # TTimo: legacy RELEASE_CFLAGS
@@ -126,7 +128,8 @@ DLL_ONLY=false
   RANLIB=ranlib
 
   THREAD_LDFLAGS=-lpthread
-  LDFLAGS=-ldl -lm -static -lstdc++
+  #LDFLAGS=/opt/sxl/lib/sxlgcc3.a -lpthread -ldl -lm -lstdc++ -static -Wl --gc-sections
+  LDFLAGS=-ldl -lm -lstdc++ -static 
   GLLDFLAGS=-L/usr/X11R6/lib -L$(MESADIR)/lib -lX11 -lXext -lXxf86dga -lXxf86vm
 
   TARGETS=\
@@ -169,7 +172,6 @@ fixnames:
 	@if [ ! -d $(GHOUL2DIR)/G2.h ]; then mv $(GHOUL2DIR)/g2.h $(GHOUL2DIR)/G2.h;fi
 	@if [ ! -d $(CMDIR)/ROFFSystem.h ]; then mv $(CMDIR)/roffsystem.h $(CMDIR)/ROFFSystem.h;fi
 	@if [ ! -d $(RDIR)/MatComp.h ] ; then mv $(RDIR)/matcomp.h $(RDIR)/MatComp.h;fi
-	@if [ ! -d $(CMDIR)/stri.cpp ]; then mv $(CMDIR)/`strip.cpp` $(CMDIR)/stri.cpp;fi
 
 
 makedirs:
@@ -211,6 +213,7 @@ Q3DOBJ = \
 	$(B)/ded/cm_polylib.o \
 	$(B)/ded/cm_test.o \
 	$(B)/ded/cm_trace.o \
+	$(B)/ded/cm_shader.o \
 	$(B)/ded/cmd.o \
 	$(B)/ded/common.o \
 	$(B)/ded/cvar.o \
@@ -271,8 +274,10 @@ Q3DOBJ = \
 	$(B)/ded/null_input.o \
 	$(B)/ded/null_snddma.o \
 	$(B)/ded/null_glimp.o \
+	$(B)/ded/null_renderer.o \
 	\
 	$(B)/ded/tr_model.o \
+	$(B)/ded/tr_image.o \
 	$(B)/ded/roffsystem.o \
 	$(B)/ded/tr_ghoul2.o \
 	$(B)/ded/matcomp.o \
@@ -280,7 +285,8 @@ Q3DOBJ = \
 	$(B)/ded/tr_main.o \
 	$(B)/ded/tr_backend.o \
 	$(B)/ded/tr_mesh.o \
-	$(B)/ded/stri.o \
+	$(B)/ded/tr_shader.o \
+	$(B)/ded/strip.o \
 #	\
 #	$(B)/ded/null_main.o \
 #	$(B)/ded/null_net.o \
@@ -332,6 +338,7 @@ $(B)/ded/sv_net_chan.o : $(SDIR)/sv_net_chan.cpp; $(DO_DED_CC)
 $(B)/ded/sv_snapshot.o : $(SDIR)/sv_snapshot.cpp; $(DO_DED_CC) 
 $(B)/ded/sv_world.o : $(SDIR)/sv_world.cpp; $(DO_DED_CC) 
 $(B)/ded/cm_load.o : $(CMDIR)/cm_load.cpp; $(DO_DED_CC) 
+$(B)/ded/cm_shader.o : $(CMDIR)/cm_shader.cpp; $(DO_DED_CC)
 $(B)/ded/cm_polylib.o : $(CMDIR)/cm_polylib.cpp; $(DO_DED_CC) 
 $(B)/ded/cm_test.o : $(CMDIR)/cm_test.cpp; $(DO_DED_CC) 
 $(B)/ded/cm_trace.o : $(CMDIR)/cm_trace.cpp; $(DO_DED_CC) 
@@ -346,7 +353,7 @@ $(B)/ded/net_chan.o : $(CMDIR)/net_chan.cpp; $(DO_DED_CC)
 $(B)/ded/huffman.o : $(CMDIR)/huffman.cpp; $(DO_DED_CC)
 $(B)/ded/q_shared.o : $(CMDIR)/q_shared.cpp; $(DO_DED_CC) 
 $(B)/ded/q_math.o : $(GDIR)/q_math.c; $(DO_DED_CC) 
-$(B)/ded/stri.o : $(CMDIR)/stri.cpp; $(DO_DED_CC)
+$(B)/ded/strip.o : $(CMDIR)/strip.cpp; $(DO_DED_CC)
 
 $(B)/ded/g2_api.o : $(GHOUL2DIR)/g2_api.cpp; $(DO_DED_CC)
 $(B)/ded/g2_bolts.o : $(GHOUL2DIR)/g2_bolts.cpp; $(DO_DED_CC)
@@ -427,6 +434,7 @@ $(B)/ded/null_snddma.o : $(NDIR)/null_snddma.c; $(DO_DED_CC)
 $(B)/ded/null_glimp.o : $(NDIR)/null_glimp.c; $(DO_DED_CC)
 $(B)/ded/null_main.o : $(NDIR)/null_main.c; $(DO_DED_CC)
 $(B)/ded/null_net.o : $(NDIR)/null_net.c; $(DO_DED_CC)
+$(B)/ded/null_renderer.o : $(NDIR)/null_renderer.c; $(DO_DED_CC)
 $(B)/ded/unzip.o : $(CMDIR)/unzip.cpp; $(DO_DED_CC) 
 $(B)/ded/vm.o : $(CMDIR)/vm.cpp; $(DO_DED_CC) 
 $(B)/ded/vm_interpreted.o : $(CMDIR)/vm_interpreted.cpp; $(DO_DED_CC) 

@@ -12,11 +12,12 @@
 #include "b_local.h"
 #include "anims.h"
 #include "g_icarus.h"
+#include "objectives.h"
 #include "../cgame/cg_local.h"	// yeah I know this is naughty, but we're shipping soon...
-#include "../qcommon/stripPublic.h"
 
 extern CNavigator		navigator;
 static int				navCalcPathTime = 0;
+int		eventClearTime = 0;
 
 #define	STEPSIZE		18
 
@@ -124,8 +125,7 @@ cvar_t	*com_buildScript;
 cvar_t	*g_skippingcin;
 cvar_t	*g_AIsurrender;
 cvar_t	*g_numEntities;
-cvar_t	*g_s_language;
-cvar_t	*g_sp_language;
+cvar_t	*g_iscensored;
 
 cvar_t	*g_saberAutoBlocking;
 cvar_t	*g_saberRealisticCombat;
@@ -147,8 +147,6 @@ void ClearNPCGlobals( void );
 extern void AI_UpdateGroups( void );
 
 void ClearPlayerAlertEvents( void );
-int eventClearTime = 0;
-
 extern void NPC_ShowDebugInfo (void);
 extern int killPlayerTimer;
 extern	cvar_t		*d_altRoutes;
@@ -548,19 +546,18 @@ void G_InitCvars( void ) {
 	g_subtitles = gi.cvar( "g_subtitles", "2", CVAR_ARCHIVE );
 	com_buildScript = gi.cvar ("com_buildscript", "0", 0);
 
-	g_saberAutoBlocking = gi.cvar( "g_saberAutoBlocking", "1", CVAR_ARCHIVE );//must press +block button to do any blocking
-	g_saberRealisticCombat = gi.cvar( "g_saberRealisticCombat", "0", CVAR_ARCHIVE );//makes collision more precise, increases damage
-	g_saberMoveSpeed = gi.cvar( "g_saberMoveSpeed", "1", CVAR_ARCHIVE );//how fast you run while attacking with a saber
-	g_saberAnimSpeed = gi.cvar( "g_saberAnimSpeed", "1", CVAR_ARCHIVE );//how fast saber animations run
-	g_saberAutoAim = gi.cvar( "g_saberAutoAim", "1", CVAR_ARCHIVE );//auto-aims at enemies when not moving or when just running forward
+	g_saberAutoBlocking = gi.cvar( "g_saberAutoBlocking", "1", CVAR_ARCHIVE|CVAR_CHEAT );//must press +block button to do any blocking
+	g_saberRealisticCombat = gi.cvar( "g_saberRealisticCombat", "0", CVAR_ARCHIVE|CVAR_CHEAT );//makes collision more precise, increases damage
+	g_saberMoveSpeed = gi.cvar( "g_saberMoveSpeed", "1", CVAR_ARCHIVE|CVAR_CHEAT );//how fast you run while attacking with a saber
+	g_saberAnimSpeed = gi.cvar( "g_saberAnimSpeed", "1", CVAR_ARCHIVE|CVAR_CHEAT );//how fast saber animations run
+	g_saberAutoAim = gi.cvar( "g_saberAutoAim", "1", CVAR_ARCHIVE|CVAR_CHEAT );//auto-aims at enemies when not moving or when just running forward
 
 	g_AIsurrender = gi.cvar( "g_AIsurrender", "0", CVAR_CHEAT );
 	g_numEntities = gi.cvar( "g_numEntities", "0", CVAR_CHEAT );
-	g_s_language = gi.cvar( "s_language", "english", (CVAR_ARCHIVE|CVAR_NORESTART) );
-	g_sp_language = gi.cvar( "sp_language", va("%d", SP_LANGUAGE_ENGLISH), (CVAR_ARCHIVE|CVAR_NORESTART) );
 	
 	gi.cvar( "newTotalSecrets", "0", CVAR_ROM );
 	gi.cvar_set("newTotalSecrets", "0");//used to carry over the count from SP_target_secret to ClientBegin
+	g_iscensored = gi.cvar( "ui_iscensored", "0", CVAR_ARCHIVE|CVAR_ROM|CVAR_INIT|CVAR_CHEAT|CVAR_NORESTART );
 }
 
 /*
@@ -702,6 +699,7 @@ void InitGame(  const char *mapname, const char *spawntarget, int checkSum, cons
 	level.dmBeatTime = 0;
 
 	level.curAlertID = 1;//0 is default for lastAlertEvent, so...
+	eventClearTime = 0;
 }
 
 /*
@@ -1146,8 +1144,28 @@ void UpdateTeamCounters( gentity_t *ent )
 	teamEnemyCount[ent->client->playerTeam]++;
 }
 */
+extern void G_SoundOnEnt( gentity_t *ent, soundChannel_t channel, const char *soundPath );
+void G_PlayerGuiltDeath( void )
+{
+	if ( player && player->client )
+	{//simulate death
+		player->client->ps.stats[STAT_HEALTH] = 0;
+		//turn off saber
+		if ( player->client->ps.weapon == WP_SABER && player->client->ps.saberActive )
+		{
+			G_SoundOnEnt( player, CHAN_WEAPON, "sound/weapons/saber/saberoff.wav" );
+			player->client->ps.saberActive = qfalse;
+		}
+		//play the "what have I done?!" anim
+		NPC_SetAnim( player, SETANIM_BOTH, BOTH_FORCEHEAL_START, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+		player->client->ps.legsAnimTimer = player->client->ps.torsoAnimTimer = -1;
+		//look at yourself
+		player->client->ps.stats[STAT_DEAD_YAW] = player->client->ps.viewangles[YAW]+180;
+	}
+}
 extern void NPC_SetAnim(gentity_t	*ent,int type,int anim,int priority);
 extern void G_MakeTeamVulnerable( void );
+int killPlayerTimer = 0;
 void G_CheckEndLevelTimers( gentity_t *ent )
 {
 	if ( killPlayerTimer && level.time > killPlayerTimer )
@@ -1156,24 +1174,13 @@ void G_CheckEndLevelTimers( gentity_t *ent )
 		ent->health = 0;
 		if ( ent->client && ent->client->ps.stats[STAT_HEALTH] > 0 )
 		{
-			//simulate death
-			ent->client->ps.stats[STAT_HEALTH] = 0;
+			G_PlayerGuiltDeath();
+			//cg.missionStatusShow = qtrue;
+			statusTextIndex = MAX_MISSIONFAILED;
 			//debounce respawn time
 			ent->client->respawnTime = level.time + 2000;
-			//play the "what have I done?!" anim
-//			NPC_SetAnim( ent, SETANIM_BOTH, BOTH_GUILT1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
-			/*
-			NPC_SetAnim( ent, SETANIM_TORSO, BOTH_SIT2TO1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
-			NPC_SetAnim( ent, SETANIM_LEGS, LEGS_KNEELDOWN1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
-			*/
-			ent->client->ps.torsoAnimTimer = -1;
-			ent->client->ps.legsAnimTimer = -1;
-			//look at yourself
-			ent->client->ps.stats[STAT_DEAD_YAW] = ent->client->ps.viewangles[YAW]+180;
 			//stop all scripts
-			if (Q_stricmpn(level.mapname,"_holo",5)) {
-				stop_icarus = qtrue;
-			}
+			stop_icarus = qtrue;
 			//make the team killable
 			G_MakeTeamVulnerable();
 		}
@@ -1206,6 +1213,7 @@ void NAV_CheckCalcPaths( void )
 		navCalcPathTime = 0;
 	}
 }
+
 /*
 ================
 G_RunFrame
@@ -1271,11 +1279,7 @@ void G_RunFrame( int levelTime ) {
 	}
 
 	//Look to clear out old events
-	//if ( eventClearTime < level.time )
-	{
-		ClearPlayerAlertEvents();
-		//eventClearTime = level.time + ALERT_CLEAR_TIME;
-	}
+	ClearPlayerAlertEvents();
 
 	//Run the frame for all entities
 //	for ( i = 0, ent = &g_entities[0]; i < globals.num_entities ; i++, ent++)

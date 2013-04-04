@@ -931,7 +931,7 @@ void WP_DisruptorAltFire( gentity_t *ent )
 					G_PlayEffect( G_EffectIndex( "disruptor/alt_hit" ), tr.endpos, tr.plane.normal );
 
 					if ( traceEnt->client && LogAccuracyHit( traceEnt, ent )) 
-					{
+					{//NOTE: hitting multiple ents can still get you over 100% accuracy
 						ent->client->ps.persistant[PERS_ACCURACY_HITS]++;
 					} 
 
@@ -3029,6 +3029,9 @@ void WP_FireStunBaton( gentity_t *ent, qboolean alt_fire )
 	vec3_t		mins, maxs, end, start;
 
 	G_Sound( ent, G_SoundIndex( "sound/weapons/baton/fire" ));
+#ifdef _IMMERSION
+	G_Force( ent, G_ForceIndex( "fffx/weapons/baton/fire", FF_CHANNEL_WEAPON ) );
+#endif // _IMMERSION
 
 	VectorCopy( muzzle, start );
 	WP_TraceSetStart( ent, start, vec3_origin, vec3_origin );
@@ -3798,6 +3801,9 @@ extern void ChangeWeapon( gentity_t *ent, int newWeapon );
 #endif
 
 		G_Sound( self, G_SoundIndex( "sound/weapons/emplaced/emplaced_mount.mp3" ));
+#ifdef _IMMERSION
+		G_Force( self, G_ForceIndex( "fffx/weapons/emplaced/emplaced_mount", FF_CHANNEL_TOUCH ) );
+#endif // _IMMERSION
 	}
 }
 

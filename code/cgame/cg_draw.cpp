@@ -2282,7 +2282,10 @@ static void CG_Draw2D( void )
 	CG_DrawGameText();
 
 	if ( in_camera )
+	{//still draw the saber clash flare, but nothing else
+		CG_SaberClashFlare();
 		return;
+	}
 
 	if ( CG_RenderingFromMiscCamera())
 	{
@@ -2384,24 +2387,37 @@ static void CG_Draw2D( void )
 
 			cgi_SP_GetStringTextString( "INGAME_DATAPAD_UPDATED", text, sizeof(text) );
 
+			int x_pos = 0;
 			y_pos = (SCREEN_HEIGHT/2)+80;
-			w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontSmall, 1.0f);
-			cgi_R_Font_DrawString((SCREEN_WIDTH/2)-(w/2), y_pos, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
+			if ( cg_missionInfoCentered.integer )
+			{
+				w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontSmall, 1.0f);
+				x_pos = (SCREEN_WIDTH/2)-(w/2);
+			}
+			cgi_R_Font_DrawString(x_pos, y_pos, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
 
 			if (cg_updatedDataPadForcePower1.integer) 
 			{
 				y_pos += 25;
 				cgi_SP_GetStringTextString("INGAME_NEW_FORCE_POWER_INFO", text, sizeof(text) );
-				w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontSmall, 1.0f);
-				cgi_R_Font_DrawString((SCREEN_WIDTH/2)-(w/2), y_pos, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
+				if ( cg_missionInfoCentered.integer )
+				{
+					w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontSmall, 1.0f);
+					x_pos = (SCREEN_WIDTH/2)-(w/2);
+				}
+				cgi_R_Font_DrawString(x_pos, y_pos, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
 			}
 
 			if (cg_updatedDataPadObjective.integer) 
 			{
 				y_pos += 25;
 				cgi_SP_GetStringTextString( "INGAME_NEW_OBJECTIVE_INFO", text, sizeof(text) );
-				w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontSmall, 1.0f);
-				cgi_R_Font_DrawString((SCREEN_WIDTH/2)-(w/2), y_pos, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
+				if ( cg_missionInfoCentered.integer )
+				{
+					w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontSmall, 1.0f);
+					x_pos = (SCREEN_WIDTH/2)-(w/2);
+				}
+				cgi_R_Font_DrawString(x_pos, y_pos, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
 			}
 
 	//		if (cent->gent->client->sess.missionObjectivesShown<3)

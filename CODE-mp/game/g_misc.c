@@ -4,6 +4,8 @@
 
 #include "g_local.h"
 
+#include "ai_main.h" //for the g2animents
+
 #define HOLOCRON_RESPAWN_TIME 30000
 #define MAX_AMMO_GIVE 2
 #define STATION_RECHARGE_TIME 3000//800
@@ -1546,3 +1548,1155 @@ void SP_fx_runner( gentity_t *ent )
 
 	trap_LinkEntity( ent );
 }
+
+//rww - here starts the main example g2animent stuff
+#define ANIMENT_TYPE_STORMTROOPER			0
+#define ANIMENT_TYPE_RODIAN					1
+
+#define TROOPER_PAIN_SOUNDS 4
+#define TROOPER_DEATH_SOUNDS 3
+#define TROOPER_ALERT_SOUNDS 5
+int gTrooperSound_Pain[TROOPER_PAIN_SOUNDS];
+int gTrooperSound_Death[TROOPER_DEATH_SOUNDS];
+int gTrooperSound_Alert[TROOPER_ALERT_SOUNDS];
+
+#define RODIAN_PAIN_SOUNDS 4
+#define RODIAN_DEATH_SOUNDS 3
+#define RODIAN_ALERT_SOUNDS 5
+int gRodianSound_Pain[RODIAN_PAIN_SOUNDS];
+int gRodianSound_Death[RODIAN_DEATH_SOUNDS];
+int gRodianSound_Alert[RODIAN_ALERT_SOUNDS];
+
+int G_PickDeathAnim( gentity_t *self, vec3_t point, int damage, int mod, int hitLoc );
+void AnimEntFireWeapon( gentity_t *ent, qboolean altFire );
+int GetNearestVisibleWP(vec3_t org, int ignore);
+int InFieldOfVision(vec3_t viewangles, float fov, vec3_t angles);
+extern float gBotEdit;
+
+void ExampleAnimEntAlertOthers(gentity_t *self)
+{
+	//alert all the other animents in the area
+	int i = 0;
+
+	while (i < MAX_GENTITIES)
+	{
+		if (g_entities[i].inuse &&
+			g_entities[i].s.eType == ET_GRAPPLE &&
+			g_entities[i].health > 0)
+		{
+			if (g_entities[i].bolt_Motion == ENTITYNUM_NONE && trap_InPVS(self->r.currentOrigin, g_entities[i].r.currentOrigin))
+			{
+				g_entities[i].bolt_Motion = self->bolt_Motion;
+				g_entities[i].speed = level.time + 4000; //4 seconds til we forget about the enemy
+				g_entities[i].bolt_RArm = level.time + Q_irand(500, 1000);
+			}
+		}
+
+		i++;
+	}
+}
+
+void ExampleAnimEnt_Die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod )
+{
+	self->s.torsoAnim = G_PickDeathAnim(self, self->pos1, damage, mod, HL_NONE);
+
+	if (self->s.torsoAnim < 0 || self->s.torsoAnim >= MAX_TOTALANIMATIONS)
+	{ //?! (bad)
+		self->s.torsoAnim = BOTH_DEATH1;
+	}
+
+	self->s.legsAnim = self->s.torsoAnim;
+	self->health = 1;
+	self->s.eFlags |= EF_DEAD;
+	self->takedamage = qfalse;
+	self->r.contents = 0;
+
+	if (self->watertype == ANIMENT_TYPE_STORMTROOPER)
+	{
+		G_Sound(self, CHAN_AUTO, gTrooperSound_Death[Q_irand(0, TROOPER_DEATH_SOUNDS-1)]);
+	}
+	else if (self->watertype == ANIMENT_TYPE_RODIAN)
+	{
+		G_Sound(self, CHAN_AUTO, gRodianSound_Death[Q_irand(0, RODIAN_DEATH_SOUNDS-1)]);
+	}
+
+	if (mod == MOD_SABER)
+	{ //Set the velocity up a bit to make the limb fly up more than it otherwise would.
+		vec3_t preDelta;
+		VectorCopy(self->s.pos.trDelta, preDelta);
+
+		if (Q_irand(1, 10) < 5)
+		{
+			self->s.pos.trDelta[0] += Q_irand(10, 40);
+		}
+		else
+		{
+			self->s.pos.trDelta[0] -= Q_irand(10, 40);
+		}
+		if (Q_irand(1, 10) < 5)
+		{
+			self->s.pos.trDelta[1] += Q_irand(10, 40);
+		}
+		else
+		{
+			self->s.pos.trDelta[1] -= Q_irand(10, 40);
+		}
+		self->s.pos.trDelta[2] += 100;
+		G_CheckForDismemberment(self, self->pos1, damage, self->s.torsoAnim);
+		
+		VectorCopy(preDelta, self->s.pos.trDelta);
+	}
+
+	if (self->bolt_Motion != ENTITYNUM_NONE)
+	{
+		ExampleAnimEntAlertOthers(self);
+	}
+
+	trap_LinkEntity(self);
+
+	self->bolt_Head = level.time + 5000;
+}
+
+void ExampleAnimEnt_Pain(gentity_t *self, gentity_t *attacker, int damage)
+{
+	int painAnim = (BOTH_PAIN1 + Q_irand(0, 3));
+	int animLen = (bgGlobalAnimations[painAnim].numFrames * fabs(bgGlobalAnimations[painAnim].frameLerp))-50;
+
+	while (painAnim == self->s.torsoAnim)
+	{
+		painAnim = (BOTH_PAIN1 + Q_irand(0, 3));
+	}
+
+	self->s.torsoAnim = painAnim;
+	self->s.legsAnim = painAnim;
+	self->bolt_LArm = level.time + animLen;
+
+	if (self->watertype == ANIMENT_TYPE_STORMTROOPER)
+	{
+		G_Sound(self, CHAN_AUTO, gTrooperSound_Pain[Q_irand(0, TROOPER_PAIN_SOUNDS-1)]);
+	}
+	else if (self->watertype == ANIMENT_TYPE_RODIAN)
+	{
+		G_Sound(self, CHAN_AUTO, gRodianSound_Pain[Q_irand(0, RODIAN_PAIN_SOUNDS-1)]);
+	}
+
+	if (attacker && attacker->client && self->bolt_Motion == ENTITYNUM_NONE)
+	{
+		self->bolt_Motion = attacker->s.number;
+		self->speed = level.time + 4000; //4 seconds til we forget about the enemy
+		ExampleAnimEntAlertOthers(self);
+		self->bolt_RArm = level.time + Q_irand(500, 1000);
+	}
+}
+
+void ExampleAnimEntTouch(gentity_t *self, gentity_t *other, trace_t *trace)
+{
+
+}
+
+//We can use this method of movement without horrible choppiness, because
+//we are smoothing out the lerpOrigin on the client when rendering this eType.
+int ExampleAnimEntMove(gentity_t *self, vec3_t moveTo, float stepSize)
+{
+	trace_t tr;
+	vec3_t stepTo;
+	vec3_t stepSub;
+	vec3_t stepGoal;
+	int didMove = 0;
+
+	if (self->s.groundEntityNum == ENTITYNUM_NONE)
+	{
+		return 2;
+	}
+
+	VectorCopy(moveTo, stepTo);
+	stepTo[2] = self->r.currentOrigin[2];
+
+	VectorSubtract(stepTo, self->r.currentOrigin, stepSub);
+
+	if (VectorLength(stepSub) < 32)
+	{
+		return 2;
+	}
+
+	VectorNormalize(stepSub);
+
+	stepGoal[0] = self->r.currentOrigin[0] + stepSub[0]*stepSize;
+	stepGoal[1] = self->r.currentOrigin[1] + stepSub[1]*stepSize;
+	stepGoal[2] = self->r.currentOrigin[2] + stepSub[2]*stepSize;
+
+	trap_Trace(&tr, self->r.currentOrigin, self->r.mins, self->r.maxs, stepGoal, self->s.number, self->clipmask);
+
+	if (!tr.startsolid && !tr.allsolid && tr.fraction)
+	{
+		vec3_t vecSub;
+		VectorSubtract(self->r.currentOrigin, tr.endpos, vecSub);
+
+		if (VectorLength(vecSub) > (stepSize/2))
+		{
+			self->r.currentOrigin[0] = tr.endpos[0];
+			self->r.currentOrigin[1] = tr.endpos[1];
+			self->s.pos.trBase[0] = tr.endpos[0];
+			self->s.pos.trBase[1] = tr.endpos[1];
+			self->s.origin[0] = tr.endpos[0];
+			self->s.origin[1] = tr.endpos[1];
+			trap_LinkEntity(self);
+			didMove = 1;
+		}
+	}
+	
+	if (didMove != 1)
+	{ //stair check
+		vec3_t trFrom;
+		vec3_t trTo;
+		vec3_t trDir;
+		vec3_t vecMeasure;
+
+		VectorCopy(tr.endpos, trFrom);
+		trFrom[2] += 16;
+
+		VectorSubtract(/*tr.endpos*/stepGoal, self->r.currentOrigin, trDir);
+		VectorNormalize(trDir);
+		trTo[0] = tr.endpos[0] + trDir[0]*2;
+		trTo[1] = tr.endpos[1] + trDir[1]*2;
+		trTo[2] = tr.endpos[2] + trDir[2]*2;
+		trTo[2] += 16;
+
+		VectorSubtract(trFrom, trTo, vecMeasure);
+
+		if (VectorLength(vecMeasure) > 1)
+		{
+			trap_Trace(&tr, trFrom, self->r.mins, self->r.maxs, trTo, self->s.number, self->clipmask);
+
+			if (!tr.startsolid && !tr.allsolid && tr.fraction == 1)
+			{ //clear trace here, probably up a step
+				vec3_t trDown;
+				vec3_t trUp;
+				VectorCopy(tr.endpos, trUp);
+				VectorCopy(tr.endpos, trDown);
+				trDown[2] -= 16;
+
+				trap_Trace(&tr, trFrom, self->r.mins, self->r.maxs, trTo, self->s.number, self->clipmask);
+
+				if (!tr.startsolid && !tr.allsolid)
+				{ //plop us down on the step after moving up
+					VectorCopy(tr.endpos, self->r.currentOrigin);
+					VectorCopy(tr.endpos, self->s.pos.trBase);
+					VectorCopy(tr.endpos, self->s.origin);
+					trap_LinkEntity(self);
+					didMove = 1;
+				}
+			}
+		}
+	}
+
+	return didMove;
+}
+
+float ExampleAnimEntYaw(gentity_t *self, float idealYaw, float yawSpeed)
+{
+	float curYaw = 0;
+	float diffYaw = 0;
+
+	curYaw = AngleNormalize360(self->s.apos.trBase[YAW]);
+
+	diffYaw = AngleSubtract( curYaw, idealYaw );
+
+	if ( fabs(diffYaw) > 0.25f )
+	{
+		if ( fabs(diffYaw) > yawSpeed )
+		{
+			// cap max speed
+			curYaw += (diffYaw > 0.0f) ? -yawSpeed : yawSpeed;
+		}
+		else
+		{
+			// small enough
+			curYaw -= diffYaw;
+		}
+	}
+
+	return curYaw;
+}
+
+void ExampleAnimEntLook(gentity_t *self, vec3_t lookTo)
+{
+	vec3_t lookSub;
+
+	VectorSubtract(lookTo, self->r.currentOrigin, lookSub);
+	VectorNormalize(lookSub);
+	vectoangles(lookSub, lookSub);
+
+	if (lookSub[PITCH] < -180)
+	{
+		lookSub[PITCH] -= 90;
+	}
+
+	//VectorCopy(lookSub, self->s.apos.trBase);
+	self->s.apos.trBase[PITCH] = lookSub[PITCH];
+	self->s.apos.trBase[ROLL] = 0;
+	self->s.apos.trBase[YAW] = ExampleAnimEntYaw(self, lookSub[YAW], 20);
+}
+
+qboolean ExampleAnimEntClearLOS(gentity_t *self, vec3_t point)
+{
+	trace_t tr;
+
+	trap_Trace(&tr, self->r.currentOrigin, 0, 0, point, self->s.number, self->clipmask);
+
+	if (tr.fraction == 1 ||
+		tr.entityNum < MAX_CLIENTS)
+	{ //clear LOS, or would be hitting a client (they're all bad!), so fire.
+		return qtrue;
+	}
+
+	return qfalse;
+}
+
+void ExampleAnimEntWeaponHandling(gentity_t *self)
+{
+	if (self->bolt_RArm > level.time)
+	{
+		return;
+	}
+
+	if (self->boltpoint4)
+	{
+		if (self->s.weapon == WP_DISRUPTOR)
+		{
+			AnimEntFireWeapon(self, qtrue);
+			G_AddEvent(self, EV_FIRE_WEAPON, 1);
+			self->bolt_RArm = level.time + Q_irand(1500, 2500);
+		}
+		else
+		{
+			AnimEntFireWeapon(self, qfalse);
+			G_AddEvent(self, EV_FIRE_WEAPON, 0);
+			self->bolt_RArm = level.time + Q_irand(700, 1000);
+		}
+	}
+}
+
+qboolean ExampleAnimEntWayValidCheck(gentity_t *self)
+{
+	wpobject_t *currentWP;
+	trace_t tr;
+
+	if (self->bolt_Waist < 0 ||
+		self->bolt_Waist >= gWPNum)
+	{
+		return qfalse;
+	}
+
+	if (self->boltpoint1 < level.time)
+	{
+		return qfalse;
+	}
+
+	if (self->boltpoint2 < level.time)
+	{
+		return qfalse;
+	}
+
+	currentWP = gWPArray[self->bolt_Waist];
+
+	if (!currentWP)
+	{
+		return qfalse;
+	}
+
+	trap_Trace(&tr, self->r.currentOrigin, 0, 0, currentWP->origin, self->s.number, self->clipmask);
+
+	if (tr.fraction == 1)
+	{ //allow one second for time you cannot see the point. If we go beyond that, kill the connection.
+		self->boltpoint2 = level.time + 1000;
+	}
+
+	return qtrue;
+}
+
+//Simple nav routine utilizing bot path data
+//bolt_Waist represents our current indexed waypoint
+void ExampleAnimEntNavigation(gentity_t *self, vec3_t goalPos)
+{
+	if (self->bolt_Waist == -1 ||
+		!ExampleAnimEntWayValidCheck(self))
+	{
+		int wpIndex = GetNearestVisibleWP(self->r.currentOrigin, self->s.number);
+
+		if (wpIndex >= 0 && wpIndex < gWPNum)
+		{
+			self->bolt_Waist = wpIndex;
+			self->boltpoint1 = level.time + 10000; //10 seconds to get to the point
+			self->boltpoint2 = level.time + 1000; //initialize the 1 second allowed visibility
+		}
+		else
+		{
+			self->bolt_Waist = -1;
+		}
+	}
+
+	if (self->bolt_Waist != -1)
+	{ //we have a point to go to
+		wpobject_t *currentWP = gWPArray[self->bolt_Waist];
+
+		if (currentWP)
+		{
+			vec3_t subLen;
+			float vecLen = 0;
+
+			VectorCopy(currentWP->origin, goalPos);
+			VectorSubtract(self->r.currentOrigin, currentWP->origin, subLen);
+			vecLen = VectorLength(subLen);
+
+			if (vecLen <= 40)
+			{
+				int desiredIndex = -20;
+
+				if (!self->boltpoint3)
+				{
+					desiredIndex = currentWP->index+1;
+				}
+				else
+				{
+					desiredIndex = currentWP->index-1;
+				}
+
+				if (desiredIndex != -20)
+				{
+					if (desiredIndex < 0)
+					{
+						self->boltpoint3 = 0;
+						desiredIndex = currentWP->index+1;
+					}
+					if (desiredIndex >= gWPNum)
+					{
+						self->boltpoint3 = 1;
+						desiredIndex = currentWP->index-1;
+					}
+				}
+
+				if (desiredIndex != -1 && desiredIndex >= 0 && desiredIndex < gWPNum)
+				{
+					currentWP = gWPArray[desiredIndex];
+
+					if (currentWP)
+					{
+						self->bolt_Waist = desiredIndex;
+						self->boltpoint1 = level.time + 10000; //every time we grab a new point, set the allowed travel-to time again
+						VectorCopy(currentWP->origin, goalPos);
+					}
+				}
+			}
+		}
+	}
+	else
+	{ //We have no place to go. Run toward the origin mindlessly.
+		VectorClear(goalPos);
+	}
+}
+
+void ExampleAnimEntEnemyHandling(gentity_t *self, float enDist)
+{
+	int i = 0;
+	int bestIndex = -1;
+	float minDist = enDist;
+
+	while (i < MAX_CLIENTS)
+	{
+		if (g_entities[i].inuse && g_entities[i].client && g_entities[i].health > 0 && g_entities[i].client->sess.sessionTeam != TEAM_SPECTATOR)
+		{
+			vec3_t checkLen;
+			float fCheckLen;
+
+			VectorSubtract(self->r.currentOrigin, g_entities[i].client->ps.origin, checkLen);
+
+			fCheckLen = VectorLength(checkLen);
+
+			if (fCheckLen < (minDist - 128))
+			{
+				vec3_t enAngles;
+				VectorSubtract(g_entities[i].client->ps.origin, self->r.currentOrigin, enAngles);
+				vectoangles(enAngles, enAngles);
+				if ((InFieldOfVision(self->s.apos.trBase, 120, enAngles) || self->s.genericenemyindex > level.time) && ExampleAnimEntClearLOS(self, g_entities[i].client->ps.origin))
+				{
+					minDist = fCheckLen;
+					bestIndex = i;
+				}
+			}
+		}
+		i++;
+	}
+
+	if (bestIndex != -1)
+	{
+		self->bolt_Motion = bestIndex;
+		enDist = minDist;
+		self->speed = level.time + 4000; //4 seconds til we forget about the enemy
+		ExampleAnimEntAlertOthers(self);
+		self->bolt_RArm = level.time + Q_irand(500, 1000);
+
+		if (self->watertype == ANIMENT_TYPE_STORMTROOPER)
+		{
+			G_Sound(self, CHAN_AUTO, gTrooperSound_Alert[Q_irand(0, TROOPER_ALERT_SOUNDS-1)]);
+		}
+		else if (self->watertype == ANIMENT_TYPE_RODIAN)
+		{
+			G_Sound(self, CHAN_AUTO, gRodianSound_Alert[Q_irand(0, RODIAN_ALERT_SOUNDS-1)]);
+		}
+	}
+}
+
+void ExampleAnimEntUpdateSelf(gentity_t *self)
+{
+	vec3_t preserveAngles;
+
+	if (gBotEdit || !gWPNum)
+	{
+		if (!(self->s.eFlags & EF_DEAD))
+		{
+			if (self->bolt_LArm < level.time)
+			{
+				self->s.torsoAnim = BOTH_ATTACK3;
+				self->s.legsAnim = BOTH_STAND3;
+			}
+		}
+		else
+		{
+			if (self->bolt_Head < level.time)
+			{
+				self->think = G_FreeEntity;
+				self->nextthink = level.time;
+				return;
+			}
+		}
+
+		VectorCopy(self->s.apos.trBase, preserveAngles);
+		G_RunObject(self);
+		VectorCopy(preserveAngles, self->s.apos.trBase);
+		return;
+	}
+
+	if (!(self->s.eFlags & EF_DEAD))
+	{
+		if (self->bolt_LArm < level.time)
+		{
+			vec3_t goalPos;
+			int didMove = 0;
+			float enDist = 999999999;
+			float runSpeed = 18;
+			vec3_t enemyOrigin;
+			qboolean hasEnemyLOS = qfalse;
+			int originalEnemyIndex = self->bolt_Motion;
+
+			if (self->bolt_Motion != ENTITYNUM_NONE &&
+				g_entities[self->bolt_Motion].inuse &&
+				g_entities[self->bolt_Motion].client)
+			{
+				if (g_entities[self->bolt_Motion].client->sess.sessionTeam == TEAM_SPECTATOR)
+				{
+					self->bolt_Motion = ENTITYNUM_NONE;
+				}
+			}
+
+			if (gWPNum > 0)
+			{
+				if (self->bolt_Motion != ENTITYNUM_NONE &&
+					g_entities[self->bolt_Motion].inuse &&
+					g_entities[self->bolt_Motion].client)
+				{
+					vec3_t enSubVec;
+					VectorSubtract(self->r.currentOrigin, g_entities[self->bolt_Motion].client->ps.origin, enSubVec);
+	
+					enDist = VectorLength(enSubVec);
+
+					VectorCopy(g_entities[self->bolt_Motion].client->ps.origin, enemyOrigin);
+
+					if (g_entities[self->bolt_Motion].client->pers.cmd.upmove < 0)
+					{
+						enemyOrigin[2] -= 8;
+					}
+					else
+					{
+						enemyOrigin[2] += 8;
+					}
+
+					hasEnemyLOS = ExampleAnimEntClearLOS(self, enemyOrigin);
+				}
+
+				if (hasEnemyLOS && enDist < 512 && self->splashRadius < level.time)
+				{
+					if (rand()%10 <= 8)
+					{
+						if (self->splashMethodOfDeath)
+						{
+							self->splashMethodOfDeath = 0;
+						}
+						else
+						{
+							self->splashMethodOfDeath = 1;
+						}
+					}
+
+					if (self->watertype == ANIMENT_TYPE_RODIAN)
+					{ //these guys stand still more often because they are "snipers"
+						if (rand()%10 <= 7)
+						{
+							self->splashMethodOfDeath = 1;
+						}
+					}
+
+					self->splashRadius = level.time + Q_irand(2000, 5000);
+				}
+
+				if (hasEnemyLOS && (enDist < 512 || self->watertype == ANIMENT_TYPE_RODIAN) && self->splashMethodOfDeath)
+				{
+					VectorCopy(self->r.currentOrigin, goalPos);
+				}
+				else
+				{
+					ExampleAnimEntNavigation(self, goalPos);
+				}
+			}
+			else
+			{ //No path data? Eh. Just run toward the origin mindlessly.
+				VectorClear(goalPos);
+			}
+
+			if (self->bolt_Motion == ENTITYNUM_NONE)
+			{
+				runSpeed = 6;
+			}
+
+			didMove = ExampleAnimEntMove(self, goalPos, runSpeed);
+
+			if (self->bolt_Motion != ENTITYNUM_NONE &&
+				g_entities[self->bolt_Motion].inuse &&
+				g_entities[self->bolt_Motion].client)
+			{
+				if (self->speed < level.time || g_entities[self->bolt_Motion].health < 1)
+				{
+					self->bolt_Motion = ENTITYNUM_NONE;
+				}
+				else
+				{
+					if (self->bolt_Motion != originalEnemyIndex)
+					{
+						vec3_t enSubVec;
+						VectorSubtract(self->r.currentOrigin, g_entities[self->bolt_Motion].client->ps.origin, enSubVec);
+	
+						enDist = VectorLength(enSubVec);
+					}
+				}
+			}
+
+			ExampleAnimEntEnemyHandling(self, enDist);
+
+			if (self->bolt_Motion != ENTITYNUM_NONE &&
+				g_entities[self->bolt_Motion].inuse &&
+				g_entities[self->bolt_Motion].client)
+			{
+				if (originalEnemyIndex != self->bolt_Motion)
+				{
+					VectorCopy(g_entities[self->bolt_Motion].client->ps.origin, enemyOrigin);
+
+					if (g_entities[self->bolt_Motion].client->pers.cmd.upmove < 0)
+					{
+						enemyOrigin[2] -= 8;
+					}
+					else
+					{
+						enemyOrigin[2] += 8;
+					}
+
+					hasEnemyLOS = ExampleAnimEntClearLOS(self, enemyOrigin);
+				}
+
+				if (hasEnemyLOS)
+				{
+					vec3_t enAngles;
+					vec3_t enAimOrg;
+					vec3_t selfAimOrg;
+					vec3_t myZeroPitchAngles;
+
+					VectorCopy(g_entities[self->bolt_Motion].client->ps.origin, enAimOrg);
+					VectorCopy(self->r.currentOrigin, selfAimOrg);
+					enAimOrg[2] = selfAimOrg[2];
+
+					VectorSubtract(enAimOrg, selfAimOrg, enAngles);
+					vectoangles(enAngles, enAngles);
+
+					VectorCopy(self->s.apos.trBase, myZeroPitchAngles);
+					myZeroPitchAngles[PITCH] = 0;
+					if (InFieldOfVision(myZeroPitchAngles, 50, enAngles))
+					{
+						self->boltpoint4 = 1;
+					}
+					self->speed = level.time + 4000; //4 seconds til we forget about the enemy
+				}
+				else
+				{
+					self->boltpoint4 = 0;
+				}
+				ExampleAnimEntLook(self, enemyOrigin);
+			}
+			else
+			{
+				self->boltpoint4 = 0;
+				ExampleAnimEntLook(self, goalPos);
+			}
+
+			if (!didMove)
+			{ //not just didMove 2, this means we're actually probably stuck
+				vec3_t aFwd, aRight;
+				vec3_t newGoalPos;
+
+				AngleVectors(self->s.apos.trBase, aFwd, aRight, 0);
+				newGoalPos[0] = self->r.currentOrigin[0] + aRight[0]*64 - aFwd[0]*64;
+				newGoalPos[1] = self->r.currentOrigin[1] + aRight[1]*64 - aFwd[1]*64;
+				newGoalPos[2] = self->r.currentOrigin[2] + aRight[2]*64 - aFwd[2]*64;
+
+				//Try moving to the right of the direction we're looking, to get around stuff
+				didMove = ExampleAnimEntMove(self, newGoalPos, 18);
+
+				if (!didMove)
+				{ //still? Try to the left.
+					newGoalPos[0] = self->r.currentOrigin[0] - aRight[0]*64 - aFwd[0]*64;
+					newGoalPos[1] = self->r.currentOrigin[1] - aRight[1]*64 - aFwd[1]*64;
+					newGoalPos[2] = self->r.currentOrigin[2] - aRight[2]*64 - aFwd[2]*64;
+
+					didMove = ExampleAnimEntMove(self, newGoalPos, 18);
+				}
+			}
+
+			if (didMove == 1)
+			{
+				if (self->bolt_Motion == ENTITYNUM_NONE)
+				{
+					self->s.torsoAnim = BOTH_WALK1;
+					self->s.legsAnim = BOTH_WALK1;
+				}
+				else
+				{
+					self->s.torsoAnim = BOTH_ATTACK3;
+					self->s.legsAnim = BOTH_RUN2;
+				}
+			}
+			else
+			{
+				self->s.torsoAnim = BOTH_ATTACK3;
+				self->s.legsAnim = BOTH_STAND3;
+			}
+
+			ExampleAnimEntWeaponHandling(self);
+		}
+	}
+	else
+	{
+		if (self->bolt_Head < level.time)
+		{
+			self->think = G_FreeEntity;
+			self->nextthink = level.time;
+			return;
+		}
+	}
+
+	VectorCopy(self->s.apos.trBase, preserveAngles);
+	G_RunObject(self);
+	VectorCopy(preserveAngles, self->s.apos.trBase);
+}
+
+void G_SpawnExampleAnimEnt(vec3_t pos, int aeType)
+{
+	gentity_t *animEnt;
+	vec3_t playerMins;
+	vec3_t playerMaxs;
+
+	VectorSet(playerMins, -15, -15, DEFAULT_MINS_2);
+	VectorSet(playerMaxs, 15, 15, DEFAULT_MAXS_2);
+
+	if (aeType == ANIMENT_TYPE_STORMTROOPER)
+	{
+		if (!gTrooperSound_Pain[0])
+		{
+			gTrooperSound_Pain[0] = G_SoundIndex("sound/chars/st1/misc/pain25");
+			gTrooperSound_Pain[1] = G_SoundIndex("sound/chars/st1/misc/pain50");
+			gTrooperSound_Pain[2] = G_SoundIndex("sound/chars/st1/misc/pain75");
+			gTrooperSound_Pain[3] = G_SoundIndex("sound/chars/st1/misc/pain100");
+
+			gTrooperSound_Death[0] = G_SoundIndex("sound/chars/st1/misc/death1");
+			gTrooperSound_Death[1] = G_SoundIndex("sound/chars/st1/misc/death2");
+			gTrooperSound_Death[2] = G_SoundIndex("sound/chars/st1/misc/death3");
+
+			gTrooperSound_Alert[0] = G_SoundIndex("sound/chars/st1/misc/detected1");
+			gTrooperSound_Alert[1] = G_SoundIndex("sound/chars/st1/misc/detected2");
+			gTrooperSound_Alert[2] = G_SoundIndex("sound/chars/st1/misc/detected3");
+			gTrooperSound_Alert[3] = G_SoundIndex("sound/chars/st1/misc/detected4");
+			gTrooperSound_Alert[4] = G_SoundIndex("sound/chars/st1/misc/detected5");
+		}
+	}
+	else if (aeType == ANIMENT_TYPE_RODIAN)
+	{
+		if (!gRodianSound_Pain[0])
+		{
+			gRodianSound_Pain[0] = G_SoundIndex("sound/chars/rodian1/misc/pain25");
+			gRodianSound_Pain[1] = G_SoundIndex("sound/chars/rodian1/misc/pain50");
+			gRodianSound_Pain[2] = G_SoundIndex("sound/chars/rodian1/misc/pain75");
+			gRodianSound_Pain[3] = G_SoundIndex("sound/chars/rodian1/misc/pain100");
+
+			gRodianSound_Death[0] = G_SoundIndex("sound/chars/rodian1/misc/death1");
+			gRodianSound_Death[1] = G_SoundIndex("sound/chars/rodian1/misc/death2");
+			gRodianSound_Death[2] = G_SoundIndex("sound/chars/rodian1/misc/death3");
+
+			gRodianSound_Alert[0] = G_SoundIndex("sound/chars/rodian1/misc/detected1");
+			gRodianSound_Alert[1] = G_SoundIndex("sound/chars/rodian1/misc/detected2");
+			gRodianSound_Alert[2] = G_SoundIndex("sound/chars/rodian1/misc/detected3");
+			gRodianSound_Alert[3] = G_SoundIndex("sound/chars/rodian1/misc/detected4");
+			gRodianSound_Alert[4] = G_SoundIndex("sound/chars/rodian1/misc/detected5");
+		}
+	}
+
+	animEnt = G_Spawn();
+
+	animEnt->watertype = aeType; //set the animent type
+
+	animEnt->s.eType = ET_GRAPPLE; //ET_GRAPPLE is the reserved special type for G2 anim ents.
+
+	if (animEnt->watertype == ANIMENT_TYPE_STORMTROOPER)
+	{
+		animEnt->s.modelindex = G_ModelIndex( "models/players/stormtrooper/model.glm" );
+	}
+	else if (animEnt->watertype == ANIMENT_TYPE_RODIAN)
+	{
+		animEnt->s.modelindex = G_ModelIndex( "models/players/rodian/model.glm" );
+	}
+	else
+	{
+		G_Error("Unknown AnimEnt type!\n");
+	}
+
+	animEnt->s.g2radius = 100;
+
+	if (animEnt->watertype == ANIMENT_TYPE_STORMTROOPER)
+	{
+		animEnt->s.weapon = WP_BLASTER; //This will tell the client to stick a blaster in the model's hands upon model init.
+	}
+	else if (animEnt->watertype == ANIMENT_TYPE_RODIAN)
+	{
+		animEnt->s.weapon = WP_DISRUPTOR; //These guys get disruptors instead of blasters.
+	}
+
+	animEnt->s.modelGhoul2 = 1; //Deal with it like any other ghoul2 ent, as far as killing instances.
+
+	G_SetOrigin(animEnt, pos);
+
+	animEnt->classname = "g2animent";
+			
+	VectorCopy (playerMins, animEnt->r.mins);
+	VectorCopy (playerMaxs, animEnt->r.maxs);
+
+	animEnt->r.svFlags = SVF_USE_CURRENT_ORIGIN;
+
+	animEnt->clipmask = MASK_PLAYERSOLID;
+	animEnt->r.contents = MASK_PLAYERSOLID;
+
+	animEnt->takedamage = qtrue;
+
+	animEnt->health = 60;
+
+	animEnt->s.owner = MAX_CLIENTS+1;
+	animEnt->s.shouldtarget = qtrue;
+	animEnt->s.teamowner = 0;
+
+	trap_LinkEntity(animEnt);
+
+	animEnt->pain = ExampleAnimEnt_Pain;
+	animEnt->die = ExampleAnimEnt_Die;
+
+	animEnt->touch = ExampleAnimEntTouch;
+
+	animEnt->think = ExampleAnimEntUpdateSelf;
+	animEnt->nextthink = level.time + 50;
+
+	animEnt->s.torsoAnim = BOTH_ATTACK3;
+	animEnt->s.legsAnim = BOTH_STAND3;
+
+	//initialize the "AI" values
+	animEnt->bolt_Waist = -1; //the waypoint index
+	animEnt->bolt_Motion = ENTITYNUM_NONE; //the enemy index
+	animEnt->splashMethodOfDeath = 0; //don't stand still while you have an enemy
+	animEnt->splashRadius = 0; //timer for randomly deciding to stand still
+	animEnt->boltpoint3 = 0; //running forward on the trail
+}
+
+qboolean gEscaping = qfalse;
+int gEscapeTime = 0;
+
+#ifdef ANIMENT_SPAWNER
+int AESpawner_CountAnimEnts(void)
+{
+	int i = 0;
+	int count = 0;
+
+	while (i < MAX_GENTITIES)
+	{
+		if (g_entities[i].inuse && g_entities[i].s.eType == ET_GRAPPLE)
+		{
+			count++;
+		}
+		i++;
+	}
+
+	return count;
+}
+
+qboolean AESpawner_NoClientInPVS(gentity_t *ent)
+{
+	int i = 0;
+
+	while (i < MAX_CLIENTS)
+	{
+		if (g_entities[i].inuse &&
+			g_entities[i].client &&
+			trap_InPVS(ent->s.origin, g_entities[i].client->ps.origin))
+		{
+			return qfalse;
+		}
+
+		i++;
+	}
+
+	return qtrue;
+}
+
+qboolean AESpawner_PassAnimEntPVSCheck(gentity_t *ent)
+{
+	int count = 0;
+	int i = 0;
+
+	if (!ent->bolt_LArm)
+	{ //unlimited
+		return qtrue;
+	}
+
+	while (i < MAX_GENTITIES)
+	{
+		if (g_entities[i].inuse && g_entities[i].s.eType == ET_GRAPPLE &&
+			trap_InPVS(ent->r.currentOrigin, g_entities[i].r.currentOrigin))
+		{
+			count++;
+		}
+
+		if (count >= ent->bolt_LArm)
+		{ //too many in this pvs..
+			return qfalse;
+		}
+		i++;
+	}
+
+	return qtrue;
+}
+
+void AESpawner_Think(gentity_t *ent)
+{
+	int animEntCount;
+
+	if (gBotEdit)
+	{
+		ent->nextthink = level.time + 1000;
+		return;
+	}
+
+	if (!ent->bolt_LLeg)
+	{
+		animEntCount = -1;
+	}
+	else
+	{
+		animEntCount = AESpawner_CountAnimEnts();
+	}
+
+	if (animEntCount < ent->bolt_LLeg)
+	{
+		trace_t tr;
+		vec3_t playerMins;
+		vec3_t playerMaxs;
+
+		VectorSet(playerMins, -15, -15, DEFAULT_MINS_2);
+		VectorSet(playerMaxs, 15, 15, DEFAULT_MAXS_2);
+
+		trap_Trace(&tr, ent->s.origin, playerMins, playerMaxs, ent->s.origin, ent->s.number, MASK_PLAYERSOLID);
+
+		if (tr.fraction == 1)
+		{
+			if (ent->bolt_Head || AESpawner_NoClientInPVS(ent))
+			{
+				if (AESpawner_PassAnimEntPVSCheck(ent))
+				{
+					G_SpawnExampleAnimEnt(ent->s.origin, ent->watertype);
+				}
+			}
+		}
+	}
+
+	ent->nextthink = level.time + 1000;
+}
+
+void SP_misc_animent_spawner(gentity_t *ent)
+{
+	if (g_gametype.integer != GT_SINGLE_PLAYER)
+	{
+		G_FreeEntity(ent);
+		return;
+	}
+
+	G_SpawnInt( "spawninpvs", "0", &ent->bolt_Head );
+	//If this is non-0, the spawner will spawn even if a client is in the PVS
+	G_SpawnInt( "othersinpvs", "3", &ent->bolt_LArm);
+	//Don't spawn more than this many animents in the PVS of this spawner.
+	//If 0, the amount is unlimited.
+	G_SpawnInt( "totalspawn", "12", &ent->bolt_LLeg);
+	//Only spawn if less than or equal to this many ents active globally.
+	//0 is unlimited, but that could cause horrible disaster.
+	G_SpawnInt( "spawntype", "0", &ent->watertype);
+	//Spawn type. 0 is stormtrooper, 1 is rodian.
+
+	//Just precache the assets now
+	if (ent->watertype == ANIMENT_TYPE_STORMTROOPER)
+	{
+		gTrooperSound_Pain[0] = G_SoundIndex("sound/chars/st1/misc/pain25");
+		gTrooperSound_Pain[1] = G_SoundIndex("sound/chars/st1/misc/pain50");
+		gTrooperSound_Pain[2] = G_SoundIndex("sound/chars/st1/misc/pain75");
+		gTrooperSound_Pain[3] = G_SoundIndex("sound/chars/st1/misc/pain100");
+
+		gTrooperSound_Death[0] = G_SoundIndex("sound/chars/st1/misc/death1");
+		gTrooperSound_Death[1] = G_SoundIndex("sound/chars/st1/misc/death2");
+		gTrooperSound_Death[2] = G_SoundIndex("sound/chars/st1/misc/death3");
+
+		gTrooperSound_Alert[0] = G_SoundIndex("sound/chars/st1/misc/detected1");
+		gTrooperSound_Alert[1] = G_SoundIndex("sound/chars/st1/misc/detected2");
+		gTrooperSound_Alert[2] = G_SoundIndex("sound/chars/st1/misc/detected3");
+		gTrooperSound_Alert[3] = G_SoundIndex("sound/chars/st1/misc/detected4");
+		gTrooperSound_Alert[4] = G_SoundIndex("sound/chars/st1/misc/detected5");
+
+		G_ModelIndex( "models/players/stormtrooper/model.glm" );
+	}
+	else if (ent->watertype == ANIMENT_TYPE_RODIAN)
+	{
+		gRodianSound_Pain[0] = G_SoundIndex("sound/chars/rodian1/misc/pain25");
+		gRodianSound_Pain[1] = G_SoundIndex("sound/chars/rodian1/misc/pain50");
+		gRodianSound_Pain[2] = G_SoundIndex("sound/chars/rodian1/misc/pain75");
+		gRodianSound_Pain[3] = G_SoundIndex("sound/chars/rodian1/misc/pain100");
+
+		gRodianSound_Death[0] = G_SoundIndex("sound/chars/rodian1/misc/death1");
+		gRodianSound_Death[1] = G_SoundIndex("sound/chars/rodian1/misc/death2");
+		gRodianSound_Death[2] = G_SoundIndex("sound/chars/rodian1/misc/death3");
+
+		gRodianSound_Alert[0] = G_SoundIndex("sound/chars/rodian1/misc/detected1");
+		gRodianSound_Alert[1] = G_SoundIndex("sound/chars/rodian1/misc/detected2");
+		gRodianSound_Alert[2] = G_SoundIndex("sound/chars/rodian1/misc/detected3");
+		gRodianSound_Alert[3] = G_SoundIndex("sound/chars/rodian1/misc/detected4");
+		gRodianSound_Alert[4] = G_SoundIndex("sound/chars/rodian1/misc/detected5");
+
+		G_ModelIndex( "models/players/rodian/model.glm" );
+	}
+
+	ent->think = AESpawner_Think;
+	ent->nextthink = level.time + Q_irand(50, 500);
+	trap_LinkEntity(ent);
+}
+
+void Use_Target_Screenshake( gentity_t *ent, gentity_t *other, gentity_t *activator )
+{
+	qboolean bGlobal = qfalse;
+
+	if (ent->bolt_LArm)
+	{
+		bGlobal = qtrue;
+	}
+
+	G_ScreenShake(ent->s.origin, NULL, ent->speed, ent->bolt_Head, bGlobal);
+}
+
+void SP_target_screenshake(gentity_t *ent)
+{
+	if (g_gametype.integer != GT_SINGLE_PLAYER)
+	{
+		G_FreeEntity(ent);
+		return;
+	}
+
+	G_SpawnFloat( "intensity", "10", &ent->speed );
+	//intensity of the shake
+	G_SpawnInt( "duration", "800", &ent->bolt_Head );
+	//duration of the shake
+	G_SpawnInt( "globalshake", "1", &ent->bolt_LArm );
+	//non-0 if shake should be global (all clients). Otherwise, only in the PVS.
+
+	ent->use = Use_Target_Screenshake;
+}
+
+void LogExit( const char *string );
+
+void Use_Target_Escapetrig( gentity_t *ent, gentity_t *other, gentity_t *activator )
+{
+	if (!ent->bolt_LArm)
+	{
+		gEscaping = qtrue;
+		gEscapeTime = level.time + ent->bolt_Head;
+	}
+	else if (gEscaping)
+	{
+		int i = 0;
+		gEscaping = qfalse;
+		while (i < MAX_CLIENTS)
+		{ //all of the survivors get 100 points!
+			if (g_entities[i].inuse && g_entities[i].client && g_entities[i].health > 0 &&
+				g_entities[i].client->sess.sessionTeam != TEAM_SPECTATOR &&
+				!(g_entities[i].client->ps.pm_flags & PMF_FOLLOW))
+			{
+				AddScore(&g_entities[i], g_entities[i].client->ps.origin, 100);
+			}
+			i++;
+		}
+		if (activator && activator->inuse && activator->client)
+		{ //the one who escaped gets 500
+			AddScore(activator, activator->client->ps.origin, 500);
+		}
+
+		LogExit("Escaped!");
+	}
+}
+
+void SP_target_escapetrig(gentity_t *ent)
+{
+	if (g_gametype.integer != GT_SINGLE_PLAYER)
+	{
+		G_FreeEntity(ent);
+		return;
+	}
+
+	G_SpawnInt( "escapetime", "60000", &ent->bolt_Head);
+	//time given (in ms) for the escape
+	G_SpawnInt( "escapegoal", "0", &ent->bolt_LArm);
+	//if non-0, when used, will end an ongoing escape instead of start it
+
+	ent->use = Use_Target_Escapetrig;
+}
+
+#endif
+
+void G_CreateExampleAnimEnt(gentity_t *ent)
+{
+	vec3_t fwd, fwdPos;
+
+	AngleVectors(ent->client->ps.viewangles, fwd, 0, 0);
+
+	fwdPos[0] = ent->client->ps.origin[0] + fwd[0]*128;
+	fwdPos[1] = ent->client->ps.origin[1] + fwd[1]*128;
+	fwdPos[2] = ent->client->ps.origin[2] + fwd[2]*128;
+
+	G_SpawnExampleAnimEnt(fwdPos, 0);
+}
+//rww - here ends the main example g2animent stuff
+

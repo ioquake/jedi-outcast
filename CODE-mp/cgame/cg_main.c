@@ -365,7 +365,6 @@ vmCvar_t	cg_bobpitch;
 vmCvar_t	cg_bobroll;
 //vmCvar_t	cg_swingSpeed;
 vmCvar_t	cg_shadows;
-vmCvar_t	cg_gibs;
 vmCvar_t	cg_drawTimer;
 vmCvar_t	cg_drawFPS;
 vmCvar_t	cg_drawSnapshot;
@@ -411,8 +410,14 @@ vmCvar_t	cg_zoomFov;
 
 vmCvar_t	cg_swingAngles;
 
+#ifdef G2_COLLISION_ENABLED
+vmCvar_t	cg_saberModelTraceEffect;
+#endif
+
 vmCvar_t	cg_saberContact;
 vmCvar_t	cg_saberTrail;
+
+vmCvar_t	cg_duelHeadAngles;
 
 vmCvar_t	cg_speedTrail;
 vmCvar_t	cg_auraShell;
@@ -505,7 +510,6 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_viewsize, "cg_viewsize", "100", CVAR_ARCHIVE },
 	{ &cg_stereoSeparation, "cg_stereoSeparation", "0.4", CVAR_ARCHIVE  },
 	{ &cg_shadows, "cg_shadows", "1", CVAR_ARCHIVE  },
-	{ &cg_gibs, "cg_gibs", "1", CVAR_ARCHIVE  },
 	{ &cg_draw2D, "cg_draw2D", "1", CVAR_ARCHIVE  },
 	{ &cg_drawStatus, "cg_drawStatus", "1", CVAR_ARCHIVE  },
 	{ &cg_drawTimer, "cg_drawTimer", "0", CVAR_ARCHIVE  },
@@ -553,15 +557,21 @@ static cvarTable_t cvarTable[] = { // bk001129
 
 	{ &cg_swingAngles, "cg_swingAngles", "1", 0 },
 
+#ifdef G2_COLLISION_ENABLED
+	{ &cg_saberModelTraceEffect, "cg_saberModelTraceEffect", "0", 0 },
+#endif
+
 	{ &cg_saberContact, "cg_saberContact", "1", 0 },
 	{ &cg_saberTrail, "cg_saberTrail", "1", 0 },
+
+	{ &cg_duelHeadAngles, "cg_duelHeadAngles", "0", 0 },
 
 	{ &cg_speedTrail, "cg_speedTrail", "1", 0 },
 	{ &cg_auraShell, "cg_auraShell", "1", 0 },
 
 	{ &cg_animBlend, "cg_animBlend", "1", 0 },
 
-	{ &cg_dismember, "cg_dismember", "0", 0 },
+	{ &cg_dismember, "cg_dismember", "0", CVAR_ARCHIVE },
 
 	{ &cg_thirdPerson, "cg_thirdPerson", "0", 0 },
 	{ &cg_thirdPersonRange, "cg_thirdPersonRange", "80", CVAR_CHEAT },
@@ -1267,22 +1277,20 @@ static void CG_RegisterGraphics( void ) {
 		cgs.media.chunkyNumberShaders[i]	= trap_R_RegisterShaderNoMip( sb_c_nums[i] );
 	}
 
+	cgs.media.balloonShader = trap_R_RegisterShader( "gfx/mp/chat_icon" );
+
 	cgs.media.viewBloodShader = trap_R_RegisterShader( "viewBloodBlend" );
 
 	cgs.media.deferShader = trap_R_RegisterShaderNoMip( "gfx/2d/defer.tga" );
 
 	cgs.media.smokePuffShader = trap_R_RegisterShader( "smokePuff" );
-	cgs.media.smokePuffRageProShader = trap_R_RegisterShader( "smokePuffRagePro" );
-	cgs.media.shotgunSmokePuffShader = trap_R_RegisterShader( "shotgunSmokePuff" );
-	cgs.media.plasmaBallShader = trap_R_RegisterShader( "sprites/plasma1" );
 	cgs.media.bloodTrailShader = trap_R_RegisterShader( "bloodTrail" );
-	cgs.media.lagometerShader = trap_R_RegisterShader("gfx/2d/lag" );
-	cgs.media.connectionShader = trap_R_RegisterShader( "disconnected" );
+	cgs.media.lagometerShader = trap_R_RegisterShaderNoMip("gfx/2d/lag" );
+	cgs.media.connectionShader = trap_R_RegisterShaderNoMip( "gfx/2d/net" );
 
 	cgs.media.waterBubbleShader = trap_R_RegisterShader( "waterBubble" );
 
 	cgs.media.tracerShader = trap_R_RegisterShader( "gfx/misc/tracer" );
-	cgs.media.selectShader = trap_R_RegisterShader( "gfx/2d/select" );
 
 	Com_Printf( S_COLOR_CYAN "---------- Fx System Initialization ---------\n" );
 	trap_FX_InitSystem();
@@ -2005,14 +2013,15 @@ static clientInfo_t * CG_InfoFromScoreIndex(int index, int team, int *scoreIndex
 	return &cgs.clientinfo[ cg.scores[index].client ];
 }
 
-static const char *CG_FeederItemText(float feederID, int index, int column, qhandle_t *handle) {
+static const char *CG_FeederItemText(float feederID, int index, int column,
+									 qhandle_t *handle1, qhandle_t *handle2, qhandle_t *handle3) {
 	gitem_t *item;
 	int scoreIndex = 0;
 	clientInfo_t *info = NULL;
 	int team = -1;
 	score_t *sp = NULL;
 
-	*handle = -1;
+	*handle1 = *handle2 = *handle3 = -1;
 
 	if (feederID == FEEDER_REDTEAM_LIST) {
 		team = TEAM_RED;
@@ -2028,17 +2037,17 @@ static const char *CG_FeederItemText(float feederID, int index, int column, qhan
 			case 0:
 				if ( info->powerups & ( 1 << PW_NEUTRALFLAG ) ) {
 					item = BG_FindItemForPowerup( PW_NEUTRALFLAG );
-					*handle = cg_items[ ITEM_INDEX(item) ].icon;
+					*handle1 = cg_items[ ITEM_INDEX(item) ].icon;
 				} else if ( info->powerups & ( 1 << PW_REDFLAG ) ) {
 					item = BG_FindItemForPowerup( PW_REDFLAG );
-					*handle = cg_items[ ITEM_INDEX(item) ].icon;
+					*handle1 = cg_items[ ITEM_INDEX(item) ].icon;
 				} else if ( info->powerups & ( 1 << PW_BLUEFLAG ) ) {
 					item = BG_FindItemForPowerup( PW_BLUEFLAG );
-					*handle = cg_items[ ITEM_INDEX(item) ].icon;
+					*handle1 = cg_items[ ITEM_INDEX(item) ].icon;
 				} else {
 					/*	
 					if ( info->botSkill > 0 && info->botSkill <= 5 ) {
-						*handle = cgs.media.botSkillShaders[ info->botSkill - 1 ];
+						*handle1 = cgs.media.botSkillShaders[ info->botSkill - 1 ];
 					} else if ( info->handicap < 100 ) {
 					return va("%i", info->handicap );
 					}
@@ -2049,7 +2058,7 @@ static const char *CG_FeederItemText(float feederID, int index, int column, qhan
 				if (team == -1) {
 					return "";
 				} else {
-					*handle = CG_StatusHandle(info->teamTask);
+					*handle1 = CG_StatusHandle(info->teamTask);
 				}
 		  break;
 			case 2:
@@ -2194,6 +2203,8 @@ void CG_LoadHudMenu()
 	cgDC.Font_StrLenChars = &trap_R_Font_StrLenChars;
 	cgDC.Font_HeightPixels = &trap_R_Font_HeightPixels;
 	cgDC.Font_DrawString = &trap_R_Font_DrawString;
+	cgDC.Language_IsAsian = &trap_Language_IsAsian;
+	cgDC.Language_UsesSpaces = &trap_Language_UsesSpaces;
 	cgDC.AnyLanguage_ReadCharFromString = &trap_AnyLanguage_ReadCharFromString;
 	cgDC.ownerDrawItem = &CG_OwnerDraw;
 	cgDC.getValue = &CG_GetValue;

@@ -2,7 +2,7 @@
 #define __G_PUBLIC_H__
 // g_public.h -- game module information visible to server
 
-#define	GAME_API_VERSION	6
+#define	GAME_API_VERSION	7
 
 // entity->svFlags
 // the server does not know how to interpret most of the values

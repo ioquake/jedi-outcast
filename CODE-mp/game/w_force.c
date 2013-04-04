@@ -21,13 +21,15 @@ int	ysalamiriLoopSound = 0;
 
 #define FORCE_VELOCITY_DAMAGE 0
 
-void G_PreDefSound(vec3_t org, int pdSound)
+gentity_t *G_PreDefSound(vec3_t org, int pdSound)
 {
 	gentity_t	*te;
 
 	te = G_TempEntity( org, EV_PREDEFSOUND );
 	te->s.eventParm = pdSound;
 	VectorCopy(org, te->s.origin);
+
+	return te;
 }
 
 qboolean InFront( vec3_t spot, vec3_t from, vec3_t fromAngles, float threshHold )
@@ -422,6 +424,13 @@ void WP_InitForcePowers( gentity_t *ent )
 			ent->client->ps.fd.forcePowerSelected = 0;
 		}
 	}
+
+	while (i < NUM_FORCE_POWERS)
+	{
+		ent->client->ps.fd.forcePowerBaseLevel[i] = ent->client->ps.fd.forcePowerLevel[i];
+		i++;
+	}
+	ent->client->ps.fd.forceUsingAdded = 0;
 }
 
 void WP_SpawnInitForcePowers( gentity_t *ent )
@@ -492,7 +501,8 @@ void WP_SpawnInitForcePowers( gentity_t *ent )
 
 	while (i < NUM_FORCE_POWERS)
 	{
-		ent->client->ps.fd.forcePowerBaseLevel[i] = ent->client->ps.fd.forcePowerLevel[i];
+		//Don't know why I was doing this here either.
+		//ent->client->ps.fd.forcePowerBaseLevel[i] = ent->client->ps.fd.forcePowerLevel[i];
 
 		ent->client->ps.fd.forcePowerDebounce[i] = 0;
 		ent->client->ps.fd.forcePowerDuration[i] = 0;
@@ -501,7 +511,8 @@ void WP_SpawnInitForcePowers( gentity_t *ent )
 	}
 
 	ent->client->ps.fd.forcePowerRegenDebounceTime = 0;
-	ent->client->ps.fd.forceUsingAdded = 0;
+	//I wonder why I was doing this.
+	//ent->client->ps.fd.forceUsingAdded = 0;
 	ent->client->ps.fd.forceJumpZStart = 0;
 	ent->client->ps.fd.forceJumpCharge = 0;
 	ent->client->ps.fd.forceJumpSound = 0;
@@ -655,6 +666,7 @@ int WP_AbsorbConversion(gentity_t *attacked, int atdAbsLevel, gentity_t *attacke
 {
 	int getLevel = 0;
 	int addTot = 0;
+	gentity_t *abSound;
 
 	if (atPower != FP_LIGHTNING &&
 		atPower != FP_DRAIN &&
@@ -698,7 +710,13 @@ int WP_AbsorbConversion(gentity_t *attacked, int atdAbsLevel, gentity_t *attacke
 	}
 
 	//play sound indicating that attack was absorbed
-	G_PreDefSound(attacker->client->ps.origin, PDSOUND_ABSORBHIT);
+	if (attacked->client->forcePowerSoundDebounce < level.time)
+	{
+		abSound = G_PreDefSound(attacked->client->ps.origin, PDSOUND_ABSORBHIT);
+		abSound->s.trickedentindex = attacked->s.number;
+
+		attacked->client->forcePowerSoundDebounce = level.time + 400;
+	}
 
 	return getLevel;
 }
@@ -958,7 +976,7 @@ void ForceHeal( gentity_t *self )
 
 	if (self->client->ps.fd.forcePowerLevel[FP_HEAL] == FORCE_LEVEL_3)
 	{
-		self->health += 50;
+		self->health += 25; //This was 50, but that angered the Balance God.
 		
 		if (self->health > self->client->ps.stats[STAT_MAX_HEALTH])
 		{
@@ -968,7 +986,7 @@ void ForceHeal( gentity_t *self )
 	}
 	else if (self->client->ps.fd.forcePowerLevel[FP_HEAL] == FORCE_LEVEL_2)
 	{
-		self->health += 25;
+		self->health += 10;
 		
 		if (self->health > self->client->ps.stats[STAT_MAX_HEALTH])
 		{
@@ -978,7 +996,7 @@ void ForceHeal( gentity_t *self )
 	}
 	else
 	{
-		self->health += 10;
+		self->health += 5;
 		
 		if (self->health > self->client->ps.stats[STAT_MAX_HEALTH])
 		{
@@ -1502,6 +1520,13 @@ void ForceLightningDamage( gentity_t *self, gentity_t *traceEnt, vec3_t dir, vec
 
 	if ( traceEnt && traceEnt->takedamage )
 	{
+		if (!traceEnt->client && traceEnt->s.eType == ET_GRAPPLE)
+		{ //g2animent
+			if (traceEnt->s.genericenemyindex < level.time)
+			{
+				traceEnt->s.genericenemyindex = level.time + 2000;
+			}
+		}
 		if ( traceEnt->client )
 		{//an enemy or object
 			if (ForcePowerUsableOn(self, traceEnt, FP_LIGHTNING))
@@ -1724,6 +1749,13 @@ void ForceDrainDamage( gentity_t *self, gentity_t *traceEnt, vec3_t dir, vec3_t 
 	{
 		if ( traceEnt->client && (!OnSameTeam(self, traceEnt) || g_friendlyFire.integer) && self->client->ps.fd.forceDrainTime < level.time && traceEnt->client->ps.fd.forcePower )
 		{//an enemy or object
+			if (!traceEnt->client && traceEnt->s.eType == ET_GRAPPLE)
+			{ //g2animent
+				if (traceEnt->s.genericenemyindex < level.time)
+				{
+					traceEnt->s.genericenemyindex = level.time + 2000;
+				}
+			}
 			if (ForcePowerUsableOn(self, traceEnt, FP_DRAIN))
 			{
 				int modPowerLevel = -1;
@@ -1766,7 +1798,7 @@ void ForceDrainDamage( gentity_t *self, gentity_t *traceEnt, vec3_t dir, vec3_t 
 
 				if (dmg)
 				{
-					traceEnt->client->ps.fd.forcePower -= dmg;
+					traceEnt->client->ps.fd.forcePower -= (dmg);
 				}
 				if (traceEnt->client->ps.fd.forcePower < 0)
 				{
@@ -1819,9 +1851,14 @@ void ForceDrainDamage( gentity_t *self, gentity_t *traceEnt, vec3_t dir, vec3_t 
 				//	traceEnt->client->ps.powerups[PW_DISINT_1] = level.time + 500;
 				}
 
-				tent = G_TempEntity( impactPoint, EV_FORCE_DRAINED);
-				tent->s.eventParm = DirToByte(dir);
-				tent->s.owner = traceEnt->s.number;
+				if (traceEnt->client->forcePowerSoundDebounce < level.time)
+				{
+					tent = G_TempEntity( impactPoint, EV_FORCE_DRAINED);
+					tent->s.eventParm = DirToByte(dir);
+					tent->s.owner = traceEnt->s.number;
+
+					traceEnt->client->forcePowerSoundDebounce = level.time + 400;
+				}
 			}
 		}
 	}
@@ -1962,7 +1999,7 @@ int ForceShootDrain( gentity_t *self )
 	}
 	else*/
 	{
-		BG_ForcePowerDrain( &self->client->ps, FP_DRAIN, 1 );
+		BG_ForcePowerDrain( &self->client->ps, FP_DRAIN, 5 ); //used to be 1, but this did, too, anger the God of Balance.
 	}
 
 	self->client->ps.fd.forcePowerRegenDebounceTime = level.time + 500;
@@ -2528,6 +2565,7 @@ qboolean CanCounterThrow(gentity_t *self, qboolean pull)
 	return 1;
 }
 
+extern void Touch_Button(gentity_t *ent, gentity_t *other, trace_t *trace );
 void ForceThrow( gentity_t *self, qboolean pull )
 {
 	//shove things in front of you away
@@ -2669,6 +2707,14 @@ void ForceThrow( gentity_t *self, qboolean pull )
 		if (tr.fraction != 1.0 &&
 			tr.entityNum != ENTITYNUM_NONE)
 		{
+			if (!g_entities[tr.entityNum].client && g_entities[tr.entityNum].s.eType == ET_GRAPPLE)
+			{ //g2animent
+				if (g_entities[tr.entityNum].s.genericenemyindex < level.time)
+				{
+					g_entities[tr.entityNum].s.genericenemyindex = level.time + 2000;
+				}
+			}
+
 			numListedEntities = 0;
 			entityList[numListedEntities] = tr.entityNum;
 			numListedEntities++;
@@ -2688,6 +2734,14 @@ void ForceThrow( gentity_t *self, qboolean pull )
 		while (e < numListedEntities)
 		{
 			ent = &g_entities[entityList[e]];
+
+			if (!ent->client && ent->s.eType == ET_GRAPPLE)
+			{ //g2animent
+				if (ent->s.genericenemyindex < level.time)
+				{
+					ent->s.genericenemyindex = level.time + 2000;
+				}
+			}
 
 			if (ent)
 			{
@@ -2767,30 +2821,40 @@ void ForceThrow( gentity_t *self, qboolean pull )
 			if ( ent->s.eType != ET_ITEM /*&& ent->e_ThinkFunc != thinkF_G_RunObject*/ )//|| !(ent->flags&FL_DROPPED_ITEM) )//was only dropped items
 			{
 				//FIXME: need pushable objects
-				if ( ent->s.eFlags & EF_NODRAW )
-				{
-					continue;
+				if ( Q_stricmp( "func_button", ent->classname ) == 0 )
+				{//we might push it
+					if ( pull || !(ent->spawnflags&SPF_BUTTON_FPUSHABLE) )
+					{//not force-pushable, never pullable
+						continue;
+					}
 				}
-				if ( !ent->client )
+				else
 				{
-					if ( Q_stricmp( "lightsaber", ent->classname ) != 0 )
-					{//not a lightsaber 
-//						if ( !(ent->svFlags&SVF_GLASS_BRUSH) )
-//						{//and not glass
-							if ( Q_stricmp( "func_door", ent->classname ) != 0 || !(ent->spawnflags & 2/*MOVER_FORCE_ACTIVATE*/) )
-							{//not a force-usable door
-								if ( Q_stricmp( "limb", ent->classname ) )
-								{//not a limb
+					if ( ent->s.eFlags & EF_NODRAW )
+					{
+						continue;
+					}
+					if ( !ent->client )
+					{
+						if ( Q_stricmp( "lightsaber", ent->classname ) != 0 )
+						{//not a lightsaber 
+	//						if ( !(ent->svFlags&SVF_GLASS_BRUSH) )
+	//						{//and not glass
+								if ( Q_stricmp( "func_door", ent->classname ) != 0 || !(ent->spawnflags & 2/*MOVER_FORCE_ACTIVATE*/) )
+								{//not a force-usable door
+									if ( Q_stricmp( "limb", ent->classname ) )
+									{//not a limb
+										continue;
+									}
+								}
+								else if ( ent->moverState != MOVER_POS1 && ent->moverState != MOVER_POS2 )
+								{//not at rest
 									continue;
 								}
-							}
-							else if ( ent->moverState != MOVER_POS1 && ent->moverState != MOVER_POS2 )
-							{//not at rest
-								continue;
-							}
-//						}
+	//						}
+						}
+						//continue;
 					}
-					//continue;
 				}
 			}
 		}
@@ -3133,6 +3197,11 @@ void ForceThrow( gentity_t *self, qboolean pull )
 					}
 				}
 				GEntity_UseFunc( push_list[x], self, self );
+			}
+			else if ( Q_stricmp( "func_button", push_list[x]->classname ) == 0 )
+			{//pretend you pushed it
+				Touch_Button( push_list[x], self, NULL );
+				continue;
 			}
 		}
 	}
@@ -3658,6 +3727,19 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 			WP_ForcePowerStop(self, FP_GRIP);
 			break;
 		}
+
+		if (self->client->ps.fd.forcePowerDebounce[FP_PULL] < level.time)
+		{ //This is sort of not ideal. Using the debounce value reserved for pull for this because pull doesn't need it.
+			BG_ForcePowerDrain( &self->client->ps, forcePower, 1 );
+			self->client->ps.fd.forcePowerDebounce[FP_PULL] = level.time + 100;
+		}
+
+		if (self->client->ps.fd.forcePower < 1)
+		{
+			WP_ForcePowerStop(self, FP_GRIP);
+			break;
+		}
+
 		DoGripAction(self, forcePower);
 		break;
 	case FP_LEVITATION:
@@ -3779,7 +3861,6 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 	case FP_SABERTHROW:
 		break;
 	case FP_PROTECT:
-	case FP_ABSORB:
 		if (self->client->ps.fd.forcePowerDebounce[forcePower] < level.time)
 		{
 			BG_ForcePowerDrain( &self->client->ps, forcePower, 1 );
@@ -3789,6 +3870,18 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 			}
 
 			self->client->ps.fd.forcePowerDebounce[forcePower] = level.time + 300;
+		}
+		break;
+	case FP_ABSORB:
+		if (self->client->ps.fd.forcePowerDebounce[forcePower] < level.time)
+		{
+			BG_ForcePowerDrain( &self->client->ps, forcePower, 1 );
+			if (self->client->ps.fd.forcePower < 1)
+			{
+				WP_ForcePowerStop(self, forcePower);
+			}
+
+			self->client->ps.fd.forcePowerDebounce[forcePower] = level.time + 600;
 		}
 		break;
 	default:
@@ -4307,6 +4400,29 @@ void JediMasterUpdate(gentity_t *self)
 	}
 }
 
+qboolean WP_HasForcePowers( const playerState_t *ps )
+{
+	int i;
+	if ( ps )
+	{
+		for ( i = 0; i < NUM_FORCE_POWERS; i++ )
+		{
+			if ( i == FP_LEVITATION )
+			{
+				if ( ps->fd.forcePowerLevel[i] > FORCE_LEVEL_1 )
+				{
+					return qtrue;
+				}
+			}
+			else if ( ps->fd.forcePowerLevel[i] > FORCE_LEVEL_0 )
+			{
+				return qtrue;
+			}
+		}
+	}
+	return qfalse;
+}
+
 void WP_ForcePowersUpdate( gentity_t *self, usercmd_t *ucmd )
 {
 	qboolean	usingForce = qfalse;
@@ -4333,6 +4449,19 @@ void WP_ForcePowersUpdate( gentity_t *self, usercmd_t *ucmd )
 		return;
 	}
 
+/*
+	if (g_trueJedi.integer)
+	{
+		if (self->client->ps.weapon != WP_SABER)
+		{
+			self->client->ps.forceRestricted = qtrue;
+		}
+		else
+		{
+			self->client->ps.forceRestricted = qfalse;
+		}
+	}
+*/
 	if (self->client->ps.fd.saberAnimLevel > self->client->ps.fd.forcePowerLevel[FP_SABERATTACK])
 	{
 		self->client->ps.fd.saberAnimLevel = self->client->ps.fd.forcePowerLevel[FP_SABERATTACK];
@@ -4768,18 +4897,28 @@ void WP_ForcePowersUpdate( gentity_t *self, usercmd_t *ucmd )
 		{
 			if (g_gametype.integer != GT_HOLOCRON || g_MaxHolocronCarry.value)
 			{
-				if (self->client->ps.powerups[PW_FORCE_BOON])
+				//if (!g_trueJedi.integer || self->client->ps.weapon == WP_SABER)
+				//let non-jedi force regen since we're doing a more strict jedi/non-jedi thing... this gives dark jedi something to drain
 				{
-					WP_ForcePowerRegenerate( self, 6 );
+					if (self->client->ps.powerups[PW_FORCE_BOON])
+					{
+						WP_ForcePowerRegenerate( self, 6 );
+					}
+					else if (self->client->ps.isJediMaster && g_gametype.integer == GT_JEDIMASTER)
+					{
+						WP_ForcePowerRegenerate( self, 4 ); //jedi master regenerates 4 times as fast
+					}
+					else
+					{
+						WP_ForcePowerRegenerate( self, 0 );
+					}
 				}
-				else if (self->client->ps.isJediMaster && g_gametype.integer == GT_JEDIMASTER)
+				/*
+				else if (g_trueJedi.integer && self->client->ps.weapon != WP_SABER)
 				{
-					WP_ForcePowerRegenerate( self, 4 ); //jedi master regenerates 4 times as fast
+					self->client->ps.fd.forcePower = 0;
 				}
-				else
-				{
-					WP_ForcePowerRegenerate( self, 0 );
-				}
+				*/
 			}
 			else
 			{ //regenerate based on the number of holocrons carried

@@ -8,7 +8,12 @@
 #include "client.h"
 #include "client_ui.h"
 #include <limits.h>
+#ifdef _IMMERSION
+#include "../ff/ff.h"
+#include "../ff/cl_ff.h"
+#else
 #include "fffx.h"
+#endif // _IMMERSION
 #include "../ghoul2/g2.h"
 
 #define	RETRANSMIT_TIMEOUT	3000	// time between connection packet retransmits
@@ -156,6 +161,10 @@ void CL_FlushMemory( void ) {
 
 	cls.soundRegistered = qfalse;
 	cls.rendererStarted = qfalse;
+#ifdef _IMMERSION
+	CL_ShutdownFF();
+	cls.forceStarted = qfalse;
+#endif // _IMMERSION
 }
 
 /*
@@ -409,6 +418,10 @@ void CL_Vid_Restart_f( void ) {
 	cls.cgameStarted = qfalse;
 	cls.soundRegistered = qfalse;
 
+#ifdef _IMMERSION
+	CL_ShutdownFF();
+	cls.forceStarted = qfalse;
+#endif // _IMMERSION
 	// unpause so the cgame definately gets a snapshot and renders a frame
 	Cvar_Set( "cl_paused", "0" );
 }
@@ -440,6 +453,34 @@ void CL_Snd_Restart_f( void ) {
 	extern void AS_ParseSets(void);
 	AS_ParseSets();
 }
+#ifdef _IMMERSION
+/*
+=================
+CL_FF_Restart_f
+=================
+*/
+void CL_FF_Restart_f( void ) {
+
+	if ( FF_IsInitialized() )
+	{
+		// Apply cvar changes w/o losing registered effects
+		// Allows changing devices in-game without restarting the map
+		if ( !FF_Init() )
+			FF_Shutdown();	// error (shouldn't happen)
+	}
+	else if ( cls.state >= CA_PRIMED )	// maybe > CA_DISCONNECTED
+	{
+		// Restart map or menu
+		CL_Vid_Restart_f();
+	}
+	else if ( cls.uiStarted )
+	{
+		// Restart menu
+		CL_ShutdownUI();
+		cls.forceStarted = qfalse;
+	}
+}
+#endif // _IMMERSION
 /*
 ==================
 CL_Configstrings_f
@@ -521,7 +562,7 @@ void CL_CheckForResend( void ) {
 
 	case CA_CHALLENGING:
 	// sending back the challenge
-		port = Cvar_VariableValue ("qport");
+		port = Cvar_VariableIntegerValue("qport");
 
 		UI_UpdateConnectionString( va("(%i)", clc.connectPacketCount ) );
 
@@ -629,7 +670,7 @@ void CL_ConnectionlessPacket( netadr_t from, msg_t *msg ) {
 				NET_AdrToString( clc.serverAddress ) );
 			return;
 		}
-		Netchan_Setup (NS_CLIENT, &clc.netchan, from, Cvar_VariableValue( "qport" ) );
+		Netchan_Setup (NS_CLIENT, &clc.netchan, from, Cvar_VariableIntegerValue( "qport" ) );
 		cls.state = CA_CONNECTED;
 		clc.lastPacketSentTime = -9999;		// send first packet immediately
 		return;
@@ -877,6 +918,9 @@ void CL_Frame ( int msec,float fractionMsec ) {
 	// update audio
 	S_Update();
 
+#ifdef _IMMERSION
+	FF_Update();
+#endif // _IMMERSION
 	// advance local effects for next frame
 	SCR_RunCinematic();
 
@@ -952,7 +996,12 @@ void CL_StartHunkUsers( void ) {
 		cls.whiteShader = re.RegisterShader( "white" );
 		cls.consoleShader = re.RegisterShader( "console" );
 		g_console_field_width = cls.glconfig.vidWidth / SMALLCHAR_WIDTH - 2;
-		g_consoleField.widthInChars = g_console_field_width;
+		kg.g_consoleField.widthInChars = g_console_field_width;
+#ifndef _IMMERSION
+		//-------
+		//	The latest Immersion Force Feedback system initializes here, not through
+		//	win32 input system. Therefore, the window handle is valid :)
+		//-------
 
 		// now that the renderer has started up we know that the global hWnd is now valid,
 		//	so we can now go ahead and (re)setup the input stuff that needs hWnds for DI...
@@ -965,6 +1014,7 @@ void CL_StartHunkUsers( void ) {
 			extern void Sys_In_Restart_f( void );
 			Sys_In_Restart_f();
 		}
+#endif // _IMMERSION
 	}
 
 	if ( !cls.soundStarted ) {
@@ -977,6 +1027,12 @@ void CL_StartHunkUsers( void ) {
 		S_BeginRegistration();
 	}
 
+#ifdef _IMMERSION
+	if ( !cls.forceStarted ) {
+		cls.forceStarted = qtrue;
+		CL_InitFF();
+	}
+#endif // _IMMERSION
 	if ( !cls.uiStarted ) {
 		cls.uiStarted = qtrue;
 		CL_InitUI();
@@ -1066,7 +1122,10 @@ CL_Init
 void CL_Init( void ) {
 	Com_Printf( "----- Client Initialization -----\n" );
 
-	Con_Init ();	
+	SP_Register("con_text", SP_REGISTER_REQUIRED);	//reference is CON_TEXT
+	SP_Register("keynames", SP_REGISTER_REQUIRED);	// reference is KEYNAMES
+	
+	Con_Init ();
 
 	CL_ClearState ();
 
@@ -1150,6 +1209,9 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("uimenu", CL_GenericMenu_f);
 	Cmd_AddCommand ("datapad", CL_DataPad_f);
 	Cmd_AddCommand ("endscreendissolve", CL_EndScreenDissolve_f);
+#ifdef _IMMERSION
+	Cmd_AddCommand ("ff_restart", CL_FF_Restart_f);
+#endif // _IMMERSION
 
 	CL_InitRef();
 
@@ -1192,6 +1254,9 @@ void CL_Shutdown( void ) {
 	S_Shutdown();
 	CL_ShutdownRef();
 
+#ifdef _IMMERSION
+	CL_ShutdownFF();
+#endif // _IMMERSION
 	Cmd_RemoveCommand ("cmd");
 	Cmd_RemoveCommand ("configstrings");
 	Cmd_RemoveCommand ("clientinfo");
