@@ -32,10 +32,20 @@ float trap_Cvar_VariableValue( const char *var_name )
 }
 
 
+void trap_R_ClearScene( void )
+{
+	ui.R_ClearScene();
+}
+
+void trap_R_AddRefEntityToScene( const refEntity_t *re )
+{
+	ui.R_AddRefEntityToScene(re);
+}
 
 void trap_R_RenderScene( const refdef_t *fd ) 
 {
-	syscall( UI_R_RENDERSCENE, fd );
+//	syscall( UI_R_RENDERSCENE, fd );
+	ui.R_RenderScene(fd);
 }
 
 void trap_R_SetColor( const float *rgba ) 
@@ -56,7 +66,8 @@ void trap_R_DrawStretchPic( float x, float y, float w, float h, float s1, float 
 
 void	trap_R_ModelBounds( clipHandle_t model, vec3_t mins, vec3_t maxs ) 
 {
-	syscall( UI_R_MODELBOUNDS, model, mins, maxs );
+//	syscall( UI_R_MODELBOUNDS, model, mins, maxs );
+	ui.R_ModelBounds(model, mins, maxs);
 }
 
 void trap_S_StartLocalSound( sfxHandle_t sfx, int channelNum ) 

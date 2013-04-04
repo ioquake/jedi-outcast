@@ -22,6 +22,8 @@
 	#include "../qcommon/miniheap.h"
 #endif
 
+#define G2_MODEL_OK(g) ((g)&&(g)->mValid&&(g)->aHeader&&(g)->currentModel&&(g)->animModel)
+
 #include "../server/server.h"
 
 extern mdxaBone_t		worldMatrix;
@@ -122,16 +124,16 @@ void G2_List_Model_Bones(const char *fileName, int frame)
 	mdxaSkelOffsets_t	*offsets;
   	model_t			*mod_m = R_GetModelByHandle(RE_RegisterModel(fileName)); 
 	model_t			*mod_a = R_GetModelByHandle(mod_m->mdxm->animIndex);
- 	mdxaFrame_t		*aframe=0;
-	int				frameSize;
+// 	mdxaFrame_t		*aframe=0;
+//	int				frameSize;
 	mdxaHeader_t	*header = mod_a->mdxa;
 
 	// figure out where the offset list is
 	offsets = (mdxaSkelOffsets_t *)((byte *)header + sizeof(mdxaHeader_t));
 
-    frameSize = (int)( &((mdxaFrame_t *)0)->boneIndexes[ header->numBones ] );   
+//    frameSize = (int)( &((mdxaFrame_t *)0)->boneIndexes[ header->numBones ] );   
 
-	aframe = (mdxaFrame_t *)((byte *)header + header->ofsFrames + (frame * frameSize));
+//	aframe = (mdxaFrame_t *)((byte *)header + header->ofsFrames + (frame * frameSize));
 	// walk each bone and list it's name
 	for (x=0; x< mod_a->mdxa->numBones; x++)
 	{
@@ -184,7 +186,7 @@ qboolean G2_GetAnimFileName(const char *fileName, char **filename)
 //
 /////////////////////////////////////////////////////////////////////
 
-int G2_DecideTraceLod(CGhoul2Info &ghoul2, int useLod, const model_t *mod)
+int G2_DecideTraceLod(CGhoul2Info &ghoul2, int useLod)
 {
 	int returnLod = useLod;
 
@@ -193,13 +195,16 @@ int G2_DecideTraceLod(CGhoul2Info &ghoul2, int useLod, const model_t *mod)
    	{
    		returnLod =  ghoul2.mLodBias;
    	}
+	assert(G2_MODEL_OK(&ghoul2));
 	
+	assert(ghoul2.currentModel);
+	assert(ghoul2.currentModel->mdxm);
 	//what about r_lodBias?
 
 	// now ensure that we haven't selected a lod that doesn't exist for this model
-	if ( returnLod >= mod->numLods )
+	if ( returnLod >= ghoul2.currentModel->mdxm->numLODs )
  	{
- 		returnLod = mod->numLods - 1;
+ 		returnLod = ghoul2.currentModel->mdxm->numLODs - 1;
  	}
 
 	return returnLod;
@@ -227,28 +232,36 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 	// whip through and actually transform each vertex
 	const int numVerts = surface->numVerts;
 	v = (mdxmVertex_t *) ((byte *)surface + surface->ofsVerts);
+	mdxmVertexTexCoord_t *pTexCoords = (mdxmVertexTexCoord_t *) &v[numVerts];
+
 	// optimisation issue
 	if ((scale[0] != 1.0) || (scale[1] != 1.0) || (scale[2] != 1.0))
 	{
 		for ( j = 0; j < numVerts; j++ ) 
 		{
 			vec3_t			tempVert, tempNormal;
-			mdxmWeight_t	*w;
+//			mdxmWeight_t	*w;
 
 			VectorClear( tempVert );
 			VectorClear( tempNormal );
-			w = v->weights;
-			for ( k = 0 ; k < v->numWeights ; k++, w++ ) 
+//			w = v->weights;
+
+			const int iNumWeights = G2_GetVertWeights( v );
+
+			for ( k = 0 ; k < iNumWeights ; k++ ) 
 			{
-				const mdxaBone_t &bone=EvalBoneCache(piBoneReferences[w->boneIndex],boneCache);
+				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
 
-				tempVert[0] += w->boneWeight * ( DotProduct( bone.matrix[0], v->vertCoords ) + bone.matrix[0][3] );
-				tempVert[1] += w->boneWeight * ( DotProduct( bone.matrix[1], v->vertCoords ) + bone.matrix[1][3] );
-				tempVert[2] += w->boneWeight * ( DotProduct( bone.matrix[2], v->vertCoords ) + bone.matrix[2][3] );
+				const mdxaBone_t &bone=EvalBoneCache(piBoneReferences[iBoneIndex],boneCache);
 
-				tempNormal[0] += w->boneWeight * DotProduct( bone.matrix[0], v->normal );
-				tempNormal[1] += w->boneWeight * DotProduct( bone.matrix[1], v->normal );
-				tempNormal[2] += w->boneWeight * DotProduct( bone.matrix[2], v->normal );
+				tempVert[0] += fBoneWeight * ( DotProduct( bone.matrix[0], v->vertCoords ) + bone.matrix[0][3] );
+				tempVert[1] += fBoneWeight * ( DotProduct( bone.matrix[1], v->vertCoords ) + bone.matrix[1][3] );
+				tempVert[2] += fBoneWeight * ( DotProduct( bone.matrix[2], v->vertCoords ) + bone.matrix[2][3] );
+
+				tempNormal[0] += fBoneWeight * DotProduct( bone.matrix[0], v->normal );
+				tempNormal[1] += fBoneWeight * DotProduct( bone.matrix[1], v->normal );
+				tempNormal[2] += fBoneWeight * DotProduct( bone.matrix[2], v->normal );
 			}
 			int pos = j * 5;
 
@@ -257,10 +270,10 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 			TransformedVerts[pos++] = tempVert[1] * scale[1];
 			TransformedVerts[pos++] = tempVert[2] * scale[2];
 			// we will need the S & T coors too for hitlocation and hitmaterial stuff
-			TransformedVerts[pos++] = v->texCoords[0];
-			TransformedVerts[pos] = v->texCoords[1];
+			TransformedVerts[pos++] = pTexCoords[j].texCoords[0];
+			TransformedVerts[pos] = pTexCoords[j].texCoords[1];
 
-			v = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
+			v++;// = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
 		}
 	}
 	else
@@ -269,22 +282,28 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 	  	for ( j = 0; j < numVerts; j++ ) 
 		{
 			vec3_t			tempVert, tempNormal;
-			const mdxmWeight_t	*w;
+//			const mdxmWeight_t	*w;
 
 			VectorClear( tempVert );
 			VectorClear( tempNormal );
-			w = v->weights;
-			for ( k = 0 ; k < v->numWeights ; k++, w++ ) 
+//			w = v->weights;
+
+			const int iNumWeights = G2_GetVertWeights( v );
+
+			for ( k = 0 ; k < iNumWeights ; k++ ) 
 			{
-				const mdxaBone_t &bone=EvalBoneCache(piBoneReferences[w->boneIndex],boneCache);
+				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
 
-				tempVert[0] += w->boneWeight * ( DotProduct( bone.matrix[0], v->vertCoords ) + bone.matrix[0][3] );
-				tempVert[1] += w->boneWeight * ( DotProduct( bone.matrix[1], v->vertCoords ) + bone.matrix[1][3] );
-				tempVert[2] += w->boneWeight * ( DotProduct( bone.matrix[2], v->vertCoords ) + bone.matrix[2][3] );
+				const mdxaBone_t &bone=EvalBoneCache(piBoneReferences[iBoneIndex],boneCache);
 
-				tempNormal[0] += w->boneWeight * DotProduct( bone.matrix[0], v->normal );
-				tempNormal[1] += w->boneWeight * DotProduct( bone.matrix[1], v->normal );
-				tempNormal[2] += w->boneWeight * DotProduct( bone.matrix[2], v->normal );
+				tempVert[0] += fBoneWeight * ( DotProduct( bone.matrix[0], v->vertCoords ) + bone.matrix[0][3] );
+				tempVert[1] += fBoneWeight * ( DotProduct( bone.matrix[1], v->vertCoords ) + bone.matrix[1][3] );
+				tempVert[2] += fBoneWeight * ( DotProduct( bone.matrix[2], v->vertCoords ) + bone.matrix[2][3] );
+
+				tempNormal[0] += fBoneWeight * DotProduct( bone.matrix[0], v->normal );
+				tempNormal[1] += fBoneWeight * DotProduct( bone.matrix[1], v->normal );
+				tempNormal[2] += fBoneWeight * DotProduct( bone.matrix[2], v->normal );
 			}
 
 			// copy tranformed verts into temp space
@@ -292,10 +311,10 @@ void R_TransformEachSurface( const mdxmSurface_t *surface, vec3_t scale, CMiniHe
 			TransformedVerts[pos++] = tempVert[1];
 			TransformedVerts[pos++] = tempVert[2];
 			// we will need the S & T coors too for hitlocation and hitmaterial stuff
-			TransformedVerts[pos++] = v->texCoords[0];
-			TransformedVerts[pos++] = v->texCoords[1];
+			TransformedVerts[pos++] = pTexCoords[j].texCoords[0];
+			TransformedVerts[pos++] = pTexCoords[j].texCoords[1];
 
-			v = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
+			v++;// = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
 		}
 	}
 }
@@ -304,8 +323,10 @@ void G2_TransformSurfaces(int surfaceNum, surfaceInfo_v &rootSList,
 					CBoneCache *boneCache, const model_t *currentModel, int lod, vec3_t scale, CMiniHeap *G2VertSpace, int *TransformedVertArray, bool secondTimeAround)
 {
 	int	i;
+	assert(currentModel);
+	assert(currentModel->mdxm);
 	// back track and get the surfinfo struct for this surface
-	const mdxmSurface_t			*surface = (mdxmSurface_t *)G2_FindSurface((void *)currentModel, surfaceNum, lod);
+	const mdxmSurface_t			*surface = (mdxmSurface_t *)G2_FindSurface(currentModel, surfaceNum, lod);
 	const mdxmHierarchyOffsets_t	*surfIndexes = (mdxmHierarchyOffsets_t *)((byte *)currentModel->mdxm + sizeof(mdxmHeader_t));
 	const mdxmSurfHierarchy_t		*surfInfo = (mdxmSurfHierarchy_t *)((byte *)surfIndexes + surfIndexes->offsets[surface->thisSurfaceIndex]);
 	
@@ -343,7 +364,6 @@ void G2_TransformSurfaces(int surfaceNum, surfaceInfo_v &rootSList,
 void G2_TransformModel(CGhoul2Info_v &ghoul2, const int frameNum, vec3_t scale, CMiniHeap *G2VertSpace, int useLod)
 {
 	int				i, lod;
-	const model_t	*currentModel;
 	vec3_t			correctScale;
 
 
@@ -365,35 +385,32 @@ void G2_TransformModel(CGhoul2Info_v &ghoul2, const int frameNum, vec3_t scale, 
 	// walk each possible model for this entity and try rendering it out
 	for (i=0; i<ghoul2.size(); i++)
 	{
+		CGhoul2Info &g=ghoul2[i];
 		// don't bother with models that we don't care about.
-		if (ghoul2[i].mModelindex == -1)
+		if (!g.mValid)
 		{
 			continue;
 		}
-		// get the sorted model to play with
-		currentModel = R_GetModelByHandle(RE_RegisterModel(ghoul2[i].mFileName));
-
+		assert(g.mBoneCache);
+		assert(G2_MODEL_OK(&g));
 		// stop us building this model more than once per frame
-		ghoul2[i].mMeshFrameNum = frameNum;
+		g.mMeshFrameNum = frameNum;
 
 		// decide the LOD
-		lod = G2_DecideTraceLod(ghoul2[i], useLod, currentModel);
+		lod = G2_DecideTraceLod(g, useLod);
 
 		// give us space for the transformed vertex array to be put in
-		ghoul2[i].mTransformedVertsArray = (int*)G2VertSpace->MiniHeapAlloc(currentModel->mdxm->numSurfaces * 4);
-		if (!ghoul2[i].mTransformedVertsArray)
+		ghoul2[i].mTransformedVertsArray = (int*)G2VertSpace->MiniHeapAlloc(g.currentModel->mdxm->numSurfaces * 4);
+		if (!g.mTransformedVertsArray)
 		{
 			Com_Error(ERR_DROP, "Ran out of transform space for Ghoul2 Models. Adjust MiniHeapSize in SV_SpawnServer.\n");
 		}
 
-		memset(ghoul2[i].mTransformedVertsArray, 0,(currentModel->mdxm->numSurfaces * 4)); 
+		memset(g.mTransformedVertsArray, 0,(g.currentModel->mdxm->numSurfaces * 4)); 
 
-		// did we get enough space?
-		assert(ghoul2[i].mTransformedVertsArray);
-
-		G2_FindOverrideSurface(-1,ghoul2[i].mSlist); //reset the quick surface override lookup;
+		G2_FindOverrideSurface(-1,g.mSlist); //reset the quick surface override lookup;
 		// recursively call the model surface transform
-		G2_TransformSurfaces(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist, ghoul2[i].mBoneCache,  currentModel, lod, correctScale, G2VertSpace, ghoul2[i].mTransformedVertsArray, false);
+		G2_TransformSurfaces(g.mSurfaceRoot, g.mSlist, g.mBoneCache,  g.currentModel, lod, correctScale, G2VertSpace, g.mTransformedVertsArray, false);
 	}
 }
 
@@ -853,7 +870,9 @@ static void G2_TraceSurfaces(CTraceSurface &TS)
 {
 	int	i;
 	// back track and get the surfinfo struct for this surface
-	const mdxmSurface_t		*surface = (mdxmSurface_t *)G2_FindSurface((void *)TS.currentModel, TS.surfaceNum, TS.lod);
+	assert(TS.currentModel);
+	assert(TS.currentModel->mdxm);
+	const mdxmSurface_t		*surface = (mdxmSurface_t *)G2_FindSurface(TS.currentModel, TS.surfaceNum, TS.lod);
 	const mdxmHierarchyOffsets_t	*surfIndexes = (mdxmHierarchyOffsets_t *)((byte *)TS.currentModel->mdxm + sizeof(mdxmHeader_t));
 	const mdxmSurfHierarchy_t		*surfInfo = (mdxmSurfHierarchy_t *)((byte *)surfIndexes + surfIndexes->offsets[surface->thisSurfaceIndex]);
 	
@@ -924,7 +943,6 @@ static void G2_TraceSurfaces(CTraceSurface &TS)
 void G2_TraceModels(CGhoul2Info_v &ghoul2, vec3_t rayStart, vec3_t rayEnd, CCollisionRecord *collRecMap, int entNum, EG2_Collision eG2TraceType, int useLod, float fRadius)
 {
 	int				i, lod;
-	const model_t		*currentModel;
 	skin_t			*skin;
 	shader_t		*cust_shader;
 
@@ -932,21 +950,17 @@ void G2_TraceModels(CGhoul2Info_v &ghoul2, vec3_t rayStart, vec3_t rayEnd, CColl
 	for (i=0; i<ghoul2.size(); i++)
 	{
 		// don't bother with models that we don't care about.
-		if (ghoul2[i].mModelindex == -1)
+		if (!ghoul2[i].mValid)
 		{
 			continue;
 		}
+		assert(G2_MODEL_OK(&ghoul2[i]));
 		// do we really want to collide with this object?
 		if (ghoul2[i].mFlags & GHOUL2_NOCOLLIDE) 
 		{
 			continue;
 		}
-
-		currentModel = R_GetModelByHandle(RE_RegisterModel(ghoul2[i].mFileName));
-
-		//
-		// figure out whether we should be using a custom shader for this model
-		//
+		
 		if (ghoul2[i].mCustomShader)
 		{
 			cust_shader = R_GetShaderByHandle(ghoul2[i].mCustomShader );
@@ -966,12 +980,12 @@ void G2_TraceModels(CGhoul2Info_v &ghoul2, vec3_t rayStart, vec3_t rayEnd, CColl
 			skin = NULL;
 		}
 
-		lod = G2_DecideTraceLod(ghoul2[i],useLod, currentModel);
+		lod = G2_DecideTraceLod(ghoul2[i],useLod);
 
 		//reset the quick surface override lookup
 		G2_FindOverrideSurface(-1, ghoul2[i].mSlist); 
 
-		CTraceSurface TS(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist,  currentModel, lod, rayStart, rayEnd, collRecMap, entNum, i, skin, cust_shader, ghoul2[i].mTransformedVertsArray, eG2TraceType, fRadius);
+		CTraceSurface TS(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist,  ghoul2[i].currentModel, lod, rayStart, rayEnd, collRecMap, entNum, i, skin, cust_shader, ghoul2[i].mTransformedVertsArray, eG2TraceType, fRadius);
 		// start the surface recursion loop
 		G2_TraceSurfaces(TS);
 
@@ -1059,10 +1073,10 @@ void G2_GenerateWorldMatrix(const vec3_t angles, const vec3_t origin)
 }
 
 // go away and determine what the pointer for a specific surface definition within the model definition is
-void *G2_FindSurface(const void *mod_t, int index, int lod)
+void *G2_FindSurface(const model_s *mod, int index, int lod)
 {
-	// damn include file dependancies
-	const model_t	*mod = (model_t *)mod_t;
+	assert(mod);
+	assert(mod->mdxm);
 
 	// point at first lod list
 	byte	*current = (byte*)((int)mod->mdxm + (int)mod->mdxm->ofsLODs);
@@ -1095,7 +1109,7 @@ qboolean G2_SaveGhoul2Models(CGhoul2Info_v &ghoul2, char **buffer, int *size)
 {
 
 	// is there anything to save?
-	if (!ghoul2.size())
+	if (!ghoul2.IsValid()||!ghoul2.size())
 	{
 		*buffer = (char *)Z_Malloc(4, TAG_GHOUL2, qfalse);
 		int *tempBuffer = (int *)*buffer;
@@ -1228,17 +1242,19 @@ void G2_LoadGhoul2Model(CGhoul2Info_v &ghoul2, char *buffer)
 	// now we have enough instances, lets go through each one and load up the relevant details
 	for (int i=0; i<ghoul2.size(); i++)
 	{
+		ghoul2[i].mSkelFrameNum = 0;
+		ghoul2[i].mModelindex=-1;
+		ghoul2[i].mFileName[0]=0;
+		ghoul2[i].mValid=false;
 		// load the ghoul2 info from the buffer
 		memcpy(&ghoul2[i].mModelindex, buffer, ghoul2BlockSize);
-//		OutputDebugString(va("G2_LoadGhoul2Model(): ghoul2[%d].mModelindex = %d\n",i,ghoul2[i].mModelindex));
 		buffer +=ghoul2BlockSize;
 
-		// now we have to do some building up of stuff so we can register these new models.
-		ghoul2[i].mModel = RE_RegisterModel(ghoul2[i].mFileName); 
-		// we are going to go right ahead and stuff the modelIndex in here, since we know we are only loading and saving on the server. It's a bit naught,
-		// but so what?:)
-		ghoul2[i].mModelindex = G2_FindConfigStringSpace(ghoul2[i].mFileName, CS_MODELS, MAX_MODELS);
-//		OutputDebugString(va("(further on): ghoul2[%d].mModelindex = %d\n",i,ghoul2[i].mModelindex));
+		if (ghoul2[i].mModelindex!=-1&&ghoul2[i].mFileName[0])
+		{
+			ghoul2[i].mModelindex = i;
+			G2_SetupModelPointers(&ghoul2[i]);
+		}
 
 		// give us enough surfaces to load up the data
 		ghoul2[i].mSlist.resize(*(int*)buffer);
@@ -1272,6 +1288,5 @@ void G2_LoadGhoul2Model(CGhoul2Info_v &ghoul2, char *buffer)
 			memcpy(&ghoul2[i].mBltlist[x], buffer, BOLT_SAVE_BLOCK_SIZE);
 			buffer += BOLT_SAVE_BLOCK_SIZE;
 		}
-		ghoul2[i].mSkelFrameNum = 0;
 	}
 }

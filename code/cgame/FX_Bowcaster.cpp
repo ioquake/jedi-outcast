@@ -25,6 +25,21 @@ void FX_BowcasterProjectileThink( centity_t *cent, const struct weaponInfo_s *we
 		}
 	}
 
+	// hack the scale of the forward vector if we were just fired or bounced...this will shorten up the tail for a split second so tails don't clip so harshly
+	int dif = cg.time - cent->gent->s.pos.trTime;
+
+	if ( dif < 75 )
+	{
+		if ( dif < 0 )
+		{
+			dif = 0;
+		}
+
+		float scale = ( dif / 75.0f ) * 0.95f + 0.05f;
+
+		VectorScale( forward, scale, forward );
+	}
+
 	theFxScheduler.PlayEffect( cgs.effects.bowcasterShotEffect, cent->lerpOrigin, forward );
 }
 

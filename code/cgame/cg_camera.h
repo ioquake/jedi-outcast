@@ -19,6 +19,7 @@
 #define	CAMERA_FOLLOWING	0x00000020
 #define	CAMERA_TRACKING		0x00000040
 #define CAMERA_ROFFING		0x00000080
+#define CAMERA_SMOOTHING	0x00000100
 
 // NOTE!! This structure is now saved out as part of the load/save game, so tell me if you put any pointers or
 //	other goofy crap in... -Ste
@@ -92,6 +93,14 @@ typedef struct camera_s
 	int		shake_duration;
 	int		shake_start;
 
+	//Smooth information
+	float	smooth_intensity;
+	int		smooth_duration;
+	int		smooth_start;
+	vec3_t	smooth_origin;
+	bool	smooth_active; // means smooth_origin and angles are valid
+
+
 	// ROFF information
 	char	sRoff[MAX_QPATH];	// name of a cached roff 
 	int		roff_frame;		// current frame in the roff data
@@ -132,5 +141,8 @@ void CGCam_Distance( float distance, float initLerp );
 void CGCam_Roll( float	dest, float duration );
 
 void CGCam_StartRoff( char *roff );
+
+void CGCam_Smooth( float intensity, int duration );
+void CGCam_UpdateSmooth( vec3_t origin, vec3_t angles );
 
 #endif	//__CG_CAMERA__

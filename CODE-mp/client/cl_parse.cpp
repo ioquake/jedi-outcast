@@ -13,7 +13,8 @@ char *svc_strings[256] = {
 	"svc_baseline",	
 	"svc_serverCommand",
 	"svc_download",
-	"svc_snapshot"
+	"svc_snapshot",
+	"svc_mapchange",
 };
 
 void SHOWNET( msg_t *msg, char *s) {
@@ -633,6 +634,12 @@ void CL_ParseServerMessage( msg_t *msg ) {
 			break;
 		case svc_download:
 			CL_ParseDownload( msg );
+			break;
+		case svc_mapchange:
+			if (cgvm)
+			{
+				VM_Call( cgvm, CG_MAP_CHANGE );
+			}
 			break;
 		}
 	}

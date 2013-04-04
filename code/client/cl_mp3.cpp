@@ -40,7 +40,9 @@ int MP3_GetUnpackedSize( const char *psLocalFilename, void *pvData, int iDataLen
 {
 	int	iUnpackedSize = 0;	
 
-	if (qbIgnoreID3Tag || !MP3_ReadSpecialTagInfo((byte *)pvData, iDataLen, NULL, &iUnpackedSize))
+	// always do this now that we have fast-unpack code for measuring output size... (much safer than relying on tags that may have been edited, or if MP3 has been re-saved with same tag)
+	//
+	if (1)//qbIgnoreID3Tag || !MP3_ReadSpecialTagInfo((byte *)pvData, iDataLen, NULL, &iUnpackedSize))
 	{	
 		char *psError = C_MP3_GetUnpackedSize( pvData, iDataLen, &iUnpackedSize, bStereoDesired);
 
@@ -159,9 +161,10 @@ const char sKEY_UNCOMP[]="#UNCOMP";	//    "        "
 
 // returns qtrue for success...
 //
-qboolean MP3_ReadSpecialTagInfo(byte *pbLoadedFile, int iLoadedFileLen,		// (in)
-								id3v1_1** ppTAG,							// (out), can be NULL
-								int *piUncompressedSize, float *pfMaxVol	// (out), can be NULL
+qboolean MP3_ReadSpecialTagInfo(byte *pbLoadedFile, int iLoadedFileLen,
+								id3v1_1** ppTAG /* = NULL */,
+								int *piUncompressedSize /* = NULL */, 
+								float *pfMaxVol /* = NULL */
 								)
 {
 	qboolean qbError = qfalse;

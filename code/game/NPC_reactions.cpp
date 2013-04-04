@@ -39,6 +39,7 @@ extern qboolean PM_FlippingAnim( int anim );
 extern qboolean PM_RollingAnim( int anim );
 extern qboolean PM_InCartwheel( int anim );
 
+extern qboolean	stop_icarus;
 /*
 -------------------------
 NPC_CheckAttacker
@@ -212,6 +213,10 @@ void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, vec3_t point, i
 			pain_chance = (200.0f-self->health)/100.0f + damage/50.0f;
 		}
 	}
+	else if ( self->client && self->client->playerTeam == TEAM_PLAYER && other && !other->s.number )
+	{//ally shot by player always complains
+		pain_chance = 1.1f;
+	}
 	else 
 	{
 		if ( other && other->s.weapon == WP_SABER || mod == MOD_ELECTROCUTE || mod == MOD_CRUSH/*FIXME:MOD_FORCE_GRIP*/ )
@@ -291,7 +296,7 @@ void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, vec3_t point, i
 		{
 			self->painDebounceTime = level.time + 4000;
 		}
-		self->painDebounceTime = level.time + PM_AnimLength( NPC->client->clientInfo.animFileIndex, (animNumber_t) pain_anim );
+		self->painDebounceTime = level.time + PM_AnimLength( self->client->clientInfo.animFileIndex, (animNumber_t) pain_anim );
 		self->client->fireDelay = 0;
 	}
 }
@@ -332,7 +337,9 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t p
 	{//hit by a teammate
 		if ( other != self->enemy && self != other->enemy )
 		{//we weren't already enemies
-			if ( self->enemy || other->enemy || (other->s.number&&other->s.number!=player->client->ps.viewEntity) || (!other->s.number&&Q_irand( 0, 3 )) )
+			if ( self->enemy || other->enemy 
+				|| (other->s.number&&other->s.number!=player->client->ps.viewEntity) 
+				/*|| (!other->s.number&&Q_irand( 0, 3 ))*/ )
 			{//if one of us actually has an enemy already, it's okay, just an accident OR wasn't hit by player or someone controlled by player OR player hit ally and didn't get 25% chance of getting mad (FIXME:accumulate anger+base on diff?)
 				//FIXME: player should have to do a certain amount of damage to ally or hit them several times to make them mad
 				//Still run pain and flee scripts
@@ -347,14 +354,35 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, vec3_t p
 						G_ActivateBehavior(self, BSET_PAIN);
 					}
 				}
+				if ( damage != -1 )
+				{//-1 == don't play pain anim
+					//Set our proper pain animation
+					NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc );
+				}
 				return;
 			}
 			else if ( self->NPC && !other->s.number )//should be assumed, but...
 			{//dammit, stop that!
-				//FIXME: still turn on you too easily!
 				if ( self->NPC->ffireCount < 3+((2-g_spskill->integer)*2) )
 				{//not mad enough yet
+					//Com_Printf( "chck: %d < %d\n", self->NPC->ffireCount, 3+((2-g_spskill->integer)*2) );
+					if ( damage != -1 )
+					{//-1 == don't play pain anim
+						//Set our proper pain animation
+						NPC_ChoosePainAnimation( self, other, point, damage, mod, hitLoc );
+					}
 					return;
+				}
+				else
+				{//okay, we're going to turn on our ally, we need to 
+					self->NPC->behaviorState = self->NPC->tempBehavior = self->NPC->defaultBehavior = BS_DEFAULT;
+					other->flags &= ~FL_NOTARGET;
+					self->svFlags &= ~(SVF_IGNORE_ENEMIES|SVF_ICARUS_FREEZE|SVF_NO_COMBAT_SOUNDS);
+					G_SetEnemy( self, other );
+					self->svFlags |= SVF_LOCKEDENEMY;
+					self->NPC->scriptFlags &= ~(SCF_DONT_FIRE|SCF_CROUCHED|SCF_WALKING|SCF_NO_COMBAT_TALK|SCF_FORCED_MARCH);
+					self->NPC->scriptFlags |= (SCF_CHASE_ENEMIES|SCF_NO_MIND_TRICK);
+					stop_icarus = qtrue;
 				}
 			}
 		}
@@ -439,22 +467,22 @@ void NPC_Touch(gentity_t *self, gentity_t *other, trace_t *trace)
 			{//a goodie key
 				if ( (keyTaken = INV_GoodieKeyGive( other )) == qtrue )
 				{
-					text = "cp \"You took the Imperial's goodie key\"";
+					text = "cp @INGAME_TOOK_IMPERIAL_GOODIE_KEY";
 				}
 				else
 				{
-					text = "cp \"You can't carry any more goodie keys\"";
+					text = "cp @INGAME_CANT_CARRY_GOODIE_KEY";
 				}
 			}
 			else
 			{//a named security key
 				if ( (keyTaken = INV_SecurityKeyGive( player, self->message )) == qtrue )
 				{
-					text = "cp \"You took the Imperial's security key\"";
+					text = "cp @INGAME_TOOK_IMPERIAL_SECURITY_KEY";
 				}
 				else
 				{
-					text = "cp \"You can't carry any more security keys\"";
+					text = "cp @INGAME_CANT_CARRY_SECURITY_KEY";
 				}
 			}
 			if ( keyTaken )
@@ -611,38 +639,6 @@ void WaitNPCRespond ( gentity_t *self )
 }
 
 /*
-void G_PlayerGreet( gentity_t *self, thinkFunc_t thinkFunc )
-
-  Makes the player say a greeting and waits until he's done to make the NPC respond
-*/
-qboolean G_PlayerGreet( gentity_t *self, qboolean useWhenDone )
-{
-	if ( !gi.VoiceVolume[0] )
-	{//used by the player and the player isn't talking
-		sfxHandle_t	greeting = NULL;
-		//FIXME: If it's the player doing this, see who they're talking to and
-		//have Kyle play the right greeting sound (character name if a known
-		//character else just lt., ensign or crewman).
-
-		if ( greeting != NULL )
-		{
-			cgi_S_StartSound (NULL, 0, CHAN_VOICE, greeting );
-
-			//Responder waits until Kyle is done talking then makes the NPC respond.
-			gentity_t *responder = G_Spawn();
-			responder->enemy = self;
-			responder->alt_fire = useWhenDone;
-			responder->e_ThinkFunc = thinkF_WaitNPCRespond;
-			responder->nextthink = level.time + 500;
-			//set self to not respond for a bit longer
-			self->NPC->blockedSpeechDebounceTime = level.time + 1000;
-			return qtrue;
-		}
-	}
-
-	return qfalse;
-}
-/*
 -------------------------
 NPC_UseResponse
 -------------------------
@@ -650,8 +646,6 @@ NPC_UseResponse
 
 void NPC_UseResponse( gentity_t *self, gentity_t *user, qboolean useWhenDone )
 {
-	qboolean	noGreet = qfalse;
-
 	if ( !self->NPC || !self->client )
 	{
 		return;
@@ -686,15 +680,6 @@ void NPC_UseResponse( gentity_t *self, gentity_t *user, qboolean useWhenDone )
 		{//you're not trying to use me
 			return;
 		}
-		else
-		{//I'm talking, so don't greet me
-			noGreet = qtrue;
-		}
-	}
-
-	if ( !noGreet && user->s.number == 0 && G_PlayerGreet( self, useWhenDone ) )
-	{
-		return;
 	}
 
 	if ( useWhenDone )

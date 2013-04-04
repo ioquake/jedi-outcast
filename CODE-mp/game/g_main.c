@@ -111,7 +111,7 @@ static cvarTable_t		gameCvarTable[] = {
 	// change anytime vars
 	{ &g_ff_objectives, "g_ff_objectives", "0", /*CVAR_SERVERINFO |*/ CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
 
-	{ &g_autoMapCycle, "g_autoMapCycle", "1", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
+	{ &g_autoMapCycle, "g_autoMapCycle", "0", CVAR_ARCHIVE | CVAR_NORESTART, 0, qtrue },
 	{ &g_dmflags, "dmflags", "0", CVAR_SERVERINFO | CVAR_ARCHIVE, 0, qtrue  },
 	
 	{ &g_maxForceRank, "g_maxForceRank", "0", CVAR_SERVERINFO | CVAR_USERINFO | CVAR_LATCH, 0, qfalse  },
@@ -519,6 +519,10 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 	// make sure we have flags for CTF, etc
 	if( g_gametype.integer >= GT_TEAM ) {
 		G_CheckTeamItems();
+	}
+	else if ( g_gametype.integer == GT_JEDIMASTER )
+	{
+		trap_SetConfigstring ( CS_CLIENT_JEDIMASTER, "-1" );
 	}
 
 	SaveRegisteredItems();
@@ -1614,7 +1618,20 @@ void CheckVote( void ) {
 
 		if (level.votingGametype)
 		{
-			G_RefreshNextMap(level.votingGametypeTo);
+			if (trap_Cvar_VariableIntegerValue("g_gametype") != level.votingGametypeTo)
+			{ //If we're voting to a different game type, be sure to refresh all the map stuff
+				const char *nextMap = G_RefreshNextMap(level.votingGametypeTo, qtrue);
+
+				if (nextMap && nextMap[0])
+				{
+					trap_SendConsoleCommand( EXEC_APPEND, va("map %s\n", nextMap ) );
+				}
+
+			}
+			else
+			{ //otherwise, just leave the map until a restart
+				G_RefreshNextMap(level.votingGametypeTo, qfalse);
+			}
 			level.votingGametype = qfalse;
 			level.votingGametypeTo = 0;
 		}

@@ -54,7 +54,6 @@ COM_DefaultExtension
 ==================
 */
 void COM_DefaultExtension (char *path, int maxSize, const char *extension ) {
-	char	oldPath[MAX_QPATH];
 	char    *src;
 
 	if (path[0])	// or the strlen()-1 stuff gets a bad ptr for blank string
@@ -73,8 +72,14 @@ void COM_DefaultExtension (char *path, int maxSize, const char *extension ) {
 		}
 	}
 
-	Q_strncpyz( oldPath, path, sizeof( oldPath ) );
-	Com_sprintf( path, maxSize, "%s%s", oldPath, extension );
+	if (strlen(path)+strlen(extension) >= maxSize)
+	{
+		Com_Printf ("COM_DefaultExtension: overflow adding %s to %s\n", extension, path);
+	}
+	else
+	{
+		strcat(path, extension);
+	}
 }
 
 /*

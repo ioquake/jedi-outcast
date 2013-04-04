@@ -615,6 +615,8 @@ typedef struct {
 #define MAX_MOVIES 256
 #define MAX_PLAYERMODELS 256
 
+#define MAX_SCROLLTEXT_SIZE		4096
+#define MAX_SCROLLTEXT_LINES		64
 
 typedef struct {
   const char *name;
@@ -792,6 +794,10 @@ typedef struct {
 	int movieCount;
 	int movieIndex;
 	int previewMovie;
+
+	char scrolltext[MAX_SCROLLTEXT_SIZE];
+	const char *scrolltextLine[MAX_SCROLLTEXT_LINES];
+	int scrolltextLineCount;
 
 	serverStatus_t serverStatus;
 

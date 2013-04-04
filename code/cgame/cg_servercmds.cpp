@@ -34,6 +34,10 @@ void CG_ParseServerinfo( void ) {
 	{
 		cgs.stripLevelName[i][0]='\0';
 	}
+	// be careful with the []-numbers here. Currently I use 0,1,2 for replacements or substitution, and [3] for "INGAME"
+	//	I know, if I'd known there was going to be this much messing about I'd have subroutinised it all and done it
+	//	neater, but it kinda evolved...   Feel free to bug me if you want to add to it... ?  -Ste.
+	//
 	if (!cgi_SP_Register(cgs.stripLevelName[0], qfalse))
 	{
 		// failed to load SP file, maybe it's one of the ones they renamed?...

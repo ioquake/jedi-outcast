@@ -111,6 +111,11 @@ int G_SoundIndex( char *name ) {
 	return G_FindConfigstringIndex (name, CS_SOUNDS, MAX_SOUNDS, qtrue);
 }
 
+int G_EffectIndex( char *name )
+{
+	return G_FindConfigstringIndex (name, CS_EFFECTS, MAX_FX, qtrue);
+}
+
 //=====================================================================
 
 
@@ -807,7 +812,7 @@ void G_MuteSound( int entnum, int channel )
 
 	te = G_TempEntity( vec3_origin, EV_MUTE_SOUND );
 	te->r.svFlags = SVF_BROADCAST;
-	te->s.eventParm = entnum;
+	te->s.trickedentindex2 = entnum;
 	te->s.trickedentindex = channel;
 
 	e = &g_entities[entnum];

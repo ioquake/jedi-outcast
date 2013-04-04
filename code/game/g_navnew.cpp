@@ -13,6 +13,18 @@ extern	cvar_t		*d_altRoutes;
 qboolean NAV_CheckAhead( gentity_t *self, vec3_t end, trace_t &trace, int clipmask );
 qboolean NAV_TestForBlocked( gentity_t *self, gentity_t *goal, gentity_t *blocker, float distance, int &flags );
 
+qboolean NAV_CheckNodeFailedForEnt( gentity_t *ent, int nodeNum )
+{
+	//FIXME: must be a better way to do this
+	for ( int j = 0; j < MAX_FAILED_NODES; j++ )
+	{
+		if ( ent->failedWaypoints[j] == nodeNum+1 )//+1 because 0 is a valid nodeNum, but also the default
+		{//we failed against this node
+			return qtrue;
+		}
+	}
+	return qfalse;
+}
 /*
 -------------------------
 NPC_UnBlocked
@@ -479,7 +491,7 @@ qboolean NAVNEW_AvoidCollision( gentity_t *self, gentity_t *goal, navInfo_t &inf
 	//Our path is clear, just move there
 	if ( NAVDEBUG_showCollision )
 	{
-		CG_DrawEdge( self->currentOrigin, movepos, EDGE_PATH );
+		CG_DrawEdge( self->currentOrigin, movepos, EDGE_MOVEDIR );
 	}
 
 	return qtrue;
@@ -497,7 +509,7 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 	vec3_t		origin;
 	navInfo_t	tempInfo;
 	qboolean	setBlockedInfo = qtrue;
-	qboolean	inBestWP;
+	qboolean	inBestWP, inGoalWP, goalWPFailed = qfalse;
 	int			numTries = 0;
 
 	memcpy( &tempInfo, &info, sizeof( tempInfo ) );
@@ -542,7 +554,7 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 
 	while( !foundClearPath )
 	{
-		inBestWP = qfalse;
+		inBestWP = inGoalWP = qfalse;
 		/*
 		bestNode = navigator.GetBestNodeAltRoute( self->waypoint, self->NPC->goalEntity->waypoint, bestNode );
 		*/
@@ -554,12 +566,9 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 
 		//see if we can get directly to the next node off bestNode en route to goal's node...
 		//NOTE: shouldn't be necc. now
-		int oldBestNode = bestNode;
 		/*
-		navigator.GetNodePosition( bestNode, origin );
-		Com_Printf( "%d bestNode = %d, at %s\n", level.time, bestNode, vtos( origin ) );
-		*/
-		bestNode = NAV_TestBestNode( self->currentOrigin, self->waypoint, bestNode );//, self->NPC->goalEntity->waypoint );// 
+		int oldBestNode = bestNode;
+		bestNode = NAV_TestBestNode( self, self->waypoint, bestNode, qtrue );//, self->NPC->goalEntity->waypoint );// 
 		//NOTE: Guaranteed to return something
 		if ( bestNode != oldBestNode )
 		{//we were blocked somehow
@@ -569,15 +578,49 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 				navigator.GetNodePosition( oldBestNode, NPCInfo->blockedDest );
 			}
 		}
-
+		*/
 		navigator.GetNodePosition( bestNode, origin );
-
-		if ( bestNode == self->NPC->goalEntity->waypoint && bestNode == self->waypoint && NAV_HitNavGoal( self->currentOrigin, self->mins, self->maxs, origin, navigator.GetNodeRadius( bestNode ) ) )
-		{//we're in the wp we're heading for already
-			inBestWP = qtrue;
-			//we're in the goalEntity's waypoint already, so head for the goalEntity
-			//VectorCopy( self->NPC->goalEntity->currentOrigin, origin );
+		if ( !goalWPFailed )
+		{//we haven't already tried to go straight to goal or goal's wp
+			if ( bestNode == self->NPC->goalEntity->waypoint )
+			{//our bestNode is the goal's wp
+				if ( NAV_HitNavGoal( self->currentOrigin, self->mins, self->maxs, origin, navigator.GetNodeRadius( bestNode ) ) )
+				{//we're in the goal's wp
+					inGoalWP = qtrue;
+					//we're in the goalEntity's waypoint already
+					//so head for the goalEntity since we know it's clear of architecture
+					//FIXME: this is pretty stupid because the NPCs try to go straight
+					//		towards their goal before then even try macro_nav...
+					VectorCopy( self->NPC->goalEntity->currentOrigin, origin );
+				}
+			}
 		}
+		if ( !inGoalWP )
+		{//not heading straight for goal
+			if ( bestNode == self->waypoint )
+			{//we know it's clear or architecture
+				//navigator.GetNodePosition( self->waypoint, origin );
+				/*
+				if ( NAV_HitNavGoal( self->currentOrigin, self->mins, self->maxs, origin, navigator.GetNodeRadius( bestNode ) ) )
+				{//we're in the wp we're heading for already
+					inBestWP = qtrue;
+				}
+				*/
+			}
+			else
+			{//heading to an edge off our confirmed clear waypoint... make sure it's clear
+				//it it's not, bestNode will fall back to our waypoint
+				int oldBestNode = bestNode;
+				bestNode = NAV_TestBestNode( self, self->waypoint, bestNode, qtrue );
+				if ( bestNode == self->waypoint )
+				{//we fell back to our waypoint, reset the origin
+					self->NPC->aiFlags |= NPCAI_BLOCKED;
+					navigator.GetNodePosition( oldBestNode, NPCInfo->blockedDest );
+					navigator.GetNodePosition( bestNode, origin );
+				}
+			}
+		}
+		//Com_Printf( "goalwp = %d, mywp = %d, node = %d, origin = %s\n", self->NPC->goalEntity->waypoint, self->waypoint, bestNode, vtos(origin) );
 
 		memcpy( &tempInfo, &info, sizeof( tempInfo ) );
 		VectorSubtract( origin, self->currentOrigin, tempInfo.direction );
@@ -586,19 +629,26 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 		//NOTE: One very important thing NAVNEW_AvoidCollision does is
 		//		it actually CHANGES the value of "direction" - it changes it to
 		//		whatever dir you need to go in to avoid the obstacle...
-		//Com_Printf( "%d bestNode (clear) = %d, at %s\n", level.time, bestNode, vtos( origin ) );
 		foundClearPath = NAVNEW_AvoidCollision( self, self->NPC->goalEntity, tempInfo, setBlockedInfo, 5 );
-		//foundClearPath = NAV_CheckAvoidCollision( self, origin, tempDir, 0, setBlockedInfo, self->NPC->goalEntity->s.number );
+
+		if ( !foundClearPath )
+		{//blocked by an ent
+			if ( inGoalWP )
+			{//we were heading straight for the goal, head for the goal's wp instead
+				navigator.GetNodePosition( bestNode, origin );
+				foundClearPath = NAVNEW_AvoidCollision( self, self->NPC->goalEntity, tempInfo, setBlockedInfo, 5 );
+			}
+		}
 
 		if ( foundClearPath )
-		{
+		{//clear!
 			//If we got set to blocked, clear it
-			NPC_ClearBlocked( self );//NAV_ClearBlockedInfo( self );
+			NPC_ClearBlocked( self );
 			//Take the dir
 			memcpy( &info, &tempInfo, sizeof( info ) );
 		}
 		else
-		{
+		{//blocked by ent!
 			if ( setBlockedInfo )
 			{
 				self->NPC->aiFlags |= NPCAI_BLOCKED;
@@ -607,34 +657,49 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 			//Only set blocked info first time
 			setBlockedInfo = qfalse;
 
-			if ( inBestWP )
-			{//we're in our bestWP, so we headed toward our goal and still failed
-				//we should stop
+			if ( inGoalWP )
+			{//we headed for our goal and failed and our goal's WP and failed
+				if ( self->waypoint == self->NPC->goalEntity->waypoint )
+				{//our waypoint is our goal's waypoint, nothing we can do
+					//remember that this node is blocked
+					navigator.AddFailedNode( self, self->waypoint );
+					goto failed;
+				}
+				else
+				{//try going for our waypoint this time
+					goalWPFailed = qtrue;
+					inGoalWP = qfalse;
+				}
+			}
+			else if ( bestNode != self->waypoint )
+			{//we headed toward our next waypoint (instead of our waypoint) and failed
+				if ( d_altRoutes->integer )
+				{//mark this edge failed and try our waypoint
+					navigator.AddFailedEdge( self->s.number, self->waypoint, bestNode );
+					bestNode = self->waypoint;
+				}
+				else
+				{
+					//we should stop
+					goto failed;
+				}
 			}
 			else 
-			{
+			{//we headed for *our* waypoint and couldn't get to it
 				if ( d_altRoutes->integer )
 				{
-					if ( self->waypoint == bestNode )
-					{//couldn't get to our waypoint
-						//remember that this node is blocked
-						navigator.AddFailedNode( self, self->waypoint );
-					}
-					else
-					{
-						//Remember that this node is blocked
-						navigator.AddFailedEdge( self->s.number, self->waypoint, bestNode );
-					}
-
+					//remember that this node is blocked
+					navigator.AddFailedNode( self, self->waypoint );
 					//Now we should get our waypoints again
 					//FIXME: cache the trace-data for subsequent calls as only the route info would have changed
-					if ( (bestNode = navigator.GetBestPathBetweenEnts( self, self->NPC->goalEntity, NF_CLEAR_PATH )) == NODE_NONE )//!NAVNEW_GetWaypoints( self, qfalse ) )
+					//if ( (bestNode = navigator.GetBestPathBetweenEnts( self, self->NPC->goalEntity, NF_CLEAR_PATH )) == NODE_NONE )//!NAVNEW_GetWaypoints( self, qfalse ) )
 					{//one of our waypoints is WAYPOINT_NONE now
 						goto failed;
 					}
 				}
 				else
 				{
+					//we should stop
 					goto failed;
 				}
 			}
@@ -644,7 +709,6 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 				goto failed;
 			}
 		}
-		//MCG - End
 	}
 
 //finish:
@@ -659,21 +723,17 @@ int	NAVNEW_MoveToGoal( gentity_t *self, navInfo_t &info )
 
 		//Draw the route
 		CG_DrawNode( start, NODE_START );
+		if ( bestNode != self->waypoint )
+		{
+			vec3_t	wpPos;
+			navigator.GetNodePosition( self->waypoint, wpPos );
+			CG_DrawNode( wpPos, NODE_NAVGOAL );
+		}
 		CG_DrawNode( dest, NODE_GOAL );
-		navigator.ShowPath( self->waypoint, self->NPC->goalEntity->waypoint );
+		CG_DrawEdge( dest, self->NPC->goalEntity->currentOrigin, EDGE_PATH );
+		CG_DrawNode( self->NPC->goalEntity->currentOrigin, NODE_GOAL );
+		navigator.ShowPath( bestNode, self->NPC->goalEntity->waypoint );
 	}
-
-	//FIXME: Is this really necessary?
-
-	//Calculate this for other functions
-	//MCG - Done above
-	/*
-	vec3_t	origin;
-
-	navigator.GetNodePosition( bestNode, origin );
-	VectorSubtract( origin, self->currentOrigin, dir );
-	VectorNormalize( dir );
-	*/
 
 	self->NPC->shoveCount = 0;
 

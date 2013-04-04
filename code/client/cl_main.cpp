@@ -435,6 +435,9 @@ void CL_Snd_Restart_f( void ) {
 	s_soundMuted = qfalse;		// we can play again
 
 	S_RestartMusic();
+
+	extern void S_ReloadAllUsedSounds(void);
+	S_ReloadAllUsedSounds();
 }
 /*
 ==================

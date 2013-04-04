@@ -26,7 +26,7 @@
 //Script flags
 #define	SCF_CROUCHED		0x00000001	//Force ucmd.upmove to be -127
 #define	SCF_WALKING			0x00000002	//Force BUTTON_WALKING to be pressed
-
+#define	SCF_MORELIGHT		0x00000004	//NPC will have a minlight of 96
 #define	SCF_LEAN_RIGHT		0x00000008	//Force rightmove+BUTTON_USE
 #define	SCF_LEAN_LEFT		0x00000010	//Force leftmove+BUTTON_USE
 #define	SCF_RUNNING			0x00000020	//Takes off walking button, overrides SCF_WALKING
@@ -45,6 +45,9 @@
 #define	SCF_FIRE_WEAPON		0x00040000	//NPC will fire his (her) weapon
 #define	SCF_NO_MIND_TRICK	0x00080000	//Not succeptible to mind tricks
 #define	SCF_USE_CP_NEAREST	0x00100000	//Will use combat point close to it, not next to player or try and flank player
+#define	SCF_NO_FORCE		0x00200000	//Not succeptible to force powers
+#define	SCF_NO_FALLTODEATH	0x00400000	//NPC will not scream and tumble and fall to hit death over large drops
+#define	SCF_NO_ACROBATICS	0x00800000	//Jedi won't jump, roll or cartwheel
 
 //#ifdef __DEBUG
 
@@ -240,10 +243,12 @@ typedef struct
 
 	//FIXME: These may be redundant
 	
-	int			pauseTime;		//Time to stand still
+	/*
 	int			weaponTime;		//Time until refire is valid
-	int			standTime;
 	int			jumpTime;
+	*/
+	int			pauseTime;		//Time to stand still
+	int			standTime;
 
 	int			localState;		//Tracking information local to entity
 	int			squadState;		//Tracking information for team level interaction

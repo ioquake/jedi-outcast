@@ -1468,7 +1468,6 @@ void QuickMemTest(void)
 			LPCSTR psContinue	= "Your machine failed to allocate %dMB in a memory test, which may mean you'll have problems running this game all the way through.\n\nContinue anyway?";
 			LPCSTR psNoMem		= "Insufficient memory to run this game!\n";
 
-			extern int Language_GetIntegerValue(void);
 			switch (Language_GetIntegerValue())
 			{
 				case SP_LANGUAGE_GERMAN:

@@ -350,6 +350,17 @@ void RE_LAGoggles( void )
 	fog->tcScale = 2.0f / ( fog->parms.depthForOpaque * (1.0f + cos( tr.refdef.floatTime) * 0.1f));
 }
 
+void RE_RenderWorldEffects(void)
+{
+	setModeCommand_t	*cmd;
+
+	cmd = (setModeCommand_t *)R_GetCommandBuffer( sizeof( *cmd ) );
+	if ( !cmd ) {
+		return;
+	}
+	cmd->commandId = RC_WORLD_EFFECTS;
+}
+
 /*   
 =============
 RE_Scissor

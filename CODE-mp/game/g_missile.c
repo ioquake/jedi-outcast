@@ -350,6 +350,25 @@ void G_MissileImpact( gentity_t *ent, trace_t *trace ) {
 	}
 	*/
 
+	if (other->r.contents & CONTENTS_LIGHTSABER)
+	{ //hit this person's saber, so..
+		gentity_t *otherOwner = &g_entities[other->r.ownerNum];
+
+		if (otherOwner->takedamage && otherOwner->client && otherOwner->client->ps.duelInProgress &&
+			otherOwner->client->ps.duelIndex != ent->r.ownerNum)
+		{
+			goto killProj;
+		}
+	}
+	else
+	{
+		if (other->takedamage && other->client && other->client->ps.duelInProgress &&
+			other->client->ps.duelIndex != ent->r.ownerNum)
+		{
+			goto killProj;
+		}
+	}
+
 	if (other->takedamage && other->client &&
 		ent->s.weapon != WP_ROCKET_LAUNCHER &&
 		ent->s.weapon != WP_THERMAL &&

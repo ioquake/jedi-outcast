@@ -21,6 +21,10 @@
 #define	NAV_HEADER_ID	'JNV5'
 #define	NODE_HEADER_ID	'NODE'
 
+typedef multimap<int, int> EdgeMultimap;
+typedef multimap<int, int>::iterator EdgeMultimapIt;
+
+
 /*
 -------------------------
 CEdge
@@ -200,7 +204,8 @@ public:
 	void FlagAllNodes( int newFlag );
 
 	qboolean pathsCalculated;
-	failedEdge_t	failedEdges[MAX_FAILED_EDGES];
+	failedEdge_t	failedEdges[MAX_FAILED_EDGES];	
+
 //MCG Added END
 
 protected:
@@ -220,13 +225,15 @@ protected:
 	float	GetFloat( fileHandle_t file );
 	long	GetLong( fileHandle_t file );
 
-	void	ConnectNodes( void );
+	//void	ConnectNodes( void );
+	void	SetEdgeCost( int ID1, int ID2, int cost );
 	int		GetEdgeCost( CNode *first, CNode *second );
 	void	AddNodeEdges( CNode *node, int addDist, edge_l &edgeList, bool *checkedNodes );
 
 	void	CalculatePath( CNode *node );
 
 	node_v			m_nodes;
+	EdgeMultimap	m_edgeLookupMap;
 };
 
 //////////////////////////////////////////////////////////////////////

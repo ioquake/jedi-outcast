@@ -383,6 +383,13 @@ static int cg_SP_GetStringTextStringWithRetry( LPCSTR psReference, char *psDest,
 {
 	int iReturn;
 
+	if (psReference[0] == '#')
+	{
+		// then we know the striped package name is already built in, so do NOT try prepending anything else...
+		//
+		return cgi_SP_GetStringTextString( va("%s",psReference+1), psDest, iSizeofDest );
+	}
+
 	for (int i=0; i<STRIPED_LEVELNAME_VARIATIONS; i++)
 	{
 		if (cgs.stripLevelName[i][0])	// entry present?
@@ -639,7 +646,7 @@ void CG_ScrollText( const char *str, int iPixelWidth )
 
 	// first, ask the strlen of the final string...
 	//	
-	i = cg_SP_GetStringTextStringWithRetry( str, NULL, 0 );
+	i = cgi_SP_GetStringTextString( str, NULL, 0 );
 
 	//ensure we found a match
 	if (!i)
@@ -655,8 +662,8 @@ void CG_ScrollText( const char *str, int iPixelWidth )
 	char *psText = (char *) cgi_Z_Malloc( i+1, TAG_STRING );
 	//
 	// now get the string...
-	//
-	i = cg_SP_GetStringTextStringWithRetry( str, psText, i+1 );
+	//	
+	i = cgi_SP_GetStringTextString( str, psText, i+1 );
 	//ensure we found a match
 	if (!i)
 	{
@@ -826,12 +833,12 @@ void CG_CenterPrint( const char *str, int y) {
 	{
 		int i;
 
-		i = cg_SP_GetStringTextStringWithRetry( str+1, cg.centerPrint, sizeof(cg.centerPrint) );
+		i = cgi_SP_GetStringTextString( str+1, cg.centerPrint, sizeof(cg.centerPrint) );
 
 		if (!i)
 		{
-			Com_Printf ("CG_CenterPrint: bad key for precached Text '%s'\n",str);	
-			return;
+			Com_Printf (S_COLOR_RED"CG_CenterPrint: cannot find reference '%s' in StringPackage!\n",str);	
+			Q_strncpyz( cg.centerPrint, str, sizeof(cg.centerPrint) );
 		}
 	}
 	else

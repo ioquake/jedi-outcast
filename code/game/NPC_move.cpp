@@ -22,6 +22,7 @@ extern int GetTime ( int lastTime );
 
 navInfo_t	frameNavInfo;
 extern qboolean FlyingCreature( gentity_t *ent );
+extern qboolean PM_InKnockDown( playerState_t *ps );
 
 /*
 -------------------------
@@ -341,7 +342,7 @@ qboolean NPC_MoveToGoal( qboolean tryStraight )
 	int	startTime = GetTime(0);
 #endif//	AI_TIMERS
 	//If taking full body pain, don't move
-	if( ( NPC->s.legsAnim >= BOTH_PAIN1 ) && ( NPC->s.legsAnim <= BOTH_PAIN19 ) )
+	if ( PM_InKnockDown( &NPC->client->ps ) || ( ( NPC->s.legsAnim >= BOTH_PAIN1 ) && ( NPC->s.legsAnim <= BOTH_PAIN19 ) ) )
 	{
 		return qtrue;
 	}

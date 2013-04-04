@@ -14,16 +14,11 @@
 Sys_Milliseconds
 ================
 */
-int			sys_timeBase;
 int Sys_Milliseconds (void)
 {
+	static int sys_timeBase = timeGetTime();
 	int			sys_curtime;
-	static qboolean	initialized = qfalse;
 
-	if (!initialized) {
-		sys_timeBase = timeGetTime();
-		initialized = qtrue;
-	}
 	sys_curtime = timeGetTime() - sys_timeBase;
 
 	return sys_curtime;

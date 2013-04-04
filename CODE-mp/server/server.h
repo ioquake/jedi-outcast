@@ -1,4 +1,6 @@
+#if defined (_MSC_VER) && (_MSC_VER >= 1020)
 #pragma once
+#endif
 
 #if !defined(SERVER_H_INC)
 #define SERVER_H_INC
@@ -254,6 +256,7 @@ void SV_DirectConnect( netadr_t from );
 
 void SV_AuthorizeIpPacket( netadr_t from );
 
+void SV_SendClientMapChange( client_t *client );
 void SV_ExecuteClientMessage( client_t *cl, msg_t *msg );
 void SV_UserinfoChanged( client_t *cl );
 

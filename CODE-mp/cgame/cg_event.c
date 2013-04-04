@@ -322,13 +322,13 @@ clientkilled:
 			message = "KILLED_TELEFRAG";
 			break;
 		case MOD_CRUSH:
-			message = "KILLED_FORCETOSS";
+			message = "KILLED_GENERIC";//"KILLED_FORCETOSS";
 			break;
 		case MOD_FALLING:
 			message = "KILLED_FORCETOSS";
 			break;
 		case MOD_TRIGGER_HURT:
-			message = "KILLED_FORCETOSS";
+			message = "KILLED_GENERIC";//"KILLED_FORCETOSS";
 			break;
 		default:
 			message = "KILLED_GENERIC";
@@ -439,7 +439,7 @@ static void CG_UseItem( centity_t *cent ) {
 			ci = &cgs.clientinfo[ clientNum ];
 			ci->medkitUsageTime = cg.time;
 		}
-		trap_S_StartSound (NULL, es->number, CHAN_BODY, cgs.media.medkitSound );
+		trap_S_StartSound (NULL, es->number, CHAN_AUTO, cgs.media.medkitSound );
 		break;
 	}
 
@@ -649,14 +649,14 @@ static void CG_BodyQueueCopy(centity_t *cent, int clientNum, int knownWeapon)
 		trap_G2API_CopySpecificGhoul2Model(g2WeaponInstances[knownWeapon], 0, cent->ghoul2, 1);
 	}
 
-	anim = &ci->animations[ cent->currentState.torsoAnim ];
+	anim = &bgGlobalAnimations[ cent->currentState.torsoAnim ];
 	animSpeed = 50.0f / anim->frameLerp;
 
 	//this will just set us to the last frame of the animation, in theory
 	if (source->isATST)
 	{
 		int aNum = cgs.clientinfo[source->currentState.number].frame+1;
-		anim = &ci->animations[ BOTH_DEAD1 ];
+		anim = &bgGlobalAnimations[ BOTH_DEAD1 ];
 		animSpeed = 1;
 
 		flags &= ~BONE_ANIM_OVERRIDE_LOOP;
@@ -837,14 +837,14 @@ void DoFall(centity_t *cent, entityState_t *es, int clientNum)
 	{
 		trap_S_StartSound (NULL, es->number, CHAN_AUTO, cgs.media.fallSound );
 		trap_S_StartSound( NULL, cent->currentState.number, CHAN_VOICE, 
-			CG_CustomSound( cent->currentState.number, "*fall1.wav" ) );
+			CG_CustomSound( cent->currentState.number, "*land1.wav" ) );
 		cent->pe.painTime = cg.time;	// don't play a pain sound right after this
 	}
 	else if (delta > 44)
 	{
 		trap_S_StartSound (NULL, es->number, CHAN_AUTO, cgs.media.fallSound );
 		trap_S_StartSound( NULL, cent->currentState.number, CHAN_VOICE, 
-			CG_CustomSound( cent->currentState.number, "*fall1.wav" ) );
+			CG_CustomSound( cent->currentState.number, "*land1.wav" ) );
 		cent->pe.painTime = cg.time;	// don't play a pain sound right after this
 	}
 	else
@@ -1022,23 +1022,6 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 	case EV_JUMP_PAD:
 		DEBUGNAME("EV_JUMP_PAD");
-//		CG_Printf( "EV_JUMP_PAD w/effect #%i\n", es->eventParm );
-		{
-			localEntity_t	*smoke;
-			vec3_t			up = {0, 0, 1};
-
-
-			smoke = CG_SmokePuff( cent->lerpOrigin, up, 
-						  32, 
-						  1, 1, 1, 0.33f,
-						  1000, 
-						  cg.time, 0,
-						  LEF_PUFF_DONT_SCALE, 
-						  cgs.media.smokePuffShader );
-		}
-
-		// boing sound at origin, jump sound on player
-		trap_S_StartSound (NULL, es->number, CHAN_VOICE, CG_CustomSound( es->number, "*jump1.wav" ) );
 		break;
 
 	case EV_PRIVATE_DUEL:
@@ -1142,7 +1125,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 			index = cg_entities[es->eventParm].currentState.modelindex;		// player predicted
 
-			if (index < 1)
+			if (index < 1 && cg_entities[es->eventParm].currentState.isJediMaster)
 			{ //a holocron most likely
 				index = cg_entities[es->eventParm].currentState.trickedentindex4;
 				trap_S_StartSound (NULL, es->number, CHAN_AUTO,	cgs.media.holocronPickup );
@@ -1444,11 +1427,35 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 	case EV_DISRUPTOR_MAIN_SHOT:
 		DEBUGNAME("EV_DISRUPTOR_MAIN_SHOT");
+		if (cent->currentState.eventParm != cg.snap->ps.clientNum ||
+			cg.renderingThirdPerson)
+		{ //h4q3ry
+			CG_GetClientWeaponMuzzleBoltPoint(cent->currentState.eventParm, cent->currentState.origin2);
+		}
+		else
+		{
+			if (cg.lastFPFlashPoint[0] ||cg.lastFPFlashPoint[1] || cg.lastFPFlashPoint[2])
+			{ //get the position of the muzzle flash for the first person weapon model from the last frame
+				VectorCopy(cg.lastFPFlashPoint, cent->currentState.origin2);
+			}
+		}
 		FX_DisruptorMainShot( cent->currentState.origin2, cent->lerpOrigin ); 
 		break;
 
 	case EV_DISRUPTOR_SNIPER_SHOT:
 		DEBUGNAME("EV_DISRUPTOR_SNIPER_SHOT");
+		if (cent->currentState.eventParm != cg.snap->ps.clientNum ||
+			cg.renderingThirdPerson)
+		{ //h4q3ry
+			CG_GetClientWeaponMuzzleBoltPoint(cent->currentState.eventParm, cent->currentState.origin2);
+		}
+		else
+		{
+			if (cg.lastFPFlashPoint[0] ||cg.lastFPFlashPoint[1] || cg.lastFPFlashPoint[2])
+			{ //get the position of the muzzle flash for the first person weapon model from the last frame
+				VectorCopy(cg.lastFPFlashPoint, cent->currentState.origin2);
+			}
+		}
 		FX_DisruptorAltShot( cent->currentState.origin2, cent->lerpOrigin, cent->currentState.shouldtarget );
 		break;
 
@@ -1779,6 +1786,9 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		case EFFECT_EXPLOSION:
 			eID = trap_FX_RegisterEffect("emplaced/explode.efx");
 			break;
+		case EFFECT_EXPLOSION_PAS:
+			eID = trap_FX_RegisterEffect("turret/explode.efx");
+			break;
 		case EFFECT_SPARK_EXPLOSION:
 			eID = trap_FX_RegisterEffect("spark_explosion.efx");
 			break;
@@ -1805,18 +1815,54 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 		if (eID != -1)
 		{
-			trap_FX_PlayEffectID(eID, es->origin, es->angles);
+			vec3_t fxDir;
+
+			VectorCopy(es->angles, fxDir);
+
+			if (!fxDir[0] && !fxDir[1] && !fxDir[2])
+			{
+				fxDir[1] = 1;
+			}
+
+			trap_FX_PlayEffectID(eID, es->origin, fxDir);
+		}
+		break;
+
+	case EV_PLAY_EFFECT_ID:
+		DEBUGNAME("EV_PLAY_EFFECT_ID");
+		{
+			vec3_t fxDir;
+
+			AngleVectors(es->angles, fxDir, 0, 0);
+			
+			if (!fxDir[0] && !fxDir[1] && !fxDir[2])
+			{
+				fxDir[1] = 1;
+			}
+
+			if ( cgs.gameEffects[ es->eventParm ] )
+			{
+				trap_FX_PlayEffectID(cgs.gameEffects[es->eventParm], es->origin, fxDir );
+			}
+			else
+			{
+				s = CG_ConfigString( CS_EFFECTS + es->eventParm );
+				if (s && s[0])
+				{
+					trap_FX_PlayEffectID(trap_FX_RegisterEffect(s), es->origin, fxDir );
+				}
+			}
 		}
 		break;
 
 	case EV_MUTE_SOUND:
 		DEBUGNAME("EV_MUTE_SOUND");
-		if (cg_entities[es->eventParm].currentState.eFlags & EF_SOUNDTRACKER)
+		if (cg_entities[es->trickedentindex2].currentState.eFlags & EF_SOUNDTRACKER)
 		{
-			cg_entities[es->eventParm].currentState.eFlags -= EF_SOUNDTRACKER;
+			cg_entities[es->trickedentindex2].currentState.eFlags -= EF_SOUNDTRACKER;
 		}
-		trap_S_MuteSound(es->eventParm, es->trickedentindex);
-		trap_S_StopLoopingSound(es->eventParm);
+		trap_S_MuteSound(es->trickedentindex2, es->trickedentindex);
+		trap_S_StopLoopingSound(es->trickedentindex2);
 		break;
 
 	case EV_GENERAL_SOUND:

@@ -224,16 +224,16 @@ void G2_List_Model_Bones(const char *fileName, int frame)
 	mdxaSkelOffsets_t	*offsets;
   	model_t			*mod_m = R_GetModelByHandle(RE_RegisterModel(fileName)); 
 	model_t			*mod_a = R_GetModelByHandle(mod_m->mdxm->animIndex);
- 	mdxaFrame_t		*aframe=0;
-	int				frameSize;
+// 	mdxaFrame_t		*aframe=0;
+//	int				frameSize;
 	mdxaHeader_t	*header = mod_a->mdxa;
 
 	// figure out where the offset list is
 	offsets = (mdxaSkelOffsets_t *)((byte *)header + sizeof(mdxaHeader_t));
 
-    frameSize = (int)( &((mdxaFrame_t *)0)->boneIndexes[ header->numBones ] );   
+//    frameSize = (int)( &((mdxaFrame_t *)0)->boneIndexes[ header->numBones ] );   
 
-	aframe = (mdxaFrame_t *)((byte *)header + header->ofsFrames + (frame * frameSize));
+//	aframe = (mdxaFrame_t *)((byte *)header + header->ofsFrames + (frame * frameSize));
 	// walk each bone and list it's name
 	for (x=0; x< mod_a->mdxa->numBones; x++)
 	{
@@ -329,28 +329,35 @@ void R_TransformEachSurface( mdxmSurface_t	*surface, vec3_t scale, CMiniHeap *G2
 	int *piBoneRefs = (int*) ((byte*)surface + surface->ofsBoneReferences);		
 	numVerts = surface->numVerts;
 	v = (mdxmVertex_t *) ((byte *)surface + surface->ofsVerts);
+	mdxmVertexTexCoord_t *pTexCoords = (mdxmVertexTexCoord_t *) &v[numVerts];
 	// optimisation issue
 	if ((scale[0] != 1.0) || (scale[1] != 1.0) || (scale[2] != 1.0))
 	{
 		for ( j = 0; j < numVerts; j++ ) 
 		{
 			vec3_t			tempVert, tempNormal;
-			mdxmWeight_t	*w;
+//			mdxmWeight_t	*w;
 
 			VectorClear( tempVert );
 			VectorClear( tempNormal );
-			w = v->weights;
-			for ( k = 0 ; k < v->numWeights ; k++, w++ ) 
+//			w = v->weights;
+
+			const int iNumWeights = G2_GetVertWeights( v );
+
+			for ( k = 0 ; k < iNumWeights ; k++ ) 
 			{
+				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
+
 				//bone = bonePtr + piBoneRefs[w->boneIndex];
 
-				tempVert[0] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[0][3] );
-				tempVert[1] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[1][3] );
-				tempVert[2] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[2][3] );
+				tempVert[0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[0][3] );
+				tempVert[1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[1][3] );
+				tempVert[2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[2][3] );
 
-				tempNormal[0] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[0], v->normal );
-				tempNormal[1] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[1], v->normal );
-				tempNormal[2] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[2], v->normal );
+				tempNormal[0] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], v->normal );
+				tempNormal[1] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], v->normal );
+				tempNormal[2] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], v->normal );
 			}
 			int pos = j * 5;
 
@@ -359,10 +366,10 @@ void R_TransformEachSurface( mdxmSurface_t	*surface, vec3_t scale, CMiniHeap *G2
 			TransformedVerts[pos++] = tempVert[1] * scale[1];
 			TransformedVerts[pos++] = tempVert[2] * scale[2];
 			// we will need the S & T coors too for hitlocation and hitmaterial stuff
-			TransformedVerts[pos++] = v->texCoords[0];
-			TransformedVerts[pos] = v->texCoords[1];
+			TransformedVerts[pos++] = pTexCoords[j].texCoords[0];
+			TransformedVerts[pos] = pTexCoords[j].texCoords[1];
 
-			v = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
+			v++;// = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
 		}
 	}
 	else
@@ -370,22 +377,28 @@ void R_TransformEachSurface( mdxmSurface_t	*surface, vec3_t scale, CMiniHeap *G2
 	  	for ( j = 0; j < numVerts; j++ ) 
 		{
 			vec3_t			tempVert, tempNormal;
-			mdxmWeight_t	*w;
+//			mdxmWeight_t	*w;
 
 			VectorClear( tempVert );
 			VectorClear( tempNormal );
-			w = v->weights;
-			for ( k = 0 ; k < v->numWeights ; k++, w++ ) 
+//			w = v->weights;
+
+			const int iNumWeights = G2_GetVertWeights( v );
+
+			for ( k = 0 ; k < iNumWeights ; k++ ) 
 			{
+				int		iBoneIndex	= G2_GetVertBoneIndex( v, k );
+				float	fBoneWeight	= G2_GetVertBoneWeight( v, k );
+
 				//bone = bonePtr + piBoneRefs[w->boneIndex];
 
-				tempVert[0] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[0][3] );
-				tempVert[1] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[1][3] );
-				tempVert[2] += w->boneWeight * ( DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[w->boneIndex]].matrix[2][3] );
+				tempVert[0] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[0][3] );
+				tempVert[1] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[1][3] );
+				tempVert[2] += fBoneWeight * ( DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], v->vertCoords ) + bonePtr[piBoneRefs[iBoneIndex]].matrix[2][3] );
 
-				tempNormal[0] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[0], v->normal );
-				tempNormal[1] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[1], v->normal );
-				tempNormal[2] += w->boneWeight * DotProduct( bonePtr[piBoneRefs[w->boneIndex]].matrix[2], v->normal );
+				tempNormal[0] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[0], v->normal );
+				tempNormal[1] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[1], v->normal );
+				tempNormal[2] += fBoneWeight * DotProduct( bonePtr[piBoneRefs[iBoneIndex]].matrix[2], v->normal );
 			}
 			int pos = j * 5;
 
@@ -394,10 +407,10 @@ void R_TransformEachSurface( mdxmSurface_t	*surface, vec3_t scale, CMiniHeap *G2
 			TransformedVerts[pos++] = tempVert[1];
 			TransformedVerts[pos++] = tempVert[2];
 			// we will need the S & T coors too for hitlocation and hitmaterial stuff
-			TransformedVerts[pos++] = v->texCoords[0];
-			TransformedVerts[pos] = v->texCoords[1];
+			TransformedVerts[pos++] = pTexCoords[j].texCoords[0];
+			TransformedVerts[pos] = pTexCoords[j].texCoords[1];
 
-			v = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
+			v++;// = (mdxmVertex_t *)&v->weights[/*v->numWeights*/surface->maxVertBoneWeights];
 		}
 	}
 }

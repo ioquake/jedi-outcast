@@ -176,6 +176,49 @@ void UI_UpdateClientForcePowers()
 	gTouchedForce = qfalse;
 }
 
+void UI_SaveForceTemplate()
+{
+	char *selectedName = UI_Cvar_VariableString("ui_SaveFCF");
+	char fcfString[512];
+	char forceStringValue[4];
+	fileHandle_t f;
+	int strPlace = 0;
+	int forcePlace = 0;
+
+	if (!selectedName || !selectedName[0])
+	{
+		Com_Printf("You did not provide a name for the template.\n");
+		return;
+	}
+
+	trap_FS_FOpenFile(va("forcecfg/%s.fcf", selectedName), &f, FS_WRITE);
+
+	if (!f)
+	{
+		Com_Printf("There was an error writing the template file (read-only?).\n");
+		return;
+	}
+
+	Com_sprintf(fcfString, sizeof(fcfString), "%i-%i-", uiForceRank, uiForceSide);
+	strPlace = strlen(fcfString);
+
+	while (forcePlace < NUM_FORCE_POWERS)
+	{
+		Com_sprintf(forceStringValue, sizeof(forceStringValue), "%i", uiForcePowersRank[forcePlace]);
+		//Just use the force digit even if multiple digits. Shouldn't be longer than 1.
+		fcfString[strPlace] = forceStringValue[0];
+		strPlace++;
+		forcePlace++;
+	}
+	fcfString[strPlace] = '\n';
+	fcfString[strPlace+1] = 0;
+
+	trap_FS_Write(fcfString, strlen(fcfString), f);
+	trap_FS_FCloseFile(f);
+
+	Com_Printf("Template saved as \"%s\".\n", selectedName);
+}
+
 // 
 
 void UpdateForceUsed()

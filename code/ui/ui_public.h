@@ -63,6 +63,8 @@ typedef struct {
 	void		(*R_AddLightToScene)( const vec3_t org, float intensity, float r, float g, float b );
 	void		(*R_RenderScene)( const refdef_t *fd );
 
+	void		(*R_ModelBounds)( qhandle_t handle, vec3_t mins, vec3_t maxs );
+
 	void		(*R_SetColor)( const float *rgba );	// NULL = 1,1,1,1
 	void		(*R_DrawStretchPic) ( float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader );	// 0 = white
 	void		(*R_ScissorPic) ( float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader );	// 0 = white

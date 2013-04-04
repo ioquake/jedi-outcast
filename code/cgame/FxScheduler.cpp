@@ -1157,31 +1157,41 @@ void CFxScheduler::AddScheduledEffects( void )
 			else
 			{
 			
+				mdxaBone_t 		boltMatrix;
+
+				doesBoltExist=qfalse;
 				// do we need to go and re-get the bolt matrix again? Since it takes time lets try and do it only once
 				if (((*itr)->mModelNum != oldModelNum) || ((*itr)->mEntNum != oldEntNum) || ((*itr)->mBoltNum != oldBoltIndex))
 				{
-					mdxaBone_t 		boltMatrix;
+					if (cg_entities[(*itr)->mEntNum].gent->ghoul2.IsValid())
+					{
+						if ((*itr)->mModelNum>=0&&(*itr)->mModelNum<cg_entities[(*itr)->mEntNum].gent->ghoul2.size())
+						{
+							if (cg_entities[(*itr)->mEntNum].gent->ghoul2[(*itr)->mModelNum].mModelindex>=0)
+							{
 
-					// go away and get me the bolt position for this frame please
-					doesBoltExist = gi.G2API_GetBoltMatrix(cg_entities[(*itr)->mEntNum].gent->ghoul2, (*itr)->mModelNum, (*itr)->mBoltNum, &boltMatrix, cg_entities[(*itr)->mEntNum].lerpAngles, cg_entities[(*itr)->mEntNum].lerpOrigin, cg.time, cgs.model_draw, cg_entities[(*itr)->mEntNum].currentState.modelScale);
+								// go away and get me the bolt position for this frame please
+								doesBoltExist = gi.G2API_GetBoltMatrix(cg_entities[(*itr)->mEntNum].gent->ghoul2, (*itr)->mModelNum, (*itr)->mBoltNum, &boltMatrix, cg_entities[(*itr)->mEntNum].lerpAngles, cg_entities[(*itr)->mEntNum].lerpOrigin, cg.time, cgs.model_draw, cg_entities[(*itr)->mEntNum].currentState.modelScale);
+								// set up the axis and origin we need for the actual effect spawning
+	   							origin[0] = boltMatrix.matrix[0][3];
+								origin[1] = boltMatrix.matrix[1][3];
+								origin[2] = boltMatrix.matrix[2][3];
 
-					// set up the axis and origin we need for the actual effect spawning
-	   				origin[0] = boltMatrix.matrix[0][3];
-					origin[1] = boltMatrix.matrix[1][3];
-					origin[2] = boltMatrix.matrix[2][3];
+								axis[0][0] = boltMatrix.matrix[0][0];
+								axis[0][1] = boltMatrix.matrix[1][0];
+								axis[0][2] = boltMatrix.matrix[2][0];
 
-					axis[0][0] = boltMatrix.matrix[0][0];
-					axis[0][1] = boltMatrix.matrix[1][0];
-					axis[0][2] = boltMatrix.matrix[2][0];
+								axis[1][0] = boltMatrix.matrix[0][1];
+								axis[1][1] = boltMatrix.matrix[1][1];
+								axis[1][2] = boltMatrix.matrix[2][1];
 
-					axis[1][0] = boltMatrix.matrix[0][1];
-					axis[1][1] = boltMatrix.matrix[1][1];
-					axis[1][2] = boltMatrix.matrix[2][1];
-
-					axis[2][0] = boltMatrix.matrix[0][2];
-					axis[2][1] = boltMatrix.matrix[1][2];
-					axis[2][2] = boltMatrix.matrix[2][2];
-
+								axis[2][0] = boltMatrix.matrix[0][2];
+								axis[2][1] = boltMatrix.matrix[1][2];
+								axis[2][2] = boltMatrix.matrix[2][2];
+							}
+						}
+					}
+				
 					oldModelNum = (*itr)->mModelNum;
 					oldEntNum = (*itr)->mEntNum;
 					oldBoltIndex = (*itr)->mBoltNum;
@@ -1568,7 +1578,14 @@ void CFxScheduler::CreateEffect( CPrimitiveTemplate *fx, vec3_t origin, vec3_t a
 	case Sound:
 	//---------
 
-		theFxHelper.PlaySound( org, ENTITYNUM_NONE, CHAN_AUTO, fx->mMediaHandles.GetHandle() );
+		if ( fx->mSpawnFlags & FX_SND_LESS_ATTENUATION )
+		{
+			theFxHelper.PlaySound( org, ENTITYNUM_NONE, CHAN_LESS_ATTEN, fx->mMediaHandles.GetHandle() );
+		}
+		else
+		{
+			theFxHelper.PlaySound( org, ENTITYNUM_NONE, CHAN_AUTO, fx->mMediaHandles.GetHandle() );
+		}
 		break;
 
 	//---------

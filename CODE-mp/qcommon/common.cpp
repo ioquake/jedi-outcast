@@ -4,7 +4,9 @@
 #include "qcommon.h"
 #include "strip.h"
 #include <setjmp.h>
+#ifndef __linux__
 #include <windows.h>
+#endif
 
 #define	MAXPRINTMSG	4096
 
@@ -215,8 +217,11 @@ void QDECL Com_OPrintf( const char *fmt, ...)
 	va_start (argptr,fmt);
 	vsprintf (msg,fmt,argptr);
 	va_end (argptr);
-	
+#ifndef __linux__	
 	OutputDebugString(msg);
+#else
+	printf(msg);
+#endif
 }
 
 /*
@@ -1522,7 +1527,7 @@ void Hunk_Log( void) {
 #ifdef HUNK_DEBUG
  		Com_sprintf(buf, sizeof(buf), "size\t%8d\t%s\tline\t%d\t(%s)\r\n", block->size, block->file, block->line, block->label);
 		FS_Write(buf, strlen(buf), logfile);
-//		OutputDebugString(buf);
+		OutputDebugString(buf);
 #endif
 		size += block->size;
 		numBlocks++;
@@ -2532,6 +2537,9 @@ void Com_Init( char *commandLine ) {
 		com_buildScript = Cvar_Get( "com_buildScript", "0", 0 );
 
 		com_introPlayed = Cvar_Get( "com_introplayed", "0", CVAR_ARCHIVE);
+
+		Cvar_Get ("com_othertasks", "0", CVAR_ROM );
+		Cvar_Get ("com_ignoreothertasks", "0", CVAR_ARCHIVE );
 
 	#if defined(_WIN32) && defined(_DEBUG)
 		com_noErrorInterrupt = Cvar_Get( "com_noErrorInterrupt", "0", 0 );

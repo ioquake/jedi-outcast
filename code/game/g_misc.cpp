@@ -501,7 +501,7 @@ void SP_misc_portal_camera(gentity_t *ent) {
 extern qboolean G_ClearViewEntity( gentity_t *ent );
 extern void G_SetViewEntity( gentity_t *self, gentity_t *viewEntity );
 extern void SP_fx_runner( gentity_t *ent );
-void camera_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int hitLoc )
+void camera_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int dFlags,int hitLoc )
 {
 	if ( player && player->client && player->client->ps.viewEntity == self->s.number )
 	{
@@ -611,8 +611,13 @@ void camera_aim( gentity_t *self )
 			vectoangles( dir, angles );
 			//FIXME: if a G2 model, do a bone override..???
 			VectorCopy( self->currentAngles, self->s.apos.trBase );
-			VectorSubtract( angles, self->currentAngles, self->s.apos.trDelta );
-			VectorScale( self->s.apos.trDelta, 10, self->s.apos.trDelta );
+			for( int i = 0; i < 3; i++ )
+			{
+				angles[i] = AngleNormalize180( angles[i] );
+				self->s.apos.trDelta[i] = AngleNormalize180( (angles[i]-self->currentAngles[i])*10 );
+			}
+			//VectorSubtract( angles, self->currentAngles, self->s.apos.trDelta );
+			//VectorScale( self->s.apos.trDelta, 10, self->s.apos.trDelta );
 			self->s.apos.trTime = level.time;
 			self->s.apos.trDuration = FRAMETIME;
 			VectorCopy( angles, self->currentAngles );
@@ -1663,8 +1668,9 @@ Place facing a door (using the angle, not a targetname) and it will lock that do
 NOTE: place these half-way in the door to make it flush with the door's surface.
 
 "target"	thing to use when destoryed (not doors - it automatically unlocks the door it was angled at)
+"health"	default is 10
 */
-void maglock_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int hitLoc )
+void maglock_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int dFlags, int hitLoc )
 {
 	//unlock our door if we're the last lock pointed at the door
 	if ( self->activator )
@@ -1686,6 +1692,9 @@ void SP_misc_maglock ( gentity_t *self )
 	//NOTE: May have to make these only work on doors that are either untargeted 
 	//		or are targeted by a trigger, not doors fired off by scripts, counters 
 	//		or other such things?
+	self->s.modelindex = G_ModelIndex( "models/map_objects/imp_detention/door_lock.md3" );
+	self->fxID = G_EffectIndex( "maglock/explosion" );
+
 	G_SetOrigin( self, self->s.origin );
 
 	self->e_ThinkFunc = thinkF_maglock_link;
@@ -1747,7 +1756,7 @@ void maglock_link( gentity_t *self )
 
 	//make it hittable
 	//FIXME: if rotated/inclined this bbox may be off... but okay if we're a ghoul model?
-	self->s.modelindex = G_ModelIndex( "models/map_objects/imp_detention/door_lock.md3" );
+	//self->s.modelindex = G_ModelIndex( "models/map_objects/imp_detention/door_lock.md3" );
 	VectorSet( self->mins, -8, -8, -8 );
 	VectorSet( self->maxs, 8, 8, 8 );
 	self->contents = CONTENTS_CORPSE;
@@ -1755,9 +1764,9 @@ void maglock_link( gentity_t *self )
 	//make it destroyable
 	self->flags |= FL_SHIELDED;//only damagable by lightsabers
 	self->takedamage = qtrue;
-	self->health = 100;
+	self->health = 10;
 	self->e_DieFunc = dieF_maglock_die;
-	self->fxID = G_EffectIndex( "maglock/explosion" );
+	//self->fxID = G_EffectIndex( "maglock/explosion" );
 
 	gi.linkentity( self );
 }
@@ -1982,10 +1991,8 @@ ammo_power_converter_use
 */
 void ammo_power_converter_use( gentity_t *self, gentity_t *other, gentity_t *activator)
 {
-	int			add,highest;
-	qboolean	overcharge;
+	int			add;
 	int			difBlaster,difPowerCell,difMetalBolts;
-	float		percent;
 	playerState_t *ps;
 
 	if ( !activator || activator->s.number != 0 )
@@ -1999,14 +2006,19 @@ void ammo_power_converter_use( gentity_t *self, gentity_t *other, gentity_t *act
 
 	if ( self->setTime < level.time )
 	{
-		overcharge = qfalse;
+		difBlaster		= ammoData[AMMO_BLASTER].max - ps->ammo[AMMO_BLASTER];
+		difPowerCell	= ammoData[AMMO_POWERCELL].max - ps->ammo[AMMO_POWERCELL];
+		difMetalBolts	= ammoData[AMMO_METAL_BOLTS].max - ps->ammo[AMMO_METAL_BOLTS];
 
-		if ( self->count )	// Has it got any power left?
+		// Has it got any power left...and can we even use any of it?
+		if ( self->count && ( difBlaster > 0 || difPowerCell > 0 || difMetalBolts > 0 ))	
 		{
+			// at least one of the ammo types could stand to take on a bit more ammo
 			self->setTime = level.time + 100;
 			self->s.loopSound = G_SoundIndex( "sound/interface/ammocon_run.wav" );
 
-			if (self->count > MAX_AMMO_GIVE)
+			// dole out ammo in little packets
+			if ( self->count > MAX_AMMO_GIVE )
 			{
 				add = MAX_AMMO_GIVE;
 			}
@@ -2019,34 +2031,28 @@ void ammo_power_converter_use( gentity_t *self, gentity_t *other, gentity_t *act
 				add = self->count;
 			}
 
-			ps->ammo[AMMO_BLASTER] += add;
-			ps->ammo[AMMO_POWERCELL] += add;
-			ps->ammo[AMMO_METAL_BOLTS] += add;
+			// all weapons fill at same rate...
+			ps->ammo[AMMO_BLASTER]		+= add;
+			ps->ammo[AMMO_POWERCELL]	+= add;
+			ps->ammo[AMMO_METAL_BOLTS]	+= add;
+
+			// ...then get clamped to max
+			if ( ps->ammo[AMMO_BLASTER] > ammoData[AMMO_BLASTER].max )
+			{
+				ps->ammo[AMMO_BLASTER] = ammoData[AMMO_BLASTER].max;
+			}
+
+			if ( ps->ammo[AMMO_POWERCELL] > ammoData[AMMO_POWERCELL].max )
+			{
+				ps->ammo[AMMO_POWERCELL] = ammoData[AMMO_POWERCELL].max;
+			}
+
+			if ( ps->ammo[AMMO_METAL_BOLTS] > ammoData[AMMO_METAL_BOLTS].max )
+			{
+				ps->ammo[AMMO_METAL_BOLTS] = ammoData[AMMO_METAL_BOLTS].max;
+			}
 
 			self->count -= add;
-
-			difBlaster = ps->ammo[AMMO_BLASTER] - ammoData[AMMO_BLASTER].max;
-			difPowerCell = ps->ammo[AMMO_POWERCELL] - ammoData[AMMO_POWERCELL].max;
-			difMetalBolts = ps->ammo[AMMO_METAL_BOLTS] - ammoData[AMMO_METAL_BOLTS].max;
-
-			// Find the highest one
-			highest = difBlaster;
-			if (difPowerCell>difBlaster)
-			{
-				highest = difPowerCell;
-			}
-
-			if (difMetalBolts > highest)
-			{
-				highest = difMetalBolts;
-			}
-
-			// Overcharge
-			if ( highest > 0 )
-			{
-				percent = (float) highest/100.0f;
-				ps->powerups[PW_WEAPON_OVERCHARGE] = level.time + ( 10000 * percent );
-			}		
 		}
 	}
 
@@ -2065,7 +2071,6 @@ void ammo_power_converter_use( gentity_t *self, gentity_t *other, gentity_t *act
 					&& ps->ammo[AMMO_POWERCELL] >= ammoData[AMMO_POWERCELL].max 
 					&& ps->ammo[AMMO_METAL_BOLTS] >= ammoData[AMMO_METAL_BOLTS].max )
 	{
-		// FIXME: at this point, overcharging needs to be working properly...this probably isn't the right way to play this sound.
 		G_Sound( self, G_SoundIndex( "sound/interface/ammocon_done.wav" ));
 		self->setTime = level.time + 1000; // extra debounce so that the sounds don't overlap too much
 		self->s.loopSound = 0;
@@ -2138,9 +2143,9 @@ void SP_misc_ammo_floor_unit( gentity_t *ent )
 
 	EnergyAmmoStationSettings(ent);
 
-	G_SoundIndex("sound/interface/shieldcon_run.wav");
-	G_SoundIndex("sound/interface/shieldcon_done.mp3");
-	G_SoundIndex("sound/interface/shieldcon_empty.mp3");
+	G_SoundIndex("sound/interface/ammocon_run.wav");
+	G_SoundIndex("sound/interface/ammocon_done.mp3");
+	G_SoundIndex("sound/interface/ammocon_empty.mp3");
 
 	ent->s.modelindex = G_ModelIndex("models/items/a_pwr_converter.md3");	// Precache model
 	ent->s.eFlags |= EF_SHADER_ANIM;
@@ -2223,7 +2228,7 @@ void SP_misc_model_welder( gentity_t *ent )
 	G_EffectIndex( "blueWeldSparks" );
 
 	ent->s.modelindex = G_ModelIndex( "models/map_objects/cairn/welder.glm" );
-	ent->s.modelindex2 = G_ModelIndex( "models/map_objects/cairn/welder.md3" );
+//	ent->s.modelindex2 = G_ModelIndex( "models/map_objects/cairn/welder.md3" );
 	ent->playerModel = gi.G2API_InitGhoul2Model( ent->ghoul2, "models/map_objects/cairn/welder.glm", ent->s.modelindex );
 	ent->s.radius = 400.0f;// the origin of the welder is offset by approximately 352, so we need the big radius
 
@@ -2535,12 +2540,17 @@ void misc_atst_setanim( gentity_t *self, int bone, int anim )
 	}
 	if ( firstFrame != -1 && lastFrame != -1 && animSpeed != 0 )
 	{
-		gi.G2API_SetBoneAnimIndex( &self->ghoul2[self->playerModel], bone, firstFrame,
+		if (!gi.G2API_SetBoneAnimIndex( &self->ghoul2[self->playerModel], bone, firstFrame,
 								lastFrame, BONE_ANIM_OVERRIDE_FREEZE|BONE_ANIM_BLEND, animSpeed, 
+								(cg.time?cg.time:level.time), -1, 150 ))
+		{
+			gi.G2API_SetBoneAnimIndex( &self->ghoul2[self->playerModel], bone, firstFrame,
+								lastFrame, BONE_ANIM_OVERRIDE_FREEZE, animSpeed, 
 								(cg.time?cg.time:level.time), -1, 150 );
+		}
 	}
 }
-void misc_atst_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int hitLoc )
+void misc_atst_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int dFlags,int hitLoc )
 {//ATST was destroyed while you weren't in it
 	//can't be used anymore
 	self->e_UseFunc = useF_NULL;
@@ -2562,6 +2572,7 @@ void misc_atst_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, 
 
 extern void G_DriveATST( gentity_t *ent, gentity_t *atst );
 extern void SetClientViewAngle( gentity_t *ent, vec3_t angle );
+extern qboolean PM_InSlopeAnim( int anim );
 void misc_atst_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 {
 	if ( !activator || activator->s.number )
@@ -2609,10 +2620,9 @@ void misc_atst_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 	else
 	{//get out of ATST
 		int legsAnim = activator->client->ps.legsAnim;
-		if ( legsAnim != BOTH_STAND1 &&
-			( legsAnim < LEGS_LEFTUP1 || legsAnim > LEGS_LEFTUP5 )&&
-			( legsAnim < LEGS_RIGHTUP1 || legsAnim > LEGS_RIGHTUP5 )&&
-			legsAnim != BOTH_TURN_RIGHT1 && legsAnim != BOTH_TURN_LEFT1 )
+		if ( legsAnim != BOTH_STAND1 
+			&& !PM_InSlopeAnim( legsAnim ) 
+			&& legsAnim != BOTH_TURN_RIGHT1 && legsAnim != BOTH_TURN_LEFT1 )
 		{//can't get out of it while it's still moving
 			return;
 		}
@@ -2672,22 +2682,12 @@ void SP_misc_atst_drivable( gentity_t *ent )
 	VectorSet( ent->s.modelScale, 1.0f, 1.0f, 1.0f );
 
 	//register my weapons, sounds and model
-	gitem_t	*item = FindItemForWeapon( WP_ATST_MAIN );	//precache the weapon
-	CG_RegisterItemSounds( (item-bg_itemlist) );
-	CG_RegisterItemVisuals( (item-bg_itemlist) );
-	item = FindItemForWeapon( WP_ATST_SIDE );	//precache the weapon
-	CG_RegisterItemSounds( (item-bg_itemlist) );
-	CG_RegisterItemVisuals( (item-bg_itemlist) );
+	RegisterItem( FindItemForWeapon( WP_ATST_MAIN ));	//precache the weapon
+	RegisterItem( FindItemForWeapon( WP_ATST_SIDE ));	//precache the weapon
 	//HACKHACKHACKTEMP - until ATST gets real weapons of it's own?
-	item = FindItemForWeapon( WP_EMPLACED_GUN );
-	CG_RegisterItemSounds( (item-bg_itemlist) );
-	CG_RegisterItemVisuals( (item-bg_itemlist) );
-	item = FindItemForWeapon( WP_ROCKET_LAUNCHER );
-	CG_RegisterItemSounds( (item-bg_itemlist) );
-	CG_RegisterItemVisuals( (item-bg_itemlist) );
-	item = FindItemForWeapon( WP_BOWCASTER );
-	CG_RegisterItemSounds( (item-bg_itemlist) );
-	CG_RegisterItemVisuals( (item-bg_itemlist) );
+	RegisterItem( FindItemForWeapon( WP_EMPLACED_GUN ));	//precache the weapon
+	RegisterItem( FindItemForWeapon( WP_ROCKET_LAUNCHER ));	//precache the weapon
+	RegisterItem( FindItemForWeapon( WP_BOWCASTER ));	//precache the weapon
 	//HACKHACKHACKTEMP - until ATST gets real weapons of it's own?
 
 	NPC_ATST_Precache();

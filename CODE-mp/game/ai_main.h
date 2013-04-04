@@ -74,6 +74,8 @@
 
 #define BOT_FLAG_GET_DISTANCE		256
 
+#define BOT_SABER_THROW_RANGE		800
+
 typedef enum
 {
 	CTFSTATE_NONE,
@@ -238,6 +240,7 @@ typedef struct bot_state_s
 	float				beStill;
 	float				duckTime;
 	float				jumpTime;
+	float				jumpHoldTime;
 	float				forceJumping;
 	float				jDelay;
 

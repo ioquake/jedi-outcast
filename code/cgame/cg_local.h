@@ -319,7 +319,7 @@ typedef struct {
 
 	float		landChange;				// for landing hard
 	int			landTime;
-
+	
 	// input state sent to server
 	int			weaponSelect;
 	int			saberAnimLevelPending;
@@ -413,6 +413,8 @@ typedef struct {
 	int			DataPadWeaponSelect;		// Current weapon item chosen on Data Pad
 	int			DataPadforcepowerSelect;	// Current force power chosen on Data Pad
 
+	int			dataPadLevelStartTime;		// Time until datapad won't pop up when level starts
+
 	qboolean	messageLitActive;			// Flag to show of message lite is active
 
 	int			weaponSelectTime;
@@ -482,6 +484,7 @@ Ghoul2 Insert End
 } cg_t;
 
 
+#define MAX_SHOWPOWERS 6
 extern int showPowers[8]; 
 
 //==============================================================================
@@ -537,6 +540,7 @@ extern	vmCvar_t		cg_drawAmmoWarning;
 extern	vmCvar_t		cg_drawCrosshair;
 extern	vmCvar_t		cg_dynamicCrosshair;
 extern	vmCvar_t		cg_crosshairForceHint;
+extern	vmCvar_t		cg_crosshairIdentifyTarget;
 extern	vmCvar_t		cg_crosshairX;
 extern	vmCvar_t		cg_crosshairY;
 extern	vmCvar_t		cg_crosshairSize;
@@ -561,6 +565,8 @@ extern	vmCvar_t		cg_simpleItems;
 extern	vmCvar_t		cg_fov;
 extern	vmCvar_t		cg_missionstatusscreen;
 extern	vmCvar_t		cg_endcredits;
+extern	vmCvar_t		cg_updatedDataPadForcePower;
+extern	vmCvar_t		cg_updatedDataPadObjective;
 
 extern	vmCvar_t		cg_thirdPerson;
 extern	vmCvar_t		cg_thirdPersonRange;
@@ -595,6 +601,8 @@ extern	vmCvar_t		cg_debugBB;
 /*
 Ghoul2 Insert End
 */
+extern	vmCvar_t		cg_turnAnims;
+extern	vmCvar_t		cg_smoothPlayerPos;
 
 void CG_NewClientinfo( int clientNum );
 //

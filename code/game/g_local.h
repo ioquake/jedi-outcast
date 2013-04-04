@@ -43,9 +43,10 @@
 #define FL_DROPPED_ITEM			0x00001000
 #define	FL_DONT_SHOOT			0x00002000	// Can target him, but not shoot him
 #define	FL_UNDYING				0x00004000	// Takes damage down to 1 point, but does not die
-#define FL_OVERCHARGED			0x00008000	// weapon shot is an overcharged version....probably a lame place to be putting this flag...
+//#define FL_OVERCHARGED			0x00008000	// weapon shot is an overcharged version....probably a lame place to be putting this flag...
 #define FL_LOCK_PLAYER_WEAPONS	0x00010000	// player can't switch weapons... ask james if there's a better spot for this
 #define FL_DISINTEGRATED		0x00020000	// marks that the corpse has already been disintegrated
+#define FL_FORCE_PULLABLE_ONLY	0x00040000	// cannot be force pushed
 
 //Pointer safety utilities
 #define VALID( a )		( a != NULL )
@@ -303,7 +304,7 @@ qboolean CanDamage (gentity_t *targ, vec3_t origin);
 void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_t dir, vec3_t point, int damage, int dflags, int mod, int hitLoc=HL_NONE );
 void G_RadiusDamage (vec3_t origin, gentity_t *attacker, float damage, float radius, gentity_t *ignore, int mod);
 gentity_t *TossClientItems( gentity_t *self );
-void ExplodeDeath_Wait( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath,int hitLoc );
+void ExplodeDeath_Wait( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath,int dFlags,int hitLoc );
 void ExplodeDeath( gentity_t *self );
 void GoExplodeDeath( gentity_t *self, gentity_t *other, gentity_t *activator);
 void G_ApplyKnockback( gentity_t *targ, vec3_t newDir, float knockback );
@@ -367,7 +368,7 @@ void respawn (gentity_t *ent);
 void InitClientPersistant (gclient_t *client);
 void InitClientResp (gclient_t *client);
 qboolean ClientSpawn( gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded );
-void player_die (gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int hitLoc);
+void player_die (gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int dFlags, int hitLoc);
 void AddScore( gentity_t *ent, int score );
 qboolean SpotWouldTelefrag( gentity_t *spot, team_t checkteam );
 
@@ -403,6 +404,13 @@ static void G_SayTo( gentity_t *ent, gentity_t *other, int mode, int color, cons
 //
 void G_RunThink (gentity_t *ent);
 void QDECL G_Error( const char *fmt, ... );
+void ClearAllInUse(void);
+void SetInUse(gentity_t *ent);
+void ClearInUse(gentity_t *ent);
+qboolean PInUse(unsigned int entNum);
+qboolean PInUse2(gentity_t *ent);
+void WriteInUseBits(void);
+void ReadInUseBits(void);
 
 //
 // g_nav.cpp

@@ -41,6 +41,7 @@
 	TAGDEF(GP2),						// generic parser 2
 	TAGDEF(SPECIAL_MEM_TEST),			// special usage in one function only!!!!!!
 	TAGDEF(ATI_NPATCH),					// special tag for checking mem usage / leak of ATI's NPATCH code
+	TAGDEF(ANIMATION_CFG),				// may as well keep this seperate / readable
 /*	TAGDEF(SHADER),
 	TAGDEF(RMAP),
 	TAGDEF(CURVES),

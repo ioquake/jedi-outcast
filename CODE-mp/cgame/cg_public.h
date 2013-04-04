@@ -320,6 +320,8 @@ typedef enum {
 //				   float orientation, float red, float green, float blue, float alpha,
 //				   qboolean alphaFade, float radius, qboolean temporary )
 
+	CG_MAP_CHANGE,
+
 } cgameExport_t;
 
 // CG_POINT_CONTENTS

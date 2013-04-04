@@ -81,6 +81,8 @@ void ThrowSaberToAttacker(gentity_t *self, gentity_t *attacker)
 		return;
 	}
 
+	trap_SetConfigstring ( CS_CLIENT_JEDIMASTER, "-1" );
+
 	if (attacker && attacker->client && self->client->ps.saberInFlight)
 	{ //someone killed us and we had the saber thrown, so actually move this saber to the saber location
 	  //if we killed ourselves with saber thrown, however, same suicide rules of respawning at spawn spot still
@@ -210,6 +212,9 @@ void JMSaberTouch(gentity_t *self, gentity_t *other, trace_t *trace)
 	other->client->ps.weapon = WP_SABER;
 	other->s.weapon = WP_SABER;
 	G_AddEvent(other, EV_BECOME_JEDIMASTER, 0);
+
+	// Track the jedi master 
+	trap_SetConfigstring ( CS_CLIENT_JEDIMASTER, va("%i", other->s.number ) );
 
 	if (g_spawnInvulnerability.integer)
 	{
@@ -973,10 +978,22 @@ void SetupGameGhoul2Model(gclient_t *client, char *modelname)
 	*/
 
 	//rww - just load the "standard" model for the server"
-	Com_sprintf( afilename, sizeof( afilename ), "models/players/kyle/model.glm" );
-	handle = trap_G2API_InitGhoul2Model(&client->ghoul2, afilename, 0, 0, -20, 0, 0);
+	if (!precachedKyle)
+	{
+		Com_sprintf( afilename, sizeof( afilename ), "models/players/kyle/model.glm" );
+		handle = trap_G2API_InitGhoul2Model(&precachedKyle, afilename, 0, 0, -20, 0, 0);
 
-	if (handle<0)
+		if (handle<0)
+		{
+			return;
+		}
+	}
+
+	if (precachedKyle && trap_G2_HaveWeGhoul2Models(precachedKyle))
+	{
+		trap_G2API_DuplicateGhoul2Instance(precachedKyle, &client->ghoul2);
+	}
+	else
 	{
 		return;
 	}
@@ -985,37 +1002,40 @@ void SetupGameGhoul2Model(gclient_t *client, char *modelname)
 
 	GLAName[0] = 0;
 
-	//get the location of the animation.cfg
-	//GLAName = trap_G2API_GetGLAName( client->ghoul2, 0);
-	trap_G2API_GetGLAName( client->ghoul2, 0, GLAName);
-
-	if (!GLAName[0])
+	if (!BGPAFtextLoaded)
 	{
-		if (!BG_ParseAnimationFile("models/players/_humanoid/animation.cfg", client->animations))
+		//get the location of the animation.cfg
+		//GLAName = trap_G2API_GetGLAName( client->ghoul2, 0);
+		trap_G2API_GetGLAName( client->ghoul2, 0, GLAName);
+
+		if (!GLAName[0])
 		{
-			Com_Printf( "Failed to load animation file %s\n", afilename );
+			if (!BG_ParseAnimationFile("models/players/_humanoid/animation.cfg"))
+			{
+				Com_Printf( "Failed to load animation file %s\n", afilename );
+				return;
+			}
 			return;
 		}
-		return;
-	}
-	Q_strncpyz( afilename, GLAName, sizeof( afilename ));
-	slash = Q_strrchr( afilename, '/' );
-	if ( slash )
-	{
-		strcpy(slash, "/animation.cfg");
-	}	// Now afilename holds just the path to the animation.cfg
-	else 
-	{	// Didn't find any slashes, this is a raw filename right in base (whish isn't a good thing)
-		return;
-	}
-
-	// Try to load the animation.cfg for this model then.
-	if ( !BG_ParseAnimationFile( afilename, client->animations ) )
-	{	// The GLA's animations failed
-		if (!BG_ParseAnimationFile("models/players/_humanoid/animation.cfg", client->animations))
+		Q_strncpyz( afilename, GLAName, sizeof( afilename ));
+		slash = Q_strrchr( afilename, '/' );
+		if ( slash )
 		{
-			Com_Printf( "Failed to load animation file %s\n", afilename );
+			strcpy(slash, "/animation.cfg");
+		}	// Now afilename holds just the path to the animation.cfg
+		else 
+		{	// Didn't find any slashes, this is a raw filename right in base (whish isn't a good thing)
 			return;
+		}
+
+		// Try to load the animation.cfg for this model then.
+		if ( !BG_ParseAnimationFile( afilename ) )
+		{	// The GLA's animations failed
+			if (!BG_ParseAnimationFile("models/players/_humanoid/animation.cfg"))
+			{
+				Com_Printf( "Failed to load animation file %s\n", afilename );
+				return;
+			}
 		}
 	}
 
@@ -1459,7 +1479,6 @@ void ClientSpawn(gentity_t *ent) {
 //	char	userinfo[MAX_INFO_STRING];
 	forcedata_t			savedForce;
 	void		*ghoul2save;
-	animation_t	animations[MAX_TOTALANIMATIONS];
 	int		saveSaberNum = ENTITYNUM_NONE;
 
 	index = ent - g_entities;
@@ -1543,23 +1562,10 @@ void ClientSpawn(gentity_t *ent) {
 
 	saveSaberNum = client->ps.saberEntityNum;
 
-	i = 0;
-	while (i < MAX_TOTALANIMATIONS)
-	{
-		animations[i] = client->animations[i];
-		i++;
-	}
-
 	memset (client, 0, sizeof(*client)); // bk FIXME: Com_Memset?
 
 	//rww - Don't wipe the ghoul2 instance or the animation data
 	client->ghoul2 = ghoul2save;
-	i = 0;
-	while (i < MAX_TOTALANIMATIONS)
-	{
-		client->animations[i] = animations[i];
-		i++;
-	}
 
 	//or the saber ent num
 	client->ps.saberEntityNum = saveSaberNum;

@@ -10,6 +10,12 @@
 extern qboolean InFront( vec3_t spot, vec3_t from, vec3_t fromAngles, float threshHold = 0.0f );
 qboolean LogAccuracyHit( gentity_t *target, gentity_t *attacker );
 extern qboolean G_GetHitLocFromSurfName( gentity_t *ent, const char *surfName, int *hitLoc, vec3_t point, vec3_t dir, vec3_t bladeDir );
+extern qboolean PM_SaberInParry( int move );
+extern qboolean PM_SaberInReflect( int move );
+extern qboolean PM_SaberInIdle( int move );
+extern qboolean PM_SaberInAttack( int move );
+extern qboolean PM_SaberInTransitionAny( int move );
+extern qboolean PM_SaberInSpecialAttack( int anim );
 
 //-------------------------------------------------------------------------
 void G_MissileBounceEffect( gentity_t *ent, vec3_t org, vec3_t dir )
@@ -17,9 +23,11 @@ void G_MissileBounceEffect( gentity_t *ent, vec3_t org, vec3_t dir )
 	//FIXME: have an EV_BOUNCE_MISSILE event that checks the s.weapon and does the appropriate effect
 	switch( ent->s.weapon )
 	{
+	case WP_BOWCASTER:
+		G_PlayEffect( "bowcaster/deflect", ent->currentOrigin, dir );
+		break;
 	case WP_BLASTER:
 	case WP_BRYAR_PISTOL:
-	case WP_BOWCASTER:
 		G_PlayEffect( "blaster/deflect", ent->currentOrigin, dir );
 		break;
 	default:
@@ -38,9 +46,19 @@ static void G_MissileStick( gentity_t *missile, gentity_t *other, trace_t *tr )
 	if ( other->NPC || !Q_stricmp( other->classname, "misc_model_breakable" ))
 	{
 		// we bounce off of NPC's and misc model breakables because sticking to them requires too much effort
-		VectorScale( tr->plane.normal, -6, missile->s.pos.trDelta );
+		vec3_t dir;
+
 		G_SetOrigin( missile, tr->endpos );
-		missile->s.pos.trTime = level.previousTime + ( level.time - level.previousTime ) * tr->fraction + 30; // move a bit on the first frame
+
+		// get our bounce direction, not accurate, but it simplifies things.
+		dir[0] = missile->s.pos.trDelta[0] + crandom() * 40.0f; // randomize bounce a bit
+		dir[1] = missile->s.pos.trDelta[1] + crandom() * 40.0f;
+		dir[2] = 0;//missile->s.pos.trDelta[2] * 0.1f;// kill upward thrust
+
+		VectorNormalize( dir );
+
+		VectorScale( dir, -72, missile->s.pos.trDelta );
+		missile->s.pos.trTime = level.time - 100; // move a bit on the first frame
 
 		// check for stop
 		if ( tr->entityNum >= 0 && tr->entityNum < ENTITYNUM_WORLD && 
@@ -97,7 +115,7 @@ void G_ReflectMissile( gentity_t *ent, gentity_t *missile, vec3_t forward )
 
 	if ( ent && owner && owner->client && !owner->client->ps.saberInFlight && 
 		(owner->client->ps.forcePowerLevel[FP_SABER_DEFENSE] > FORCE_LEVEL_2 || (owner->client->ps.forcePowerLevel[FP_SABER_DEFENSE]>FORCE_LEVEL_1&&!Q_irand( 0, 3 )) ) )
-	{//if high enough defense skill and saber in-hand, reflections are perfectly deflected toward an enemy
+	{//if high enough defense skill and saber in-hand (100% at level 3, 25% at level 2, 0% at level 1), reflections are perfectly deflected toward an enemy
 		gentity_t *enemy;
 		if ( owner->enemy && Q_irand( 0, 3 ) )
 		{//toward current enemy 75% of the time
@@ -115,6 +133,28 @@ void G_ReflectMissile( gentity_t *ent, gentity_t *missile, vec3_t forward )
 			bullseye[1] += Q_irand( -4, 4 );
 			bullseye[2] += Q_irand( -16, 4 );
 			VectorSubtract( bullseye, missile->currentOrigin, bounce_dir );
+			VectorNormalize( bounce_dir );
+			if ( !PM_SaberInParry( owner->client->ps.saberMove ) 
+				&& !PM_SaberInReflect( owner->client->ps.saberMove ) 
+				&& !PM_SaberInIdle( owner->client->ps.saberMove ) )
+			{//a bit more wild
+				if ( PM_SaberInAttack( owner->client->ps.saberMove )
+					|| PM_SaberInTransitionAny( owner->client->ps.saberMove )
+					|| PM_SaberInSpecialAttack( owner->client->ps.torsoAnim ) )
+				{//moderately more wild
+					for ( i = 0; i < 3; i++ )
+					{
+						bounce_dir[i] += Q_flrand( -0.2f, 0.2f );
+					}
+				}
+				else
+				{//mildly more wild
+					for ( i = 0; i < 3; i++ )
+					{
+						bounce_dir[i] += Q_flrand( -0.1f, 0.1f );
+					}
+				}
+			}
 			VectorNormalize( bounce_dir );
 			reflected = qtrue;
 		}
@@ -135,9 +175,57 @@ void G_ReflectMissile( gentity_t *ent, gentity_t *missile, vec3_t forward )
 			VectorScale( bounce_dir, DotProduct( forward, missile_dir ), bounce_dir );
 			VectorNormalize( bounce_dir );
 		}
-		for ( i = 0; i < 3; i++ )
-		{
-			bounce_dir[i] += Q_flrand( -0.2f, 0.2f );
+		if ( owner->s.weapon == WP_SABER && owner->client )
+		{//saber
+			if ( owner->client->ps.saberInFlight )
+			{//reflecting off a thrown saber is totally wild
+				for ( i = 0; i < 3; i++ )
+				{
+					bounce_dir[i] += Q_flrand( -0.8f, 0.8f );
+				}
+			}
+			else if ( owner->client->ps.forcePowerLevel[FP_SABER_DEFENSE] <= FORCE_LEVEL_1 )
+			{// at level 1
+				for ( i = 0; i < 3; i++ )
+				{
+					bounce_dir[i] += Q_flrand( -0.4f, 0.4f );
+				}
+			}
+			else
+			{// at level 2
+				for ( i = 0; i < 3; i++ )
+				{
+					bounce_dir[i] += Q_flrand( -0.2f, 0.2f );
+				}
+			}
+			if ( !PM_SaberInParry( owner->client->ps.saberMove ) 
+				&& !PM_SaberInReflect( owner->client->ps.saberMove ) 
+				&& !PM_SaberInIdle( owner->client->ps.saberMove ) )
+			{//a bit more wild
+				if ( PM_SaberInAttack( owner->client->ps.saberMove )
+					|| PM_SaberInTransitionAny( owner->client->ps.saberMove )
+					|| PM_SaberInSpecialAttack( owner->client->ps.torsoAnim ) )
+				{//really wild
+					for ( i = 0; i < 3; i++ )
+					{
+						bounce_dir[i] += Q_flrand( -0.3f, 0.3f );
+					}
+				}
+				else
+				{//mildly more wild
+					for ( i = 0; i < 3; i++ )
+					{
+						bounce_dir[i] += Q_flrand( -0.1f, 0.1f );
+					}
+				}
+			}
+		}
+		else
+		{//some other kind of reflection
+			for ( i = 0; i < 3; i++ )
+			{
+				bounce_dir[i] += Q_flrand( -0.2f, 0.2f );
+			}
 		}
 	}
 	VectorNormalize( bounce_dir );
@@ -281,15 +369,14 @@ void G_BounceMissile( gentity_t *ent, trace_t *trace ) {
 #else
 	// NEW--It would seem that we want to set our trBase to the trace endpos
 	//	and set the trTime to the actual time of impact....
-	//	FIXME: Should we still consider adding the normal though??
-	VectorCopy( trace->endpos, ent->currentOrigin );
+	VectorAdd( trace->endpos, trace->plane.normal, ent->currentOrigin );
 	if ( hitTime >= level.time )
 	{//trace fraction must have been 1
 		ent->s.pos.trTime = level.time - 10;
 	}
 	else
 	{
-		ent->s.pos.trTime = hitTime;
+		ent->s.pos.trTime = hitTime - 10; // this is kinda dumb hacking, but it pushes the missile away from the impact plane a bit
 	}
 #endif
 
@@ -558,25 +645,34 @@ void G_MissileImpact( gentity_t *ent, trace_t *trace, int hitLoc=HL_NONE )
 	}
 
 	// check for hitting a lightsaber
-	if ( other->contents & CONTENTS_LIGHTSABER && (!ent->splashDamage || !ent->splashRadius) )//this would be cool, though, to "bat" the thermal det away...
+	if ( other->contents & CONTENTS_LIGHTSABER 
+		&& ( g_spskill->integer <= 0//on easy, it reflects all shots
+			|| (g_spskill->integer == 1 && ent->s.weapon != WP_FLECHETTE && ent->s.weapon != WP_DEMP2 )//on medium it won't reflect flechette or demp shots
+			|| (g_spskill->integer >= 2 && ent->s.weapon != WP_FLECHETTE && ent->s.weapon != WP_DEMP2 && ent->s.weapon != WP_BOWCASTER && ent->s.weapon != WP_REPEATER )//on hard it won't reflect flechette, demp, repeater or bowcaster shots
+			)
+		&& (!ent->splashDamage || !ent->splashRadius) )//this would be cool, though, to "bat" the thermal det away...
 	{	
 		//FIXME: take other's owner's FP_SABER_DEFENSE into account here somehow?
 		if ( !other->owner || !other->owner->client || other->owner->client->ps.saberInFlight || InFront( ent->currentOrigin, other->owner->currentOrigin, other->owner->client->ps.viewangles, SABER_REFLECT_MISSILE_CONE ) )//other->owner->s.number != 0 || 
 		{//Jedi cannot block shots from behind!
-			VectorSubtract(ent->currentOrigin, other->currentOrigin, diff);
-			VectorNormalize(diff);
-			//FIXME: take other's owner's FP_SABER_DEFENSE into account here somehow?
-			G_ReflectMissile( other, ent, diff);
-			//WP_SaberBlock( other, ent->currentOrigin, qtrue );
-			if ( other->owner && other->owner->client )
-			{
-				other->owner->client->ps.saberEventFlags |= SEF_DEFLECTED;
+			if ( (other->owner->client->ps.forcePowerLevel[FP_SABER_DEFENSE] > FORCE_LEVEL_1 && Q_irand( 0, 3 ))
+				||(other->owner->client->ps.forcePowerLevel[FP_SABER_DEFENSE] > FORCE_LEVEL_0 && Q_irand( 0, 1 )))
+			{//level 1 reflects 50% of the time, level 2 reflects 75% of the time
+				VectorSubtract(ent->currentOrigin, other->currentOrigin, diff);
+				VectorNormalize(diff);
+				//FIXME: take other's owner's FP_SABER_DEFENSE into account here somehow?
+				G_ReflectMissile( other, ent, diff);
+				//WP_SaberBlock( other, ent->currentOrigin, qtrue );
+				if ( other->owner && other->owner->client )
+				{
+					other->owner->client->ps.saberEventFlags |= SEF_DEFLECTED;
+				}
+				//do the effect
+				VectorCopy( ent->s.pos.trDelta, diff );
+				VectorNormalize( diff );
+				G_MissileBounceEffect( ent, trace->endpos, trace->plane.normal );
+				return;
 			}
-			//do the effect
-			VectorCopy( ent->s.pos.trDelta, diff );
-			VectorNormalize( diff );
-			G_MissileBounceEffect( ent, trace->endpos, trace->plane.normal );
-			return;
 		}
 	}
 

@@ -113,6 +113,7 @@ void GEntity_ThinkFunc(gentity_t *self)
 	THINKCASE( welder_think )
 	THINKCASE( gas_random_jet )
 	THINKCASE( poll_converter ) // dumb loop sound handling 
+	THINKCASE( spawn_rack_goods ) // delay spawn of goods to help on ents
 
 	default:
 		Com_Error(ERR_DROP, "GEntity_ThinkFunc: case %d not handled!\n",self->e_ThinkFunc);
@@ -134,6 +135,7 @@ void CEntity_ThinkFunc(centity_s *cent)
 
 	CLTHINKCASE( CG_DLightThink )
 	CLTHINKCASE( CG_MatrixEffect )
+	CLTHINKCASE( CG_Limb )
 
 	default:
 		Com_Error(ERR_DROP, "CEntity_ThinkFunc: case %d not handled!\n",cent->gent->e_clThinkFunc);
@@ -347,10 +349,10 @@ void GEntity_PainFunc(gentity_t *self, gentity_t *inflictor, gentity_t *attacker
 }
 
 
-void GEntity_DieFunc(gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int hitLoc)
+void GEntity_DieFunc(gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int dFlags, int hitLoc)
 {
 //#define DIECASE(blah) case dieF_ ## blah: blah(self,inflictor,attacker,damage,mod); OutputDebugString(va("%s\n",#blah));break;
-#define DIECASE(blah) case dieF_ ## blah: blah(self,inflictor,attacker,damage,mod,hitLoc); break;
+#define DIECASE(blah) case dieF_ ## blah: blah(self,inflictor,attacker,damage,mod,dFlags,hitLoc); break;
 
 	switch (self->e_DieFunc)
 	{

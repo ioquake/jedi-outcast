@@ -101,13 +101,14 @@ char *types [] = {
 "ITEM_TYPE_EDITFIELD",
 "ITEM_TYPE_COMBO",
 "ITEM_TYPE_LISTBOX",
-"ITEM_TYPE_OWNERDRAW",
 "ITEM_TYPE_MODEL",
+"ITEM_TYPE_OWNERDRAW",
 "ITEM_TYPE_NUMERICFIELD",
 "ITEM_TYPE_SLIDER",
 "ITEM_TYPE_YESNO",
 "ITEM_TYPE_MULTI",
 "ITEM_TYPE_BIND",
+"ITEM_TYPE_TEXTSCROLL",
 NULL
 };
 
@@ -534,7 +535,7 @@ qboolean PC_String_Parse(int handle, const char **out)
 	if (token.string[0] == '@')	// Is it a localized text?
 	{
 		char *temp;
-		char	text[MAX_STRING_CHARS];
+		char	text[MAX_STRING_CHARS*4];
 		temp = &token.string[0];
 		
 									// The +1 is to offset the @ at the beginning of the text
@@ -543,14 +544,18 @@ qboolean PC_String_Parse(int handle, const char **out)
 		if (text[0] == 0)		// Couldn't find it
 		{
 			Com_Printf(va(S_COLOR_YELLOW "Unable to locate StripEd text '%s'\n", token.string));
+			*(out) = String_Alloc( token.string );
 		} 
 		else 
 		{
-			memcpy(token.string,text,sizeof(text));
+			*(out) = String_Alloc(text);
 		}
 	}
-	
-	*(out) = String_Alloc(token.string);
+	else
+	{
+		*(out) = String_Alloc(token.string);
+	}
+
 	return qtrue;
 }
 
@@ -1527,6 +1532,231 @@ qboolean Item_SetFocus(itemDef_t *item, float x, float y) {
 	return qtrue;
 }
 
+int Item_TextScroll_MaxScroll ( itemDef_t *item ) 
+{
+	textScrollDef_t *scrollPtr = (textScrollDef_t*)item->typeData;
+	
+	int count = scrollPtr->lineCount;
+	int max   = count - (item->window.rect.h / scrollPtr->lineHeight) + 1;
+
+	if (max < 0) 
+	{
+		return 0;
+	}
+
+	return max;
+}
+
+int Item_TextScroll_ThumbPosition ( itemDef_t *item ) 
+{
+	float max, pos, size;
+	textScrollDef_t *scrollPtr = (textScrollDef_t*)item->typeData;
+
+	max  = Item_TextScroll_MaxScroll ( item );
+	size = item->window.rect.h - (SCROLLBAR_SIZE * 2) - 2;
+
+	if (max > 0) 
+	{
+		pos = (size-SCROLLBAR_SIZE) / (float) max;
+	} 
+	else 
+	{
+		pos = 0;
+	}
+	
+	pos *= scrollPtr->startPos;
+	
+	return item->window.rect.y + 1 + SCROLLBAR_SIZE + pos;
+}
+
+int Item_TextScroll_ThumbDrawPosition ( itemDef_t *item ) 
+{
+	int min, max;
+
+	if (itemCapture == item) 
+	{
+		min = item->window.rect.y + SCROLLBAR_SIZE + 1;
+		max = item->window.rect.y + item->window.rect.h - 2*SCROLLBAR_SIZE - 1;
+
+		if (DC->cursory >= min + SCROLLBAR_SIZE/2 && DC->cursory <= max + SCROLLBAR_SIZE/2) 
+		{
+			return DC->cursory - SCROLLBAR_SIZE/2;
+		}
+
+		return Item_TextScroll_ThumbPosition(item);
+	}
+
+	return Item_TextScroll_ThumbPosition(item);
+}
+
+int Item_TextScroll_OverLB ( itemDef_t *item, float x, float y ) 
+{
+	rectDef_t		r;
+	textScrollDef_t *scrollPtr;
+	int				thumbstart;
+	int				count;
+
+	scrollPtr = (textScrollDef_t*)item->typeData;
+	count     = scrollPtr->lineCount;
+
+	r.x = item->window.rect.x + item->window.rect.w - SCROLLBAR_SIZE;
+	r.y = item->window.rect.y;
+	r.h = r.w = SCROLLBAR_SIZE;
+	if (Rect_ContainsPoint(&r, x, y)) 
+	{
+		return WINDOW_LB_LEFTARROW;
+	}
+
+	r.y = item->window.rect.y + item->window.rect.h - SCROLLBAR_SIZE;
+	if (Rect_ContainsPoint(&r, x, y)) 
+	{
+		return WINDOW_LB_RIGHTARROW;
+	}
+
+	thumbstart = Item_TextScroll_ThumbPosition(item);
+	r.y = thumbstart;
+	if (Rect_ContainsPoint(&r, x, y)) 
+	{
+		return WINDOW_LB_THUMB;
+	}
+
+	r.y = item->window.rect.y + SCROLLBAR_SIZE;
+	r.h = thumbstart - r.y;
+	if (Rect_ContainsPoint(&r, x, y)) 
+	{
+		return WINDOW_LB_PGUP;
+	}
+
+	r.y = thumbstart + SCROLLBAR_SIZE;
+	r.h = item->window.rect.y + item->window.rect.h - SCROLLBAR_SIZE;
+	if (Rect_ContainsPoint(&r, x, y)) 
+	{
+		return WINDOW_LB_PGDN;
+	}
+
+	return 0;
+}
+
+void Item_TextScroll_MouseEnter (itemDef_t *item, float x, float y) 
+{
+	item->window.flags &= ~(WINDOW_LB_LEFTARROW | WINDOW_LB_RIGHTARROW | WINDOW_LB_THUMB | WINDOW_LB_PGUP | WINDOW_LB_PGDN);
+	item->window.flags |= Item_TextScroll_OverLB(item, x, y);
+}
+
+qboolean Item_TextScroll_HandleKey ( itemDef_t *item, int key, qboolean down, qboolean force) 
+{
+	textScrollDef_t *scrollPtr = (textScrollDef_t*)item->typeData;
+	int				max;
+	int				viewmax;
+
+	if (force || (Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory) && item->window.flags & WINDOW_HASFOCUS)) 
+	{
+		max = Item_TextScroll_MaxScroll(item);
+
+		viewmax = (item->window.rect.h / scrollPtr->lineHeight);
+		if ( key == K_UPARROW || key == K_KP_UPARROW ) 
+		{
+			scrollPtr->startPos--;
+			if (scrollPtr->startPos < 0)
+			{
+				scrollPtr->startPos = 0;
+			}
+			return qtrue;
+		}
+
+		if ( key == K_DOWNARROW || key == K_KP_DOWNARROW ) 
+		{
+			scrollPtr->startPos++;
+			if (scrollPtr->startPos > max)
+			{
+				scrollPtr->startPos = max;
+			}
+
+			return qtrue;
+		}
+
+		// mouse hit
+		if (key == K_MOUSE1 || key == K_MOUSE2) 
+		{
+			if (item->window.flags & WINDOW_LB_LEFTARROW) 
+			{
+				scrollPtr->startPos--;
+				if (scrollPtr->startPos < 0) 
+				{
+					scrollPtr->startPos = 0;
+				}
+			} 
+			else if (item->window.flags & WINDOW_LB_RIGHTARROW) 
+			{
+				// one down
+				scrollPtr->startPos++;
+				if (scrollPtr->startPos > max) 
+				{
+					scrollPtr->startPos = max;
+				}
+			} 
+			else if (item->window.flags & WINDOW_LB_PGUP) 
+			{
+				// page up
+				scrollPtr->startPos -= viewmax;
+				if (scrollPtr->startPos < 0) 
+				{
+					scrollPtr->startPos = 0;
+				}
+			} 
+			else if (item->window.flags & WINDOW_LB_PGDN) 
+			{
+				// page down
+				scrollPtr->startPos += viewmax;
+				if (scrollPtr->startPos > max) 
+				{
+					scrollPtr->startPos = max;
+				}
+			} 
+			else if (item->window.flags & WINDOW_LB_THUMB) 
+			{
+				// Display_SetCaptureItem(item);
+			} 
+
+			return qtrue;
+		}
+
+		if ( key == K_HOME || key == K_KP_HOME) 
+		{
+			// home
+			scrollPtr->startPos = 0;
+			return qtrue;
+		}
+		if ( key == K_END || key == K_KP_END) 
+		{
+			// end
+			scrollPtr->startPos = max;
+			return qtrue;
+		}
+		if (key == K_PGUP || key == K_KP_PGUP ) 
+		{
+			scrollPtr->startPos -= viewmax;
+			if (scrollPtr->startPos < 0) 
+			{
+					scrollPtr->startPos = 0;
+			}
+
+			return qtrue;
+		}
+		if ( key == K_PGDN || key == K_KP_PGDN ) 
+		{
+			scrollPtr->startPos += viewmax;
+			if (scrollPtr->startPos > max) 
+			{
+				scrollPtr->startPos = max;
+			}
+			return qtrue;
+		}
+	}
+
+	return qfalse;
+}
+
 int Item_ListBox_MaxScroll(itemDef_t *item) {
 	listBoxDef_t *listPtr = (listBoxDef_t*)item->typeData;
 	int count = DC->feederCount(item->special);
@@ -1796,6 +2026,10 @@ void Item_MouseEnter(itemDef_t *item, float x, float y) {
 
 			if (item->type == ITEM_TYPE_LISTBOX) {
 				Item_ListBox_MouseEnter(item, x, y);
+			}
+			else if ( item->type == ITEM_TYPE_TEXTSCROLL )
+			{
+				Item_TextScroll_MouseEnter ( item, x, y );
 			}
 		}
 	}
@@ -2292,6 +2526,79 @@ qboolean Item_TextField_HandleKey(itemDef_t *item, int key) {
 
 }
 
+static void Scroll_TextScroll_AutoFunc (void *p) 
+{
+	scrollInfo_t *si = (scrollInfo_t*)p;
+
+	if (DC->realTime > si->nextScrollTime) 
+	{ 
+		// need to scroll which is done by simulating a click to the item
+		// this is done a bit sideways as the autoscroll "knows" that the item is a listbox
+		// so it calls it directly
+		Item_TextScroll_HandleKey(si->item, si->scrollKey, qtrue, qfalse);
+		si->nextScrollTime = DC->realTime + si->adjustValue; 
+	}
+
+	if (DC->realTime > si->nextAdjustTime) 
+	{
+		si->nextAdjustTime = DC->realTime + SCROLL_TIME_ADJUST;
+		if (si->adjustValue > SCROLL_TIME_FLOOR) 
+		{
+			si->adjustValue -= SCROLL_TIME_ADJUSTOFFSET;
+		}
+	}
+}
+
+static void Scroll_TextScroll_ThumbFunc(void *p) 
+{
+	scrollInfo_t *si = (scrollInfo_t*)p;
+	rectDef_t	 r;
+	int			 pos;
+	int			 max;
+
+	textScrollDef_t *scrollPtr = (textScrollDef_t*)si->item->typeData;
+
+	if (DC->cursory != si->yStart) 
+	{
+		r.x = si->item->window.rect.x + si->item->window.rect.w - SCROLLBAR_SIZE - 1;
+		r.y = si->item->window.rect.y + SCROLLBAR_SIZE + 1;
+		r.h = si->item->window.rect.h - (SCROLLBAR_SIZE*2) - 2;
+		r.w = SCROLLBAR_SIZE;
+		max = Item_TextScroll_MaxScroll(si->item);
+		//
+		pos = (DC->cursory - r.y - SCROLLBAR_SIZE/2) * max / (r.h - SCROLLBAR_SIZE);
+		if (pos < 0) 
+		{
+			pos = 0;
+		}
+		else if (pos > max) 
+		{
+			pos = max;
+		}
+
+		scrollPtr->startPos = pos;
+		si->yStart = DC->cursory;
+	}
+
+	if (DC->realTime > si->nextScrollTime) 
+	{ 
+		// need to scroll which is done by simulating a click to the item
+		// this is done a bit sideways as the autoscroll "knows" that the item is a listbox
+		// so it calls it directly
+		Item_TextScroll_HandleKey(si->item, si->scrollKey, qtrue, qfalse);
+		si->nextScrollTime = DC->realTime + si->adjustValue; 
+	}
+
+	if (DC->realTime > si->nextAdjustTime) 
+	{
+		si->nextAdjustTime = DC->realTime + SCROLL_TIME_ADJUST;
+		if (si->adjustValue > SCROLL_TIME_FLOOR) 
+		{
+			si->adjustValue -= SCROLL_TIME_ADJUSTOFFSET;
+		}
+	}
+}
+
 static void Scroll_ListBox_AutoFunc(void *p) {
 	scrollInfo_t *si = (scrollInfo_t*)p;
 	if (DC->realTime > si->nextScrollTime) { 
@@ -2396,12 +2703,13 @@ static void Scroll_Slider_ThumbFunc(void *p) {
 	DC->setCVar(si->item->cvar, va("%f", value));
 }
 
-void Item_StartCapture(itemDef_t *item, int key) {
+void Item_StartCapture(itemDef_t *item, int key) 
+{
 	int flags;
-	switch (item->type) {
-    case ITEM_TYPE_EDITFIELD:
-    case ITEM_TYPE_NUMERICFIELD:
-
+	switch (item->type) 
+	{
+	    case ITEM_TYPE_EDITFIELD:
+		case ITEM_TYPE_NUMERICFIELD:
 		case ITEM_TYPE_LISTBOX:
 		{
 			flags = Item_ListBox_OverLB(item, DC->cursorx, DC->cursory);
@@ -2426,6 +2734,33 @@ void Item_StartCapture(itemDef_t *item, int key) {
 			}
 			break;
 		}
+
+		case ITEM_TYPE_TEXTSCROLL:
+			flags = Item_TextScroll_OverLB (item, DC->cursorx, DC->cursory);
+			if (flags & (WINDOW_LB_LEFTARROW | WINDOW_LB_RIGHTARROW)) 
+			{
+				scrollInfo.nextScrollTime = DC->realTime + SCROLL_TIME_START;
+				scrollInfo.nextAdjustTime = DC->realTime + SCROLL_TIME_ADJUST;
+				scrollInfo.adjustValue = SCROLL_TIME_START;
+				scrollInfo.scrollKey = key;
+				scrollInfo.scrollDir = (flags & WINDOW_LB_LEFTARROW) ? qtrue : qfalse;
+				scrollInfo.item = item;
+				captureData = &scrollInfo;
+				captureFunc = &Scroll_TextScroll_AutoFunc;
+				itemCapture = item;
+			} 
+			else if (flags & WINDOW_LB_THUMB) 
+			{
+				scrollInfo.scrollKey = key;
+				scrollInfo.item = item;
+				scrollInfo.xStart = DC->cursorx;
+				scrollInfo.yStart = DC->cursory;
+				captureData = &scrollInfo;
+				captureFunc = &Scroll_TextScroll_ThumbFunc;
+				itemCapture = item;
+			}
+			break;
+
 		case ITEM_TYPE_SLIDER:
 		{
 			flags = Item_Slider_OverSlider(item, DC->cursorx, DC->cursory);
@@ -2536,6 +2871,9 @@ qboolean Item_HandleKey(itemDef_t *item, int key, qboolean down) {
       break;
     case ITEM_TYPE_LISTBOX:
       return Item_ListBox_HandleKey(item, key, down, qfalse);
+      break;
+	case ITEM_TYPE_TEXTSCROLL:
+      return Item_TextScroll_HandleKey(item, key, down, qfalse);
       break;
     case ITEM_TYPE_YESNO:
       return Item_YesNo_HandleKey(item, key);
@@ -3727,8 +4065,8 @@ qboolean Item_Bind_HandleKey(itemDef_t *item, int key, qboolean down) {
 	return qtrue;
 }
 
-
-void Item_Model_Paint(itemDef_t *item) {
+void Item_Model_Paint(itemDef_t *item) 
+{
 	float x, y, w, h;
 	refdef_t refdef;
 	refEntity_t		ent;
@@ -3736,7 +4074,8 @@ void Item_Model_Paint(itemDef_t *item) {
 	vec3_t			angles;
 	modelDef_t *modelPtr = (modelDef_t*)item->typeData;
 
-	if (modelPtr == NULL) {
+	if (modelPtr == NULL) 
+	{
 		return;
 	}
 
@@ -3749,10 +4088,10 @@ void Item_Model_Paint(itemDef_t *item) {
 	w = item->window.rect.w-2;
 	h = item->window.rect.h-2;
 
-	refdef.x = x;
-	refdef.y = y;
-	refdef.width = w;
-	refdef.height = h;
+	refdef.x = x * DC->xscale;
+	refdef.y = y * DC->yscale;
+	refdef.width = w * DC->xscale;
+	refdef.height = h * DC->yscale;
 
 	DC->modelBounds( item->asset, mins, maxs );
 
@@ -3760,15 +4099,21 @@ void Item_Model_Paint(itemDef_t *item) {
 	origin[1] = 0.5 * ( mins[1] + maxs[1] );
 
 	// calculate distance so the model nearly fills the box
-	if (qtrue) {
+	if (qtrue) 
+	{
 		float len = 0.5 * ( maxs[2] - mins[2] );		
 		origin[0] = len / 0.268;	// len / tan( fov/2 )
 		//origin[0] = len / tan(w/2);
-	} else {
+	} 
+	else 
+	{
 		origin[0] = item->textscale;
 	}
 	refdef.fov_x = (modelPtr->fov_x) ? modelPtr->fov_x : w;
 	refdef.fov_y = (modelPtr->fov_y) ? modelPtr->fov_y : h;
+
+	refdef.fov_x = 45;
+	refdef.fov_y = 45;
 
 	//refdef.fov_x = (int)((float)refdef.width / 640.0f * 90.0f);
 	//xx = refdef.width / tan( refdef.fov_x / 360 * M_PI );
@@ -3788,13 +4133,18 @@ void Item_Model_Paint(itemDef_t *item) {
 	//VectorSet( angles, 0, 0, 1 );
 
 	// use item storage to track
-	if (modelPtr->rotationSpeed) {
-		if (DC->realTime > item->window.nextTime) {
+/*	if (modelPtr->rotationSpeed) 
+	{
+		if (DC->realTime > item->window.nextTime) 
+		{
 			item->window.nextTime = DC->realTime + modelPtr->rotationSpeed;
 			modelPtr->angle = (int)(modelPtr->angle + 1) % 360;
 		}
 	}
 	VectorSet( angles, 0, modelPtr->angle, 0 );
+*/
+	VectorSet( angles, 0, (float)(refdef.time/20.0f), 0);
+
 	AnglesToAxis( angles, ent.axis );
 
 	ent.hModel = item->asset;
@@ -3814,6 +4164,63 @@ void Item_Image_Paint(itemDef_t *item) {
 		return;
 	}
 	DC->drawHandlePic(item->window.rect.x+1, item->window.rect.y+1, item->window.rect.w-2, item->window.rect.h-2, item->asset);
+}
+
+void Item_TextScroll_Paint(itemDef_t *item) 
+{
+	float x, y, size, count, thumb;
+	int	  i;
+	textScrollDef_t *scrollPtr = (textScrollDef_t*)item->typeData;
+
+	count = scrollPtr->lineCount;
+
+	// draw scrollbar to right side of the window
+	x = item->window.rect.x + item->window.rect.w - SCROLLBAR_SIZE - 1;
+	y = item->window.rect.y + 1;
+	DC->drawHandlePic(x, y, SCROLLBAR_SIZE, SCROLLBAR_SIZE, DC->Assets.scrollBarArrowUp);
+	y += SCROLLBAR_SIZE - 1;
+
+	scrollPtr->endPos = scrollPtr->startPos;
+	size = item->window.rect.h - (SCROLLBAR_SIZE * 2);
+	DC->drawHandlePic(x, y, SCROLLBAR_SIZE, size+1, DC->Assets.scrollBar);
+	y += size - 1;
+	DC->drawHandlePic(x, y, SCROLLBAR_SIZE, SCROLLBAR_SIZE, DC->Assets.scrollBarArrowDown);
+	
+	// thumb
+	thumb = Item_TextScroll_ThumbDrawPosition(item);
+	if (thumb > y - SCROLLBAR_SIZE - 1) 
+	{
+		thumb = y - SCROLLBAR_SIZE - 1;
+	}
+	DC->drawHandlePic(x, thumb, SCROLLBAR_SIZE, SCROLLBAR_SIZE, DC->Assets.scrollBarThumb);
+
+	// adjust size for item painting
+	size = item->window.rect.h - 2;
+	x	 = item->window.rect.x + 1;
+	y	 = item->window.rect.y + 1;
+
+	for (i = scrollPtr->startPos; i < count; i++) 
+	{
+		char *text;
+
+		text = scrollPtr->lines[i];
+		if (!text) 
+		{
+			continue;
+		}
+
+		DC->drawText(x + 4, y, item->textscale, item->window.foreColor, text, 0, 0, item->textStyle, item->iMenuFont);
+
+		size -= scrollPtr->lineHeight;
+		if (size < scrollPtr->lineHeight) 
+		{
+			scrollPtr->drawPadding = scrollPtr->lineHeight - size;
+			break;
+		}
+
+		scrollPtr->endPos++;
+		y += scrollPtr->lineHeight;
+	}
 }
 
 void Item_ListBox_Paint(itemDef_t *item) {
@@ -4063,7 +4470,7 @@ void Item_Paint(itemDef_t *item)
 	{
 		if (item->descText)
 		{
-			textWidth = DC->textWidth(item->descText,(float) 0.7f, 0);
+			textWidth = DC->textWidth(item->descText,(float) 0.7f, FONT_MEDIUM);
 
 			if (parent->descAlignment == ITEM_ALIGN_RIGHT)
 			{
@@ -4079,7 +4486,13 @@ void Item_Paint(itemDef_t *item)
 			}
 
 			Item_TextColor(item, &color);
-			DC->drawText(xPos, parent->descY, (float) 0.7f, parent->descColor, item->descText, 0, 0, item->textStyle, item->iMenuFont);
+
+			if (!parent->descScale)
+			{
+				parent->descScale = 1;
+			}
+
+			DC->drawText(xPos, parent->descY, (float) parent->descScale, parent->descColor, item->descText, 0, 0, item->textStyle, FONT_MEDIUM);
 		}
 	}
 
@@ -4244,6 +4657,9 @@ void Item_Paint(itemDef_t *item)
     case ITEM_TYPE_LISTBOX:
       Item_ListBox_Paint(item);
       break;
+	case ITEM_TYPE_TEXTSCROLL:
+	  Item_TextScroll_Paint ( item );
+	  break;
     //case ITEM_TYPE_IMAGE:
     //  Item_Image_Paint(item);
     //  break;
@@ -4515,26 +4931,41 @@ void Menu_Paint(menuDef_t *menu, qboolean forcePaint) {
 Item_ValidateTypeData
 ===============
 */
-void Item_ValidateTypeData(itemDef_t *item) {
-	if (item->typeData) {
+void Item_ValidateTypeData(itemDef_t *item) 
+{
+	if (item->typeData) 
+	{
 		return;
 	}
 
-	if (item->type == ITEM_TYPE_LISTBOX) {
+	if (item->type == ITEM_TYPE_LISTBOX) 
+	{
 		item->typeData = UI_Alloc(sizeof(listBoxDef_t));
 		memset(item->typeData, 0, sizeof(listBoxDef_t));
-	} else if (item->type == ITEM_TYPE_EDITFIELD || item->type == ITEM_TYPE_NUMERICFIELD || item->type == ITEM_TYPE_YESNO || item->type == ITEM_TYPE_BIND || item->type == ITEM_TYPE_SLIDER || item->type == ITEM_TYPE_TEXT) {
+	}
+	else if (item->type == ITEM_TYPE_EDITFIELD || item->type == ITEM_TYPE_NUMERICFIELD || item->type == ITEM_TYPE_YESNO || item->type == ITEM_TYPE_BIND || item->type == ITEM_TYPE_SLIDER || item->type == ITEM_TYPE_TEXT) 
+	{
 		item->typeData = UI_Alloc(sizeof(editFieldDef_t));
 		memset(item->typeData, 0, sizeof(editFieldDef_t));
-		if (item->type == ITEM_TYPE_EDITFIELD) {
-			if (!((editFieldDef_t *) item->typeData)->maxPaintChars) {
+		if (item->type == ITEM_TYPE_EDITFIELD) 
+		{
+			if (!((editFieldDef_t *) item->typeData)->maxPaintChars) 
+			{
 				((editFieldDef_t *) item->typeData)->maxPaintChars = MAX_EDITFIELD;
 			}
 		}
-	} else if (item->type == ITEM_TYPE_MULTI) {
+	} 
+	else if (item->type == ITEM_TYPE_MULTI) 
+	{
 		item->typeData = UI_Alloc(sizeof(multiDef_t));
-	} else if (item->type == ITEM_TYPE_MODEL) {
+	} 
+	else if (item->type == ITEM_TYPE_MODEL) 
+	{
 		item->typeData = UI_Alloc(sizeof(modelDef_t));
+	}
+	else if (item->type == ITEM_TYPE_TEXTSCROLL )
+	{
+		item->typeData = UI_Alloc(sizeof(textScrollDef_t));
 	}
 }
 
@@ -5289,7 +5720,45 @@ qboolean ItemParse_maxPaintChars( itemDef_t *item, int handle ) {
 	return qtrue;
 }
 
+qboolean ItemParse_maxLineChars( itemDef_t *item, int handle ) 
+{
+	textScrollDef_t *scrollPtr;
+	int				maxChars;
 
+	Item_ValidateTypeData(item);
+	if (!item->typeData)
+		return qfalse;
+
+	if (!PC_Int_Parse(handle, &maxChars)) 
+	{
+		return qfalse;
+	}
+
+	scrollPtr = (textScrollDef_t*)item->typeData;
+	scrollPtr->maxLineChars = maxChars;
+
+	return qtrue;
+}
+
+qboolean ItemParse_lineHeight( itemDef_t *item, int handle ) 
+{
+	textScrollDef_t *scrollPtr;
+	int				height;
+
+	Item_ValidateTypeData(item);
+	if (!item->typeData)
+		return qfalse;
+
+	if (!PC_Int_Parse(handle, &height)) 
+	{
+		return qfalse;
+	}
+
+	scrollPtr = (textScrollDef_t*)item->typeData;
+	scrollPtr->lineHeight = height;
+
+	return qtrue;
+}
 
 qboolean ItemParse_cvarFloat( itemDef_t *item, int handle ) {
 	editFieldDef_t *editPtr;
@@ -5545,6 +6014,11 @@ keywordHash_t itemParseKeywords[] = {
 	{"type",			ItemParse_type,				NULL	},
 	{"visible",			ItemParse_visible,			NULL	},
 	{"wrapped",			ItemParse_wrapped,			NULL	},
+
+	// Text scroll specific
+	{"maxLineChars",	ItemParse_maxLineChars,		NULL	},
+	{"lineHeight",		ItemParse_lineHeight,		NULL	},
+
 	{0,					0,							0		}
 };
 
@@ -5602,21 +6076,117 @@ qboolean Item_Parse(int handle, itemDef_t *item) {
 	return qfalse; 	// bk001205 - LCC missing return value
 }
 
+static void Item_TextScroll_BuildLines ( itemDef_t* item )
+{
+	textScrollDef_t* scrollPtr = (textScrollDef_t*) item->typeData;
+	int				 len;
+	int				 width;
+	char*			 lineStart;
+
+	scrollPtr->lineCount = 0;
+	len   = strlen ( item->text );
+	width = scrollPtr->maxLineChars;
+	lineStart = (char*)item->text;
+
+	// Keep going as long as there are more lines
+	while ( len > width && scrollPtr->lineCount < MAX_TEXTSCROLL_LINES )
+	{
+		char* lineEnd;
+
+		// Carriage returns break the line earlier than the width
+		lineEnd = lineStart;
+		while ( lineEnd - lineStart < width && *lineEnd )
+		{
+			if ( *lineEnd == '\n' )
+			{
+				break;
+			}
+
+			lineEnd++;
+		}
+
+		// If a <CR> wasnt found then start with the width
+		if ( !lineEnd || *lineEnd != '\n' )
+		{
+			// Start with a position right at the width and then backtrack until we 
+			// find a space.
+			lineEnd = lineStart + width;
+			while ( *lineEnd != ' ' && *lineEnd != '\t' && lineEnd > lineStart )
+			{
+				lineEnd--;
+			}
+		}
+
+		// This probably isnt too graceful, but if a line has a word that is longer
+		// than the width in characters then the word will be skipped all together.
+		if ( lineEnd >= lineStart )
+		{
+			// throw down a null terminator
+			*lineEnd = '\0';
+
+			// Add the line to the list, leave any trailing spaces
+			scrollPtr->lines[ scrollPtr->lineCount++ ] = lineStart;
+			
+			// Skip past the space that we landed on
+			lineEnd++;
+
+			// Skip any whitespaces
+			while ( (*lineEnd == ' ' || *lineEnd == '\t') && *lineEnd )
+			{
+				lineEnd++;
+			}
+
+			// Subtract out the number of characters used in the last line
+			len -= ( lineEnd - lineStart);
+
+			lineStart = lineEnd;
+		}
+	}
+
+	if ( len && scrollPtr->lineCount < MAX_TEXTSCROLL_LINES )
+	{
+		scrollPtr->lines[ scrollPtr->lineCount++ ] = lineStart;
+	}
+}
 
 // Item_InitControls
 // init's special control types
-void Item_InitControls(itemDef_t *item) {
-	if (item == NULL) {
+void Item_InitControls(itemDef_t *item) 
+{
+	if (item == NULL) 
+	{
 		return;
 	}
-	if (item->type == ITEM_TYPE_LISTBOX) {
-		listBoxDef_t *listPtr = (listBoxDef_t*)item->typeData;
-		item->cursorPos = 0;
-		if (listPtr) {
-			listPtr->cursorPos = 0;
-			listPtr->startPos = 0;
-			listPtr->endPos = 0;
-			listPtr->cursorPos = 0;
+
+	switch ( item->type )
+	{
+		case ITEM_TYPE_LISTBOX:
+		{
+			listBoxDef_t *listPtr = (listBoxDef_t*)item->typeData;
+			item->cursorPos = 0;
+			if (listPtr) 
+			{
+				listPtr->cursorPos = 0;
+				listPtr->startPos = 0;
+				listPtr->endPos = 0;
+				listPtr->cursorPos = 0;
+			}
+
+			break;
+		}
+
+		case ITEM_TYPE_TEXTSCROLL:
+		{
+			textScrollDef_t *scrollPtr = (textScrollDef_t*)item->typeData;
+			if ( scrollPtr )
+			{
+				scrollPtr->startPos = 0;
+				scrollPtr->endPos = 0;
+			}
+
+			Item_TextScroll_BuildLines ( item );
+
+			break;
 		}
 	}
 }
@@ -5645,7 +6215,7 @@ qboolean MenuParse_name( itemDef_t *item, int handle ) {
 	if (!PC_String_Parse(handle, &menu->window.name)) {
 		return qfalse;
 	}
-	if (Q_stricmp(menu->window.name, "main") == 0) {
+	if (Q_stricmp(menu->window.name, "mainMenu") == 0) {
 		// default main as having focus
 		//menu->window.flags |= WINDOW_HASFOCUS;
 	}
@@ -5804,6 +6374,23 @@ qboolean MenuParse_descY( itemDef_t *item, int handle )
 	}
 	return qtrue;
 }
+
+/*
+=================
+MenuParse_descScale
+=================
+*/
+qboolean MenuParse_descScale( itemDef_t *item, int handle) 
+{
+	menuDef_t *menu = (menuDef_t*)item;
+
+	if (!PC_Float_Parse(handle, &menu->descScale)) 
+	{
+		return qfalse;
+	}
+	return qtrue;
+}
+
 /*
 =================
 MenuParse_descColor
@@ -6026,6 +6613,7 @@ keywordHash_t menuParseKeywords[] = {
 	{"desccolor",			MenuParse_descColor,	NULL	},
 	{"descX",				MenuParse_descX,		NULL	},
 	{"descY",				MenuParse_descY,		NULL	},
+	{"descScale",			MenuParse_descScale,	NULL	},
 	{"disablecolor",		MenuParse_disablecolor, NULL	},
 	{"fadeAmount",			MenuParse_fadeAmount,	NULL	},
 	{"fadeClamp",			MenuParse_fadeClamp,	NULL	},

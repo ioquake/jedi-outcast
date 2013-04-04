@@ -1644,7 +1644,10 @@ void R_RenderView (viewParms_t *parms) {
 
 	R_SetupFrustum ();
 
-	R_SetViewFogIndex ();
+	if (!(tr.refdef.rdflags & RDF_NOWORLDMODEL)) 
+	{	// Trying to do this with no world is not good.
+		R_SetViewFogIndex ();
+	}
 
 	R_GenerateDrawSurfs();
 

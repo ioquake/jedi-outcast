@@ -142,8 +142,8 @@ typedef struct {
 
 typedef struct {
 
-//	void		(*addRefEntityToScene) (const refEntity_t *re );
-//	void		(*clearScene) ();
+	void		(*addRefEntityToScene) (const refEntity_t *re );
+	void		(*clearScene) ();
 	void		(*drawHandlePic) (float x, float y, float w, float h, qhandle_t asset);
 	void		(*drawRect) ( float x, float y, float w, float h, float size, const vec4_t color);
 	void		(*drawSides) (float x, float y, float w, float h, float size);
@@ -172,7 +172,8 @@ typedef struct {
 	qhandle_t	(*registerShaderNoMip) (const char *p);	
 	sfxHandle_t (*registerSound)(const char *name, qboolean compressed);
 	void		(*renderScene) ( const refdef_t *fd );
-	void		(*runScript)(const char **p);
+	qboolean	(*runScript)(const char **p);
+	qboolean	(*deferScript)(const char **p);
 	void		(*setBinding)( int keynum, const char *binding );
 	void		(*setColor) (const vec4_t v);
 	void		(*setCVar)(const char *cvar, const char *value);
@@ -279,11 +280,22 @@ typedef struct {
 } colorRangeDef_t;
 
 typedef struct modelDef_s {
-	int			angle;						//
-	vec3_t		origin;						//
-	float		fov_x;						//
-	float		fov_y;						//
-	int			rotationSpeed;				//
+	int		angle;
+	vec3_t	origin;
+	float	fov_x;
+	float	fov_y;
+	int		rotationSpeed;
+
+	int		animated;
+	int		startframe;
+	int		numframes;
+	int		loopframes;
+	int		fps;
+	
+	int		frame;
+	int		oldframe;
+	float	backlerp;
+	int		frameTime;
 } modelDef_t;
 
 typedef struct itemDef_s {
@@ -353,15 +365,17 @@ typedef struct {
 	float		descScale;					// Description scale
 } menuDef_t;
 
-typedef struct {
-  const char *name;
-  void (*handler) (itemDef_t *item, const char** args);
+typedef struct 
+{
+	const char *name;
+	qboolean (*handler) (itemDef_t *item, const char** args);
+
 } commandDef_t;
 
 menuDef_t	*Menu_GetFocused(void);
 
-void		Controls_GetConfig2( void );
-void		Controls_SetConfig2(qboolean restart);
+void		Controls_GetConfig( void );
+void		Controls_SetConfig(qboolean restart);
 qboolean	Display_KeyBindPending(void);
 qboolean	Display_MouseMove(void *p, int x, int y);
 int			Display_VisibleMenuCount(void);

@@ -50,7 +50,7 @@ const char	*cg_customBasicSoundNames[MAX_CUSTOM_BASIC_SOUNDS] =
 	"*gurp2.wav",
 	"*drown.wav",
 	"*gasp.wav",
-	"*fall1.wav",
+	"*land1.wav",
 	"*falling1.wav",
 };
 
@@ -151,21 +151,21 @@ const char	*cg_customJediSoundNames[MAX_CUSTOM_JEDI_SOUNDS] =
 // cuts down on sound-variant registration for low end machines, 
 //		eg *gloat1.wav (plus...2,...3) can be capped to all be just *gloat1.wav
 //
-static const char *GetCustomSound_VariantCapped(const char *ppsTable[], int iEntryNum)
+static const char *GetCustomSound_VariantCapped(const char *ppsTable[], int iEntryNum, qboolean bForceVariant1)
 {
 	extern vmCvar_t	cg_VariantSoundCap;
 		
 //	const int iVariantCap = 2;	// test
 	const int &iVariantCap = cg_VariantSoundCap.integer;
 
-	if (iVariantCap)
+	if (iVariantCap || bForceVariant1)
 	{
 		char *p = strchr(ppsTable[iEntryNum],'.');
 		if (p && p-2 > ppsTable[iEntryNum] && isdigit(p[-1]) && !isdigit(p[-2]))
 		{
 			int iThisVariant = p[-1]-'0';
 
-			if (iThisVariant > iVariantCap)
+			if (iThisVariant > iVariantCap || bForceVariant1)
 			{
 				// ok, let's not load this variant, so pick a random one below the cap value...
 				//
@@ -180,7 +180,7 @@ static const char *GetCustomSound_VariantCapped(const char *ppsTable[], int iEnt
 						*p = '\0';
 						sName[strlen(sName)-1] = '\0';	// strip the digit
 
-						int iRandom = !i ? Q_irand(1,iVariantCap) : 1;
+						int iRandom = bForceVariant1 ? 1 : (!i ? Q_irand(1,iVariantCap) : 1);
 
 						strcat(sName,va("%d.wav",iRandom));
 
@@ -207,6 +207,35 @@ static const char *GetCustomSound_VariantCapped(const char *ppsTable[], int iEnt
 
 	return ppsTable[iEntryNum];
 }
+
+static void CG_RegisterCustomSounds(clientInfo_t *ci, int iSoundEntryBase,
+									int iTableEntries, const char *ppsTable[], const char *psDir
+									)
+{
+	for ( int i=0 ; i<iTableEntries; i++ ) 
+	{
+		const char *s = GetCustomSound_VariantCapped(ppsTable,i, qfalse);
+		if ( !s ) 
+		{
+			break;	// fairly pointless code in original, since there are no NULL's in the table, but wtf...
+		}
+
+		sfxHandle_t hSFX = cgi_S_RegisterSound( va("sound/chars/%s/misc/%s", psDir, s + 1) );
+		if (hSFX == 0)
+		{
+			// hmmm... variant in table was missing, so forcibly-retry with %1 version (which we may have just tried, but wtf?)...
+			//
+			s = GetCustomSound_VariantCapped(ppsTable,i, qtrue);
+			hSFX = cgi_S_RegisterSound( va("sound/chars/%s/misc/%s", psDir, s + 1) );
+			//
+			// and fall through regardless...
+			//
+		}
+		
+		ci->sounds[i + iSoundEntryBase] = hSFX;
+	}
+}
+
 
 
 /*
@@ -357,8 +386,8 @@ void CG_NewClientinfo( int clientNum )
 	clientInfo_t *ci;
 	const char	*configstring;
 	const char	*v;
-	const char	*s;
-	int			i;
+//	const char	*s;
+//	int			i;
 
 	configstring = CG_ConfigString( clientNum + CS_PLAYERS );
 
@@ -415,15 +444,12 @@ void CG_NewClientinfo( int clientNum )
 	}
 
 	//player uses only the basic custom sound set, not the combat or extra
-	for ( i = 0 ; i < MAX_CUSTOM_BASIC_SOUNDS ; i++ ) 
-	{
-		s = GetCustomSound_VariantCapped(cg_customBasicSoundNames,i);	// s = cg_customBasicSoundNames[i];
-		if ( !s ) 
-		{
-			break;
-		}
-		ci->sounds[i] = cgi_S_RegisterSound( va("sound/chars/%s/misc/%s", ci->customBasicSoundDir, s + 1) );
-	}
+	CG_RegisterCustomSounds(ci, 
+							0,							// int iSoundEntryBase,
+							MAX_CUSTOM_BASIC_SOUNDS,	// int iTableEntries,
+							cg_customBasicSoundNames,	// const char *ppsTable[], 
+							ci->customBasicSoundDir		// const char *psDir
+							);
 
 	ci->infoValid = qfalse;
 }
@@ -433,77 +459,49 @@ CG_RegisterNPCCustomSounds
 */
 void CG_RegisterNPCCustomSounds( clientInfo_t *ci )
 {
-	const char	*s;
-	int			i;
+//	const char	*s;
+//	int			i;
 
 	// sounds
 
 	if ( ci->customBasicSoundDir && ci->customBasicSoundDir[0] )
 	{
-		for ( i = 0 ; i < MAX_CUSTOM_BASIC_SOUNDS ; i++ ) 
-		{
-			s = GetCustomSound_VariantCapped(cg_customBasicSoundNames,i);	// s = cg_customBasicSoundNames[i];
-			if ( !s ) 
-			{
-				break;
-			}
-
-			char finalName[MAX_QPATH];
-
-			Q_strncpyz(finalName, s+1, sizeof(finalName), qtrue);
-			ci->sounds[i] = cgi_S_RegisterSound( va("sound/chars/%s/misc/%s", ci->customBasicSoundDir, finalName) );
-		}
+		CG_RegisterCustomSounds(ci, 
+								0,							// int iSoundEntryBase,
+								MAX_CUSTOM_BASIC_SOUNDS,	// int iTableEntries,
+								cg_customBasicSoundNames,	// const char *ppsTable[], 
+								ci->customBasicSoundDir		// const char *psDir
+								);
 	}
 
 	if ( ci->customCombatSoundDir && ci->customCombatSoundDir[0] )
 	{
-		for ( i = 0 ; i < MAX_CUSTOM_COMBAT_SOUNDS ; i++ ) 
-		{
-			s = GetCustomSound_VariantCapped(cg_customCombatSoundNames,i);	// s = cg_customCombatSoundNames[i];
-			if ( !s ) 
-			{
-				break;
-			}
-
-			char finalName[MAX_QPATH];
-
-			Q_strncpyz(finalName, s+1, sizeof(finalName), qtrue);
-			ci->sounds[i+MAX_CUSTOM_BASIC_SOUNDS] = cgi_S_RegisterSound( va("sound/chars/%s/misc/%s", ci->customCombatSoundDir, finalName) );
-		}
+		CG_RegisterCustomSounds(ci, 
+								MAX_CUSTOM_BASIC_SOUNDS,	// int iSoundEntryBase,
+								MAX_CUSTOM_COMBAT_SOUNDS,	// int iTableEntries,
+								cg_customCombatSoundNames,	// const char *ppsTable[], 
+								ci->customCombatSoundDir	// const char *psDir
+								);
 	}
 
 	if ( ci->customExtraSoundDir && ci->customExtraSoundDir[0] )
 	{
-		for ( i = 0 ; i < MAX_CUSTOM_EXTRA_SOUNDS ; i++ ) 
-		{
-			s = GetCustomSound_VariantCapped(cg_customExtraSoundNames,i);	// s = cg_customExtraSoundNames[i];
-			if ( !s ) 
-			{
-				break;
-			}
-
-			char finalName[MAX_QPATH];
-
-			Q_strncpyz(finalName, s+1, sizeof(finalName), qtrue);
-			ci->sounds[i+MAX_CUSTOM_BASIC_SOUNDS+MAX_CUSTOM_COMBAT_SOUNDS] = cgi_S_RegisterSound( va("sound/chars/%s/misc/%s", ci->customExtraSoundDir, finalName) );
-		}
+		CG_RegisterCustomSounds(ci, 
+								MAX_CUSTOM_BASIC_SOUNDS+MAX_CUSTOM_COMBAT_SOUNDS,	// int iSoundEntryBase,
+								MAX_CUSTOM_EXTRA_SOUNDS,	// int iTableEntries,
+								cg_customExtraSoundNames,	// const char *ppsTable[], 
+								ci->customExtraSoundDir		// const char *psDir
+								);
 	}
 
 	if ( ci->customJediSoundDir && ci->customJediSoundDir[0] )
 	{
-		for ( i = 0 ; i < MAX_CUSTOM_JEDI_SOUNDS ; i++ ) 
-		{
-			s = GetCustomSound_VariantCapped(cg_customJediSoundNames,i);	// s = cg_customJediSoundNames[i];
-			if ( !s ) 
-			{
-				break;
-			}
-
-			char finalName[MAX_QPATH];
-
-			Q_strncpyz(finalName, s+1, sizeof(finalName), qtrue);
-			ci->sounds[i+MAX_CUSTOM_BASIC_SOUNDS+MAX_CUSTOM_COMBAT_SOUNDS+MAX_CUSTOM_EXTRA_SOUNDS] = cgi_S_RegisterSound( va("sound/chars/%s/misc/%s", ci->customJediSoundDir, finalName) );
-		}
+		CG_RegisterCustomSounds(ci, 
+								MAX_CUSTOM_BASIC_SOUNDS+MAX_CUSTOM_COMBAT_SOUNDS+MAX_CUSTOM_EXTRA_SOUNDS,							// int iSoundEntryBase,
+								MAX_CUSTOM_JEDI_SOUNDS,		// int iTableEntries,
+								cg_customJediSoundNames,	// const char *ppsTable[], 
+								ci->customJediSoundDir		// const char *psDir
+								);
 	}
 }
 
@@ -1083,7 +1081,7 @@ void CG_PlayerAnimSounds( animsounds_t *animSounds, int frame, int entNum )
 	int		holdSnd = -1;
 	qboolean	playSound = qfalse;
 
-	if ( entNum == 0 && !cg_thirdPerson.integer )
+	if ( entNum == 0 && !cg.renderingThirdPerson )//!cg_thirdPerson.integer )
 	{//player in first person view does not play any keyframed sounds
 		return;
 	}
@@ -1134,18 +1132,22 @@ void CG_PlayerAnimSounds( animsounds_t *animSounds, int frame, int entNum )
 }
 
 void CGG2_AnimSounds( centity_t *cent )
-{//FIXME: this doesn't work because Ghoul is skipping frames like crazy
-	if ( !cent || !cent->gent || !cent->gent->client )
+{
+	if ( !cent || !cent->gent || !cent->gent->client)
 	{
 		return;
 	}
+	assert(cent->gent->playerModel>=0&&cent->gent->playerModel<cent->gent->ghoul2.size());
 	if ( ValidAnimFileIndex( cent->gent->client->clientInfo.animFileIndex ) )
 	{
-		int		junk, curFrame;
-		float	currentFrame, animSpeed;
+		int		junk, curFrame=0;
+		float	currentFrame=0, animSpeed;
 
-		gi.G2API_GetBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->rootBone, cg.time, &currentFrame, &junk, &junk, &junk, &animSpeed, cgs.model_draw );
-		curFrame = floor( currentFrame );
+		if (cent->gent->rootBone>=0&&gi.G2API_GetBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->rootBone, cg.time, &currentFrame, &junk, &junk, &junk, &animSpeed, cgs.model_draw ))
+		{
+			// the above may have failed, not sure what to do about it, current frame will be zero in that case
+			curFrame = floor( currentFrame );
+		}
 		if ( curFrame != cent->gent->client->renderInfo.legsFrame )
 		{
 			CG_PlayerAnimSounds( level.knownAnimFileSets[cent->gent->client->clientInfo.animFileIndex].legsAnimSnds, curFrame, cent->currentState.clientNum );
@@ -1153,7 +1155,7 @@ void CGG2_AnimSounds( centity_t *cent )
 		cent->gent->client->renderInfo.legsFrame = curFrame;
 		cent->pe.legs.frame = curFrame;
 
-		if ( gi.G2API_GetBoneAnimIndex(&cent->gent->ghoul2[cent->gent->playerModel], cent->gent->lowerLumbarBone, cg.time, &currentFrame, &junk, &junk, &junk, &animSpeed, cgs.model_draw ) )
+		if (cent->gent->lowerLumbarBone>=0&& gi.G2API_GetBoneAnimIndex(&cent->gent->ghoul2[cent->gent->playerModel], cent->gent->lowerLumbarBone, cg.time, &currentFrame, &junk, &junk, &junk, &animSpeed, cgs.model_draw ) )
 		{
 			curFrame = floor( currentFrame );
 		}
@@ -1470,7 +1472,7 @@ static qboolean CG_CheckLookTarget( centity_t *cent, vec3_t	lookAngles, float *l
 
 				//FIXME: Ignore small deltas from current angles so we don't bob our head in synch with theirs?
 
-				if ( cent->gent->client->renderInfo.lookTarget == 0 && !cg_thirdPerson.integer )
+				if ( cent->gent->client->renderInfo.lookTarget == 0 && !cg.renderingThirdPerson )//!cg_thirdPerson.integer )
 				{//Special case- use cg.refdef.vieworg if looking at player and not in third person view
 					VectorCopy( cg.refdef.vieworg, lookOrg );
 				}
@@ -1493,7 +1495,7 @@ static qboolean CG_CheckLookTarget( centity_t *cent, vec3_t	lookAngles, float *l
 				//Look in dir of lookTarget
 			}
 		}
-		else if ( cent->gent->client->renderInfo.lookMode == LM_ENT && cent->gent->client->renderInfo.lookTarget > -1 && cent->gent->client->renderInfo.lookTarget < MAX_INTEREST_POINTS )
+		else if ( cent->gent->client->renderInfo.lookMode == LM_INTEREST && cent->gent->client->renderInfo.lookTarget > -1 && cent->gent->client->renderInfo.lookTarget < MAX_INTEREST_POINTS )
 		{
 			VectorCopy( level.interestPoints[cent->gent->client->renderInfo.lookTarget].origin, lookOrg );
 		}
@@ -1923,6 +1925,8 @@ Handles seperate torso motion
 
 ===============
 */
+extern int PM_TurnAnimForLegsAnim( gentity_t *gent, int anim );
+extern float PM_GetTimeScaleMod( gentity_t *gent );
 void CG_G2PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t angles ) 
 {
 	vec3_t		headAngles, neckAngles, chestAngles, thoracicAngles = {0,0,0};//legsAngles, torsoAngles, 
@@ -1948,6 +1952,11 @@ void CG_G2PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t angles )
 	// Dead entity
 	if ( cent->gent && cent->gent->health <= 0 )
 	{
+		if ( cent->gent->hipsBone != -1 )
+		{
+			gi.G2API_StopBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->hipsBone );
+		}
+
 		VectorCopy( cent->lerpAngles, angles );
 
 		BG_G2SetBoneAngles( cent, cent->gent, cent->gent->craniumBone, vec3_origin, BONE_ANGLES_POSTMULT, POSITIVE_X, NEGATIVE_Y, NEGATIVE_Z, cgs.model_draw ); 
@@ -2017,6 +2026,45 @@ void CG_G2PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t angles )
 		}
 		else
 		{
+			if ( cg_turnAnims.integer && !in_camera && cent->gent->hipsBone >= 0 )
+			{
+				//override the hips bone with a turn anim when turning
+				//and clear it when we're not... does blend from and to parent actually work?
+				int startFrame, endFrame;
+				const qboolean animatingHips = gi.G2API_GetAnimRangeIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->hipsBone, &startFrame, &endFrame );
+
+				//FIXME: make legs lag behind when turning in place, only play turn anim when legs have to catch up
+				if ( angles[YAW] == cent->pe.legs.yawAngle )
+				{
+					gi.G2API_StopBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->hipsBone );
+				}
+				else if ( VectorCompare( vec3_origin, cent->gent->client->ps.velocity ) )
+				{//FIXME: because of LegsYawFromMovement, we play the turnAnims when we stop running, which looks really bad.
+					int turnAnim = PM_TurnAnimForLegsAnim( cent->gent, cent->gent->client->ps.legsAnim );
+					if ( turnAnim != -1 && cent->gent->health > 0 )
+					{
+						animation_t *animations = level.knownAnimFileSets[cent->gent->client->clientInfo.animFileIndex].animations;
+												
+						if ( !animatingHips || ( animations[turnAnim].firstFrame != startFrame ) )// only set the anim if we aren't going to do the same animation again
+						{
+							float animSpeed = 50.0f / animations[turnAnim].frameLerp * PM_GetTimeScaleMod( cent->gent );
+
+							gi.G2API_SetBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->hipsBone,
+								animations[turnAnim].firstFrame, animations[turnAnim].firstFrame+animations[turnAnim].numFrames, 
+								BONE_ANIM_OVERRIDE_LOOP/*|BONE_ANIM_OVERRIDE_FREEZE|BONE_ANIM_BLEND*/, animSpeed, cg.time, -1, 100 );
+						}
+					}
+					else
+					{
+						gi.G2API_StopBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->hipsBone );
+					}
+				}
+				else
+				{
+					gi.G2API_StopBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->hipsBone );
+				}
+			}
+
 			CG_G2ClientSpineAngles( cent, viewAngles, angles, thoracicAngles, ulAngles, llAngles );
 		}
 
@@ -2029,10 +2077,8 @@ void CG_G2PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t angles )
 		}
 		else
 		{
-			//FIXME: we need to override the hips bone with a turn anim when turning
-			//		and clear it when we're not... does beld from and to parent actually work?
 
-			//FIXME: this needs to properly set the legs.yawing field so we don't erroneously play the turning anim, but we do play it when turning in place
+			//set the legs.yawing field so we play the turning anim when turning in place
 			if ( angles[YAW] == cent->pe.legs.yawAngle )
 			{
 				cent->pe.legs.yawing = qfalse;
@@ -2041,7 +2087,6 @@ void CG_G2PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t angles )
 			{
 				cent->pe.legs.yawing = qtrue;
 			}
-
 			cent->pe.legs.yawAngle = angles[YAW];
 			if ( cent->gent->client )
 			{
@@ -2272,8 +2317,6 @@ void CG_G2PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t angles )
 void CG_PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t torso[3], vec3_t head[3] ) 
 {
 	vec3_t		legsAngles, torsoAngles, headAngles;
-	float		speed;
-	vec3_t		velocity;
 	vec3_t		lookAngles, viewAngles;
 	float		headYawClampMin, headYawClampMax;
 	float		headPitchClampMin, headPitchClampMax;
@@ -2498,36 +2541,6 @@ void CG_PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t torso[3], vec3_t h
 	CG_SwingAngles( dest, torsoPitchSwingTolMin, torsoPitchSwingTolMax, torsoPitchClampMin, torsoPitchClampMax, 0.1f, &cent->pe.torso.pitchAngle, &cent->pe.torso.pitching );
 	torsoAngles[PITCH] = cent->pe.torso.pitchAngle;
 	// --------- roll -------------
-
-	// lean towards the direction of travel
-	if ( cent->gent->s.eFlags & EF_BANK_STRAFE )
-	{
-		VectorCopy( cent->gent->client->ps.velocity, velocity );
-		speed = VectorNormalize( velocity );
-
-		if ( speed ) 
-		{
-			vec3_t	axis[3];
-			float	side;
-
-			// Magic number fun!  Speed is used for banking, so modulate the speed by a sine wave
-			speed *= 0.4 * sin( (cg.time - cent->gent->fx_time + 200 ) * 0.003 );
-
-			// Clamp to prevent harsh rolling
-			if ( speed > 12 )
-				speed = 12;
-
-			AnglesToAxis( legsAngles, axis );
-			side = speed * DotProduct( velocity, axis[1] );
-			legsAngles[ROLL] -= side;
-			torsoAngles[ROLL] -= side;
-
-
-			side = speed * DotProduct( velocity, axis[0] );
-			legsAngles[PITCH] += side;
-			torsoAngles[PITCH] += side;
-		}
-	}
 
 	// pain twitch - FIXME: don't do this if you have no head (like droids?)
 	// Maybe need to have clamp angles for roll as well as pitch and yaw?
@@ -3077,49 +3090,71 @@ static void CG_ForcePushBodyBlur( centity_t *cent, const vec3_t origin, vec3_t t
 	CG_ForcePushBlur( cent->gent->client->renderInfo.eyePoint );
 
 	// Do a torso based blur
-	gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->torsoBolt, 
-					&boltMatrix, tempAngles, origin, cg.time, 
-					cgs.model_draw, cent->currentState.modelScale);
-	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
-	CG_ForcePushBlur( fxOrg );
+	if (cent->gent->torsoBolt>=0)
+	{
+		gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->torsoBolt, 
+						&boltMatrix, tempAngles, origin, cg.time, 
+						cgs.model_draw, cent->currentState.modelScale);
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
+		CG_ForcePushBlur( fxOrg );
+	}
 
-	// Do a right-hand based blur
-	gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->handRBolt, 
-					&boltMatrix, tempAngles, origin, cg.time, 
-					cgs.model_draw, cent->currentState.modelScale);
-	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
-	CG_ForcePushBlur( fxOrg );
+	if (cent->gent->handRBolt>=0)
+	{
+		// Do a right-hand based blur
+		gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->handRBolt, 
+						&boltMatrix, tempAngles, origin, cg.time, 
+						cgs.model_draw, cent->currentState.modelScale);
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
+		CG_ForcePushBlur( fxOrg );
+	}
 
-	// Do a left-hand based blur
-	gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->handLBolt, 
-					&boltMatrix, tempAngles, origin, cg.time, 
-					cgs.model_draw, cent->currentState.modelScale);
-	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
-	CG_ForcePushBlur( fxOrg );
+	if (cent->gent->handLBolt>=0)
+	{
+		// Do a left-hand based blur
+		gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->handLBolt, 
+						&boltMatrix, tempAngles, origin, cg.time, 
+						cgs.model_draw, cent->currentState.modelScale);
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
+		CG_ForcePushBlur( fxOrg );
+	}
 
 	// Do the knees
-	gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->kneeLBolt, 
-					&boltMatrix, tempAngles, origin, cg.time, 
-					cgs.model_draw, cent->currentState.modelScale);
-	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
-	CG_ForcePushBlur( fxOrg );
-	gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->kneeRBolt, 
-					&boltMatrix, tempAngles, origin, cg.time, 
-					cgs.model_draw, cent->currentState.modelScale);
-	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
-	CG_ForcePushBlur( fxOrg );
+	if (cent->gent->kneeLBolt>=0)
+	{
+		gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->kneeLBolt, 
+						&boltMatrix, tempAngles, origin, cg.time, 
+						cgs.model_draw, cent->currentState.modelScale);
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
+		CG_ForcePushBlur( fxOrg );
+	}
 
-	// Do the elbows
-	gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->elbowLBolt, 
-					&boltMatrix, tempAngles, origin, cg.time, 
-					cgs.model_draw, cent->currentState.modelScale);
-	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
-	CG_ForcePushBlur( fxOrg );
-	gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->elbowRBolt, 
-					&boltMatrix, tempAngles, origin, cg.time, 
-					cgs.model_draw, cent->currentState.modelScale);
-	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
-	CG_ForcePushBlur( fxOrg );
+	if (cent->gent->kneeRBolt>=0)
+	{
+		gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->kneeRBolt, 
+						&boltMatrix, tempAngles, origin, cg.time, 
+						cgs.model_draw, cent->currentState.modelScale);
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
+		CG_ForcePushBlur( fxOrg );
+	}
+
+	if (cent->gent->elbowLBolt>=0)
+	{
+		// Do the elbows
+		gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->elbowLBolt, 
+						&boltMatrix, tempAngles, origin, cg.time, 
+						cgs.model_draw, cent->currentState.modelScale);
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
+		CG_ForcePushBlur( fxOrg );
+	}
+	if (cent->gent->elbowRBolt>=0)
+	{
+		gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->elbowRBolt, 
+						&boltMatrix, tempAngles, origin, cg.time, 
+						cgs.model_draw, cent->currentState.modelScale);
+		gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, fxOrg );
+		CG_ForcePushBlur( fxOrg );
+	}
 }
 
 static void CG_ForceElectrocution( centity_t *cent, const vec3_t origin, vec3_t tempAngles )
@@ -3130,54 +3165,61 @@ static void CG_ForceElectrocution( centity_t *cent, const vec3_t origin, vec3_t 
 	vec3_t		rgb = {1.0f,1.0f,1.0f};
 	mdxaBone_t	boltMatrix;
 
+	int bolt=-1;
+	int iter=0;
 	// Pick a random start point
-	switch( Q_irand(0,6))
+	while (bolt<0)
 	{
-	case 0:
-		// Right Elbow
-		found = gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->elbowRBolt, 
-				&boltMatrix, tempAngles, origin, cg.time, 
-				cgs.model_draw, cent->currentState.modelScale);
-		break;
-	case 1:
-		// Left Hand
-		found = gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->handLBolt, 
-				&boltMatrix, tempAngles, origin, cg.time, 
-				cgs.model_draw, cent->currentState.modelScale);
-		break;
-	case 2:
-		// Right hand
-		found = gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->handRBolt, 
-				&boltMatrix, tempAngles, origin, cg.time, 
-				cgs.model_draw, cent->currentState.modelScale);
-		break;
-	case 3:
-		// Left Foot
-		found = gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->footLBolt, 
-				&boltMatrix, tempAngles, origin, cg.time, 
-				cgs.model_draw, cent->currentState.modelScale);
-		break;
-	case 4:
-		// Right foot
-		found = gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->footRBolt, 
-				&boltMatrix, tempAngles, origin, cg.time, 
-				cgs.model_draw, cent->currentState.modelScale);
-		break;
-	case 5:
-		// Torso
-		found = gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->torsoBolt, 
-				&boltMatrix, tempAngles, origin, cg.time, 
-				cgs.model_draw, cent->currentState.modelScale);
-		break;
-	case 6:
-	default:
-		// Left Elbow
-		found = gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->elbowLBolt, 
-				&boltMatrix, tempAngles, origin, cg.time, 
-				cgs.model_draw, cent->currentState.modelScale);
-		break;
+		int test;
+		if (iter>5)
+		{
+			test=iter-5;
+		}
+		else
+		{
+			test=Q_irand(0,6);
+		}
+		switch(test)
+		{
+		case 0:
+			// Right Elbow
+			bolt=cent->gent->elbowRBolt;
+			break;
+		case 1:
+			// Left Hand
+			bolt=cent->gent->handLBolt;
+			break;
+		case 2:
+			// Right hand
+			bolt=cent->gent->handRBolt;
+			break;
+		case 3:
+			// Left Foot
+			bolt=cent->gent->footLBolt;
+			break;
+		case 4:
+			// Right foot
+			bolt=cent->gent->footRBolt;
+			break;
+		case 5:
+			// Torso
+			bolt=cent->gent->torsoBolt;
+			break;
+		case 6:
+		default:
+			// Left Elbow
+			bolt=cent->gent->elbowLBolt;
+			break;
+		}
+		if (++iter==20)
+			break;
 	}
-
+	if (bolt>=0)
+	{
+		found = gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, bolt, 
+				&boltMatrix, tempAngles, origin, cg.time, 
+				cgs.model_draw, cent->currentState.modelScale);
+	}
 	// Make sure that it's safe to even try and get these values out of the Matrix, otherwise the values could be garbage
 	if ( found )
 	{
@@ -3210,6 +3252,9 @@ static void CG_ForceElectrocution( centity_t *cent, const vec3_t origin, vec3_t 
 				break;
 			case CLASS_MARK1:
 				fxOrg[2] += 50;
+				break;
+			case CLASS_ATST:
+				fxOrg[2] += 120;
 				break;
 			}
 		}
@@ -3260,11 +3305,11 @@ void CG_AddRefEntityWithPowerups( refEntity_t *ent, int powerups, centity_t *cen
 		}
 	}
 
-	if ( gent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 )
-	{
-		centity_t *cent = &cg_entities[gent->s.number];
-		cgi_S_AddLoopingSound( 0, cent->lerpOrigin, vec3_origin, cgs.media.overchargeLoopSound );
-	}
+//	if ( gent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 )
+//	{
+//		centity_t *cent = &cg_entities[gent->s.number];
+//		cgi_S_AddLoopingSound( 0, cent->lerpOrigin, vec3_origin, cgs.media.overchargeLoopSound );
+//	}
 
 	// If certain states are active, we don't want to add in the regular body
 	if ( !gent->client->ps.powerups[PW_CLOAKED] && 
@@ -3528,7 +3573,7 @@ static void CG_G2SetHeadBlink( centity_t *cent, qboolean bStart )
 	gentity_t *gent = cent->gent;
 	//FIXME: get these boneIndices game-side and pass it down?
 	//FIXME: need a version of this that *doesn't* need the mFileName in the ghoul2
-	const int hLeye = gi.G2API_GetBoneIndex( &gent->ghoul2[0], "leye", qtrue );
+	const int hLeye = gi.G2API_GetBoneIndex( &gent->ghoul2[0], "leye", qfalse );
 	if (hLeye == -1)
 	{
 		return;
@@ -3549,9 +3594,14 @@ static void CG_G2SetHeadBlink( centity_t *cent, qboolean bStart )
 	}
 	gi.G2API_SetBoneAnglesIndex( &gent->ghoul2[gent->playerModel], hLeye, desiredAngles,
 		BONE_ANGLES_POSTMULT, POSITIVE_Y, POSITIVE_Z, POSITIVE_X, NULL, blendTime, cg.time ); 
+	const int hReye = gi.G2API_GetBoneIndex( &gent->ghoul2[0], "reye", qfalse );
+	if (hReye == -1)
+	{
+		return;
+	}
 	
 	if (!bWink)
-	gi.G2API_SetBoneAngles( &gent->ghoul2[gent->playerModel], "reye", desiredAngles,
+	gi.G2API_SetBoneAnglesIndex( &gent->ghoul2[gent->playerModel], hReye, desiredAngles,
 		BONE_ANGLES_POSTMULT, POSITIVE_Y, POSITIVE_Z, POSITIVE_X, NULL, blendTime, cg.time ); 
 }
 
@@ -4476,11 +4526,17 @@ Ghoul2 Insert End
 			{
 				if ( (trace.contents&CONTENTS_WATER) || (trace.contents&CONTENTS_SLIME) )
 				{
+					/*
 					if ( !(cent->gent->client->ps.saberEventFlags&SEF_INWATER) )
 					{
+					}
+					*/
+					if ( !Q_irand( 0, 10 ) )
+					{//FIXME: don't do this this way.... :)
+						G_PlayEffect( "saber/boil", trace.endpos );
 						cgi_S_StartSound ( trace.endpos, -1, CHAN_AUTO, cgi_S_RegisterSound( "sound/weapons/saber/hitwater.wav" ) );
 					}
-					cent->gent->client->ps.saberEventFlags |= SEF_INWATER;
+					//cent->gent->client->ps.saberEventFlags |= SEF_INWATER;
 					//don't do other trace
 					i = 1;
 				}
@@ -4733,7 +4789,7 @@ void CG_Player( centity_t *cent ) {
 		return;
 	}
 
-	if(cent->currentState.number == 0 && !cg_thirdPerson.integer )
+	if(cent->currentState.number == 0 && !cg.renderingThirdPerson )//!cg_thirdPerson.integer )
 	{
 		calcedMp = qtrue;
 	}
@@ -5009,7 +5065,7 @@ extern vmCvar_t	cg_thirdPersonAlpha;
 			&& ( cg.snap->ps.weapon == WP_SABER || cg.snap->ps.weapon == WP_MELEE )
 			&& !cent->gent->s.number )
 		{// Yeah um, this needs to not do this quite this way
-			ent.customSkin = cgi_R_RegisterSkin( "models/players/kyle/model_fpls2.skin" );
+			ent.customSkin = cgi_R_RegisterSkin( "models/players/kyle/model_fpls2.skin" );	//precached in g_client.cpp
 			//turn on arm caps
 			gi.G2API_SetSurfaceOnOff( &cent->gent->ghoul2[cent->gent->playerModel], "r_arm_cap_torso_off", 0 );
 			gi.G2API_SetSurfaceOnOff( &cent->gent->ghoul2[cent->gent->playerModel], "l_arm_cap_torso_off", 0 );
@@ -5203,13 +5259,28 @@ extern vmCvar_t	cg_thirdPersonAlpha;
 				VectorMA( cent->gent->client->renderInfo.eyePoint, 8, tempAxis, cent->gent->client->renderInfo.headPoint );
 			}
 			//Get torsoPoint & torsoAngles
-			gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->chestBolt, &boltMatrix, tempAngles, ent.origin, cg.time, cgs.model_draw, cent->currentState.modelScale );
-			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, cent->gent->client->renderInfo.torsoPoint );
-			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Z, tempAxis );
-			vectoangles( tempAxis, cent->gent->client->renderInfo.torsoAngles );
+			if (cent->gent->chestBolt>=0)
+			{
+				gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->chestBolt, &boltMatrix, tempAngles, ent.origin, cg.time, cgs.model_draw, cent->currentState.modelScale );
+				gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, cent->gent->client->renderInfo.torsoPoint );
+				gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Z, tempAxis );
+				vectoangles( tempAxis, cent->gent->client->renderInfo.torsoAngles );
+			}
+			else
+			{
+				VectorCopy( ent.origin, cent->gent->client->renderInfo.torsoPoint);
+				VectorClear(cent->gent->client->renderInfo.torsoAngles);
+			}
 			//get crotchPoint
-			gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->crotchBolt, &boltMatrix, tempAngles, ent.origin, cg.time, cgs.model_draw, cent->currentState.modelScale );
-			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, cent->gent->client->renderInfo.crotchPoint );
+			if (cent->gent->crotchBolt>=0)
+			{
+				gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel, cent->gent->crotchBolt, &boltMatrix, tempAngles, ent.origin, cg.time, cgs.model_draw, cent->currentState.modelScale );
+				gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, cent->gent->client->renderInfo.crotchPoint );
+			}
+			else
+			{
+				VectorCopy( ent.origin, cent->gent->client->renderInfo.crotchPoint);
+			}
 
 			if( !calcedMp )
 			{
@@ -5490,7 +5561,7 @@ Ghoul2 Insert End
 		renderfx |= RF_SHADOW_PLANE;
 	}
 	renderfx |= RF_LIGHTING_ORIGIN;			// use the same origin for all
-	if ( cent->gent->NPC->scriptFlags & SCF_MORELIGHT )
+	if ( cent->gent->NPC && cent->gent->NPC->scriptFlags & SCF_MORELIGHT )
 	{
 		renderfx |= RF_MORELIGHT;			//bigger than normal min light
 	}
@@ -5794,6 +5865,57 @@ Ghoul2 Insert End
 	}
 
 	//FIXME: for debug, allow to draw a cone of the NPC's FOV...
+	if ( cent->currentState.number == 0 && cg.renderingThirdPerson )
+	{
+		playerState_t *ps = &cg.predicted_player_state;
+
+		if (( ps->weaponstate == WEAPON_CHARGING_ALT && ps->weapon == WP_BRYAR_PISTOL ) 
+			|| ( ps->weapon == WP_BOWCASTER && ps->weaponstate == WEAPON_CHARGING )
+			|| ( ps->weapon == WP_DEMP2 && ps->weaponstate == WEAPON_CHARGING_ALT ))
+		{
+			int		shader = 0;
+			float	val = 0.0f, scale = 1.0f;
+			vec3_t	WHITE	= {1.0f,1.0f,1.0f};
+
+			if ( ps->weapon == WP_BRYAR_PISTOL )
+			{
+				// Hardcoded max charge time of 1 second
+				val = ( cg.time - ps->weaponChargeTime ) * 0.001f;
+				shader = cgi_R_RegisterShader( "gfx/effects/bryarFrontFlash" );
+			}
+			else if ( ps->weapon == WP_BOWCASTER )
+			{
+				// Hardcoded max charge time of 1 second
+				val = ( cg.time - ps->weaponChargeTime ) * 0.001f;
+				shader = cgi_R_RegisterShader( "gfx/effects/greenFrontFlash" );
+			}
+			else if ( ps->weapon == WP_DEMP2 )
+			{
+				// Hardcoded max charge time of 1 second
+				val = ( cg.time - ps->weaponChargeTime ) * 0.001f;
+				shader = cgi_R_RegisterShader( "gfx/misc/lightningFlash" );
+				scale = 1.75f;
+			}
+
+			if ( val < 0.0f )
+			{
+				val = 0.0f;
+			}
+			else if ( val > 1.0f )
+			{
+				val = 1.0f;
+				CGCam_Shake( 0.1f, 100 );
+			}
+			else
+			{
+				CGCam_Shake( val * val * 0.3f, 100 );
+			}
+
+			val += random() * 0.5f;
+
+			FX_AddSprite( cent->gent->client->renderInfo.muzzlePoint, NULL, NULL, 3.0f * val * scale, 0.0f, 0.7f, 0.7f, WHITE, WHITE, random() * 360, 0.0f, 1.0f, shader, FX_USE_ALPHA );
+		}
+	}
 }
 
 //=====================================================================

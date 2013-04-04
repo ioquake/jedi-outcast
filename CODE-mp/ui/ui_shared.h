@@ -17,6 +17,7 @@
 #define MAX_MENUITEMS				128
 #define MAX_COLOR_RANGES			10
 #define MAX_OPEN_MENUS				16
+#define	MAX_TEXTSCROLL_LINES		256
 
 #define WINDOW_MOUSEOVER			0x00000001	// mouse is over it, non exclusive
 #define WINDOW_HASFOCUS				0x00000002	// has cursor focus, exclusive
@@ -194,6 +195,20 @@ typedef struct modelDef_s {
 	int rotationSpeed;
 } modelDef_t;
 
+typedef struct textScrollDef_s 
+{
+	int				startPos;
+	int				endPos;
+
+	float			lineHeight;
+	int				maxLineChars;
+	int				drawPadding;
+
+	int				lineCount;
+	char*			lines[MAX_TEXTSCROLL_LINES];
+
+} textScrollDef_t;
+
 #define ITEM_ALIGN_LEFT		0		// left alignment
 #define ITEM_ALIGN_CENTER	1		// center alignment
 #define ITEM_ALIGN_RIGHT	2		// right alignment
@@ -263,6 +278,7 @@ typedef struct {
 	int			descY;						// X position of description
 	vec4_t		descColor;					// description text color for items
 	int			descAlignment;				// Description of alignment
+	float		descScale;					// Description scale
 	float		appearanceTime;				//	when next item should appear
 	int			appearanceCnt;				//	current item displayed
 	float		appearanceIncrement;		//

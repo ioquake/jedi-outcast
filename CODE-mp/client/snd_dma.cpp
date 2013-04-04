@@ -138,6 +138,8 @@ cvar_t		*s_musicVolume;
 cvar_t		*s_separation;
 cvar_t		*s_doppler;
 cvar_t		*s_CPUType;
+cvar_t		*s_language;
+
 
 static loopSound_t		loopSounds[MAX_GENTITIES];
 static	channel_t		*freelist = NULL;
@@ -218,6 +220,8 @@ void S_Init( void ) {
 	s_mixPreStep = Cvar_Get ("s_mixPreStep", "0.05", CVAR_ARCHIVE);
 	s_show = Cvar_Get ("s_show", "0", CVAR_CHEAT);
 	s_testsound = Cvar_Get ("s_testsound", "0", CVAR_CHEAT);
+
+	s_language = Cvar_Get("s_language","english",CVAR_ARCHIVE | CVAR_NORESTART);
 
 	MP3_InitCvars();
 

@@ -116,6 +116,96 @@ static byte s_scantokey[128] =
 	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
 }; 
 
+static byte s_scantokey_german[128] = 
+					{ 
+//  0           1       2       3       4       5       6       7 
+//  8           9       A       B       C       D       E       F 
+	0  ,    27,     '1',    '2',    '3',    '4',    '5',    '6', 
+	'7',    '8',    '9',    '0',    '?',    '\'',    K_BACKSPACE, 9, // 0 
+	'q',    'w',    'e',    'r',    't',    'z',    'u',    'i', 
+	'o',    'p',    '=',    '+',    13 ,    K_CTRL, 'a',  's',      // 1 
+	'd',    'f',    'g',    'h',    'j',    'k',    'l',    '[', 
+	']' ,    '`',    K_SHIFT,'#',  'y',    'x',    'c',    'v',      // 2 
+	'b',    'n',    'm',    ',',    '.',    '-',    K_SHIFT,'*', 
+	K_ALT,' ',   K_CAPSLOCK  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
+	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
+	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
+	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             '<',              K_F11, 
+	K_F12,0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 5
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
+}; 
+
+static byte s_scantokey_french[128] = 
+					{ 
+//  0           1       2       3       4       5       6       7 
+//  8           9       A       B       C       D       E       F 
+	0  ,    27,     '1',    '2',    '3',    '4',    '5',    '6', 
+	'7',    '8',    '9',    '0',    ')',    '=',    K_BACKSPACE, 9, // 0 
+	'a',    'z',    'e',    'r',    't',    'y',    'u',    'i', 
+	'o',    'p',    '^',    '$',    13 ,    K_CTRL, 'q',  's',      // 1 
+	'd',    'f',    'g',    'h',    'j',    'k',    'l',    'm', 
+	'%' ,    '`',    K_SHIFT,'*',  'w',    'x',    'c',    'v',      // 2 
+	'b',    'n',    ',',    ';',    ':',    '!',    K_SHIFT,'*', 
+	K_ALT,' ',   K_CAPSLOCK  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
+	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
+	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
+	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             '<',              K_F11, 
+	K_F12,0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 5
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
+}; 
+
+static byte s_scantokey_spanish[128] = 
+{ 
+//  0           1       2       3       4       5       6       7 
+//  8           9       A       B       C       D       E       F 
+	0  ,    27,     '1',    '2',    '3',    '4',    '5',    '6', 
+	'7',    '8',    '9',    '0',    '\'',    '!',    K_BACKSPACE, 9, // 0 
+	'q',    'w',    'e',    'r',    't',    'y',    'u',    'i', 
+	'o',    'p',    '[',    ']',    13 ,    K_CTRL, 'a',  's',      // 1 
+	'd',    'f',    'g',    'h',    'j',    'k',    'l',    '=', 
+	'{' ,    '`',    K_SHIFT,'}',  'z',    'x',    'c',    'v',      // 2 
+	'b',    'n',    'm',    ',',    '.',    '-',    K_SHIFT,'*', 
+	K_ALT,' ',   K_CAPSLOCK  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
+	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
+	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
+	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             '<',              K_F11, 
+	K_F12,0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 5
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
+}; 
+
+static byte s_scantokey_italian[128] = 
+{ 
+//  0           1       2       3       4       5       6       7 
+//  8           9       A       B       C       D       E       F 
+	0  ,    27,     '1',    '2',    '3',    '4',    '5',    '6', 
+	'7',    '8',    '9',    '0',    '\'',    '^',    K_BACKSPACE, 9, // 0 
+	'q',    'w',    'e',    'r',    't',    'y',    'u',    'i', 
+	'o',    'p',    '[',    ']',    13 ,    K_CTRL, 'a',  's',      // 1 
+	'd',    'f',    'g',    'h',    'j',    'k',    'l',    '@', 
+	'#' ,    '`',    K_SHIFT,'=',  'z',    'x',    'c',    'v',      // 2 
+	'b',    'n',    'm',    ',',    '.',    '-',    K_SHIFT,'*', 
+	K_ALT,' ',   K_CAPSLOCK  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
+	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
+	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
+	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             '<',              K_F11, 
+	K_F12,0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 5
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0,        // 6 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0, 
+	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
+}; 
+
+extern cvar_t		*k_language;
+
 /*
 =======
 MapKey
@@ -146,6 +236,16 @@ static int MapKey (int key)
 	}
 
 	result = s_scantokey[modified];
+	if ( !Q_stricmp(k_language->string, "deutsch") ) {
+		result = s_scantokey_german[modified];
+	} else if ( !Q_stricmp(k_language->string, "francais") ) {
+		result = s_scantokey_french[modified];
+	} else if ( !Q_stricmp(k_language->string, "espanol") ) {
+		result = s_scantokey_spanish[modified];
+	} else if ( !Q_stricmp(k_language->string, "italiano") ) {
+		result = s_scantokey_italian[modified];
+	}
+
 
 	if ( !is_extended )
 	{

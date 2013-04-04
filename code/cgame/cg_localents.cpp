@@ -371,6 +371,12 @@ static void CG_AddFadeModel( localEntity_t *le )
 {
 	refEntity_t	*ent = &le->refEntity;
 
+	if ( cg.time < le->startTime )
+	{
+		CG_FreeLocalEntity( le );
+		return;
+	}
+
 	float frac = 1.0f - ((float)( cg.time - le->startTime )/(float)( le->endTime - le->startTime ));
 
 	ent->shaderRGBA[0] = le->color[0] * frac;

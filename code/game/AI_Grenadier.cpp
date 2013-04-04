@@ -538,7 +538,9 @@ void NPC_BSGrenadier_Attack( void )
 			//can we shoot our target?
 			//FIXME: how accurate/necessary is this check?
 			int hit = NPC_ShotEntity( NPC->enemy );
-			if ( hit == NPC->enemy->s.number )
+			gentity_t *hitEnt = &g_entities[hit];
+			if ( hit == NPC->enemy->s.number 
+				|| ( hitEnt && hitEnt->client && hitEnt->client->playerTeam == NPC->client->enemyTeam ) )
 			{
 				VectorCopy( NPC->enemy->currentOrigin, NPCInfo->enemyLastSeenLocation );
 				float enemyHorzDist = DistanceHorizontalSquared( NPC->enemy->currentOrigin, NPC->currentOrigin );

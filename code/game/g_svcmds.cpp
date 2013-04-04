@@ -183,6 +183,11 @@ void Svcmd_ForceJump_f( void )
 	{
 		return;
 	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+		return;
+	}
 	char *newVal = gi.argv(1);
 	if ( !VALIDSTRING( newVal ) )
 	{
@@ -214,6 +219,11 @@ void Svcmd_SaberThrow_f( void )
 {
 	if ( !&g_entities[0] || !g_entities[0].client )
 	{
+		return;
+	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
 		return;
 	}
 	char *newVal = gi.argv(1);
@@ -249,6 +259,11 @@ void Svcmd_ForceHeal_f( void )
 	{
 		return;
 	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+		return;
+	}
 	char *newVal = gi.argv(1);
 	if ( !VALIDSTRING( newVal ) )
 	{
@@ -280,6 +295,11 @@ void Svcmd_ForcePush_f( void )
 {
 	if ( !&g_entities[0] || !g_entities[0].client )
 	{
+		return;
+	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
 		return;
 	}
 	char *newVal = gi.argv(1);
@@ -315,6 +335,11 @@ void Svcmd_ForcePull_f( void )
 	{
 		return;
 	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+		return;
+	}
 	char *newVal = gi.argv(1);
 	if ( !VALIDSTRING( newVal ) )
 	{
@@ -346,6 +371,11 @@ void Svcmd_ForceSpeed_f( void )
 {
 	if ( !&g_entities[0] || !g_entities[0].client )
 	{
+		return;
+	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
 		return;
 	}
 	char *newVal = gi.argv(1);
@@ -380,6 +410,11 @@ void Svcmd_ForceGrip_f( void )
 	{
 		return;
 	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+		return;
+	}
 	char *newVal = gi.argv(1);
 	if ( !VALIDSTRING( newVal ) )
 	{
@@ -410,6 +445,11 @@ void Svcmd_ForceLightning_f( void )
 {
 	if ( !&g_entities[0] || !g_entities[0].client )
 	{
+		return;
+	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
 		return;
 	}
 	char *newVal = gi.argv(1);
@@ -444,6 +484,11 @@ void Svcmd_MindTrick_f( void )
 	{
 		return;
 	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+		return;
+	}
 	char *newVal = gi.argv(1);
 	if ( !VALIDSTRING( newVal ) )
 	{
@@ -476,6 +521,11 @@ void Svcmd_SaberDefense_f( void )
 	{
 		return;
 	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+		return;
+	}
 	char *newVal = gi.argv(1);
 	if ( !VALIDSTRING( newVal ) )
 	{
@@ -506,6 +556,11 @@ void Svcmd_SaberOffense_f( void )
 {
 	if ( !&g_entities[0] || !g_entities[0].client )
 	{
+		return;
+	}
+	if ( !g_cheats->integer ) 
+	{
+		gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
 		return;
 	}
 	char *newVal = gi.argv(1);
@@ -597,7 +652,8 @@ qboolean	ConsoleCommand( void ) {
 
 	cmd = gi.argv(0);
 
-	if ( Q_stricmp (cmd, "entitylist") == 0 ) {
+	if ( Q_stricmp (cmd, "entitylist") == 0 ) 
+	{
 		Svcmd_EntityList_f();
 		return qtrue;
 	}
@@ -612,28 +668,57 @@ qboolean	ConsoleCommand( void ) {
 //		return qtrue;
 //	}
 
-	if (Q_stricmp (cmd, "nav") == 0) {
+	if (Q_stricmp (cmd, "nav") == 0) 
+	{
+		if ( !g_cheats->integer ) 
+		{
+			gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+			return qfalse;
+		}
 		Svcmd_Nav_f ();
 		return qtrue;
 	}
 
-	if (Q_stricmp (cmd, "npc") == 0) {
+	if (Q_stricmp (cmd, "npc") == 0) 
+	{
+		if ( !g_cheats->integer ) 
+		{
+			gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+			return qfalse;
+		}
 		Svcmd_NPC_f ();
 		return qtrue;
 	}
 
-	if (Q_stricmp (cmd, "use") == 0) {
+	if (Q_stricmp (cmd, "use") == 0) 
+	{
+		if ( !g_cheats->integer ) 
+		{
+			gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+			return qfalse;
+		}
 		Svcmd_Use_f ();
 		return qtrue;
 	}
 
-	if ( Q_stricmp( cmd, "ICARUS" ) == 0 )	{
+	if ( Q_stricmp( cmd, "ICARUS" ) == 0 )	
+	{
+		if ( !g_cheats->integer ) 
+		{
+			gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+			return qfalse;
+		}
 		Svcmd_ICARUS_f();
 		return qtrue;
 	}
 
 	if ( Q_stricmp( cmd, "saberColor" ) == 0 )	
 	{
+		if ( !g_cheats->integer ) 
+		{
+			gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+			return qfalse;
+		}
 		Svcmd_SaberColor_f();
 		return qtrue;
 	}
@@ -715,6 +800,11 @@ qboolean	ConsoleCommand( void ) {
 	}
 	if ( Q_stricmp( cmd, "runscript" ) == 0 ) 
 	{
+		if ( !g_cheats->integer ) 
+		{
+			gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+			return qfalse;
+		}
 		char *cmd2 = gi.argv(1);
 
 		if ( cmd2 && cmd2[0] )
@@ -748,6 +838,11 @@ qboolean	ConsoleCommand( void ) {
 
 	if ( Q_stricmp( cmd, "playerteam" ) == 0 ) 
 	{
+		if ( !g_cheats->integer ) 
+		{
+			gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+			return qfalse;
+		}
 		char	*cmd2 = gi.argv(1);
 		int		n;
 
@@ -785,6 +880,11 @@ qboolean	ConsoleCommand( void ) {
 
 	if ( Q_stricmp( cmd, "control" ) == 0 )
 	{
+		if ( !g_cheats->integer ) 
+		{
+			gi.SendServerCommand( 0, "print \"Cheats are not enabled on this server.\n\"");
+			return qfalse;
+		}
 		char	*cmd2 = gi.argv(1);
 		if ( !*cmd2 || !cmd2[0] )
 		{

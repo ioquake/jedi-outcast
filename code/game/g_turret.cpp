@@ -8,8 +8,9 @@
 extern team_t TranslateTeamName( const char *name );
 extern	cvar_t	*g_spskill;
 
-extern void G_SetEnemy( gentity_t *self, gentity_t *enemy );
+void G_SetEnemy( gentity_t *self, gentity_t *enemy );
 void finish_spawning_turret( gentity_t *base );
+void ObjectDie (gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath );
 
 #define	ARM_ANGLE_RANGE		60
 #define	HEAD_ANGLE_RANGE	90
@@ -34,9 +35,11 @@ void TurretPain( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, vec
 }
 
 //------------------------------------------------------------------------------------------------------------
-void turret_die ( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath,int hitLoc )
+void turret_die ( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath,int dFlags,int hitLoc )
 //------------------------------------------------------------------------------------------------------------
 {
+	vec3_t	forward = { 0,0,-1 }, pos;
+
 	// Turn off the thinking of the base & use it's targets
 	self->e_ThinkFunc = thinkF_NULL;
 	self->e_UseFunc = useF_NULL;
@@ -45,34 +48,51 @@ void turret_die ( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, in
 	self->e_DieFunc  = dieF_NULL;
 	self->takedamage = qfalse;
 	self->health = 0;
+	self->s.loopSound = 0;
 
 	// hack the effect angle so that explode death can orient the effect properly
-	VectorSet( self->s.angles, 0, 0, -1 );
+	if ( self->spawnflags & 2 )
+	{
+		VectorSet( forward, 0, 0, 1 );
+	}
+
+	VectorCopy( self->currentOrigin, self->s.pos.trBase );
+
+	if ( self->fxID > 0 )
+	{
+		VectorMA( self->currentOrigin, 12, forward, pos );
+		G_PlayEffect( self->fxID, pos, forward );
+	}
+	
+	if ( self->splashDamage > 0 && self->splashRadius > 0 )
+	{
+		G_RadiusDamage( self->currentOrigin, attacker, self->splashDamage, self->splashRadius, attacker, MOD_UNKNOWN );
+	}
+
+	if ( self->s.eFlags & EF_SHADER_ANIM )
+	{
+		self->s.frame = 1; // black
+	}
+
+	self->s.weapon = 0; // crosshair code uses this to mark crosshair red
 
 	if ( self->s.modelindex2 )
 	{
-		gentity_t *dead = G_Spawn();
+		// switch to damage model if we should
+		self->s.modelindex = self->s.modelindex2;
 
-		if ( dead )
+		VectorCopy( self->currentAngles, self->s.apos.trBase );
+		VectorClear( self->s.apos.trDelta );
+		
+		if ( self->target )
 		{
-			G_SetAngles( dead, self->currentAngles );
-			G_SetOrigin( dead, self->currentOrigin ); // self->s.origin );
-			VectorSet( dead->maxs, 8.0f, 8.0f, 8.0f );
-			VectorScale( dead->maxs, -1, dead->mins );
-
-			dead->s.modelindex = self->s.modelindex2;
-			dead->contents = CONTENTS_SOLID;
-			gi.linkentity( dead );
-
-			if ( self->s.eFlags & EF_SHADER_ANIM )
-			{
-				dead->s.eFlags = EF_SHADER_ANIM;
-				dead->s.frame = 1; // black
-			}
+			G_UseTargets( self, attacker );
 		}
 	}
-
-	ExplodeDeath( self );
+	else
+	{
+		ObjectDie( self, inflictor, attacker, damage, meansOfDeath );
+	}
 }
 
 //----------------------------------------------------------------
@@ -565,7 +585,7 @@ void finish_spawning_turret( gentity_t *base )
 	}
 
 	// Set up our explosion effect for the ExplodeDeath code....
-	base->fxID = G_EffectIndex( "tripMine/explosion" );
+	base->fxID = G_EffectIndex( "turret/explode" );
 	G_EffectIndex( "spark_exp_nosnd" );
 
 	base->e_UseFunc = useF_turret_base_use;
@@ -616,13 +636,13 @@ void finish_spawning_turret( gentity_t *base )
 
 	if ( base->spawnflags & 2 )
 	{//upside-down, invert mins and maxe
-		VectorSet( base->maxs, 8.0f, 8.0f, 22.0f );
-		VectorSet( base->mins, -8.0f, -8.0f, 0.0f );
+		VectorSet( base->maxs, 10.0f, 10.0f, 30.0f );
+		VectorSet( base->mins, -10.0f, -10.0f, 0.0f );
 	}
 	else
 	{
-		VectorSet( base->maxs, 8.0f, 8.0f, 0.0f );
-		VectorSet( base->mins, -8.0f, -8.0f, -22.0f );
+		VectorSet( base->maxs, 10.0f, 10.0f, 0.0f );
+		VectorSet( base->mins, -10.0f, -10.0f, -30.0f );
 	}
 	// Precache moving sounds
 	G_SoundIndex( "sound/chars/turret/startup.wav" );
@@ -630,7 +650,8 @@ void finish_spawning_turret( gentity_t *base )
 	G_SoundIndex( "sound/chars/turret/ping.wav" );
 	G_SoundIndex( "sound/chars/turret/move.wav" );
 
-	base->contents = CONTENTS_BODY;
+	base->contents = MASK_SHOT;//CONTENTS_BODY;
+
 	base->max_health = base->health;
 	base->takedamage = qtrue;
 	base->e_DieFunc  = dieF_turret_die;
@@ -1315,8 +1336,10 @@ void pas_think( gentity_t *ent )
 	}
 }
 
-/*QUAKED misc_sentry_turret (1 0 0) (-16 -16 0) (16 16 24) START_OFF
+/*QUAKED misc_sentry_turret (1 0 0) (-16 -16 0) (16 16 24) START_OFF RESERVED
 personal assault sentry, like the ones you can carry in your inventory
+
+  RESERVED - do no use this flag for anything, does nothing..etc.
 
   radius - How far away an enemy can be for it to pick it up (default 512)
   count - number of shots before thing deactivates. -1 = infinite, default 150
@@ -1399,6 +1422,11 @@ void SP_PAS( gentity_t *base )
 	base->e_PainFunc = painF_TurretPain;
 	base->e_DieFunc  = dieF_turret_die;
 
+	// hack this flag on so that when it calls the turret die code, it will orient the effect up
+	// HACK
+	//--------------------------------------
+	base->spawnflags |= 2;
+
 	// Use this for our missile effect
 	RegisterItem( FindItemForWeapon( WP_TURRET ));
 	base->s.weapon = WP_TURRET;
@@ -1452,6 +1480,9 @@ qboolean place_portable_assault_sentry( gentity_t *self, vec3_t origin, vec3_t a
 		{
 			VectorCopy( tr.endpos, pas->s.origin );
 			SP_PAS( pas );
+
+			pas->contents |= CONTENTS_PLAYERCLIP; // player placed ones can block players but not npcs
+
 			pas->e_UseFunc = useF_NULL; // placeable ones never need to be used
 	
 			// we don't hurt us or anyone who belongs to the same team as us.
@@ -1522,7 +1553,7 @@ void ion_cannon_think( gentity_t *self )
 }
 
 //----------------------------------------------------------------------------------------------
-void ion_cannon_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int hitLoc )
+void ion_cannon_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int dFlags,int hitLoc )
 //----------------------------------------------------------------------------------------------
 {
 	vec3_t org;
@@ -1866,7 +1897,7 @@ void panel_turret_shoot( gentity_t *self, vec3_t org, vec3_t dir)
 }
 
 //-----------------------------------------
-void misc_panel_turret_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int hitLoc )
+void misc_panel_turret_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int dFlags, int hitLoc )
 {
 	if ( self->target3 )
 	{
@@ -1876,6 +1907,7 @@ void misc_panel_turret_die( gentity_t *self, gentity_t *inflictor, gentity_t *at
 	// FIXME: might need some other kind of logic or functionality in here??
 	G_UseTargets2( self, player, self->target2 );
 	G_ClearViewEntity( player );
+	cg.overrides.active &= ~CG_OVERRIDE_FOV;
 	cg.overrides.fov = 0;
 }
 
@@ -1941,20 +1973,22 @@ void panel_turret_think( gentity_t *self )
 			G_ClearViewEntity( player );
 			G_Sound( player, self->soundPos2 );
 
-			cg.overrides.fov = 0;
+			cg.overrides.active &= ~CG_OVERRIDE_FOV;
+			cg.overrides.fov = 0; 
 
 			// can be drawn
-			self->s.eFlags &= ~EF_NODRAW;
+//			self->s.eFlags &= ~EF_NODRAW;
 		}
 		else
 		{
 			// don't draw me when being looked through
-			self->s.eFlags |= EF_NODRAW;
-			self->s.modelindex = 0;
+//			self->s.eFlags |= EF_NODRAW;
+//			self->s.modelindex = 0;
 
 			// we only need to think when we are being used
 			self->nextthink = level.time + 50;
 
+			cg.overrides.active |= CG_OVERRIDE_FOV;
 			cg.overrides.fov = 50;
 		}
 
@@ -1967,7 +2001,7 @@ void panel_turret_think( gentity_t *self )
 				AngleVectors( self->s.apos.trBase, dir, NULL, NULL );
 
 				VectorCopy( self->currentOrigin, pt );
-				pt[2] -= 3;
+				pt[2] -= 4;
 				panel_turret_shoot( self, pt, dir );
 
 				self->attackDebounceTime = level.time + self->delay;
@@ -2029,7 +2063,7 @@ void SP_misc_panel_turret( gentity_t *self )
 		self->dflags |= DAMAGE_CUSTOM_HUD; // dumb, but we draw a custom hud
 	}
 
-	self->s.modelindex = G_ModelIndex( "models/map_objects/kejim/impcam.md3" );
+	self->s.modelindex = G_ModelIndex( "models/map_objects/imp_mine/ladyluck_gun.md3" );
 
 	self->soundPos1 = G_SoundIndex( "sound/movers/camera_on.mp3" );
 	self->soundPos2 = G_SoundIndex( "sound/movers/camera_off.mp3" );

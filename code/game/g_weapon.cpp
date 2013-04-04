@@ -43,7 +43,7 @@ static gentity_t *ent_list[MAX_GENTITIES];
 
 // Tenloss Disruptor
 //----------
-#define DISRUPTOR_MAIN_DAMAGE			18
+#define DISRUPTOR_MAIN_DAMAGE			14
 #define DISRUPTOR_NPC_MAIN_DAMAGE_CUT	0.25f
 
 #define DISRUPTOR_ALT_DAMAGE			4
@@ -222,26 +222,26 @@ static void WP_TraceSetStart( const gentity_t *ent, vec3_t start, const vec3_t m
 {
 	//make sure our start point isn't on the other side of a wall
 	trace_t	tr;
-	vec3_t	entMins;
+	vec3_t	entMins, newstart;
 	vec3_t	entMaxs;
 
-	VectorAdd( ent->currentOrigin, ent->mins, entMins );
-	VectorAdd( ent->currentOrigin, ent->maxs, entMaxs );
-
-	if ( G_BoxInBounds( start, mins, maxs, entMins, entMaxs ) )
-	{
-		return;
-	}
+	VectorSet( entMaxs, 5, 5, 5 );
+	VectorScale( entMaxs, -1, entMins );
 
 	if ( !ent->client )
 	{
 		return;
 	}
 
-	gi.trace( &tr, ent->client->renderInfo.eyePoint, mins, maxs, start, ent->s.number, MASK_SOLID|CONTENTS_SHOTCLIP );
+	// man, I'm not so sure about this, but....was having some nasty problems with weapon muzzles in walls so this is sort of a last
+	//	desperate attempt to remedy the situation
+	VectorMA( start, -20, forward, newstart );
+
+	gi.trace( &tr, newstart, entMins, entMaxs, start, ent->s.number, MASK_SOLID|CONTENTS_SHOTCLIP );
 
 	if ( tr.startsolid || tr.allsolid )
 	{
+		// there is a problem here..
 		return;
 	}
 
@@ -267,7 +267,7 @@ gentity_t *CreateMissile( vec3_t org, vec3_t dir, float vel, int life, gentity_t
 	missile->alt_fire = altFire;
 
 	missile->s.pos.trType = TR_LINEAR;
-	missile->s.pos.trTime = level.time - 10;	// move a bit on the very first frame
+	missile->s.pos.trTime = level.time;// - 10;	// move a bit on the very first frame
 	VectorCopy( org, missile->s.pos.trBase );
 	VectorScale( dir, vel, missile->s.pos.trDelta );
 	VectorCopy( org, missile->currentOrigin);
@@ -325,6 +325,10 @@ void WP_Explode( gentity_t *self )
 	{
 		attacker = self->owner;
 	}
+	else if ( self->activator )
+	{
+		attacker = self->activator;
+	}
 
 	if ( self->splashDamage > 0 && self->splashRadius > 0 )
 	{
@@ -336,12 +340,15 @@ void WP_Explode( gentity_t *self )
 		G_UseTargets( self, attacker );
 	}
 
-	G_FreeEntity( self );
+	G_SetOrigin( self, self->currentOrigin );
+
+	self->nextthink = level.time + 50;
+	self->e_ThinkFunc = thinkF_G_FreeEntity;
 }
 
 // We need to have a dieFunc, otherwise G_Damage won't actually make us die.  I could modify G_Damage, but that entails too many changes
 //-----------------------------------------------------------------------------
-void WP_ExplosiveDie( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath,int hitLoc )
+void WP_ExplosiveDie( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath,int dFlags,int hitLoc )
 //-----------------------------------------------------------------------------
 {
 	self->enemy = attacker;
@@ -477,8 +484,16 @@ static void WP_FireBryarPistol( gentity_t *ent, qboolean alt_fire )
 
 		vectoangles( forward, angs );
 
-		angs[PITCH] += ( crandom() * ((5-ent->NPC->currentAim)*0.5f) );
-		angs[YAW]	+= ( crandom() * ((5-ent->NPC->currentAim)*0.5f) );
+		if ( ent->client->NPC_class == CLASS_IMPWORKER )
+		{//*sigh*, hack to make impworkers less accurate without affecteing imperial officer accuracy
+			angs[PITCH] += ( crandom() * (BLASTER_NPC_SPREAD+(6-ent->NPC->currentAim)*0.25f));//was 0.5f
+			angs[YAW]	+= ( crandom() * (BLASTER_NPC_SPREAD+(6-ent->NPC->currentAim)*0.25f));//was 0.5f
+		}
+		else
+		{
+			angs[PITCH] += ( crandom() * ((5-ent->NPC->currentAim)*0.25f) );
+			angs[YAW]	+= ( crandom() * ((5-ent->NPC->currentAim)*0.25f) );
+		}
 
 		AngleVectors( angs, forward, NULL, NULL );
 	}
@@ -505,12 +520,12 @@ static void WP_FireBryarPistol( gentity_t *ent, qboolean alt_fire )
 		missile->count = count; // this will get used in the projectile rendering code to make a beefier effect
 	}
 
-	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-	{
-		// in overcharge mode, so doing double damage
-		missile->flags |= FL_OVERCHARGED;
-		damage *= 2;
-	}
+//	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//	{
+//		// in overcharge mode, so doing double damage
+//		missile->flags |= FL_OVERCHARGED;
+//		damage *= 2;
+//	}
 
 	missile->damage = damage;
 	missile->dflags = DAMAGE_DEATH_KNOCKBACK;
@@ -572,15 +587,15 @@ static void WP_FireBlasterMissile( gentity_t *ent, vec3_t start, vec3_t dir, qbo
 		}
 	}
 
-	if ( ent->client )
-	{
-		if ( ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-		{
-			// in overcharge mode, so doing double damage
-			missile->flags |= FL_OVERCHARGED;
-			damage *= 2;
-		}
-	}
+//	if ( ent->client )
+//	{
+//		if ( ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//		{
+//			// in overcharge mode, so doing double damage
+//			missile->flags |= FL_OVERCHARGED;
+//			damage *= 2;
+//		}
+//	}
 
 	missile->damage = damage;
 	missile->dflags = DAMAGE_DEATH_KNOCKBACK;
@@ -619,7 +634,6 @@ static void WP_FireBlaster( gentity_t *ent, qboolean alt_fire )
 		if ( ent->client && ent->NPC &&
 			( ent->client->NPC_class == CLASS_STORMTROOPER ||
 			ent->client->NPC_class == CLASS_SWAMPTROOPER ) )
-			
 		{
 			angs[PITCH] += ( crandom() * (BLASTER_NPC_SPREAD+(6-ent->NPC->currentAim)*0.25f));//was 0.5f
 			angs[YAW]	+= ( crandom() * (BLASTER_NPC_SPREAD+(6-ent->NPC->currentAim)*0.25f));//was 0.5f
@@ -681,12 +695,13 @@ static void WP_DisruptorMainFire( gentity_t *ent )
 	}
 
 	VectorCopy( muzzle, start );
+	WP_TraceSetStart( ent, start, vec3_origin, vec3_origin );
 
-	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-	{
-		// in overcharge mode, so doing double damage
-		damage *= 2;
-	}
+//	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//	{
+//		// in overcharge mode, so doing double damage
+//		damage *= 2;
+//	}
 
 	VectorMA( start, shotRange, forward, end );
 
@@ -756,6 +771,8 @@ static void WP_DisruptorMainFire( gentity_t *ent )
 		VectorMA( start, dist, forward, spot );
 		AddSightEvent( ent, spot, 256, AEL_DISCOVERED, 50 );
 	}
+	VectorMA( start, shotDist-4, forward, spot );
+	AddSightEvent( ent, spot, 256, AEL_DISCOVERED, 50 );
 }
 
 //---------------------------------------------------------
@@ -815,11 +832,11 @@ void WP_DisruptorAltFire( gentity_t *ent )
 
 	skip = ent->s.number;
 
-	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-	{
-		// in overcharge mode, so doing double damage
-		damage *= 2;
-	}
+//	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//	{
+//		// in overcharge mode, so doing double damage
+//		damage *= 2;
+//	}
 
 	for ( int i = 0; i < traces; i++ )
 	{
@@ -892,7 +909,7 @@ void WP_DisruptorAltFire( gentity_t *ent )
 				{
 					 // we only make this mark on things that can't break or move
 					tent = G_TempEntity( tr.endpos, EV_DISRUPTOR_SNIPER_MISS );
-					tent->s.eventParm = DirToByte( tr.plane.normal );
+					VectorCopy( tr.plane.normal, tent->pos1 );
 					break; // hit solid, but doesn't take damage, so stop the shot...we _could_ allow it to shoot through walls, might be cool?
 				}
 			}
@@ -913,13 +930,16 @@ void WP_DisruptorAltFire( gentity_t *ent )
 
 	shotDist = VectorNormalize( dir );
 
+	//FIXME: if shoot *really* close to someone, the alert could be way out of their FOV
 	for ( dist = 0; dist < shotDist; dist += 64 )
 	{
 		//FIXME: on a really long shot, this could make a LOT of alerts in one frame...
 		VectorMA( muzzle, dist, dir, spot );
 		AddSightEvent( ent, spot, 256, AEL_DISCOVERED, 50 );
 	}
-
+	//FIXME: spawn a temp ent that continuously spawns sight alerts here?  And 1 sound alert to draw their attention?
+	VectorMA( start, shotDist-4, forward, spot );
+	AddSightEvent( ent, spot, 256, AEL_DISCOVERED, 50 );
 }
 
 //---------------------------------------------------------
@@ -989,11 +1009,11 @@ static void WP_BowcasterMainFire( gentity_t *ent )
 		count--;
 	}
 
-	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-	{
-		// in overcharge mode, so doing double damage
-		damage *= 2;
-	}
+//	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//	{
+//		// in overcharge mode, so doing double damage
+//		damage *= 2;
+//	}
 
 	for ( int i = 0; i < count; i++ )
 	{
@@ -1016,10 +1036,10 @@ static void WP_BowcasterMainFire( gentity_t *ent )
 		VectorSet( missile->maxs, BOWCASTER_SIZE, BOWCASTER_SIZE, BOWCASTER_SIZE );
 		VectorScale( missile->maxs, -1, missile->mins );
 
-		if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-		{
-			missile->flags |= FL_OVERCHARGED;
-		}
+//		if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//		{
+//			missile->flags |= FL_OVERCHARGED;
+//		}
 
 		missile->damage = damage;
 		missile->dflags = DAMAGE_DEATH_KNOCKBACK;
@@ -1068,12 +1088,12 @@ static void WP_BowcasterAltFire( gentity_t *ent )
 	VectorSet( missile->maxs, BOWCASTER_SIZE, BOWCASTER_SIZE, BOWCASTER_SIZE );
 	VectorScale( missile->maxs, -1, missile->mins );
 
-	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-	{
-		// in overcharge mode, so doing double damage
-		missile->flags |= FL_OVERCHARGED;
-		damage *= 2;
-	}
+//	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//	{
+//		// in overcharge mode, so doing double damage
+//		missile->flags |= FL_OVERCHARGED;
+//		damage *= 2;
+//	}
 
 	missile->s.eFlags |= EF_BOUNCE;
 	missile->bounceCount = 3;
@@ -1137,12 +1157,12 @@ static void WP_RepeaterMainFire( gentity_t *ent, vec3_t dir )
 		}
 	}
 
-	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-	{
-		// in overcharge mode, so doing double damage
-		missile->flags |= FL_OVERCHARGED;
-		damage *= 2;
-	}
+//	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//	{
+//		// in overcharge mode, so doing double damage
+//		missile->flags |= FL_OVERCHARGED;
+//		damage *= 2;
+//	}
 
 	missile->damage = damage;
 	missile->dflags = DAMAGE_DEATH_KNOCKBACK;
@@ -1199,12 +1219,12 @@ static void WP_RepeaterAltFire( gentity_t *ent )
 	missile->s.pos.trType = TR_GRAVITY;
 	missile->s.pos.trDelta[2] += 40.0f; //give a slight boost in the upward direction
 
-	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-	{
-		// in overcharge mode, so doing double damage
-		missile->flags |= FL_OVERCHARGED;
-		damage *= 2;
-	}
+//	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//	{
+//		// in overcharge mode, so doing double damage
+//		missile->flags |= FL_OVERCHARGED;
+//		damage *= 2;
+//	}
 
 	missile->damage = damage;
 	missile->dflags = DAMAGE_DEATH_KNOCKBACK;
@@ -1239,8 +1259,8 @@ static void WP_FireRepeater( gentity_t *ent, qboolean alt_fire )
 			  ent->client->NPC_class == CLASS_SWAMPTROOPER ||
 			  ent->client->NPC_class == CLASS_SHADOWTROOPER ) )
 		{
-			angs[PITCH] += ( crandom() * (REPEATER_NPC_SPREAD+(6-ent->NPC->currentAim)*0.5f) );
-			angs[YAW]	+= ( crandom() * (REPEATER_NPC_SPREAD+(6-ent->NPC->currentAim)*0.5f) );
+			angs[PITCH] += ( crandom() * (REPEATER_NPC_SPREAD+(6-ent->NPC->currentAim)*0.25f) );
+			angs[YAW]	+= ( crandom() * (REPEATER_NPC_SPREAD+(6-ent->NPC->currentAim)*0.25f) );
 		}
 		else
 		{
@@ -1295,12 +1315,12 @@ static void WP_DEMP2_MainFire( gentity_t *ent )
 	VectorSet( missile->maxs, DEMP2_SIZE, DEMP2_SIZE, DEMP2_SIZE );
 	VectorScale( missile->maxs, -1, missile->mins );
 
-	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-	{
-		// in overcharge mode, so doing double damage
-		missile->flags |= FL_OVERCHARGED;
-		damage *= 2;
-	}
+//	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//	{
+//		// in overcharge mode, so doing double damage
+//		missile->flags |= FL_OVERCHARGED;
+//		damage *= 2;
+//	}
 
 	missile->damage = damage;
 	missile->dflags = DAMAGE_DEATH_KNOCKBACK;
@@ -1508,11 +1528,11 @@ static void WP_FlechetteMainFire( gentity_t *ent )
 		vel *= 0.5f;
 	}
 
-	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-	{
-		// in overcharge mode, so doing double damage
-		damage *= 2;
-	}
+//	if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//	{
+//		// in overcharge mode, so doing double damage
+//		damage *= 2;
+//	}
 
 	for ( int i = 0; i < FLECHETTE_SHOTS; i++ )
 	{
@@ -1540,10 +1560,10 @@ static void WP_FlechetteMainFire( gentity_t *ent )
 
 		missile->damage = damage;
 
-		if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
-		{
-			missile->flags |= FL_OVERCHARGED;
-		}
+//		if ( ent->client && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > 0 && ent->client->ps.powerups[PW_WEAPON_OVERCHARGE] > cg.time )
+//		{
+//			missile->flags |= FL_OVERCHARGED;
+//		}
 			
 		missile->dflags = (DAMAGE_DEATH_KNOCKBACK|DAMAGE_EXTRA_KNOCKBACK);
 		
@@ -1655,7 +1675,7 @@ static void WP_FlechetteProxMine( gentity_t *ent )
 	missile->clipmask = MASK_SHOT;
 
 	// we don't want it to bounce forever
-	missile->bounceCount = 0;
+	missile->bounceCount = 0; 
 }
 */
 //----------------------------------------------
@@ -1674,7 +1694,7 @@ void WP_flechette_alt_blow( gentity_t *ent )
 static void WP_CreateFlechetteBouncyThing( vec3_t start, vec3_t fwd, gentity_t *self )
 //------------------------------------------------------------------------------
 {
-	gentity_t	*missile = CreateMissile( start, fwd, 700 + random() * 700, 1500 + random() * 2000, self, qtrue );
+	gentity_t	*missile = CreateMissile( start, fwd, 950 + random() * 700, 1500 + random() * 2000, self, qtrue );
 	
 	missile->e_ThinkFunc = thinkF_WP_flechette_alt_blow;
 
@@ -2021,7 +2041,7 @@ static void WP_DropDetPack( gentity_t *self, vec3_t start, vec3_t dir )
 	missile->splashRadius = FLECHETTE_MINE_SPLASH_RADIUS;
 	missile->splashMethodOfDeath = MOD_DETPACK;// ?SPLASH;
 
-	missile->clipmask = MASK_SHOT;
+	missile->clipmask = (CONTENTS_SOLID|CONTENTS_BODY|CONTENTS_SHOTCLIP);//MASK_SHOT;
 
 	// we don't want it to ever bounce
 	missile->bounceCount = 0;
@@ -2248,7 +2268,7 @@ void CreateLaserTrap( gentity_t *laserTrap, vec3_t start, gentity_t *owner )
 	laserTrap->owner = owner;
 //	VectorSet( laserTrap->mins, -LT_SIZE, -LT_SIZE, -LT_SIZE );
 //	VectorSet( laserTrap->maxs, LT_SIZE, LT_SIZE, LT_SIZE );
-	laserTrap->clipmask = MASK_SHOT;
+	laserTrap->clipmask = (CONTENTS_SOLID|CONTENTS_BODY|CONTENTS_SHOTCLIP);//MASK_SHOT;
 
 	laserTrap->s.pos.trTime = level.time;		// move a bit on the very first frame
 	VectorCopy( start, laserTrap->s.pos.trBase );
@@ -2403,7 +2423,7 @@ void thermalDetonatorExplode( gentity_t *ent )
 }
 
 //-------------------------------------------------------------------------------------------------------------
-void thermal_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int hitLoc )
+void thermal_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int dFlags, int hitLoc )
 //-------------------------------------------------------------------------------------------------------------
 {
 	thermalDetonatorExplode( self );
@@ -2695,9 +2715,9 @@ gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean alt_fire )
 				VectorMA( target, Q_flrand( 0, -32 ), vec, target );//throw a little short
 			}
 
-			target[0] += Q_flrand( -5, 5 )+(crandom()*(6-ent->NPC->currentAim)*4);
-			target[1] += Q_flrand( -5, 5 )+(crandom()*(6-ent->NPC->currentAim)*4);
-			target[2] += Q_flrand( -5, 5 )+(crandom()*(6-ent->NPC->currentAim)*4);
+			target[0] += Q_flrand( -5, 5 )+(crandom()*(6-ent->NPC->currentAim)*2);
+			target[1] += Q_flrand( -5, 5 )+(crandom()*(6-ent->NPC->currentAim)*2);
+			target[2] += Q_flrand( -5, 5 )+(crandom()*(6-ent->NPC->currentAim)*2);
 
 			WP_LobFire( ent, start, target, bolt->mins, bolt->maxs, bolt->clipmask, bolt->s.pos.trDelta, qtrue, ent->s.number, ent->enemy->s.number );
 		}
@@ -2941,16 +2961,19 @@ void WP_FireStunBaton( gentity_t *ent, qboolean alt_fire )
 {
 	gentity_t	*tr_ent;
 	trace_t		tr;
-	vec3_t		mins, maxs, end;
+	vec3_t		mins, maxs, end, start;
 
 	G_Sound( ent, G_SoundIndex( "sound/weapons/baton/fire" ));
 
-	VectorMA( muzzle, STUN_BATON_RANGE, forward, end );
+	VectorCopy( muzzle, start );
+	WP_TraceSetStart( ent, start, vec3_origin, vec3_origin );
+
+	VectorMA( start, STUN_BATON_RANGE, forward, end );
 
 	VectorSet( maxs, 6, 6, 6 );
 	VectorScale( maxs, -1, mins );
 
-	gi.trace ( &tr, muzzle, mins, maxs, end, ent->s.number, MASK_SHOT );
+	gi.trace ( &tr, start, mins, maxs, end, ent->s.number, MASK_SHOT );
 
 	if ( tr.entityNum >= ENTITYNUM_WORLD )
 	{
@@ -3602,6 +3625,8 @@ extern void ChangeWeapon( gentity_t *ent, int newWeapon );
 			gi.Printf( S_COLOR_RED"ERROR: no waypoint for emplaced_gun %s at %s\n", self->targetname, vtos(self->currentOrigin) );
 		}
 #endif
+
+		G_Sound( self, G_SoundIndex( "sound/weapons/emplaced/emplaced_mount.mp3" ));
 	}
 }
 
@@ -3632,7 +3657,7 @@ void emplaced_blow( gentity_t *ent )
 }
 
 //----------------------------------------------------------
-void emplaced_gun_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int hitLoc )
+void emplaced_gun_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int dFlags,int hitLoc )
 {
 	vec3_t org;
 
@@ -3685,10 +3710,12 @@ void emplaced_gun_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacke
 	G_RadiusDamage( self->currentOrigin, self, self->splashDamage, self->splashRadius, self, MOD_UNKNOWN );
 
 	// when the gun is dead, add some ugliness to it.
-	self->lastAngles[YAW] += 4;
-	self->lastAngles[PITCH] += 6;
-	self->lastAngles[ROLL] += 7;
-	gi.G2API_SetBoneAnglesIndex( &self->ghoul2[self->playerModel], self->lowerLumbarBone, self->lastAngles, BONE_ANGLES_POSTMULT, POSITIVE_Y, POSITIVE_Z, POSITIVE_X, NULL ); 
+	vec3_t ugly;
+
+	ugly[YAW] = 4;
+	ugly[PITCH] = self->lastAngles[PITCH] * 0.8f + crandom() * 6;
+	ugly[ROLL] = crandom() * 7;
+	gi.G2API_SetBoneAnglesIndex( &self->ghoul2[self->playerModel], self->lowerLumbarBone, ugly, BONE_ANGLES_POSTMULT, POSITIVE_Y, POSITIVE_Z, POSITIVE_X, NULL ); 
 
 	VectorSet( org, 0, 0, 1 );
 
@@ -3713,7 +3740,8 @@ void emplaced_gun_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacke
 		G_SetOrigin( ent, org );
 		VectorCopy( org, ent->s.origin );
 
-		VectorSet( ent->s.angles, 0, 0, 1 ); // up
+		VectorSet( ent->s.angles, -90, 0, 0 ); // up
+		G_SetAngles( ent, ent->s.angles );
 
 		gi.linkentity( ent );
 	}
@@ -3734,35 +3762,8 @@ void SP_emplaced_gun( gentity_t *ent )
 		ent->svFlags |= SVF_INACTIVE;
 	}
 
-	// We'll set a base bounding box, then rotate it to match the spawn angles below
-	VectorSet( ent->mins, -30, -20, -5 );
-	VectorSet( ent->maxs, 90, 20, 60 );
-
-	// rotate
-	float temp, ang = ent->s.angles[YAW] * 0.0174533f;
-	float c, s;
-
-	c = cos( ang );
-	s = sin( ang );
-
-	temp = c * ent->mins[0] - s * ent->mins[1];
-	ent->mins[1] = s * ent->mins[0] + c * ent->mins[1];
-	ent->mins[0] = temp;
-
-	temp = c * ent->maxs[0] - s * ent->maxs[1];
-	ent->maxs[1] = s * ent->maxs[0] + c * ent->maxs[1];
-	ent->maxs[0] = temp;
-
-	// ensure that maxs is greater than mins
-	for ( int i = 0; i < 2; i++ )
-	{
-		if ( ent->maxs[i] < ent->mins[i] )
-		{
-			temp = ent->maxs[i];
-			ent->maxs[i] = ent->mins[i];
-			ent->mins[i] = temp;
-		}
-	}
+	VectorSet( ent->mins, -30, -30, -5 );
+	VectorSet( ent->maxs, 30, 30, 60 );
 
 	if ( ent->spawnflags & EMPLACED_VULNERABLE )
 	{
@@ -3778,6 +3779,10 @@ void SP_emplaced_gun( gentity_t *ent )
 
 	G_EffectIndex( "emplaced/explode" );
 	G_EffectIndex( "emplaced/dead_smoke" );
+
+	G_SoundIndex( "sound/weapons/emplaced/emplaced_mount.mp3" );
+	G_SoundIndex( "sound/weapons/emplaced/emplaced_dismount.mp3" );
+	G_SoundIndex( "sound/weapons/emplaced/emplaced_move_lp.wav" );
 
 	// Set up our defaults and override with custom amounts as necessary
 	G_SpawnInt( "count", "600", &ent->count );
@@ -3797,7 +3802,7 @@ void SP_emplaced_gun( gentity_t *ent )
 	ent->headBolt = gi.G2API_AddBolt( &ent->ghoul2[0], "*seat" );
 	ent->handLBolt = gi.G2API_AddBolt( &ent->ghoul2[0], "*flash01" );
 	ent->handRBolt = gi.G2API_AddBolt( &ent->ghoul2[0], "*flash02" );
-	ent->rootBone = gi.G2API_GetBoneIndex( &ent->ghoul2[ent->playerModel], "model_root", qtrue );
+	ent->rootBone = gi.G2API_GetBoneIndex( &ent->ghoul2[ent->playerModel], "base_bone", qtrue );
 	ent->lowerLumbarBone = gi.G2API_GetBoneIndex( &ent->ghoul2[0], "swivel_bone", qtrue );
 	gi.G2API_SetBoneAngles( &ent->ghoul2[0], "swivel_bone", vec3_origin, BONE_ANGLES_POSTMULT, POSITIVE_Y, POSITIVE_Z, POSITIVE_X, NULL); 
 

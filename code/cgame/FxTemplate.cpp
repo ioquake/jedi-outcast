@@ -815,6 +815,10 @@ bool CPrimitiveTemplate::ParseSpawnFlags( const char *val )
 		{
 			mSpawnFlags |= FX_RGB_COMPONENT_INTERP;
 		}
+		else if ( !stricmp( flag[i], "lessAttenuation" ))
+		{
+			mSpawnFlags |= FX_SND_LESS_ATTENUATION;
+		}
 		else
 		{ // we have badness going on, but continue on in case there are any valid fields in here
 			ok = false;

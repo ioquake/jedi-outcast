@@ -23,8 +23,6 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_DEATH12),			//# 
 	ENUM2STRING(BOTH_DEATH13),			//# 
 	ENUM2STRING(BOTH_DEATH14),			//# 
-	ENUM2STRING(BOTH_DEATH14_UNGRIP),	//# Desann's end death (cin #35)
-	ENUM2STRING(BOTH_DEATH14_SITUP),	//# Tavion sitting up after having been thrown (cin #23)
 	ENUM2STRING(BOTH_DEATH15),			//# 
 	ENUM2STRING(BOTH_DEATH16),			//# 
 	ENUM2STRING(BOTH_DEATH17),			//# 
@@ -124,6 +122,7 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	//# #sep ENUM2STRING(BOTH_ ATTACKS
 	ENUM2STRING(BOTH_ATTACK1),			//# Attack with stun baton
 	ENUM2STRING(BOTH_ATTACK2),			//# Attack with one-handed pistol
+	ENUM2STRING(BOTH_ATTACK2IDLE1),		//# Idle with one-handed pistol
 	ENUM2STRING(BOTH_ATTACK3),			//# Attack with blaster rifle
 	ENUM2STRING(BOTH_ATTACK4),			//# Attack with disruptor
 	ENUM2STRING(BOTH_ATTACK5),			//# Attack with bow caster
@@ -609,17 +608,17 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_CCWCIRCLELOCK),	//#
 
 	//# #sep ENUM2STRING(BOTH_ STANDING
-	ENUM2STRING(BOTH_STAND1),			//# Standing idle), no weapon), hands down
-	ENUM2STRING(BOTH_STAND1_RANDOM1),	//# Random standing idle
-	ENUM2STRING(BOTH_STAND1_RANDOM2),	//# Random standing idle
-	ENUM2STRING(BOTH_STAND2),			//# Standing idle with a weapon
-	ENUM2STRING(BOTH_STAND2_RANDOM1),	//# Random standing idle
-	ENUM2STRING(BOTH_STAND2_RANDOM2),	//# Random standing idle
-	ENUM2STRING(BOTH_STAND2_RANDOM3),	//# Random standing idle
-	ENUM2STRING(BOTH_STAND2_RANDOM4),	//# Random standing idle
-	ENUM2STRING(BOTH_STAND3),			//# Standing hands behind back), at ease), etc.
+	ENUM2STRING(BOTH_STAND1),			//# Standing idle, no weapon, hands down
+	ENUM2STRING(BOTH_STAND1IDLE1),		//# Random standing idle
+	ENUM2STRING(BOTH_STAND2),			//# Standing idle with a saber
+	ENUM2STRING(BOTH_STAND2IDLE1),		//# Random standing idle
+	ENUM2STRING(BOTH_STAND2IDLE2),
+	ENUM2STRING(BOTH_STAND3),			//# Standing idle with 2-handed weapon
+	ENUM2STRING(BOTH_STAND3IDLE1),		//# Random standing idle
 	ENUM2STRING(BOTH_STAND4),			//# hands clasp behind back
-	ENUM2STRING(BOTH_STAND5),			//# standing idle), no weapon), hand down), back straight
+	ENUM2STRING(BOTH_STAND4IDLE1),		//# Random standing idle
+	ENUM2STRING(BOTH_STAND5),			//# standing idle, no weapon, hand down, back straight
+	ENUM2STRING(BOTH_STAND5IDLE1),		//# Random standing idle
 	ENUM2STRING(BOTH_STAND6),			//# one handed), gun at side), relaxed stand
 	ENUM2STRING(BOTH_STAND7),			//# both hands on hips (female)
 	ENUM2STRING(BOTH_STAND8),			//# both hands on hips (male)
@@ -638,7 +637,11 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_STAND5_REELO),		//# Reelo in his stand5 position (cin #18)
 	ENUM2STRING(BOTH_STAND1TOSTAND5),	//# Transition from stand1 to stand5
 	ENUM2STRING(BOTH_STAND5TOSTAND1),	//# Transition from stand5 to stand1
+	ENUM2STRING(BOTH_STAND5TOAIM),		//# Transition of Kye aiming his gun at Desann (cin #9) 
+	ENUM2STRING(BOTH_STAND5STARTLEDLOOKLEFT),	//# Kyle turning to watch the bridge drop (cin #9) 
+	ENUM2STRING(BOTH_STARTLEDLOOKLEFTTOSTAND5),	//# Kyle returning to stand 5 from watching the bridge drop (cin #9) 
 	ENUM2STRING(BOTH_STAND5TOSTAND8),	//# Transition from stand5 to stand8
+	ENUM2STRING(BOTH_STAND7TOSTAND8),	//# Tavion putting hands on back of chair (cin #11)
 	ENUM2STRING(BOTH_STAND8TOSTAND5),	//# Transition from stand8 to stand5
 
 	ENUM2STRING(BOTH_CONSOLE1START),	//# typing at a console
@@ -647,6 +650,8 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_CONSOLE2START),	//# typing at a console with comm link in hand (cin #5) 
 	ENUM2STRING(BOTH_CONSOLE2),			//# typing at a console with comm link in hand (cin #5) 
 	ENUM2STRING(BOTH_CONSOLE2STOP),		//# typing at a console with comm link in hand (cin #5) 
+	ENUM2STRING(BOTH_CONSOLE2HOLDCOMSTART),	//# lean in to type at console while holding comm link in hand (cin #5) 
+	ENUM2STRING(BOTH_CONSOLE2HOLDCOMSTOP),	//# lean away after typing at console while holding comm link in hand (cin #5) 
 
 	ENUM2STRING(BOTH_GUARD_LOOKAROUND1),	//# Cradling weapon and looking around
 	ENUM2STRING(BOTH_GUARD_IDLE1),		//# Cradling weapon and standing
@@ -654,6 +659,7 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_GESTURE1),			//# Generic gesture), non-specific
 	ENUM2STRING(BOTH_GESTURE2),			//# Generic gesture), non-specific
 	ENUM2STRING(BOTH_GESTURE3),			//# Generic gesture), non-specific
+	ENUM2STRING(BOTH_WALK1TALKCOMM1),	//# Talking into coom link while walking
 	ENUM2STRING(BOTH_TALK1),			//# Generic talk anim
 	ENUM2STRING(BOTH_TALKCOMM1START),	//# Start talking into a comm link
 	ENUM2STRING(BOTH_TALKCOMM1),		//# Talking into a comm link
@@ -696,6 +702,9 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_TALKGESTURE19START),	//# Desann lifting his arm "Join me" (cin #34)
 	ENUM2STRING(BOTH_TALKGESTURE19STOP),	//# Desann lifting his arm "Join me" (cin #34)
 	ENUM2STRING(BOTH_TALKGESTURE20START),	//# Kyle lifting his arm "Join us" (cin #34)
+	ENUM2STRING(BOTH_TALKGESTURE21),		//# generic talk gesture from stand3
+	ENUM2STRING(BOTH_TALKGESTURE22),		//# generic talk gesture from stand3
+	ENUM2STRING(BOTH_TALKGESTURE23),		//# generic talk gesture from stand3
 	ENUM2STRING(BOTH_PAUSE1START),			//# Luke pauses to warn Kyle (cin #24) start
 	ENUM2STRING(BOTH_PAUSE1STOP),			//# Luke pauses to warn Kyle (cin #24) stop
 
@@ -725,13 +734,6 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_EXAMINE3START),	//# Start Lando looking around corner
 	ENUM2STRING(BOTH_EXAMINE3),			//# Hold Lando looking around corner
 	ENUM2STRING(BOTH_EXAMINE3STOP),		//# End Lando looking around corner
-
-	ENUM2STRING(BOTH_THROW1START),		//# Kyle thrown to the right
-	ENUM2STRING(BOTH_THROW1),			//# Kyle thrown to the right
-	ENUM2STRING(BOTH_THROW1STOP),		//# Kyle thrown to the right
-	ENUM2STRING(BOTH_THROW2START),		//# Kyle thrown to the left
-	ENUM2STRING(BOTH_THROW2),			//# Kyle thrown to the left
-	ENUM2STRING(BOTH_THROW3),			//# Kyle thrown backwards in cin #9
 
 	ENUM2STRING(BOTH_LEANLEFT2START),	//# Start leaning left in chair
 	ENUM2STRING(BOTH_LEANLEFT2STOP),		//# Stop leaning left in chair
@@ -797,6 +799,7 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_THREATEN1),			//# Kyle threatening Bartender with lightsaber (cin #16)
 	ENUM2STRING(BOTH_RADIO_ONOFF),			//# Mech Galak turning on his suit radio (cin #32)
 	ENUM2STRING(BOTH_TRIUMPHANT1START),		//# Mech Galak raising his arms in victory (cin #32)
+	ENUM2STRING(BOTH_TRIUMPHANT1STARTGESTURE),	//# Mech Galak raising his arms in victory (cin #32)
 	ENUM2STRING(BOTH_TRIUMPHANT1STOP),		//# Mech Galak lowering his arms in victory (cin #32)
 
 	ENUM2STRING(BOTH_SABERTHROW1START),		//# Desann throwing his light saber (cin #26)
@@ -820,6 +823,8 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 
 	ENUM2STRING(BOTH_SIT2TO3),			//# Trans from sit2 to sit3?
 	ENUM2STRING(BOTH_SIT2TOSTAND5),		//# Transition from sit 2 to stand 5
+	ENUM2STRING(BOTH_STAND5TOSIT2),		//# Transition from stand 5 to sit 2
+	ENUM2STRING(BOTH_SIT2TOSIT4),		//# Trans from sit2 to sit4 (cin #12) Luke leaning back from lotus position.
 	ENUM2STRING(BOTH_SIT3TO1),			//# Trans from sit3 to sit1?
 	ENUM2STRING(BOTH_SIT3TO2),			//# Trans from sit3 to sit2?
 	ENUM2STRING(BOTH_SIT3TOSTAND5),		//# transition from sit 3 to stand 5
@@ -840,23 +845,22 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_UNCROUCH1),			//# Transition from crouch to standing
 	ENUM2STRING(BOTH_CROUCH2IDLE),		//# crouch and resting on back righ heel), no weapon
 	ENUM2STRING(BOTH_CROUCH2TOSTAND1),	//# going from crouch2 to stand1
-	ENUM2STRING(BOTH_UNCROUCH3),			//# Desann uncrouching down to Kyle (cin 9)
 	ENUM2STRING(BOTH_CROUCH3),			//# Desann crouching down to Kyle (cin 9)
+	ENUM2STRING(BOTH_UNCROUCH3),			//# Desann uncrouching down to Kyle (cin 9)
+	ENUM2STRING(BOTH_CROUCH4),			//# Slower version of crouch1 for cinematics
+	ENUM2STRING(BOTH_UNCROUCH4),		//# Slower version of uncrouch1 for cinematics
 	ENUM2STRING(BOTH_GET_UP1),			//# Get up from the ground), face down
 	ENUM2STRING(BOTH_GET_UP2),			//# Get up from the ground), face up
 
-	ENUM2STRING(BOTH_COCKPIT_CONSOLE1),		//# work console1 while sitting in a cockpit.
-	ENUM2STRING(BOTH_COCKPIT_CONSOLE2),		//# work console2 while sitting in a cockpit.
 	ENUM2STRING(BOTH_COCKPIT_SIT),			//# sit in a cockpit.
 
 	ENUM2STRING(BOTH_GUNSIT1),			//# sitting on an emplaced gun.
 
+	ENUM2STRING(BOTH_DEATH14_UNGRIP),	//# Desann's end death (cin #35)
+	ENUM2STRING(BOTH_DEATH14_SITUP),	//# Tavion sitting up after having been thrown (cin #23)
 	ENUM2STRING(BOTH_KNEES1),			//# Tavion on her knees
 	ENUM2STRING(BOTH_KNEES2),			//# Tavion on her knees looking down
 	ENUM2STRING(BOTH_KNEES2TO1),		//# Transition of KNEES2 to KNEES1
-	ENUM2STRING(BOTH_STRUGGLE1START),	//# Kyle struggling under crate
-	ENUM2STRING(BOTH_STRUGGLE1),		//# Kyle struggling under crate
-	ENUM2STRING(BOTH_STRUGGLE1STOP),	//# Kyle struggling under crate
 
 	ENUM2STRING(BOTH_RUMMAGE1START),	//# Kyle rummaging for crystal (cin 2)
 	ENUM2STRING(BOTH_RUMMAGE1),			//# Kyle rummaging for crystal (cin 2)
@@ -886,10 +890,12 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_RUNSTRAFE_RIGHT1),	//# Sidestep right), should loop
 	ENUM2STRING(BOTH_TURN_LEFT1),		//# Turn left), should loop
 	ENUM2STRING(BOTH_TURN_RIGHT1),		//# Turn right), should loop
+	ENUM2STRING(BOTH_TURNSTAND1),		//# Turn from STAND1 position
 	ENUM2STRING(BOTH_TURNSTAND2),		//# Turn from STAND2 position
 	ENUM2STRING(BOTH_TURNSTAND3),		//# Turn from STAND3 position
 	ENUM2STRING(BOTH_TURNSTAND4),		//# Turn from STAND4 position
 	ENUM2STRING(BOTH_TURNSTAND5),		//# Turn from STAND5 position
+	ENUM2STRING(BOTH_TURNCROUCH1),		//# Turn from CROUCH1 position
 	ENUM2STRING(BOTH_RUNAWAY1),			//# Running scared
 	ENUM2STRING(BOTH_SWIM1),				//# Swimming
 
@@ -1029,6 +1035,7 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_POSE2),//#
 	ENUM2STRING(BOTH_POSE3),//#
 	ENUM2STRING(BOTH_POSE4),//#
+	ENUM2STRING(BOTH_POSE5),//#
 
 	//# #sep BOTH_ MISC MOVEMENT
 	ENUM2STRING(BOTH_HIT1),				//# Kyle hit by crate in cin #9
@@ -1142,6 +1149,7 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_MINDTRICK1),			//# Use off-hand to do mind trick
 	ENUM2STRING(BOTH_MINDTRICK2),			//# Use off-hand to do distraction
 	ENUM2STRING(BOTH_FORCELIGHTNING),		//# Use off-hand to do lightning
+	ENUM2STRING(BOTH_FORCELIGHTNING_START),	//# Use off-hand to do lightning - start
 	ENUM2STRING(BOTH_FORCELIGHTNING_HOLD),	//# Use off-hand to do lightning - hold
 	ENUM2STRING(BOTH_FORCELIGHTNING_RELEASE),//# Use off-hand to do lightning - release
 	ENUM2STRING(BOTH_FORCEHEAL_START),		//# Healing meditation pose start
@@ -1149,12 +1157,48 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 	ENUM2STRING(BOTH_FORCEHEAL_QUICK),		//# Healing meditation gesture
 	ENUM2STRING(BOTH_SABERPULL),			//# Use off-hand to do force power.
 	ENUM2STRING(BOTH_FORCEGRIP1),			//# force-gripping (no anim?)
-	ENUM2STRING(BOTH_FORCEGRIP2),			//# force-gripping (?)
 	ENUM2STRING(BOTH_FORCEGRIP3),			//# force-gripping (right-hand)
 	ENUM2STRING(BOTH_FORCEGRIP_HOLD),	//# Use off-hand to do grip - hold
 	ENUM2STRING(BOTH_FORCEGRIP_RELEASE),//# Use off-hand to do grip - release
 	ENUM2STRING(BOTH_TOSS1),				//# throwing to left after force gripping
 	ENUM2STRING(BOTH_TOSS2),				//# throwing to right after force gripping
+
+	ENUM2STRING(BOTH_COCKPIT_TALKR1START),		//# turn head from straight forward to looking full right
+	ENUM2STRING(BOTH_COCKPIT_TALKR1STARTTOMID),	//# from TALKR1START to looking at hologram (cin #1)
+	ENUM2STRING(BOTH_COCKPIT_TALKR1MIDTOSTART),	//# from looking at hologram to TALKR1START (cin #1)
+	ENUM2STRING(BOTH_COCKPIT_TALKR1STOP),		//# return head to straight forward from BOTH_COCKPIT_TALKR1
+	ENUM2STRING(BOTH_COCKPIT_TALKR1STOPTOMID),	//# from TALKR1STOP to TALKR1MID
+	ENUM2STRING(BOTH_COCKPIT_TALKR1MIDTOSTOP),	//# from looking at hologram to TALKR1STOP (cin #1)
+	ENUM2STRING(BOTH_COCKPIT_TALKR1),			//# talk to right side
+
+	ENUM2STRING(BOTH_COCKPIT_TALKL1START),		//# turn head from straight forward to looking full left
+	ENUM2STRING(BOTH_COCKPIT_TALKL1STARTTOMID),	//# from TALKL1START to looking at hologram (cin #1)
+	ENUM2STRING(BOTH_COCKPIT_TALKL1MIDTOSTART),	//# from looking at hologram to TALKL1START (cin #1)
+	ENUM2STRING(BOTH_COCKPIT_TALKL1STOP),		//# return head to straight forward from BOTH_COCKPIT_TALKL1
+	ENUM2STRING(BOTH_COCKPIT_TALKL1STOPTOMID),	//# from TALKL1STOP to TALKL1MID
+	ENUM2STRING(BOTH_COCKPIT_TALKL1MIDTOSTOP),	//# from looking at hologram to TALKL1STOP (cin #1)
+	ENUM2STRING(BOTH_COCKPIT_TALKL1),			//# talk to left side
+
+	ENUM2STRING(BOTH_COCKPIT_CONSOLE1),			//# type at controls
+	ENUM2STRING(BOTH_COCKPIT_CONSOLE2),			//# type at controls
+	ENUM2STRING(BOTH_COCKPIT_CONSOLE2_PARTIAL),	//# last part of console2 anim (cin #1) used by Jan	
+
+	ENUM2STRING(BOTH_COCKPIT_HEADNOD),			//# nod head yes while sitting
+	ENUM2STRING(BOTH_COCKPIT_HEADSHAKE),			//# shake head no while sitting
+
+	ENUM2STRING(BOTH_COCKPIT_HEADTILTLSTART),	//# start tilt head left while sitting
+	ENUM2STRING(BOTH_COCKPIT_HEADTILTLSTOP),		//# stop tilt head left while sitting
+	ENUM2STRING(BOTH_COCKPIT_HEADTILTRSTART),	//# start tilt head right while sitting
+	ENUM2STRING(BOTH_COCKPIT_HEADTILTRSTOP),		//# stop tilt head right while sitting
+
+	ENUM2STRING(BOTH_COCKPIT_TALKGESTURE7START),		//# 
+	ENUM2STRING(BOTH_COCKPIT_TALKGESTURE7STOP),		//# 
+	ENUM2STRING(BOTH_COCKPIT_TALKGESTURE8),			//# 
+	ENUM2STRING(BOTH_COCKPIT_TALKGESTURE11START),	//# 
+	ENUM2STRING(BOTH_COCKPIT_TALKGESTURE11STOP),		//# 
+
+	ENUM2STRING(BOTH_COCKPIT_SLEEP6START),	//# 
+	ENUM2STRING(BOTH_COCKPIT_SLEEP6STOP),		//# 
 
 	//=================================================
 	//ANIMS IN WHICH ONLY THE UPPER OBJECTS ARE IN MD3
@@ -1197,11 +1241,9 @@ stringID_table_t animTable [MAX_ANIMATIONS+1] =
 
 	//# #sep ENUM2STRING(TORSO_ MISC
 	ENUM2STRING(TORSO_TALKR1START),		//# begin turning head for ENUM2STRING(BOTH_ENUM2STRING(TORSO_TALKR
-	ENUM2STRING(TORSO_TALKR1HOLD),		//# non-looping version of talk to right side
 	ENUM2STRING(TORSO_TALKR1STOP),		//# return head to straight forward from ENUM2STRING(BOTH_ENUM2STRING(TORSO_TALKL
 	ENUM2STRING(TORSO_TALKR1),			//# talk to right side
 	ENUM2STRING(TORSO_TALKL1START),		//# begin turning head for ENUM2STRING(BOTH_ENUM2STRING(TORSO_TALKL
-	ENUM2STRING(TORSO_TALKL1HOLD),		//# non-looping version of talk to left side
 	ENUM2STRING(TORSO_TALKL1STOP),		//# return head to straight forward from ENUM2STRING(BOTH_ENUM2STRING(TORSO_TALKL
 	ENUM2STRING(TORSO_TALKL1),			//# talk to left side
 	ENUM2STRING(TORSO_LOOKL1),			//# looking left

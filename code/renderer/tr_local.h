@@ -1174,7 +1174,6 @@ extern	cvar_t	*r_printShaders;
 /*
 Ghoul2 Insert Start
 */
-extern	cvar_t	*r_noServerGhoul2;
 extern	cvar_t	*r_noGhoul2;
 /*
 Ghoul2 Insert End
@@ -1279,6 +1278,7 @@ void		RE_LoadWorldMap( const char *mapname );
 void		RE_SetWorldVisData( const byte *vis );
 qhandle_t	RE_RegisterModel( const char *name );
 qhandle_t	RE_RegisterSkin( const char *name );
+int			RE_GetAnimationCFG(const char *psCFGFilename, char *psDest, int iDestSize);
 void		RE_Shutdown( qboolean destroyWindow );
 
 void		RE_RegisterMedia_LevelLoadBegin(const char *psMapName, ForceReload_e eForceReload, qboolean bAllowScreenDissolve);
@@ -1698,6 +1698,11 @@ typedef struct {
 	float	a;
 } rotatePicCommand_t;
 
+typedef struct
+{
+	int			commandId;
+} setModeCommand_t;
+
 typedef struct 
 {
 	int		commandId;
@@ -1723,6 +1728,7 @@ typedef enum {
 	RC_DRAW_SURFS,
 	RC_DRAW_BUFFER,
 	RC_SWAP_BUFFERS,
+	RC_WORLD_EFFECTS,
 } renderCommand_t;
 
 
@@ -1769,6 +1775,7 @@ void RE_RotatePic ( float x, float y, float w, float h,
 					  float s1, float t1, float s2, float t2,float a, qhandle_t hShader );
 void RE_RotatePic2 ( float x, float y, float w, float h, 
 					  float s1, float t1, float s2, float t2,float a, qhandle_t hShader );
+void RE_RenderWorldEffects(void);
 void RE_LAGoggles( void );
 void RE_Scissor ( float x, float y, float w, float h);
 void RE_BeginFrame( stereoFrame_t stereoFrame );

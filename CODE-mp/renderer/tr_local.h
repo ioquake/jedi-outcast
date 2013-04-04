@@ -1026,7 +1026,7 @@ typedef struct {
 	int						identityLightByte;	// identityLight * 255
 	int						overbrightBits;		// r_overbrightBits->integer, but set to 0 if no hw gamma
 
-	orientationr_t			or;					// for current entity
+	orientationr_t			ori;					// for current entity
 
 	trRefdef_t				refdef;
 
@@ -1213,7 +1213,6 @@ extern	cvar_t	*r_showImages;
 extern	cvar_t	*r_debugSort;
 
 extern	cvar_t	*r_printShaders;
-extern	cvar_t	*r_saveFontData;
 /*
 Ghoul2 Insert Start
 */
@@ -1424,7 +1423,7 @@ typedef struct stageVars
 
 #define	NUM_TEX_COORDS		(MAXLIGHTMAPS+1)
 
-typedef struct shaderCommands_s 
+struct shaderCommands_s 
 {
 	glIndex_t	indexes[SHADER_MAX_INDEXES];
 	vec4_t		xyz[SHADER_MAX_VERTEXES];
@@ -1454,7 +1453,9 @@ typedef struct shaderCommands_s
 
 	qboolean	SSInitializedWind;
 
-} shaderCommands_t;
+};
+
+typedef __declspec(align(16)) shaderCommands_s	shaderCommands_t;
 
 extern	shaderCommands_t	tess;
 extern	color4ub_t	styleColors[MAX_LIGHT_STYLES];

@@ -123,12 +123,15 @@ void CG_ItemPickup( int itemNum ) {
 			}
 		}
 	}
-	if (bg_itemlist[itemNum].pickup_name && bg_itemlist[itemNum].pickup_name[0])
+	if (bg_itemlist[itemNum].classname && bg_itemlist[itemNum].classname[0])
 	{ 
-		char text[1024];
+		char text[1024], data[1024];
 		if (cgi_SP_GetStringTextString("INGAME_PICKUPLINE",text, sizeof(text)) )
-		{
-			Com_Printf("%s %s\n", text, bg_itemlist[itemNum].pickup_name);
+		{			
+			if ( cgi_SP_GetStringTextString( va("INGAME_%s",bg_itemlist[itemNum].classname ), data, sizeof( data )))
+			{
+				Com_Printf("%s %s\n", text, data );
+			}
 		}
 	}
 }
@@ -269,7 +272,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 	case EV_FOOTSTEP:
 		DEBUGNAME("EV_FOOTSTEP");
 		if (cg_footsteps.integer) {
-			if ( cent->gent && cent->gent->s.number == 0 && !cg_thirdPerson.integer )
+			if ( cent->gent && cent->gent->s.number == 0 && !cg.renderingThirdPerson )//!cg_thirdPerson.integer )
 			{//Everyone else has keyframed footsteps in animsounds.cfg
 				cgi_S_StartSound (NULL, es->number, CHAN_BODY, 
 					cgs.media.footsteps[ FOOTSTEP_NORMAL ][rand()&3] );
@@ -280,7 +283,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		DEBUGNAME("EV_FOOTSTEP_METAL");
 		if (cg_footsteps.integer) 
 		{
-			if ( cent->gent && cent->gent->s.number == 0 && !cg_thirdPerson.integer )
+			if ( cent->gent && cent->gent->s.number == 0 && !cg.renderingThirdPerson )//!cg_thirdPerson.integer )
 			{//Everyone else has keyframed footsteps in animsounds.cfg
 				cgi_S_StartSound (NULL, es->number, CHAN_BODY, cgs.media.footsteps[ FOOTSTEP_METAL ][rand()&3] );
 			}
@@ -339,7 +342,8 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		break;
 	case EV_FALL_FAR:
 		DEBUGNAME("EV_FALL_FAR");
-		CG_TryPlayCustomSound(NULL, es->number, CHAN_AUTO, "*fall1.wav", CS_BASIC );
+		CG_TryPlayCustomSound( NULL, es->number, CHAN_BODY, "*land1.wav", CS_BASIC );
+		cgi_S_StartSound( NULL, es->number, CHAN_AUTO, cgs.media.landSound  );
 		cent->pe.painTime = cg.time;	// don't play a pain sound right after this
 		if ( clientNum == cg.predicted_player_state.clientNum ) {
 			// smooth landing z changes
@@ -513,8 +517,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 	case EV_DISRUPTOR_SNIPER_MISS:
 		DEBUGNAME("EV_DISRUPTOR_SNIPER_MISS");
-		ByteToDir( es->eventParm, dir );
-		FX_DisruptorAltMiss( cent->lerpOrigin, dir );
+		FX_DisruptorAltMiss( cent->lerpOrigin, cent->gent->pos1 );
 		break;
 
 	case EV_DEMP2_ALT_IMPACT:
@@ -571,13 +574,14 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 				disintLength = 2000;
 				makeNotSolid = qtrue;
 				break;
-			case PW_SHOCKED:// arc welder
+/*			case PW_SHOCKED:// arc welder
 				disintEffect = EF_DISINT_1;//ef_
 				disintSound1 = NULL;//with scream
 				disintSound2 = NULL;//no scream
 				disintSound3 = NULL;//with inhuman scream
 				disintLength = 4000;
 				break;
+*/
 			default:
 				return;
 				break;

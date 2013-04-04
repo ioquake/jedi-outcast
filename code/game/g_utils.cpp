@@ -112,10 +112,10 @@ void G_PlayEffect( int fxID, vec3_t origin, vec3_t fwd )
 	VectorSet( tent->maxs, FX_ENT_RADIUS, FX_ENT_RADIUS, FX_ENT_RADIUS );
 	VectorScale( tent->maxs, -1, tent->mins );
 
-	VectorCopy( fwd, tent->s.angles );
+	VectorCopy( fwd, tent->pos3 );
 
 	// Assume angles, we'll do a cross product on the other end to finish up
-	MakeNormalVectors( fwd, tent->s.angles2, temp );
+	MakeNormalVectors( fwd, tent->pos4, temp );
 	gi.linkentity( tent );
 }
 
@@ -131,10 +131,10 @@ void G_PlayEffect( int fxID, int entNum, vec3_t fwd )
 	tent->s.otherEntityNum = entNum;
 	VectorSet( tent->maxs, FX_ENT_RADIUS, FX_ENT_RADIUS, FX_ENT_RADIUS );
 	VectorScale( tent->maxs, -1, tent->mins );
-	VectorCopy( fwd, tent->s.angles );
+	VectorCopy( fwd, tent->pos3 );
 
 	// Assume angles, we'll do a cross product on the other end to finish up
-	MakeNormalVectors( fwd, tent->s.angles2, temp );
+	MakeNormalVectors( fwd, tent->pos4, temp );
 }
 
 // Play an effect bolted onto the muzzle of the specified client
@@ -162,8 +162,8 @@ void G_PlayEffect( int fxID, vec3_t origin, vec3_t axis[3] )
 	VectorScale( tent->maxs, -1, tent->mins );
 
 	// We can just assume axis[2] from doing a cross product on these.
-	VectorCopy( axis[0], tent->s.angles );
-	VectorCopy( axis[1], tent->s.angles2 );
+	VectorCopy( axis[0], tent->pos3 );
+	VectorCopy( axis[1], tent->pos4 );
 }
 
 // Effect playing utilities	- bolt an effect to a ghoul2 models bolton point
@@ -382,7 +382,7 @@ NULL will be returned if the end of the list is reached.
 gentity_t *G_Find (gentity_t *from, int fieldofs, const char *match)
 {
 	char	*s;
-
+	
 	if(!match || !match[0])
 	{
 		return NULL;
@@ -393,10 +393,15 @@ gentity_t *G_Find (gentity_t *from, int fieldofs, const char *match)
 	else
 		from++;
 
-	for ( ; from < &g_entities[globals.num_entities] ; from++)
+//	for ( ; from < &g_entities[globals.num_entities] ; from++)
+	int i=from-g_entities;
+	for ( ; i < globals.num_entities ; i++)
 	{
-		if (!from->inuse)
+//		if (!from->inuse)	
+		if(!PInUse(i))
 			continue;
+
+		from=&g_entities[i];
 		s = *(char **) ((byte *)from + fieldofs);
 		if (!s)
 			continue;
@@ -666,10 +671,14 @@ float vectoyaw( const vec3_t vec ) {
 void G_InitGentity( gentity_t *e ) 
 {
 	e->inuse = qtrue;
+	SetInUse(e);
 	e->classname = "noclass";
 	e->s.number = e - g_entities;
 
 	ICARUS_FreeEnt( e );	//ICARUS information must be added after this point
+	
+	// remove any ghoul2 models here
+	//let not gi.G2API_CleanGhoul2Models(e->ghoul2);
 
 	//Navigational setups
 	e->waypoint				= WAYPOINT_NONE;
@@ -699,14 +708,24 @@ gentity_t *G_Spawn( void )
 
 	e = NULL;	// shut up warning
 	i = 0;		// shut up warning
-	for ( force = 0 ; force < 2 ; force++ ) {
+	for ( force = 0 ; force < 2 ; force++ ) 
+	{
 		// if we go through all entities and can't find one to free,
 		// override the normal minimum times before use
 		e = &g_entities[MAX_CLIENTS];
-		for ( i = MAX_CLIENTS ; i<globals.num_entities ; i++, e++) {
-			if ( e->inuse ) {
+//		for ( i = MAX_CLIENTS ; i<globals.num_entities ; i++, e++)
+//		{
+//			if ( e->inuse )
+//			{
+//				continue;
+//			}
+		for ( i = MAX_CLIENTS ; i<globals.num_entities ; i++) 
+		{
+			if(PInUse(i))
+			{
 				continue;
-			}
+			}			
+			e=&g_entities[i];
 
 			// the first couple seconds of server time can involve a lot of
 			// freeing and allocating, so relax the replacement policy
@@ -718,11 +737,14 @@ gentity_t *G_Spawn( void )
 			G_InitGentity( e );
 			return e;
 		}
-		if ( i != ENTITYNUM_MAX_NORMAL ) {
+		e=&g_entities[i];
+		if ( i != ENTITYNUM_MAX_NORMAL )
+		{
 			break;
 		}
 	}
-	if ( i == ENTITYNUM_MAX_NORMAL ) {
+	if ( i == ENTITYNUM_MAX_NORMAL )
+	{
 /*
 		e = &g_entities[0];
 
@@ -788,6 +810,7 @@ void G_FreeEntity( gentity_t *ed ) {
 	ed->classname = "freed";
 	ed->freetime = level.time;
 	ed->inuse = qfalse;
+	ClearInUse(ed);
 }
 
 /*
@@ -855,8 +878,23 @@ void G_KillBox (gentity_t *ent) {
 		if ( hit == ent ) {
 			continue;
 		}
-		if ( !(hit->contents & ent->contents) ) {
+		if ( ent->s.number && hit->client->ps.stats[STAT_HEALTH] <= 0 ) 
+		{//NPC
 			continue;
+		}
+		if ( ent->s.number )
+		{//NPC
+			if ( !(hit->contents&CONTENTS_BODY) )
+			{
+				continue;
+			}
+		}
+		else 
+		{//player
+			if ( !(hit->contents & ent->contents) ) 
+			{
+				continue;
+			}
 		}
 
 		// nail it

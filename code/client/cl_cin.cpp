@@ -1089,7 +1089,7 @@ redump:
 			if (cinTable[currentHandle].numQuads == -1) {
 				readQuadInfo( framedata );
 				setupQuad( 0, 0 );
-				cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = Com_Milliseconds()*com_timescale->value;
+				cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = Sys_Milliseconds()*com_timescale->value;
 			}
 			if (cinTable[currentHandle].numQuads != 1) cinTable[currentHandle].numQuads = 0;
 			break;
@@ -1158,7 +1158,7 @@ redump:
 static void RoQ_init( void )
 {
 
-	cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = Com_Milliseconds()*com_timescale->value;
+	cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = Sys_Milliseconds()*com_timescale->value;
 
 	cinTable[currentHandle].RoQPlayed = 24;
 
@@ -1316,11 +1316,11 @@ e_status CIN_RunCinematic (int handle)
 		return cinTable[currentHandle].status;
 	}
 
-	thisTime = Com_Milliseconds()*com_timescale->value;
+	thisTime = Sys_Milliseconds()*com_timescale->value;
 	if (cinTable[currentHandle].shader && (abs(thisTime - cinTable[currentHandle].lastTime))>100) {
 		cinTable[currentHandle].startTime += thisTime - cinTable[currentHandle].lastTime;
 	}
-	cinTable[currentHandle].tfps = ((((Com_Milliseconds()*com_timescale->value) - cinTable[currentHandle].startTime)*cinTable[currentHandle].roqFPS)/1000);
+	cinTable[currentHandle].tfps = ((((Sys_Milliseconds()*com_timescale->value) - cinTable[currentHandle].startTime)*cinTable[currentHandle].roqFPS)/1000);
 
 	start = cinTable[currentHandle].startTime;
 	while(  (cinTable[currentHandle].tfps != cinTable[currentHandle].numQuads)
@@ -1328,7 +1328,7 @@ e_status CIN_RunCinematic (int handle)
 	{
 		RoQInterrupt();
 		if (start != cinTable[currentHandle].startTime) {
-		  cinTable[currentHandle].tfps = ((((Com_Milliseconds()*com_timescale->value)
+		  cinTable[currentHandle].tfps = ((((Sys_Milliseconds()*com_timescale->value)
 							  - cinTable[currentHandle].startTime)*cinTable[currentHandle].roqFPS)/1000);
 			start = cinTable[currentHandle].startTime;
 		}
@@ -1601,7 +1601,7 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 		// work out associated audio-overlay file, if any...
 		//
 		extern cvar_t *s_language;
-		qboolean	bIsForeign	= s_language && stricmp(s_language->string,"english");
+		qboolean	bIsForeign	= s_language && !(!stricmp(s_language->string,"english") || !stricmp(s_language->string,""));
 		LPCSTR		psAudioFile	= NULL;
 		if (bIsForeign && !stricmp(arg,"video/jk05.roq"))
 		{
@@ -1616,7 +1616,6 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 		}
 		//
 		////////////////////////////////////////////////////////////////////
-
 
 		CL_handle = CIN_PlayCinematic( arg, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, bits, psAudioFile );
 		if (CL_handle >= 0) 

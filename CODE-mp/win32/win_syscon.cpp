@@ -473,8 +473,10 @@ char *Sys_ConsoleInput( void )
 void Conbuf_AppendText( const char *pMsg )
 {
 #define CONSOLE_BUFFER_SIZE		16384
-
-	char buffer[CONSOLE_BUFFER_SIZE*2];
+	if ( !s_wcd.hWnd ) {
+		return;
+	}
+	char buffer[CONSOLE_BUFFER_SIZE*4];
 	char *b = buffer;
 	const char *msg;
 	int bufLen;
@@ -538,10 +540,6 @@ void Conbuf_AppendText( const char *pMsg )
 	//
 	if ( s_totalChars > 0x7fff )
 	{
-/*		SendMessage( s_wcd.hwndBuffer, EM_SETSEL, 0, s_totalChars - 0x7fff );
-		SendMessage( s_wcd.hwndBuffer, EM_REPLACESEL, 0, (LPARAM) "" );
-		s_totalChars = 0x7fff;
-		SendMessage( s_wcd.hwndBuffer, EM_SETSEL, s_totalChars, s_totalChars );*/
 		SendMessage( s_wcd.hwndBuffer, EM_SETSEL, 0, -1 );
 		s_totalChars = bufLen;
 	}

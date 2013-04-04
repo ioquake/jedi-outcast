@@ -286,7 +286,7 @@ void NPC_Droid_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, ve
 					{
 						gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "head", TURN_OFF );
 
-						G_PlayEffect( "small_chunks" , self->currentOrigin );
+//						G_PlayEffect( "small_chunks" , self->currentOrigin );
 						G_PlayEffect( "r5d2head", self->currentOrigin );
 
 						self->s.powerups |= ( 1 << PW_SHOCKED );
@@ -416,8 +416,10 @@ void NPC_R5D2_Precache(void)
 	{
 		G_SoundIndex( va( "sound/chars/r5d2/misc/r5talk%d.wav", i ) );
 	}
-	G_EffectIndex( "droidexplosion1");
-	G_EffectIndex( "small_chunks");
+	G_SoundIndex( "sound/chars/r2d2/misc/r2_move_lp2.wav" );
+	G_EffectIndex( "r5_droidexplosion");
+	G_EffectIndex( "droid_smoke" );
+//	G_EffectIndex( "small_chunks");
 	G_EffectIndex( "r5d2head");
 //	G_EffectIndex( "r5d2headland");
 }
@@ -433,8 +435,9 @@ void NPC_R2D2_Precache(void)
 	{
 		G_SoundIndex( va( "sound/chars/r2d2/misc/r2d2talk0%d.wav", i ) );
 	}
-	G_EffectIndex( "droidexplosion1");
-	G_EffectIndex( "small_chunks");
+	G_SoundIndex( "sound/chars/r2d2/misc/r2_move_lp.wav" );
+	G_EffectIndex( "r2_droidexplosion");
+//	G_EffectIndex( "small_chunks");
 }
 
 /*

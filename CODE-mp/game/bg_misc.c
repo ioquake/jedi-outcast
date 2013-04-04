@@ -104,8 +104,8 @@ int WeaponReadyAnim[WP_NUM_WEAPONS] =
 	TORSO_WEAPONREADY3,//TORSO_WEAPONREADY8,//WP_FLECHETTE,
 	TORSO_WEAPONREADY3,//TORSO_WEAPONREADY9,//WP_ROCKET_LAUNCHER,
 	TORSO_WEAPONREADY10,//WP_THERMAL,
-	TORSO_WEAPONREADY3,//TORSO_WEAPONREADY11,//WP_TRIP_MINE,
-	TORSO_WEAPONREADY3,//TORSO_WEAPONREADY12,//WP_DET_PACK,
+	TORSO_WEAPONREADY10,//TORSO_WEAPONREADY11,//WP_TRIP_MINE,
+	TORSO_WEAPONREADY10,//TORSO_WEAPONREADY12,//WP_DET_PACK,
 
 	//NOT VALID (e.g. should never really be used):
 	BOTH_STAND1,//WP_EMPLACED_GUN,
@@ -126,7 +126,7 @@ int WeaponAttackAnim[WP_NUM_WEAPONS] =
 	BOTH_ATTACK3,//BOTH_ATTACK7,//WP_DEMP2,
 	BOTH_ATTACK3,//BOTH_ATTACK8,//WP_FLECHETTE,
 	BOTH_ATTACK3,//BOTH_ATTACK9,//WP_ROCKET_LAUNCHER,
-	BOTH_ATTACK10,//WP_THERMAL,
+	BOTH_THERMAL_THROW,//WP_THERMAL,
 	BOTH_ATTACK3,//BOTH_ATTACK11,//WP_TRIP_MINE,
 	BOTH_ATTACK3,//BOTH_ATTACK12,//WP_DET_PACK,
 
@@ -182,7 +182,7 @@ Instant shield pickup, restores 25
         { "models/map_objects/mp/psd_sm.md3",
 		0, 0, 0},
 /* view */		NULL,			
-/* icon */		"gfx/hud/w_icon_blaster",
+/* icon */		"gfx/mp/small_shield",
 /* pickup */	"Shield Small",
 		25,
 		IT_ARMOR,
@@ -200,7 +200,7 @@ Instant shield pickup, restores 100
         { "models/map_objects/mp/psd.md3",
 		0, 0, 0},
 /* view */		NULL,			
-/* icon */		"gfx/hud/w_icon_blaster",
+/* icon */		"gfx/mp/large_shield",
 /* pickup */	"Shield Large",
 		100,
 		IT_ARMOR,
@@ -265,7 +265,7 @@ Portable shield
 		IT_HOLDABLE,
 		HI_SHIELD,
 /* precache */ "",
-/* sounds */ "sound/weapons/detpack/stick.wav sound/movers/doors/forcefield_on.wav sound/movers/doors/forcefield_off.wav sound/effects/bumpfield.wav",
+/* sounds */ "sound/weapons/detpack/stick.wav sound/movers/doors/forcefield_on.wav sound/movers/doors/forcefield_off.wav sound/movers/doors/forcefield_lp.wav sound/effects/bumpfield.wav",
 	},
 
 /*QUAKED item_medpac (.3 .3 1) (-8 -8 -0) (8 8 16) suspended
@@ -723,7 +723,7 @@ Ammo for Tenloss Disruptor, Wookie Bowcaster, and the Destructive Electro Magnet
         { "models/items/power_cell.md3", 
 		0, 0, 0},
 /* view */		NULL,			
-/* icon */		"gfx/hud/w_icon_blaster",
+/* icon */		"gfx/mp/ammo_power_cell",
 /* pickup */	"Power Cell",
 		100,
 		IT_AMMO,
@@ -741,7 +741,7 @@ Ammo for Imperial Heavy Repeater and the Golan Arms Flechette
         { "models/items/metallic_bolts.md3", 
 		0, 0, 0},
 /* view */		NULL,			
-/* icon */		"gfx/hud/w_icon_blaster",
+/* icon */		"gfx/mp/ammo_metallic_bolts",
 /* pickup */	"Metallic Bolts",
 		100,
 		IT_AMMO,
@@ -759,7 +759,7 @@ Ammo for Merr-Sonn portable missile launcher
         { "models/items/rockets.md3", 
 		0, 0, 0},
 /* view */		NULL,			
-/* icon */		"gfx/hud/w_icon_blaster",
+/* icon */		"gfx/mp/ammo_rockets",
 /* pickup */	"Rockets",
 		100,
 		IT_AMMO,
@@ -1227,6 +1227,11 @@ qboolean BG_CanItemBeGrabbed( int gametype, const entityState_t *ent, const play
 	case IT_HEALTH:
 		// small and mega healths will go over the max, otherwise
 		// don't pick up if already at max
+		if ((ps->fd.forcePowersActive & (1 << FP_RAGE)))
+		{
+			return qfalse;
+		}
+
 		if ( item->quantity == 5 || item->quantity == 100 ) {
 			if ( ps->stats[STAT_HEALTH] >= ps->stats[STAT_MAX_HEALTH] * 2 ) {
 				return qfalse;
@@ -1449,6 +1454,7 @@ char *eventnames[] = {
 	"EV_GRENADE_BOUNCE",		// eventParm will be the soundindex
 
 	"EV_PLAY_EFFECT",
+	"EV_PLAY_EFFECT_ID", //finally gave in and added it..
 
 	"EV_MUTE_SOUND",
 	"EV_GENERAL_SOUND",
@@ -1562,7 +1568,7 @@ void BG_TouchJumpPad( playerState_t *ps, entityState_t *jumppad ) {
 		} else {
 			effectNum = 1;
 		}
-		BG_AddPredictableEventToPlayerstate( EV_JUMP_PAD, effectNum, ps );
+		//BG_AddPredictableEventToPlayerstate( EV_JUMP_PAD, effectNum, ps );
 	}
 	// remember hitting this jumppad this frame
 	ps->jumppad_ent = jumppad->number;

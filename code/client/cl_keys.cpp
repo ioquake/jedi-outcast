@@ -793,6 +793,11 @@ void Console_Key (int key) {
 		return;
 	}
 
+/*	extern qboolean SwallowBadNumLockedKPKey( int iKey );
+	if (SwallowBadNumLockedKPKey(key)){
+		return;
+	}
+*/
 	// enter finishes the line
 	if ( key == K_ENTER || key == K_KP_ENTER ) {
 		Cbuf_AddText( g_consoleField.buffer );	// valid command
@@ -1253,10 +1258,16 @@ void CL_KeyEvent (int key, qboolean down, unsigned time) {
 
 	// console key is hardcoded, so the user can never unbind it
 	if (key == '`' || key == '~') {
-		if (!down) {
+		if (!down ) {
 			return;
 
 		}
+#ifdef FINAL_BUILD
+		if (!(cls.keyCatchers & KEYCATCH_CONSOLE) && !keys[K_SHIFT].down )	//we're not in the console
+		{//so we require the control keys to get in
+			return;
+		}
+#endif
 		Con_ToggleConsole_f ();
 		return;
 	}

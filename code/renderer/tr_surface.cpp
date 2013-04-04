@@ -722,10 +722,10 @@ static void DoBoltSeg( vec3_t start, vec3_t end, vec3_t right, float radius )
 	VectorSubtract( end, start, fwd );
 	dis = VectorNormalize( fwd );
 
-	if (dis > 2048)	//freaky long
+	if (dis > 2000)	//freaky long
 	{
-		ri.Printf( PRINT_WARNING, "DoBoltSeg: insane distance.\n" );
-		dis = 2048;
+//		ri.Printf( PRINT_WARNING, "DoBoltSeg: insane distance.\n" );
+		dis = 2000;
 	}
 	MakeNormalVectors( fwd, rt, up );
 

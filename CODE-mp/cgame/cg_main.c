@@ -235,6 +235,13 @@ int vmMain( int command, int arg0, int arg1, int arg2, int arg3, int arg4, int a
 		C_ImpactMark();
 		return 0;
 
+	case CG_MAP_CHANGE:
+		// this trap map be called more than once for a given map change, as the
+		// server is going to attempt to send out multiple broadcasts in hopes that
+		// the client will receive one of them
+		cg.mMapChange = qtrue;
+		return 0;
+
 	default:
 		CG_Error( "vmMain: unknown command %i", command );
 		break;
@@ -369,6 +376,7 @@ vmCvar_t	cg_drawCrosshair;
 vmCvar_t	cg_drawCrosshairNames;
 vmCvar_t	cg_dynamicCrosshair;
 vmCvar_t	cg_drawRewards;
+vmCvar_t	cg_drawScores;
 vmCvar_t	cg_crosshairSize;
 vmCvar_t	cg_crosshairX;
 vmCvar_t	cg_crosshairY;
@@ -424,7 +432,7 @@ vmCvar_t	cg_thirdPersonHorzOffset;
 
 vmCvar_t	cg_stereoSeparation;
 vmCvar_t	cg_lagometer;
-vmCvar_t	cg_drawAttacker;
+vmCvar_t	cg_drawEnemyInfo;
 vmCvar_t	cg_synchronousClients;
 vmCvar_t 	cg_teamChatTime;
 vmCvar_t 	cg_teamChatHeight;
@@ -502,9 +510,10 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_draw3dIcons, "cg_draw3dIcons", "1", CVAR_ARCHIVE  },
 	{ &cg_drawIcons, "cg_drawIcons", "1", CVAR_ARCHIVE  },
 	{ &cg_drawAmmoWarning, "cg_drawAmmoWarning", "0", CVAR_ARCHIVE  },
-	{ &cg_drawAttacker, "cg_drawAttacker", "1", CVAR_ARCHIVE  },
+	{ &cg_drawEnemyInfo, "cg_drawEnemyInfo", "1", CVAR_ARCHIVE  },
 	{ &cg_drawCrosshair, "cg_drawCrosshair", "1", CVAR_ARCHIVE },
 	{ &cg_drawCrosshairNames, "cg_drawCrosshairNames", "1", CVAR_ARCHIVE },
+	{ &cg_drawScores,		  "cg_drawScores", "1", CVAR_ARCHIVE },
 	{ &cg_dynamicCrosshair, "cg_dynamicCrosshair", "1", CVAR_ARCHIVE },
 	{ &cg_drawRewards, "cg_drawRewards", "1", CVAR_ARCHIVE },
 	{ &cg_crosshairSize, "cg_crosshairSize", "24", CVAR_ARCHIVE },
@@ -549,14 +558,14 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_dismember, "cg_dismember", "0", 0 },
 
 	{ &cg_thirdPerson, "cg_thirdPerson", "0", 0 },
-	{ &cg_thirdPersonRange, "cg_thirdPersonRange", "80", 0 },
-	{ &cg_thirdPersonAngle, "cg_thirdPersonAngle", "0", 0 },
-	{ &cg_thirdPersonPitchOffset, "cg_thirdPersonPitchOffset", "0", 0 },
-	{ &cg_thirdPersonVertOffset, "cg_thirdPersonVertOffset", "16", 0},
-	{ &cg_thirdPersonCameraDamp, "cg_thirdPersonCameraDamp", "0.3", 0},
-	{ &cg_thirdPersonTargetDamp, "cg_thirdPersonTargetDamp", "0.5", 0},
+	{ &cg_thirdPersonRange, "cg_thirdPersonRange", "80", CVAR_CHEAT },
+	{ &cg_thirdPersonAngle, "cg_thirdPersonAngle", "0", CVAR_CHEAT },
+	{ &cg_thirdPersonPitchOffset, "cg_thirdPersonPitchOffset", "0", CVAR_CHEAT },
+	{ &cg_thirdPersonVertOffset, "cg_thirdPersonVertOffset", "16", CVAR_CHEAT },
+	{ &cg_thirdPersonCameraDamp, "cg_thirdPersonCameraDamp", "0.3", CVAR_CHEAT },
+	{ &cg_thirdPersonTargetDamp, "cg_thirdPersonTargetDamp", "0.5", CVAR_CHEAT },
 	
-	{ &cg_thirdPersonHorzOffset, "cg_thirdPersonHorzOffset", "0", 0},
+	{ &cg_thirdPersonHorzOffset, "cg_thirdPersonHorzOffset", "0", CVAR_CHEAT },
 	{ &cg_thirdPersonAlpha,	"cg_thirdPersonAlpha",	"1.0", CVAR_CHEAT },
 
 	{ &cg_teamChatTime, "cg_teamChatTime", "3000", CVAR_ARCHIVE  },
@@ -923,10 +932,12 @@ static void CG_RegisterSounds( void ) {
 		trap_S_RegisterSound(va("sound/weapons/saber/bounce%i.wav", i));
 	}
 
-	trap_S_RegisterSound( "sound/weapons/saber/saberhum.wav" );
+	trap_S_RegisterSound( "sound/weapons/saber/saberhum1.wav" );
 	trap_S_RegisterSound( "sound/weapons/saber/saberon.wav" );
 	trap_S_RegisterSound( "sound/weapons/saber/saberoffquick.wav" );
-	trap_S_RegisterSound( "sound/weapons/saber/saberhitwall.wav" );
+	trap_S_RegisterSound( "sound/weapons/saber/saberhitwall1" );
+	trap_S_RegisterSound( "sound/weapons/saber/saberhitwall2" );
+	trap_S_RegisterSound( "sound/weapons/saber/saberhitwall3" );
 	trap_S_RegisterSound("sound/weapons/saber/saberhit.wav");
 
 	trap_S_RegisterSound("sound/weapons/force/heal.wav");
@@ -1073,7 +1084,7 @@ static void CG_RegisterSounds( void ) {
 	cgs.media.zoomEnd	= trap_S_RegisterSound( "sound/interface/zoomend.wav" );
 
 	for (i=0 ; i<4 ; i++) {
-		Com_sprintf (name, sizeof(name), "sound/player/footsteps/step%i.wav", i+1);
+		Com_sprintf (name, sizeof(name), "sound/player/footsteps/boot%i.wav", i+1);
 		cgs.media.footsteps[FOOTSTEP_NORMAL][i] = trap_S_RegisterSound (name);
 
 		Com_sprintf (name, sizeof(name), "sound/player/footsteps/splash%i.wav", i+1);
@@ -1083,7 +1094,7 @@ static void CG_RegisterSounds( void ) {
 		cgs.media.footsteps[FOOTSTEP_METAL][i] = trap_S_RegisterSound (name);
 
 		// should these always be registered??
-		Com_sprintf (name, sizeof(name), "sound/player/footsteps/boot%i.wav", i+1);
+		Com_sprintf (name, sizeof(name), "sound/player/footsteps/step%i.wav", i+1);
 		trap_S_RegisterSound (name);
 	}
 
@@ -1105,6 +1116,17 @@ static void CG_RegisterSounds( void ) {
 			continue;	// custom sound
 		}
 		cgs.gameSounds[i] = trap_S_RegisterSound( soundName );
+	}
+
+	for ( i = 1 ; i < MAX_FX ; i++ ) {
+		soundName = CG_ConfigString( CS_EFFECTS+i );
+		if ( !soundName[0] ) {
+			break;
+		}
+		if ( soundName[0] == '*' ) {
+			continue;	// custom sound
+		}
+		cgs.gameEffects[i] = trap_FX_RegisterEffect( soundName );
 	}
 
 	cg.loadLCARSStage = 2;
@@ -1254,10 +1276,8 @@ static void CG_RegisterGraphics( void ) {
 	trap_FX_RegisterEffect("emplaced/dead_smoke.efx");
 	trap_FX_RegisterEffect("emplaced/explode.efx");
 
-	if (cg_buildScript.integer)
-	{
-		trap_FX_RegisterEffect("emplaced/explode.efx");
-	}
+	trap_FX_RegisterEffect("turret/explode.efx");
+
 	trap_FX_RegisterEffect("spark_explosion.efx");
 
 	trap_FX_RegisterEffect("effects/turret/muzzle_flash.efx");
@@ -2328,6 +2348,7 @@ Ghoul2 Insert End
 	cgs.media.loadBarLEDSurround= trap_R_RegisterShaderNoMip( "gfx/hud/mp_levelload" );
 
 	//rww - precache HUD weapon icons here
+	//actually, these should be stored in the icon field of each item def
 	cgs.media.weaponIcons[WP_STUN_BATON] = trap_R_RegisterShaderNoMip("gfx/hud/w_icon_stunbaton");
 	cgs.media.weaponIcons_NA[WP_STUN_BATON] = trap_R_RegisterShaderNoMip("gfx/hud/w_icon_stunbaton_na");
 
@@ -2416,6 +2437,10 @@ Ghoul2 Insert End
 	
 	cgs.media.HUDLeftStatic		= cgs.media.HUDLeftFrame;//trap_R_RegisterShaderNoMip( "gfx/hud/static_test" );
 	cgs.media.HUDLeft			= cgs.media.HUDInnerLeft;//trap_R_RegisterShaderNoMip( "gfx/hud/hudleft" );
+
+	cgs.media.HUDSaberStyle1	= trap_R_RegisterShader( "gfx/hud/saber_styles1" );
+	cgs.media.HUDSaberStyle2	= trap_R_RegisterShader( "gfx/hud/saber_styles2" );
+	cgs.media.HUDSaberStyle3	= trap_R_RegisterShader( "gfx/hud/saber_styles3" );
 
 	cgs.media.HUDRightFrame		= trap_R_RegisterShaderNoMip("gfx/hud/hudrightframe");
 	cgs.media.HUDInnerRight		= trap_R_RegisterShaderNoMip( "gfx/hud/hudright_innerframe" );

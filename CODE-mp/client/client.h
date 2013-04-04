@@ -96,6 +96,9 @@ typedef struct {
 	int			cgameForceSelection;
 	int			cgameInvenSelection;
 
+	qboolean	gcmdSendValue;
+	byte		gcmdValue;
+
 	float		lastViewYaw;
 
 	// cmds[cmdNumber] is the predicted command, [cmdNumber-1] is the last

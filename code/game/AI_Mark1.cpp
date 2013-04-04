@@ -71,6 +71,7 @@ void NPC_Mark1_Precache(void)
 	G_EffectIndex( "probeexplosion1");
 	G_EffectIndex( "blaster/smoke_bolton");
 	G_EffectIndex( "bryar/muzzle_flash");
+	G_EffectIndex( "droidexplosion1" );
 
 	RegisterItem( FindItemForAmmo( 	AMMO_METAL_BOLTS));
 	RegisterItem( FindItemForAmmo( AMMO_POWERCELL ));
@@ -190,7 +191,7 @@ void Mark1Dead_FireBlaster (void)
 Mark1_die
 -------------------------
 */
-void Mark1_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int hitLoc )
+void Mark1_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int dFlags,int hitLoc )
 {
 	int	anim;
 
@@ -204,6 +205,7 @@ void Mark1_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int 
 			DeathFX(self);
 			self->client->ps.eFlags |= EF_NODRAW;
 			self->contents = CONTENTS_CORPSE;
+			G_FreeEntity( self ); // Is this safe?  I can't see why we'd mark it nodraw and then just leave it around??
 		}
 		return;
 	}

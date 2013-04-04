@@ -36,28 +36,10 @@ enum
 	SP_LANGUAGE_TAIWANESE,
 	SP_LANGUAGE_ITALIAN,
 	SP_LANGUAGE_SPANISH,
-	SP_LANGUAGE_9,
+	SP_LANGUAGE_JAPANESE,
 	SP_LANGUAGE_10,
 	SP_LANGUGAGE_MAX,
 	SP_LANGUAGE_ALL = 255
-};
-
-
-
-enum
-{
-	TEXT_LANGUAGE1 = 0,
-	TEXT_LANGUAGE2,
-	TEXT_LANGUAGE3,
-	TEXT_LANGUAGE4,
-	TEXT_LANGUAGE5,
-	TEXT_LANGUAGE6,
-	TEXT_LANGUAGE7,
-	TEXT_LANGUAGE8,
-	TEXT_LANGUAGE9,
-	TEXT_LANGUAGE10,
-	TEXT_MAX,
-	TEXT_ALL = 255
 };
 
 
@@ -90,7 +72,7 @@ class cCriteria
 public:
 	int					WhichLanguage;
 
-	cCriteria(int initWhichLanguage = TEXT_ALL);
+	cCriteria(int initWhichLanguage = SP_LANGUAGE_ALL);
 };
 
 #ifdef _STRIPED_
@@ -102,7 +84,7 @@ class cCriteriaED : public cCriteria
 public:
 	cStringPackageED	*Merge;
 
-	cCriteriaED(int initWhichLanguage = TEXT_ALL, cStringPackageED *initMerge = NULL);
+	cCriteriaED(int initWhichLanguage = SP_LANGUAGE_ALL, cStringPackageED *initMerge = NULL);
 };
 
 
@@ -325,5 +307,6 @@ void					SP_Init(void);
 
 #endif
 
+extern int Language_GetIntegerValue(void);
 
 #endif // __STRIP_H

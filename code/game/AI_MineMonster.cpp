@@ -120,11 +120,11 @@ void MineMonster_TryDamage( gentity_t *enemy, int damage )
 	if ( tr.entityNum >= 0 && tr.entityNum < ENTITYNUM_NONE )
 	{
 		G_Damage( &g_entities[tr.entityNum], NPC, NPC, dir, tr.endpos, damage, DAMAGE_NO_KNOCKBACK, MOD_MELEE );
-		G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/mine/misc/bite%i.wav", Q_irand(1,4)));
+		G_SoundOnEnt( NPC, CHAN_VOICE_ATTEN, va("sound/chars/mine/misc/bite%i.wav", Q_irand(1,4)));
 	}
 	else
 	{
-		G_SoundOnEnt( NPC, CHAN_AUTO, va("sound/chars/mine/misc/miss%i.wav", Q_irand(1,4)));
+		G_SoundOnEnt( NPC, CHAN_VOICE_ATTEN, va("sound/chars/mine/misc/miss%i.wav", Q_irand(1,4)));
 	}
 }
 
@@ -138,7 +138,7 @@ void MineMonster_Attack( void )
 						|| random() > 0.8f ))
 		{
 			// Going to do ATTACK4
-			TIMER_Set( NPC, "attacking", 1650  + random() * 350 );
+			TIMER_Set( NPC, "attacking", 2350 + random() * 250 );
 			NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_ATTACK4, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD );
 
 			TIMER_Set( NPC, "attack2_dmg", 1250 ); // level two damage

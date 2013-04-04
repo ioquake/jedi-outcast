@@ -8,7 +8,7 @@ Ghoul2 Insert Start
 	#include "../renderer/tr_local.h"
 #endif
 
-#include "..\qcommon\strip.h"
+#include "../qcommon/strip.h"
 
 /*
 ===============
@@ -143,7 +143,7 @@ int SV_AddConfigstring (const char *name, int start, int max)
 			SV_SetConfigstring ((start+i), name);
 			break;
 		}
-		else if (!strcmpi(sv.configstrings[start+i], name))
+		else if (!Q_stricmp(sv.configstrings[start+i], name))
 		{
 			return i;
 		}
@@ -390,6 +390,25 @@ void SV_TouchCGame(void) {
 	}
 }
 
+void SV_SendMapChange(void)
+{
+	int		i;
+
+	if (svs.clients)
+	{
+		for (i=0 ; i<sv_maxclients->integer ; i++) 
+		{
+			if (svs.clients[i].state >= CS_CONNECTED) 
+			{
+				if ( svs.clients[i].netchan.remoteAddress.type != NA_BOT ) 
+				{
+					SV_SendClientMapChange( &svs.clients[i] ) ;
+				}
+			}
+		}	
+	}
+}
+
 void R_SVModelInit();
 
 /*
@@ -408,6 +427,8 @@ void SV_SpawnServer( char *server, qboolean killBots, ForceReload_e eForceReload
 	qboolean	isBot;
 	char		systemInfo[16384];
 	const char	*p;
+
+	SV_SendMapChange();
 
 	RE_RegisterMedia_LevelLoadBegin(server, eForceReload);
 
@@ -429,6 +450,8 @@ Ghoul2 Insert Start
 /*
 Ghoul2 Insert End
 */
+
+	SV_SendMapChange();
 
 	// if not running a dedicated server CL_MapLoading will connect the client to the server
 	// also print some status stuff
@@ -458,6 +481,8 @@ Ghoul2 Insert Start
 		R_SVModelInit();
 	}
 
+	SV_SendMapChange();
+
 	// clear collision map data
 	CM_ClearMap();
 
@@ -470,6 +495,8 @@ Ghoul2 Insert Start
 			SV_ChangeMaxClients();
 		}
 	}
+
+	SV_SendMapChange();
 
 	// clear pak references
 	FS_ClearPakReferences(0);
@@ -515,6 +542,8 @@ Ghoul2 Insert End
 	FS_Restart( sv.checksumFeed );
 
 	CM_LoadMap( va("maps/%s.bsp", server), qfalse, &checksum );
+
+	SV_SendMapChange();
 
 	// set serverinfo visible name
 	Cvar_Set( "mapname", server );

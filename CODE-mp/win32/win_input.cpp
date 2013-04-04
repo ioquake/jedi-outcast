@@ -52,6 +52,7 @@ typedef struct {
 static	joystickInfo_t	joy;
 
 
+cvar_t	*k_language;
 
 cvar_t	*in_midi;
 cvar_t	*in_midiport;
@@ -655,6 +656,8 @@ void IN_Init( void ) {
 	in_debugJoystick		= Cvar_Get ("in_debugjoystick",			"0",		CVAR_TEMP);
 
 	joy_threshold			= Cvar_Get ("joy_threshold",			"0.15",		CVAR_ARCHIVE);
+
+	k_language              = Cvar_Get ("k_language",               "american", CVAR_ARCHIVE | CVAR_NORESTART);
 
 	IN_Startup();
 }

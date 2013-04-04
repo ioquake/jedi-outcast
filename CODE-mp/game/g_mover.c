@@ -728,7 +728,14 @@ void Blocked_Door( gentity_t *ent, gentity_t *other ) {
 	}
 
 	if ( ent->damage ) {
-		G_Damage( other, ent, ent, NULL, NULL, ent->damage, DAMAGE_NO_ARMOR, MOD_CRUSH );
+		if (ent->activator && ent->activator->inuse && ent->activator->client)
+		{
+			G_Damage( other, ent->activator, ent->activator, NULL, NULL, ent->damage, DAMAGE_NO_ARMOR, MOD_CRUSH );
+		}
+		else
+		{
+			G_Damage( other, ent, ent, NULL, NULL, ent->damage, DAMAGE_NO_ARMOR, MOD_CRUSH );
+		}
 	}
 	if ( ent->spawnflags & 4 ) {
 		return;		// crushers don't reverse

@@ -19,7 +19,7 @@
 #include "resource.h"
 #include "glw_win.h"
 #include "win_local.h"
-
+#include "../qcommon/strip.h"
 extern void WG_CheckHardwareGamma( void );
 extern void WG_RestoreGamma( void );
 
@@ -724,15 +724,45 @@ static rserr_t GLW_SetMode( int mode,
 	{
 		if ( colorbits == 0 || ( !cdsFullscreen && colorbits >= 15 ) )
 		{
-			if ( MessageBox( NULL,
-						"It is highly unlikely that a correct\n"
-						"windowed display can be initialized with\n"
-						"the current desktop display depth.  Select\n"
-						"'OK' to try anyway.  Press 'Cancel' if you\n"
-						"have a 3Dfx Voodoo, Voodoo-2, or Voodoo Rush\n"
-						"3D accelerator installed, or if you otherwise\n"
-						"wish to quit.",
-						"Low Desktop Color Depth",
+			const char *psErrorTitle_English =	"Low Desktop Color Depth";
+			const char *psErrorBody_English = 	"It is highly unlikely that a correct windowed\n"
+												"display can be initialized with the current\n"
+												"desktop display depth.  Select 'OK' to try\n"
+												"anyway.  Select 'Cancel' to try a fullscreen\n"
+												"mode instead.";
+			
+			const char *psErrorTitle_German =	"Falsche Desktop-Farbtiefe";
+			const char *psErrorBody_German = 	"Es ist unwahrscheinlich, dass bei der momentanen\n"
+												"Desktop-Farbiefe ein Fenstermodus initialisiert\n"
+												"werden kann. Mit 'OK' versuchen Sie es dennoch,\n"
+												"mit 'Abbrechen' wechselt das Spiel in den\n"
+												"Vollbildmodus.";
+
+			const char *psErrorTitle_French =	"Basse Intensité De la Couleur DeskTop";
+			const char *psErrorBody_French = 	"Il est fortement peu probable qu'un correct windowed\n"
+												"l'affichage peut être initialisé avec la profondeur\n"
+												"de bureau actuelle d'affichage. Choisissez 'OK'\n"
+												"pour essayer de toute façon. Choisissez 'ANNUL'\n"
+												"pour essayer a fullscreen le mode à la place.";
+
+			const char *psHeadText = psErrorTitle_English;
+			const char *psBodyText = psErrorBody_English;
+			
+			if (Language_GetIntegerValue() == SP_LANGUAGE_GERMAN)
+			{
+				psHeadText = psErrorTitle_German;
+				psBodyText = psErrorBody_German;
+			}
+			else
+			if (Language_GetIntegerValue() == SP_LANGUAGE_FRENCH)
+			{
+				psHeadText = psErrorTitle_French;
+				psBodyText = psErrorBody_French;
+			}
+
+			if ( MessageBox( NULL, 							
+						psBodyText,
+						psHeadText,
 						MB_OKCANCEL | MB_ICONEXCLAMATION ) != IDOK )
 			{
 				return RSERR_INVALID_MODE;

@@ -713,7 +713,7 @@ done:
 class CStringComparator
 {
 public:
-	bool operator()(const char *s1, const char *s2) const { return(strcmp(s1, s2) < 0); } 
+	bool operator()(const char *s1, const char *s2) const { return(stricmp(s1, s2) < 0); } 
 };
 
 typedef map <LPCSTR, image_t *, CStringComparator>	AllocatedImages_t;
@@ -2046,6 +2046,77 @@ static char *CommaParse( char **data_p ) {
 	return com_token;
 }
 
+/*
+class CStringComparator
+{
+public:
+	bool operator()(const char *s1, const char *s2) const { return(stricmp(s1, s2) < 0); } 
+};
+*/
+typedef map<sstring_t,char * /*, CStringComparator*/ >	AnimationCFGs_t;
+													AnimationCFGs_t AnimationCFGs;
+
+// I added this function for development purposes (and it's VM-safe) so we don't have problems
+//	with our use of cached models but uncached animation.cfg files (so frame sequences are out of sync
+//	if someone rebuild the model while you're ingame and you change levels)...
+//
+// Usage:  call with psDest == NULL for a size enquire (for malloc), 
+//				then with NZ ptr for it to copy to your supplied buffer...
+//
+int RE_GetAnimationCFG(const char *psCFGFilename, char *psDest, int iDestSize)
+{
+	char *psText = NULL;
+
+	AnimationCFGs_t::iterator it = AnimationCFGs.find(psCFGFilename);
+	if (it != AnimationCFGs.end())
+	{
+		psText = (*it).second;
+	}
+	else
+	{
+		// not found, so load it...
+		//
+		fileHandle_t f;
+		int iLen = FS_FOpenFileRead( psCFGFilename, &f, FS_READ );
+		if (iLen <= 0)
+		{
+			return 0;
+		}
+
+		psText = (char *) Z_Malloc( iLen+1, TAG_ANIMATION_CFG, qfalse );
+
+		FS_Read( psText, iLen, f );
+		psText[iLen] = '\0';
+		FS_FCloseFile( f );
+
+		AnimationCFGs[psCFGFilename] = psText;
+	}
+
+	if (psText)	// sanity, but should always be NZ
+	{
+		if (psDest)
+		{
+			Q_strncpyz(psDest,psText,iDestSize);
+		}
+
+		return strlen(psText);
+	}
+
+	return 0;
+}
+
+// only called from devmapbsp, devmapall, or ...
+//
+void RE_AnimationCFGs_DeleteAll(void)
+{
+	for (AnimationCFGs_t::iterator it = AnimationCFGs.begin(); it != AnimationCFGs.end(); ++it)
+	{
+		char *psText = (*it).second;
+		Z_Free(psText);
+	}
+
+	AnimationCFGs.clear();
+}
 
 /*
 ===============

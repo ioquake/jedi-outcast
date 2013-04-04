@@ -62,6 +62,11 @@ void CalcEntitySpot ( const gentity_t *ent, const spot_t spot, vec3_t point )
 			{//adjust up some
 				point[2] += 28;//magic number :)
 			}
+			if ( ent->NPC )
+			{//always aim from the center of my bbox, so we don't wiggle when we lean forward or backwards
+				point[0] = ent->currentOrigin[0];
+				point[1] = ent->currentOrigin[1];
+			}
 		}
 		else
 		{
@@ -88,6 +93,11 @@ void CalcEntitySpot ( const gentity_t *ent, const spot_t spot, vec3_t point )
 			if ( ent->client->NPC_class == CLASS_ATST )
 			{//adjust up some
 				point[2] += 28;//magic number :)
+			}
+			if ( ent->NPC )
+			{//always aim from the center of my bbox, so we don't wiggle when we lean forward or backwards
+				point[0] = ent->currentOrigin[0];
+				point[1] = ent->currentOrigin[1];
 			}
 			//NOTE: automatically takes leaning into account!
 		}

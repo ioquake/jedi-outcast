@@ -48,12 +48,15 @@ qboolean NPC_CheckPlayerTeamStealth( void );
 
 static qboolean enemyLOS;
 static qboolean enemyCS;
+static qboolean enemyInFOV;
 static qboolean hitAlly;
 static qboolean faceEnemy;
 static qboolean move;
 static qboolean shoot;
 static float	enemyDist;
 static vec3_t	impactPos;
+
+int groupSpeechDebounceTime[TEAM_NUM_TEAMS];//used to stop several group AI from speaking all at once
 
 //Local state enums
 enum
@@ -137,14 +140,19 @@ static void ST_Speech( gentity_t *self, int speechType, float failChance )
 	if ( failChance >= 0 )
 	{//a negative failChance makes it always talk
 		if ( self->NPC->group )
-		{
+		{//group AI speech debounce timer
 			if ( self->NPC->group->speechDebounceTime > level.time )
 			{
 				return;
 			}
 		}
 		else if ( !TIMER_Done( self, "chatter" ) )
-		{
+		{//personal timer
+			return;
+		}
+		else if ( groupSpeechDebounceTime[self->client->playerTeam] > level.time )
+		{//for those not in group AI
+			//FIXME: let certain speech types interrupt others?  Let closer NPCs interrupt farther away ones?
 			return;
 		}
 	}
@@ -157,6 +165,7 @@ static void ST_Speech( gentity_t *self, int speechType, float failChance )
 	else
 	{
 		TIMER_Set( self, "chatter", Q_irand( 2000, 4000 ) );
+		groupSpeechDebounceTime[self->client->playerTeam] = level.time + Q_irand( 1000, 2000 );
 	}
 
 	if ( self->NPC->blockedSpeechDebounceTime > level.time )
@@ -727,6 +736,8 @@ qboolean NPC_CheckPlayerTeamStealth( void )
 	gentity_t *enemy;
 	for ( int i = 0; i < ENTITYNUM_WORLD; i++ )
 	{
+		if(!PInUse(i))
+			continue;
 		enemy = &g_entities[i];
 		if ( enemy && enemy->client && NPC_ValidEnemy( enemy ) && enemy->client->playerTeam == NPC->client->enemyTeam )
 		{
@@ -1389,10 +1400,14 @@ static void ST_CheckFireState( void )
 
 	//See if we should continue to fire on their last position
 	//!TIMER_Done( NPC, "stick" ) || 
-	if ( !hitAlly && NPCInfo->enemyLastSeenTime > 0 && NPCInfo->group && (NPCInfo->group->numState[SQUAD_RETREAT]>0||NPCInfo->group->numState[SQUAD_TRANSITION]>0||NPCInfo->group->numState[SQUAD_SCOUT]>0) )
+	if ( !hitAlly //we're not going to hit an ally
+		&& enemyInFOV //enemy is in our FOV //FIXME: or we don't have a clear LOS?
+		&& NPCInfo->enemyLastSeenTime > 0 //we've seen the enemy
+		&& NPCInfo->group //have a group
+		&& (NPCInfo->group->numState[SQUAD_RETREAT]>0||NPCInfo->group->numState[SQUAD_TRANSITION]>0||NPCInfo->group->numState[SQUAD_SCOUT]>0) )//laying down covering fire
 	{
-		if ( level.time - NPCInfo->enemyLastSeenTime < 10000 &&
-			(!NPCInfo->group || level.time - NPCInfo->group->lastSeenEnemyTime < 10000 ))
+		if ( level.time - NPCInfo->enemyLastSeenTime < 10000 &&//we have seem the enemy in the last 10 seconds
+			(!NPCInfo->group || level.time - NPCInfo->group->lastSeenEnemyTime < 10000 ))//we are not in a group or the group has seen the enemy in the last 10 seconds
 		{
 			if ( !Q_irand( 0, 10 ) )
 			{
@@ -2427,13 +2442,23 @@ void NPC_BSST_Attack( void )
 		return;
 	}
 
-	enemyLOS = enemyCS = qfalse;
+	enemyLOS = enemyCS = enemyInFOV = qfalse;
 	move = qtrue;
 	faceEnemy = qfalse;
 	shoot = qfalse;
 	hitAlly = qfalse;
 	VectorClear( impactPos );
 	enemyDist = DistanceSquared( NPC->currentOrigin, NPC->enemy->currentOrigin );
+
+	vec3_t	enemyDir, shootDir;
+	VectorSubtract( NPC->enemy->currentOrigin, NPC->currentOrigin, enemyDir );
+	VectorNormalize( enemyDir );
+	AngleVectors( NPC->client->ps.viewangles, shootDir, NULL, NULL );
+	float dot = DotProduct( enemyDir, shootDir );
+	if ( dot > 0.5f ||( enemyDist * (1.0f-dot)) < 10000 )
+	{//enemy is in front of me or they're very close and not behind me
+		enemyInFOV = qtrue;
+	}
 
 	if ( enemyDist < MIN_ROCKET_DIST_SQUARED )//128
 	{//enemy within 128
@@ -2465,11 +2490,15 @@ void NPC_BSST_Attack( void )
 				hitAlly = qtrue;//us!
 				//FIXME: if too close, run away!
 			}
-			else
-			{
+			else if ( enemyInFOV )
+			{//if enemy is FOV, go ahead and check for shooting
 				int hit = NPC_ShotEntity( NPC->enemy, impactPos );
-				if ( hit == NPC->enemy->s.number || (&g_entities[hit] != NULL && g_entities[hit].takedamage && ((g_entities[hit].svFlags&SVF_GLASS_BRUSH)||g_entities[hit].health < 40||NPC->s.weapon == WP_EMPLACED_GUN) ) )
-				{//can hit enemy or will hit glass or other minor breakable (or in emplaced gun), so shoot anyway
+				gentity_t *hitEnt = &g_entities[hit];
+
+				if ( hit == NPC->enemy->s.number 
+					|| ( hitEnt && hitEnt->client && hitEnt->client->playerTeam == NPC->client->enemyTeam )
+					|| ( hitEnt && hitEnt->takedamage && ((hitEnt->svFlags&SVF_GLASS_BRUSH)||hitEnt->health < 40||NPC->s.weapon == WP_EMPLACED_GUN) ) )
+				{//can hit enemy or enemy ally or will hit glass or other minor breakable (or in emplaced gun), so shoot anyway
 					AI_GroupUpdateClearShotTime( NPCInfo->group );
 					enemyCS = qtrue;
 					NPC_AimAdjust( 2 );//adjust aim better longer we have clear shot at enemy
@@ -2479,7 +2508,6 @@ void NPC_BSST_Attack( void )
 				{//Hmm, have to get around this bastard
 					NPC_AimAdjust( 1 );//adjust aim better longer we can see enemy
 					ST_ResolveBlockedShot( hit );
-					gentity_t *hitEnt = &g_entities[hit];
 					if ( hitEnt && hitEnt->client && hitEnt->client->playerTeam == NPC->client->playerTeam )
 					{//would hit an ally, don't fire!!!
 						hitAlly = qtrue;
@@ -2488,6 +2516,10 @@ void NPC_BSST_Attack( void )
 					{//Check and see where our shot *would* hit... if it's not close to the enemy (within 256?), then don't fire
 					}
 				}
+			}
+			else
+			{
+				enemyCS = qfalse;//not true, but should stop us from firing
 			}
 		}
 	}
@@ -2568,6 +2600,10 @@ void NPC_BSST_Attack( void )
 
 	if ( !faceEnemy )
 	{//we want to face in the dir we're running
+		if ( !move )
+		{//if we haven't moved, we should look in the direction we last looked?
+			VectorCopy( NPC->client->ps.viewangles, NPCInfo->lastPathAngles );
+		}
 		NPCInfo->desiredYaw = NPCInfo->lastPathAngles[YAW];
 		NPCInfo->desiredPitch = 0;
 		NPC_UpdateAngles( qtrue, qtrue );

@@ -129,8 +129,8 @@ char *types [] = {
 "ITEM_TYPE_EDITFIELD",
 "ITEM_TYPE_COMBO",
 "ITEM_TYPE_LISTBOX",
-"ITEM_TYPE_OWNERDRAW",
 "ITEM_TYPE_MODEL",
+"ITEM_TYPE_OWNERDRAW",
 "ITEM_TYPE_NUMERICFIELD",
 "ITEM_TYPE_SLIDER",
 "ITEM_TYPE_YESNO",
@@ -1461,11 +1461,37 @@ Menus_CloseByName
 void Menus_CloseByName(const char *p) 
 {
 	menuDef_t *menu = Menus_FindByName(p);
-	if (menu != NULL) 
+	
+	// If the menu wasnt found just exit
+	if (menu == NULL) 
 	{
-		Menu_RunCloseScript(menu);
-		menu->window.flags &= ~(WINDOW_VISIBLE | WINDOW_HASFOCUS);
+		return;
 	}
+
+	// Run the close script for the menu
+	Menu_RunCloseScript(menu);
+
+	// If this window had the focus then take it away
+	if ( menu->window.flags & WINDOW_HASFOCUS )
+	{	
+		// If there is something still in the open menu list then
+		// set it to have focus now
+		if ( openMenuCount )
+		{
+			// Subtract one from the open menu count to prepare to
+			// remove the top menu from the list
+			openMenuCount -= 1;
+
+			// Set the top menu to have focus now
+			menuStack[openMenuCount]->window.flags |= WINDOW_HASFOCUS;
+
+			// Remove the top menu from the list
+			menuStack[openMenuCount] = NULL;
+		}
+	}
+
+	// Window is now invisible and doenst have focus
+	menu->window.flags &= ~(WINDOW_VISIBLE | WINDOW_HASFOCUS);
 }
 
 /*
@@ -1581,13 +1607,15 @@ void Menu_OrbitItemByName(menuDef_t *menu, const char *p, float x, float y, floa
 Script_FadeIn
 =================
 */
-void Script_FadeIn(itemDef_t *item, const char **args) 
+qboolean Script_FadeIn(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	if (String_Parse(args, &name)) 
 	{
 		Menu_FadeItemByName((menuDef_t *) item->parent, name, qfalse);
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1595,13 +1623,15 @@ void Script_FadeIn(itemDef_t *item, const char **args)
 Script_FadeOut
 =================
 */
-void Script_FadeOut(itemDef_t *item, const char **args) 
+qboolean Script_FadeOut(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	if (String_Parse(args, &name)) 
 	{
 		Menu_FadeItemByName((menuDef_t *) item->parent, name, qtrue);
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1609,13 +1639,15 @@ void Script_FadeOut(itemDef_t *item, const char **args)
 Script_Show
 =================
 */
-void Script_Show(itemDef_t *item, const char **args) 
+qboolean Script_Show(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	if (String_Parse(args, &name)) 
 	{
 		Menu_ShowItemByName((menuDef_t *) item->parent, name, qtrue);
 	}
+
+	return qtrue;
 }
 
 
@@ -1625,13 +1657,15 @@ void Script_Show(itemDef_t *item, const char **args)
 Script_ShowMenu
 =================
 */
-void Script_ShowMenu(itemDef_t *item, const char **args) 
+qboolean Script_ShowMenu(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	if (String_Parse(args, &name)) 
 	{
 		Menus_ShowItems(name);
 	}
+
+	return qtrue;
 }
 
 
@@ -1640,13 +1674,15 @@ void Script_ShowMenu(itemDef_t *item, const char **args)
 Script_Hide
 =================
 */
-void Script_Hide(itemDef_t *item, const char **args) 
+qboolean Script_Hide(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	if (String_Parse(args, &name)) 
 	{
 		Menu_ShowItemByName((menuDef_t *) item->parent, name, qfalse);
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1654,7 +1690,7 @@ void Script_Hide(itemDef_t *item, const char **args)
 Script_SetColor
 =================
 */
-void Script_SetColor(itemDef_t *item, const char **args) 
+qboolean Script_SetColor(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	int i;
@@ -1687,12 +1723,14 @@ void Script_SetColor(itemDef_t *item, const char **args)
 //				if (!Float_Parse(args, &f)) 
 				if (COM_ParseFloat( args, &f))
 				{
-					return;
+					return qtrue;
 				}
 				(*out)[i] = f;
 			}
 		}
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1700,18 +1738,21 @@ void Script_SetColor(itemDef_t *item, const char **args)
 Script_Open
 =================
 */
-void Script_Open(itemDef_t *item, const char **args) 
+qboolean Script_Open(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	if (String_Parse(args, &name)) 
 	{
 		Menus_OpenByName(name);
 	}
+
+	return qtrue;
 }
 
-void Script_OpenGoToMenu(itemDef_t *item, const char **args) 
+qboolean Script_OpenGoToMenu(itemDef_t *item, const char **args) 
 {
 	Menus_OpenByName(GoToMenu);				// Give warning
+	return qtrue;
 }
 
 
@@ -1720,7 +1761,7 @@ void Script_OpenGoToMenu(itemDef_t *item, const char **args)
 Script_Close
 =================
 */
-void Script_Close(itemDef_t *item, const char **args) 
+qboolean Script_Close(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	if (String_Parse(args, &name)) 
@@ -1734,6 +1775,8 @@ void Script_Close(itemDef_t *item, const char **args)
 			Menus_CloseByName(name);
 		}
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1741,7 +1784,7 @@ void Script_Close(itemDef_t *item, const char **args)
 Script_Activate
 =================
 */
-void Script_Activate(itemDef_t *item, const char **args) 
+qboolean Script_Activate(itemDef_t *item, const char **args) 
 {
 	const char *name, *menu;
 
@@ -1752,6 +1795,8 @@ void Script_Activate(itemDef_t *item, const char **args)
 			Item_ActivateByName(menu,name);
 		}
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1759,7 +1804,7 @@ void Script_Activate(itemDef_t *item, const char **args)
 Script_SetBackground
 =================
 */
-void Script_SetBackground(itemDef_t *item, const char **args) 
+qboolean Script_SetBackground(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	// expecting name to set asset to
@@ -1767,6 +1812,8 @@ void Script_SetBackground(itemDef_t *item, const char **args)
 	{
 		item->window.background = DC->registerShaderNoMip(name);
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1774,7 +1821,7 @@ void Script_SetBackground(itemDef_t *item, const char **args)
 Script_SetAsset
 =================
 */
-void Script_SetAsset(itemDef_t *item, const char **args) 
+qboolean Script_SetAsset(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	// expecting name to set asset to
@@ -1785,6 +1832,8 @@ void Script_SetAsset(itemDef_t *item, const char **args)
 		{
 		}
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1792,7 +1841,7 @@ void Script_SetAsset(itemDef_t *item, const char **args)
 Script_SetFocus
 =================
 */
-void Script_SetFocus(itemDef_t *item, const char **args) 
+qboolean Script_SetFocus(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	itemDef_t *focusItem;
@@ -1814,6 +1863,8 @@ void Script_SetFocus(itemDef_t *item, const char **args)
 			}
 		}
 	}
+
+	return qtrue;
 }
 
 
@@ -1822,7 +1873,7 @@ void Script_SetFocus(itemDef_t *item, const char **args)
 Script_SetItemFlag
 =================
 */
-void Script_SetItemFlag(itemDef_t *item, const char **args) 
+qboolean Script_SetItemFlag(itemDef_t *item, const char **args) 
 {
 	const char		*itemName,*number;
 	
@@ -1836,6 +1887,8 @@ void Script_SetItemFlag(itemDef_t *item, const char **args)
 			item->window.flags |= amount;
 		}
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1843,7 +1896,7 @@ void Script_SetItemFlag(itemDef_t *item, const char **args)
 Script_SetItemColor
 =================
 */
-void Script_SetItemColor(itemDef_t *item, const char **args) 
+qboolean Script_SetItemColor(itemDef_t *item, const char **args) 
 {
 	const char *itemname;
 	const char *name;
@@ -1861,7 +1914,7 @@ void Script_SetItemColor(itemDef_t *item, const char **args)
 //		if (!Color_Parse(args, &color)) 
 		if (COM_ParseVec4(args, &color))
 		{
-			return;
+			return qtrue;
 		}
 
 		for (j = 0; j < count; j++) 
@@ -1894,6 +1947,57 @@ void Script_SetItemColor(itemDef_t *item, const char **args)
 			}
 		}
 	}
+
+	return qtrue;
+}
+
+/*
+=================
+Script_Defer
+
+Defers the rest of the script based on the defer condition.  The deferred
+portion of the script can later be run with the "rundeferred"
+=================
+*/
+qboolean Script_Defer ( itemDef_t* item, const char **args )
+{
+	// Should the script be deferred?
+	if ( DC->deferScript ( args ) )
+	{
+		// Need the item the script was being run on
+		uiInfo.deferredScriptItem = item;
+
+		// Save the rest of the script
+		Q_strncpyz ( uiInfo.deferredScript, *args, MAX_DEFERRED_SCRIPT, qfalse );
+
+		// No more running
+		return qfalse;
+	}
+
+	// Keep running the script, its ok
+	return qtrue;
+}
+
+/*
+=================
+Script_RunDeferred
+
+Runs the last deferred script, there can only be one script deferred at a 
+time so be careful of recursion
+=================
+*/
+qboolean Script_RunDeferred ( itemDef_t* item, const char **args )
+{
+	// Make sure there is something to run.
+	if ( !uiInfo.deferredScript[0] || !uiInfo.deferredScriptItem )
+	{
+		return qtrue;
+	}
+
+	// Run the deferred script now
+	Item_RunScript ( uiInfo.deferredScriptItem, uiInfo.deferredScript );
+
+	return qtrue;
 }
 
 /*
@@ -1901,7 +2005,7 @@ void Script_SetItemColor(itemDef_t *item, const char **args)
 Script_Transition
 =================
 */
-void Script_Transition(itemDef_t *item, const char **args) 
+qboolean Script_Transition(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	rectDef_t rectFrom, rectTo;
@@ -1916,6 +2020,8 @@ void Script_Transition(itemDef_t *item, const char **args)
 			Menu_TransitionItemByName((menuDef_t *) item->parent, name, rectFrom, rectTo, time, amt);
 		}
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1923,13 +2029,15 @@ void Script_Transition(itemDef_t *item, const char **args)
 Script_SetCvar
 =================
 */
-void Script_SetCvar(itemDef_t *item, const char **args) 
+qboolean Script_SetCvar(itemDef_t *item, const char **args) 
 {
 	const char *cvar, *val;
 	if (String_Parse(args, &cvar) && String_Parse(args, &val)) 
 	{
 		DC->setCVar(cvar, val);
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1937,13 +2045,15 @@ void Script_SetCvar(itemDef_t *item, const char **args)
 Script_Exec
 =================
 */
-void Script_Exec(itemDef_t *item, const char **args) 
+qboolean Script_Exec ( itemDef_t *item, const char **args) 
 {
 	const char *val;
 	if (String_Parse(args, &val)) 
 	{
 		DC->executeText(EXEC_APPEND, va("%s ; ", val));
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1951,13 +2061,15 @@ void Script_Exec(itemDef_t *item, const char **args)
 Script_Play
 =================
 */
-void Script_Play(itemDef_t *item, const char **args) 
+qboolean Script_Play(itemDef_t *item, const char **args) 
 {
 	const char *val;
 	if (String_Parse(args, &val)) 
 	{
 		DC->startLocalSound(DC->registerSound(val, qfalse), CHAN_LOCAL_SOUND);
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1965,7 +2077,7 @@ void Script_Play(itemDef_t *item, const char **args)
 Script_playLooped
 =================
 */
-void Script_playLooped(itemDef_t *item, const char **args) 
+qboolean Script_playLooped(itemDef_t *item, const char **args) 
 {
 	const char *val;
 	if (String_Parse(args, &val)) 
@@ -1974,6 +2086,8 @@ void Script_playLooped(itemDef_t *item, const char **args)
 //		DC->stopBackgroundTrack();
 //		DC->startBackgroundTrack(val, val);
 	}
+
+	return qtrue;
 }
 
 /*
@@ -1981,7 +2095,7 @@ void Script_playLooped(itemDef_t *item, const char **args)
 Script_Orbit
 =================
 */
-void Script_Orbit(itemDef_t *item, const char **args) 
+qboolean Script_Orbit(itemDef_t *item, const char **args) 
 {
 	const char *name;
 	float cx, cy, x, y;
@@ -1995,6 +2109,8 @@ void Script_Orbit(itemDef_t *item, const char **args)
 			Menu_OrbitItemByName((menuDef_t *) item->parent, name, x, y, cx, cy, time);
 		}
 	}
+
+	return qtrue;
 }
 
 
@@ -2021,6 +2137,8 @@ commandDef_t commandList[] =
   {"show",			&Script_Show},					// group/name
   {"showMenu",		&Script_ShowMenu},				// menu
   {"transition",	&Script_Transition},			// group/name
+  {"defer",			&Script_Defer},					// 
+  {"rundeferred",	&Script_RunDeferred},			//
 };
 
 int scriptCommandCount = sizeof(commandList) / sizeof(commandDef_t);
@@ -2228,9 +2346,12 @@ qboolean ItemParse_asset_model( itemDef_t *item)
 	{
 		return qfalse;
 	}
-
-	item->asset = DC->registerModel(temp);
-	modelPtr->angle = rand() % 360;
+	
+	if(!(item->asset)) 
+	{
+		item->asset = DC->registerModel(temp);
+//		modelPtr->angle = rand() % 360;
+	}
 	return qtrue;
 }
 
@@ -3185,12 +3306,22 @@ qboolean ItemParse_cvar( itemDef_t *item)
 		return qfalse;
 	}
 
-	if (item->typeData) 
+	if ( item->typeData)
 	{
-		editPtr = (editFieldDef_t*)item->typeData;
-		editPtr->minVal = -1;
-		editPtr->maxVal = -1;
-		editPtr->defVal = -1;
+		switch ( item->type )
+		{
+			case ITEM_TYPE_EDITFIELD:
+			case ITEM_TYPE_NUMERICFIELD:
+			case ITEM_TYPE_YESNO:
+			case ITEM_TYPE_BIND:
+			case ITEM_TYPE_SLIDER:
+			case ITEM_TYPE_TEXT:
+				editPtr = (editFieldDef_t*)item->typeData;
+				editPtr->minVal = -1;
+				editPtr->maxVal = -1;
+				editPtr->defVal = -1;
+				break;
+		}
 	}
 	return qtrue;
 }
@@ -3806,7 +3937,11 @@ void Item_RunScript(itemDef_t *item, const char *s)
 			{
 				if (Q_stricmp(command, commandList[i].name) == 0) 
 				{
-					(commandList[i].handler(item, &p));
+					if ( !(commandList[i].handler(item, &p)) )
+					{
+						return;
+					}
+
 					bRan = qtrue;
 					break;
 				}
@@ -3814,7 +3949,11 @@ void Item_RunScript(itemDef_t *item, const char *s)
 			// not in our auto list, pass to handler
 			if (!bRan) 
 			{
-				DC->runScript(&p);
+				// Allow any script command to fail
+				if ( !DC->runScript(&p) )
+				{
+					break;
+				}
 			}
 		}
 	}
@@ -3843,6 +3982,7 @@ void Menu_SetupKeywordHash(void)
 Menus_ActivateByName
 ===============
 */
+void Menu_HandleMouseMove(menuDef_t *menu, float x, float y);
 menuDef_t *Menus_ActivateByName(const char *p) 
 {
 	int i;
@@ -3871,6 +4011,9 @@ menuDef_t *Menus_ActivateByName(const char *p)
 	{
 		Com_Printf(S_COLOR_YELLOW"WARNING: Menus_ActivateByName: Unable to find menu '%s'\n",p);
 	}
+
+	// Want to handle a mouse move on the new menu in case your already over an item
+	Menu_HandleMouseMove ( m, DC->cursorx, DC->cursory );
 
 	return m;
 }
@@ -3962,13 +4105,13 @@ static bind_t g_bindings[] =
 	{"+block", 			-1,					-1,		-1,		-1},
 	{"+use",			K_SPACE,			-1,		-1,		-1},
 	{"datapad",			K_TAB,				-1,		-1,		-1},
-	{"save quik*",		-1,					-1,		-1,		-1},
+	{"save quik*",		K_F9,				-1,		-1,		-1},
 	{"load quik",		-1,					-1,		-1,		-1},
 	{"load auto",		-1,					-1,		-1,		-1},
-	{"cg_thirdperson !",-1,					-1,		-1,		-1},
+	{"cg_thirdperson !",'p',				-1,		-1,		-1},
 	{"exitview",		-1,					-1,		-1,		-1},
-	{"uimenu loadmenu",	-1,					-1,		-1,		-1},
-	{"uimenu savemenu",	-1,					-1,		-1,		-1},
+	{"uimenu ingameloadmenu",	K_F10,		-1,		-1,		-1},
+	{"uimenu ingamesavemenu",	K_F11,		-1,		-1,		-1},
 	{"saberAttackCycle",-1,					-1,		-1,		-1},
 };
 
@@ -4222,12 +4365,16 @@ Menus_CloseAll
 */
 void Menus_CloseAll(void) 
 {
-  int i;
-  for (i = 0; i < menuCount; i++) 
-  {
-		Menu_RunCloseScript(&Menus[i]);
+	int i;
+
+	for (i = 0; i < menuCount; i++) 
+	{
+		Menu_RunCloseScript ( &Menus[i] );
 		Menus[i].window.flags &= ~(WINDOW_HASFOCUS | WINDOW_VISIBLE);
-  }
+	}
+
+	// Clear the menu stack
+	openMenuCount = 0;
 }
 
 /*
@@ -4309,62 +4456,6 @@ qboolean PC_ParseColor(vec4_t *color)
 	return(COM_ParseVec4(&parseData.bufferCurrent, color));
 }
 
-/*
-=================
-Controls_GetConfig2
-=================
-*/
-void Controls_GetConfig2( void )
-{
-	int		i;
-	int		twokeys[2];
-
-	// iterate each command, get its numeric binding
-	for (i=0; i < g_bindCount; i++)
-	{
-
-		Controls_GetKeyAssignment(g_bindings[i].command, twokeys);
-
-		g_bindings[i].bind1 = twokeys[0];
-		g_bindings[i].bind2 = twokeys[1];
-	}
-
-	//s_controls.invertmouse.curvalue  = DC->getCVarValue( "m_pitch" ) < 0;
-	//s_controls.smoothmouse.curvalue  = UI_ClampCvar( 0, 1, Controls_GetCvarValue( "m_filter" ) );
-	//s_controls.alwaysrun.curvalue    = UI_ClampCvar( 0, 1, Controls_GetCvarValue( "cl_run" ) );
-	//s_controls.autoswitch.curvalue   = UI_ClampCvar( 0, 1, Controls_GetCvarValue( "cg_autoswitch" ) );
-	//s_controls.sensitivity.curvalue  = UI_ClampCvar( 2, 30, Controls_GetCvarValue( "sensitivity" ) );
-	//s_controls.joyenable.curvalue    = UI_ClampCvar( 0, 1, Controls_GetCvarValue( "in_joystick" ) );
-	//s_controls.joythreshold.curvalue = UI_ClampCvar( 0.05, 0.75, Controls_GetCvarValue( "joy_threshold" ) );
-	//s_controls.freelook.curvalue     = UI_ClampCvar( 0, 1, Controls_GetCvarValue( "cl_freelook" ) );
-}
-
-/*
-=================
-Controls_SetConfig2
-=================
-*/
-void Controls_SetConfig2(qboolean restart)
-{
-//	int		i;
-
-	// FIXME BOB - make this work
-	// iterate each command, get its numeric binding
-		/*
-	for (i=0; i < g_bindCount; i++)
-	{
-		if (g_bindingsNew[i].bind1 != -1)
-		{	
-			DC->setBinding( g_bindingsNew[i].bind1, g_bindingsNew[i].command );
-
-			if (g_bindings[i].bind2 != -1)
-				DC->setBinding( g_bindingsNew[i].bind2, g_bindingsNew[i].command );
-		}
-	}
-
-	DC->executeText(EXEC_APPEND, "in_restart\n");
-	*/
-}
 
 /*
 =================
@@ -5223,10 +5314,10 @@ void Item_Model_Paint(itemDef_t *item)
 	w = item->window.rect.w-2;
 	h = item->window.rect.h-2;
 
-	refdef.x = x;
-	refdef.y = y;
-	refdef.width = w;
-	refdef.height = h;
+	refdef.x = x * DC->xscale;
+	refdef.y = y * DC->yscale;
+	refdef.width = w * DC->xscale;
+	refdef.height = h * DC->yscale;
 
 	DC->modelBounds( item->asset, mins, maxs );
 
@@ -5245,15 +5336,17 @@ void Item_Model_Paint(itemDef_t *item)
 		origin[0] = item->textscale;
 	}
 	refdef.fov_x = (modelPtr->fov_x) ? modelPtr->fov_x : w;
-	refdef.fov_x = (modelPtr->fov_y) ? modelPtr->fov_y : h;
+	refdef.fov_y = (modelPtr->fov_y) ? modelPtr->fov_y : h;
 
+	refdef.fov_x = 45;
+	refdef.fov_y = 45;
+	
 	//refdef.fov_x = (int)((float)refdef.width / 640.0f * 90.0f);
 	//xx = refdef.width / tan( refdef.fov_x / 360 * M_PI );
 	//refdef.fov_y = atan2( refdef.height, xx );
 	//refdef.fov_y *= ( 360 / M_PI );
 
-	// FIXME : Bob make this work
-//	DC->clearScene();
+	DC->clearScene();
 
 	refdef.time = DC->realTime;
 
@@ -5266,6 +5359,7 @@ void Item_Model_Paint(itemDef_t *item)
 	//VectorSet( angles, 0, 0, 1 );
 
 	// use item storage to track
+/*
 	if (modelPtr->rotationSpeed) 
 	{
 		if (DC->realTime > item->window.nextTime) 
@@ -5275,15 +5369,20 @@ void Item_Model_Paint(itemDef_t *item)
 		}
 	}
 	VectorSet( angles, 0, modelPtr->angle, 0 );
+*/
+	VectorSet( angles, 0, (float)(refdef.time/20.0f), 0);
+	
 	AnglesToAxis( angles, ent.axis );
 
 	ent.hModel = item->asset;
 	VectorCopy( origin, ent.origin );
-	VectorCopy( origin, ent.lightingOrigin );
-	ent.renderfx = RF_LIGHTING_ORIGIN | RF_NOSHADOW;
 	VectorCopy( ent.origin, ent.oldorigin );
 
-//	DC->addRefEntityToScene( &ent );
+	// Set up lighting
+	VectorCopy( refdef.vieworg, ent.lightingOrigin );
+	ent.renderfx = RF_LIGHTING_ORIGIN | RF_NOSHADOW;
+
+	DC->addRefEntityToScene( &ent );
 	DC->renderScene( &refdef );
 
 }
@@ -5568,11 +5667,11 @@ void Item_Slider_Paint(itemDef_t *item)
 		x = item->window.rect.x;
 	}
 	DC->setColor(newColor);
-	DC->drawHandlePic( x, y+7, SLIDER_WIDTH, SLIDER_HEIGHT, DC->Assets.sliderBar );
+	DC->drawHandlePic( x, y+2, SLIDER_WIDTH, SLIDER_HEIGHT, DC->Assets.sliderBar );
 
 	x = Item_Slider_ThumbPosition(item);
 //	DC->drawHandlePic( x - (SLIDER_THUMB_WIDTH / 2), y - 2, SLIDER_THUMB_WIDTH, SLIDER_THUMB_HEIGHT, DC->Assets.sliderThumb );
-	DC->drawHandlePic( x - (SLIDER_THUMB_WIDTH / 2), y+7, SLIDER_THUMB_WIDTH, SLIDER_THUMB_HEIGHT, DC->Assets.sliderThumb );
+	DC->drawHandlePic( x - (SLIDER_THUMB_WIDTH / 2), y+2, SLIDER_THUMB_WIDTH, SLIDER_THUMB_HEIGHT, DC->Assets.sliderThumb );
 
 }
 
@@ -5608,7 +5707,7 @@ void Item_Paint(itemDef_t *item)
 				textPtr = item->descText;
 			}
 
-			textWidth = DC->textWidth(textPtr,(float) item->textscale,  item->font);
+			textWidth = DC->textWidth(textPtr,(float) item->textscale, uiInfo.uiDC.Assets.qhMediumFont);	//  item->font);
 
 			if (parent->descAlignment == ITEM_ALIGN_RIGHT)
 			{
@@ -5631,7 +5730,7 @@ void Item_Paint(itemDef_t *item)
 				parent->descScale = 1;
 			}
 
-			DC->drawText(xPos, parent->descY, (float) parent->descScale, parent->descColor, textPtr, 0, 0, item->font);
+			DC->drawText(xPos, parent->descY, (float) parent->descScale, parent->descColor, textPtr, 0, 0, uiInfo.uiDC.Assets.qhMediumFont);	//item->font);
 		}
 	}
 

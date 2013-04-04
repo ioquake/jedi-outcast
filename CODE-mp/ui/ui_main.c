@@ -21,14 +21,6 @@ void UpdateForceUsed();
 
 char holdSPString[1024]={0};
 
-enum {
-	FONT_NONE,
-	FONT_SMALL=1,
-	FONT_MEDIUM,
-	FONT_LARGE
-};
-
-
 uiInfo_t uiInfo;
 
 static const char *MonthAbbrev[] = {
@@ -851,7 +843,7 @@ void UI_LoadMenus(const char *menuFile, qboolean reset) {
 
 	handle = trap_PC_LoadSource( menuFile );
 	if (!handle) {
-		trap_Error( va( S_COLOR_YELLOW "menu file not found: %s, using default\n", menuFile ) );
+		Com_Printf( S_COLOR_YELLOW "menu file not found: %s, using default\n", menuFile );
 		handle = trap_PC_LoadSource( "ui/jk2mpmenus.txt" );
 		if (!handle) {
 			trap_Error( va( S_COLOR_RED "default menu file not found: ui/menus.txt, unable to continue!\n", menuFile ) );
@@ -3549,12 +3541,15 @@ static void UI_Update(const char *name) {
 
 int gUISelectedMap = 0;
 
-static void UI_RunMenuScript(char **args) {
+static void UI_RunMenuScript(char **args) 
+{
 	const char *name, *name2;
 	char buff[1024];
 
-	if (String_Parse(args, &name)) {
-		if (Q_stricmp(name, "StartServer") == 0) {
+	if (String_Parse(args, &name)) 
+	{
+		if (Q_stricmp(name, "StartServer") == 0) 
+		{
 			int i, added = 0;
 			float skill;
 			trap_Cvar_Set("cg_thirdPerson", "0");
@@ -3567,11 +3562,13 @@ static void UI_RunMenuScript(char **args) {
 			trap_Cmd_ExecuteText( EXEC_APPEND, va( "wait ; wait ; map %s\n", uiInfo.mapList[ui_currentNetMap.integer].mapLoadName ) );
 			skill = trap_Cvar_VariableValue( "g_spSkill" );
 
-			for (i = 0; i < PLAYERS_PER_TEAM; i++) {
+			for (i = 0; i < PLAYERS_PER_TEAM; i++) 
+			{
 				int bot = trap_Cvar_VariableValue( va("ui_blueteam%i", i+1));
 				int maxcl = trap_Cvar_VariableValue( "sv_maxClients" );
 
-				if (bot > 1) {
+				if (bot > 1) 
+				{
 					int numval = i+1;
 
 					numval *= 2;
@@ -3949,6 +3946,8 @@ static void UI_RunMenuScript(char **args) {
 			}
 		} else if (Q_stricmp(name, "setForce") == 0) {
 			UI_UpdateClientForcePowers();
+		} else if (Q_stricmp(name, "saveTemplate") == 0) {
+			UI_SaveForceTemplate();
 		} else if (Q_stricmp(name, "refreshForce") == 0) {
 			UI_UpdateForcePowers();
 		} else if (Q_stricmp(name, "glCustom") == 0) {
@@ -3998,13 +3997,16 @@ static void UI_RunMenuScript(char **args) {
 				trap_Cvar_Set("g_weaponDisable", va("%i",weaponDisable));
 			}
 		} 
-		else if (Q_stricmp(name, "update") == 0) {
-			if (String_Parse(args, &name2)) {
+		else if (Q_stricmp(name, "update") == 0) 
+		{
+			if (String_Parse(args, &name2)) 
+			{
 				UI_Update(name2);
-		}
-		else {
-			Com_Printf("unknown UI script %s\n", name);
 			}
+		}
+		else 
+		{
+			Com_Printf("unknown UI script %s\n", name);
 		}
 	}
 }
@@ -4703,40 +4705,58 @@ static void UI_BuildServerStatus(qboolean force) {
 UI_FeederCount
 ==================
 */
-static int UI_FeederCount(float feederID) {
-	if (feederID == FEEDER_HEADS) {
-		return UI_HeadCountByTeam();
-	} else if (feederID == FEEDER_Q3HEADS) {
-		return UI_HeadCountByColor();
-	} else if (feederID == FEEDER_FORCECFG) {
-		return uiInfo.forceConfigCount;
-	} else if (feederID == FEEDER_CINEMATICS) {
-		return uiInfo.movieCount;
-	} else if (feederID == FEEDER_MAPS || feederID == FEEDER_ALLMAPS) {
-		return UI_MapCountByGameType(feederID == FEEDER_MAPS ? qtrue : qfalse);
-	} else if (feederID == FEEDER_SERVERS) {
-		return uiInfo.serverStatus.numDisplayServers;
-	} else if (feederID == FEEDER_SERVERSTATUS) {
-		return uiInfo.serverStatusInfo.numLines;
-	} else if (feederID == FEEDER_FINDPLAYER) {
-		return uiInfo.numFoundPlayerServers;
-	} else if (feederID == FEEDER_PLAYER_LIST) {
-		if (uiInfo.uiDC.realTime > uiInfo.playerRefresh) {
-			uiInfo.playerRefresh = uiInfo.uiDC.realTime + 3000;
-			UI_BuildPlayerList();
-		}
-		return uiInfo.playerCount;
-	} else if (feederID == FEEDER_TEAM_LIST) {
-		if (uiInfo.uiDC.realTime > uiInfo.playerRefresh) {
-			uiInfo.playerRefresh = uiInfo.uiDC.realTime + 3000;
-			UI_BuildPlayerList();
-		}
-		return uiInfo.myTeamCount;
-	} else if (feederID == FEEDER_MODS) {
-		return uiInfo.modCount;
-	} else if (feederID == FEEDER_DEMOS) {
-		return uiInfo.demoCount;
+static int UI_FeederCount(float feederID) 
+{
+	switch ( (int)feederID )
+	{
+		case FEEDER_HEADS:
+			return UI_HeadCountByTeam();
+
+		case FEEDER_Q3HEADS:
+			return UI_HeadCountByColor();
+
+		case FEEDER_FORCECFG:
+			return uiInfo.forceConfigCount;
+
+		case FEEDER_CINEMATICS:
+			return uiInfo.movieCount;
+
+		case FEEDER_MAPS:
+		case FEEDER_ALLMAPS:
+			return UI_MapCountByGameType(feederID == FEEDER_MAPS ? qtrue : qfalse);
+	
+		case FEEDER_SERVERS:
+			return uiInfo.serverStatus.numDisplayServers;
+	
+		case FEEDER_SERVERSTATUS:
+			return uiInfo.serverStatusInfo.numLines;
+	
+		case FEEDER_FINDPLAYER:
+			return uiInfo.numFoundPlayerServers;
+
+		case FEEDER_PLAYER_LIST:
+			if (uiInfo.uiDC.realTime > uiInfo.playerRefresh) 
+			{
+				uiInfo.playerRefresh = uiInfo.uiDC.realTime + 3000;
+				UI_BuildPlayerList();
+			}
+			return uiInfo.playerCount;
+
+		case FEEDER_TEAM_LIST:
+			if (uiInfo.uiDC.realTime > uiInfo.playerRefresh) 
+			{
+				uiInfo.playerRefresh = uiInfo.uiDC.realTime + 3000;
+				UI_BuildPlayerList();
+			}
+			return uiInfo.myTeamCount;
+
+		case FEEDER_MODS:
+			return uiInfo.modCount;
+	
+		case FEEDER_DEMOS:
+			return uiInfo.demoCount;
 	}
+
 	return 0;
 }
 
@@ -4948,7 +4968,7 @@ static const char *UI_FeederItemText(float feederID, int index, int column, qhan
 		if (index >= 0 && index < uiInfo.demoCount) {
 			return uiInfo.demoList[index];
 		}
-	}
+	} 
 	return "";
 }
 
@@ -5035,12 +5055,21 @@ static void UI_FeederSelection(float feederID, int index) {
 	else if (feederID == FEEDER_MAPS || feederID == FEEDER_ALLMAPS) 
 	{
 		int actual, map;
+		const char *checkValid = NULL;
+
 		map = (feederID == FEEDER_ALLMAPS) ? ui_currentNetMap.integer : ui_currentMap.integer;
 		if (uiInfo.mapList[map].cinematic >= 0) {
 		  trap_CIN_StopCinematic(uiInfo.mapList[map].cinematic);
 		  uiInfo.mapList[map].cinematic = -1;
 		}
-		UI_SelectedMap(index, &actual);
+		checkValid = UI_SelectedMap(index, &actual);
+
+		if (!checkValid || !checkValid[0])
+		{ //this isn't a valid map to select, so reselect the current
+			index = ui_mapIndex.integer;
+			UI_SelectedMap(index, &actual);
+		}
+
 		trap_Cvar_Set("ui_mapIndex", va("%d", index));
 		gUISelectedMap = index;
 		ui_mapIndex.integer = index;
@@ -6361,6 +6390,8 @@ vmCvar_t	ui_recordSPDemo;
 vmCvar_t	ui_realCaptureLimit;
 vmCvar_t	ui_realWarmUp;
 vmCvar_t	ui_serverStatusTimeOut;
+vmCvar_t	s_language;
+vmCvar_t	k_language;
 
 // bk001129 - made static to avoid aliasing
 static cvarTable_t		cvarTable[] = {
@@ -6488,7 +6519,8 @@ static cvarTable_t		cvarTable[] = {
 	{ &ui_realWarmUp, "g_warmup", "20", CVAR_ARCHIVE},
 	{ &ui_realCaptureLimit, "capturelimit", "8", CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART},
 	{ &ui_serverStatusTimeOut, "ui_serverStatusTimeOut", "7000", CVAR_ARCHIVE},
-
+	{ &s_language, "s_language", "english", CVAR_ARCHIVE | CVAR_NORESTART},
+	{ &k_language, "k_language", "", CVAR_ARCHIVE | CVAR_NORESTART},	// any default ("" or "american") is fine, only foreign strings ("deutsch" etc) make a different keyboard table get looked at
 };
 
 // bk001129 - made static to avoid aliasing

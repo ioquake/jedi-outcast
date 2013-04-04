@@ -452,8 +452,13 @@ void AI_GetGroup( gentity_t *self )
 		VectorCopy( self->NPC->group->enemy->currentOrigin, self->NPC->group->enemyLastSeenPos );
 	}
 
-	for ( i = 0, member = &g_entities[0]; i < globals.num_entities ; i++, member++)
+//	for ( i = 0, member = &g_entities[0]; i < globals.num_entities ; i++, member++)
+	for ( i = 0; i < globals.num_entities ; i++)
 	{
+		if(!PInUse(i))
+			continue;
+		member = &g_entities[i];
+
 		if ( !AI_ValidateGroupMember( self->NPC->group, member ) )
 		{//FIXME: keep track of those who aren't angry yet and see if we should wake them after we assemble the core group
 			continue;
@@ -570,7 +575,7 @@ void AI_GroupMemberKilled( gentity_t *self )
 		else
 		{
 			ST_AggressionAdjust( member, -1 );
-			member->NPC->currentAim -= Q_irand( 0, 2);//drop their aim accuracy
+			member->NPC->currentAim -= Q_irand( 0, 10 );//Q_irand( 0, 2);//drop their aim accuracy
 		}
 	}
 	//okay, if I'm the group commander, make everyone else flee
@@ -610,9 +615,9 @@ void AI_GroupMemberKilled( gentity_t *self )
 						ST_MarkToCover( member );
 					}
 				}
-				member->NPC->currentAim -= Q_irand( 1, 3 );//drop their aim accuracy even more
+				member->NPC->currentAim -= Q_irand( 1, 15 ); //Q_irand( 1, 3 );//drop their aim accuracy even more
 			}
-			member->NPC->currentAim -= Q_irand( 1, 3 );//drop their aim accuracy even more
+			member->NPC->currentAim -= Q_irand( 1, 15 ); //Q_irand( 1, 3 );//drop their aim accuracy even more
 		}
 	}
 }

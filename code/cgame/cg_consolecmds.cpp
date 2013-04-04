@@ -12,7 +12,6 @@ extern qboolean	player_locked;
 extern void CMD_CGCam_Disable( void );
 void CG_NextInventory_f( void );
 void CG_PrevInventory_f( void );
-void CG_UseInventory_f( void );
 void CG_NextForcePower_f( void );
 void CG_PrevForcePower_f( void );
 void CG_LoadHud_f( void );

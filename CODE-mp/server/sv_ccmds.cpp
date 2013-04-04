@@ -1,7 +1,7 @@
 
 #include "server.h"
-#include "..\strings\str_server.h"
-#include "..\qcommon\strip.h"
+#include "../strings/str_server.h"
+#include "../qcommon/strip.h"
 
 /*
 ===============================================================================

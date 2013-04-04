@@ -1,10 +1,10 @@
-#ifndef __objectives_h
-#define __objectives_h
+#ifndef __strip_objectives_h
+#define __strip_objectives_h
 
 
 /********************************************************************************
 
-the  objectives...  duh...
+the objectives... duh...
 
 ********************************************************************************/
 
@@ -69,8 +69,9 @@ enum
 	OBJECTIVES_KEJIM_POST_OBJ4 = 0x0835,
 	OBJECTIVES_KEJIM_POST_OBJ5 = 0x0836,
 	OBJECTIVES_ARTUS_DETENTION_OBJ3 = 0x0837,
-	OBJECTIVES_DOOM_COMM_OBJ4 = 0x0838
+	OBJECTIVES_DOOM_COMM_OBJ4 = 0x0838,
+	OBJECTIVES_DOOM_SHIELDS_OBJ3 = 0x0839
 };
 
 
-#endif // __objectives_h
+#endif // __strip_objectives_h

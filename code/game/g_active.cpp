@@ -7,6 +7,11 @@
 #include "..\cgame\cg_local.h"
 #include "Q3_Interface.h"
 #include "wp_saber.h"
+#include "g_icarus.h"
+
+#ifdef _DEBUG
+	#include <float.h>
+#endif //_DEBUG
 
 #define	SLOWDOWN_DIST	128.0f
 #define	MIN_NPC_SPEED	16.0f
@@ -21,6 +26,7 @@ extern void WP_SaberReflectCheck( gentity_t *self, usercmd_t *ucmd  );
 extern void WP_SaberUpdate( gentity_t *self, usercmd_t *ucmd );
 extern void WP_SaberStartMissileBlockCheck( gentity_t *self, usercmd_t *ucmd  );
 extern void WP_ForcePowersUpdate( gentity_t *self, usercmd_t *ucmd );
+extern void WP_SaberInitBladeData( gentity_t *ent );
 extern gentity_t *SeekerAcquiresTarget ( gentity_t *ent, vec3_t pos );
 extern void FireSeeker( gentity_t *owner, gentity_t *target, vec3_t origin, vec3_t dir );
 extern qboolean InFront( vec3_t spot, vec3_t from, vec3_t fromAngles, float threshHold = 0.0f );
@@ -31,6 +37,7 @@ extern qboolean PM_AdjustAnglesForSpinningFlip( gentity_t *ent, usercmd_t *ucmd,
 extern qboolean PM_AdjustAnglesForBackAttack( gentity_t *ent, usercmd_t *ucmd );
 extern qboolean PM_AdjustAnglesForSaberLock( gentity_t *ent, usercmd_t *ucmd );
 extern qboolean PM_AdjustAnglesForKnockdown( gentity_t *ent, usercmd_t *ucmd, qboolean angleClampOnly );
+extern qboolean PM_HasAnimation( gentity_t *ent, int animation );
 extern qboolean PM_SpinningSaberAnim( int anim );
 extern qboolean PM_SaberInAttack( int move );
 extern int PM_AnimLength( int index, animNumber_t anim );
@@ -40,8 +47,10 @@ extern void PM_CmdForRoll( int anim, usercmd_t *pCmd );
 extern qboolean PM_CrouchAnim( int anim );
 extern qboolean PM_FlippingAnim( int anim );
 extern qboolean PM_InCartwheel( int anim );
+extern qboolean PM_StandingAnim( int anim );
 extern qboolean PM_InForceGetUp( playerState_t *ps );
 extern void G_CreateG2AttachedWeaponModel( gentity_t *ent, const char *weaponModel );
+extern qboolean FlyingCreature( gentity_t *ent );
 
 extern	bool		in_camera;
 extern	qboolean	player_locked;
@@ -225,7 +234,9 @@ void G_ChooseLookEnemy( gentity_t *self, usercmd_t *ucmd )
 	float		rating, bestRating = 0.0f;
 
 	//FIXME: no need to do this in 1st person?
+	fwdangles[0] = 0;		//Must initialize data!
 	fwdangles[1] = self->client->ps.viewangles[1];
+	fwdangles[2] = 0;
 	AngleVectors( fwdangles, forward, NULL, NULL );
 
 	VectorCopy( self->currentOrigin, center );
@@ -523,12 +534,12 @@ void DoImpact( gentity_t *self, gentity_t *other, qboolean damageSelf )
 
 	magnitude = VectorLength( velocity ) * my_mass / 50;
 
-	if ( !self->client || self->client->ps.lastOnGround+300<level.time || ( self->client->ps.lastOnGround+100 < level.time && other->material >= MAT_GLASS ) )
+	if ( !self->client || self->client->ps.lastOnGround+300<level.time || ( self->client->ps.lastOnGround+100 < level.time ) )
 	{
 		vec3_t dir1, dir2;
 		float force = 0, dot;
 
-		if ( other->material >= MAT_GLASS || ((other->svFlags&SVF_BBRUSH)&&(other->spawnflags&4/*THIN*/)) )//(other->absmax[0]-other->absmin[0]<=32||other->absmax[1]-other->absmin[1]<=32||other->absmax[2]-other->absmin[2]<=32)) )
+		if ( other->material == MAT_GLASS || other->material == MAT_GLASS_METAL || other->material == MAT_GRATE1 || ((other->svFlags&SVF_BBRUSH)&&(other->spawnflags&4/*THIN*/)) )//(other->absmax[0]-other->absmin[0]<=32||other->absmax[1]-other->absmin[1]<=32||other->absmax[2]-other->absmin[2]<=32)) )
 		{//glass and thin breakable brushes (axially aligned only, unfortunately) take more impact damage
 			magnitude *= 2;
 		}
@@ -599,7 +610,7 @@ void DoImpact( gentity_t *self, gentity_t *other, qboolean damageSelf )
 				{
 					if ( !self->client || !other->s.number || !other->client )
 					{//aw, fuck it, clients no longer take impact damage from other clients, unless you're the player 
-						G_Damage( other, self, self, velocity, self->currentOrigin, force, 0, MOD_IMPACT );
+						G_Damage( other, self, self, velocity, self->currentOrigin, force, DAMAGE_NO_ARMOR, MOD_IMPACT );
 					}
 					else
 					{
@@ -665,7 +676,7 @@ void DoImpact( gentity_t *self, gentity_t *other, qboolean damageSelf )
 						{//FIXME: for now Jedi take no falling damage, but really they should if pushed off?
 							magnitude = 0;
 						}
-						G_Damage( self, NULL, NULL, NULL, self->currentOrigin, magnitude/2, 0, MOD_FALLING );//FIXME: MOD_IMPACT
+						G_Damage( self, NULL, NULL, NULL, self->currentOrigin, magnitude/2, DAMAGE_NO_ARMOR, MOD_FALLING );//FIXME: MOD_IMPACT
 					}
 				}
 		}
@@ -747,6 +758,13 @@ void	G_TouchTriggersLerped( gentity_t *ent ) {
 		}
 	}
 
+#ifdef _DEBUG
+	for ( int j = 0; j < 3; j++ )
+	{
+		assert( !_isnan(ent->currentOrigin[j]));
+		assert( !_isnan(ent->lastOrigin[j]));
+	}
+#endif// _DEBUG
 	VectorSubtract( ent->currentOrigin, ent->lastOrigin, diff );
 	dist = VectorNormalize( diff );
 
@@ -973,30 +991,55 @@ void G_MoverTouchPushTriggers( gentity_t *ent, vec3_t oldOrg )
 	}
 }
 
+void G_MatchPlayerWeapon( gentity_t *ent )
+{
+	if ( g_entities[0].inuse && g_entities[0].client )
+	{//player is around
+		int newWeap;
+		if ( g_entities[0].client->ps.weapon > WP_DET_PACK )
+		{
+			newWeap = WP_BRYAR_PISTOL;
+		}
+		else
+		{
+			newWeap = g_entities[0].client->ps.weapon;
+		}
+		if ( newWeap != WP_NONE && ent->client->ps.weapon != newWeap )
+		{
+			if ( ent->weaponModel != -1 )
+			{
+				gi.G2API_RemoveGhoul2Model(ent->ghoul2, ent->weaponModel);
+			}
+			ent->client->ps.stats[STAT_WEAPONS] = ( 1 << newWeap );
+			ent->client->ps.ammo[weaponData[newWeap].ammoIndex] = 999;
+			ChangeWeapon( ent, newWeap );
+			ent->client->ps.weapon = newWeap;
+			ent->client->ps.weaponstate = WEAPON_READY;
+			if ( newWeap == WP_SABER )
+			{
+				//FIXME: AddSound/Sight Event
+				WP_SaberInitBladeData( ent );
+				G_CreateG2AttachedWeaponModel( ent, ent->client->ps.saberModel );
+				ent->client->ps.saberActive = g_entities[0].client->ps.saberActive;
+				ent->client->ps.saberLength = g_entities[0].client->ps.saberLength;
+				ent->client->ps.saberAnimLevel = g_entities[0].client->ps.saberAnimLevel;
+			}
+			else
+			{
+				G_CreateG2AttachedWeaponModel( ent, weaponData[newWeap].weaponMdl );
+			}
+		}
+	}
+}
+
 void G_NPCMunroMatchPlayerWeapon( gentity_t *ent )
 {
 	//special uber hack for cinematic Munro's to match player's weapon
 	if ( !in_camera )
 	{
 		if ( ent && ent->client && ent->NPC && (ent->NPC->aiFlags&NPCAI_MATCHPLAYERWEAPON) )
-		{//we're a Munro NPC
-			int newWeap;
-			if ( g_entities[0].client->ps.weapon == WP_SABER || g_entities[0].client->ps.weapon > WP_DET_PACK )
-			{
-				newWeap = WP_BRYAR_PISTOL;
-			}
-			else
-			{
-				newWeap = g_entities[0].client->ps.weapon;
-			}
-			if ( newWeap != WP_NONE && ent->client->ps.weapon != newWeap )
-			{
-				ent->client->ps.stats[STAT_WEAPONS] = ( 1 << newWeap );
-				ent->client->ps.ammo[weaponData[newWeap].ammoIndex] = 999;
-				ChangeWeapon( ent, newWeap );
-				ent->client->ps.weapon = newWeap;
-				ent->client->ps.weaponstate = WEAPON_READY;
-			}
+		{//we're a Kyle NPC
+			G_MatchPlayerWeapon( ent );
 		}
 	}
 }
@@ -1185,8 +1228,10 @@ void ClientEvents( gentity_t *ent, int oldEventSequence ) {
 	}
 }
 
-void G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
+qboolean G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 {
+	qboolean overridAngles = qfalse;
+
 	if ( (!ent->s.number&&ent->aimDebounceTime>level.time) 
 		|| (ent->client->ps.pm_time && (ent->client->ps.pm_flags&PMF_TIME_KNOCKBACK)) 
 		|| ent->forcePushTime > level.time )
@@ -1201,20 +1246,21 @@ void G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 		}
 	}
 
-	PM_AdjustAnglesForKnockdown( ent, ucmd, qfalse );
+	overridAngles = (PM_AdjustAnglesForKnockdown( ent, ucmd, qfalse )?qtrue:overridAngles);
 
 	if ( ent->client->ps.saberLockTime > level.time )
 	{
 		ucmd->forwardmove = ucmd->rightmove = ucmd->upmove = 0;
 		if ( ent->client->ps.saberLockTime - level.time > SABER_LOCK_DELAYED_TIME )
 		{//2 second delay before either can push
+			//FIXME: base on difficulty
 			ucmd->buttons = 0;
 		}
 		else
 		{
 			ucmd->buttons &= ~(ucmd->buttons&~BUTTON_ATTACK);
 		}
-		PM_AdjustAnglesForSaberLock( ent, ucmd );
+		overridAngles = (PM_AdjustAnglesForSaberLock( ent, ucmd )?qtrue:overridAngles);
 		if ( ent->NPC )
 		{
 			VectorClear( ent->client->ps.moveDir );
@@ -1247,7 +1293,7 @@ void G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 		|| ent->client->ps.saberMove == LS_A_BACKSTAB )
 	{//can't move or turn during back attacks
 		ucmd->forwardmove = ucmd->rightmove = 0;
-		if ( PM_AdjustAnglesForBackAttack( ent, ucmd ) )
+		if ( (overridAngles = (PM_AdjustAnglesForBackAttack( ent, ucmd )?qtrue:overridAngles)) == qtrue )
 		{
 			//pull back the view
 			if ( !ent->s.number )
@@ -1263,6 +1309,7 @@ void G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 				{//ending anim
 					backDist = ((animLength-elapsedTime)/animLength)*120.0f;
 				}
+				cg.overrides.active |= CG_OVERRIDE_3RD_PERSON_RNG;
 				cg.overrides.thirdPersonRange = cg_thirdPersonRange.value+backDist;
 			}
 		}
@@ -1284,12 +1331,17 @@ void G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 			{//ending anim
 				backDist = ((animLength-elapsedTime)/animLength)*120.0f;
 			}
+			cg.overrides.active |= CG_OVERRIDE_3RD_PERSON_RNG;
 			cg.overrides.thirdPersonRange = cg_thirdPersonRange.value+backDist;
 		}
 	}
 	else if ( !ent->s.number )
 	{
-		cg.overrides.thirdPersonRange = 0;
+		if ( ent->client->NPC_class != CLASS_ATST )
+		{
+			cg.overrides.active &= ~CG_OVERRIDE_3RD_PERSON_RNG;
+			cg.overrides.thirdPersonRange = 0;
+		}
 	}
 
 
@@ -1320,7 +1372,9 @@ void G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 		}
 	}
 
-	PM_AdjustAngleForWallRun( ent, ucmd, qtrue );
+	overridAngles = (PM_AdjustAngleForWallRun( ent, ucmd, qtrue )?qtrue:overridAngles);
+
+	return overridAngles;
 }
 
 void BG_AddPushVecToUcmd(gentity_t *self, usercmd_t *ucmd)
@@ -1618,11 +1672,34 @@ void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd )
 {
 	if (( (*ucmd)->buttons & BUTTON_USE || (*ucmd)->forwardmove < 0 ) && ent->owner && ent->owner->delay + 500 < level.time )
 	{
+		ent->owner->s.loopSound = 0;
+
 		ExitEmplacedWeapon( ent );
 		(*ucmd)->buttons &= ~BUTTON_USE;
+
+		G_Sound( ent, G_SoundIndex( "sound/weapons/emplaced/emplaced_dismount.mp3" ));
 	}
 	else
 	{
+		// this is a crappy way to put sounds on a moving emplaced gun....
+		if ( ent->owner )
+		{
+			if ( !VectorCompare( ent->owner->pos3, ent->owner->movedir ))
+			{
+				ent->owner->s.loopSound = G_SoundIndex( "sound/weapons/emplaced/emplaced_move_lp.wav" );
+				ent->owner->fly_sound_debounce_time = level.time;
+			}
+			else
+			{
+				if ( ent->owner->fly_sound_debounce_time + 100 <= level.time )
+				{
+					ent->owner->s.loopSound = 0;
+				}
+			}
+
+			VectorCopy( ent->owner->pos3, ent->owner->movedir );
+		}
+
 		// don't allow movement, weapon switching, and most kinds of button presses
 		(*ucmd)->forwardmove = 0;
 		(*ucmd)->rightmove = 0;
@@ -1630,6 +1707,11 @@ void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd )
 		(*ucmd)->buttons &= (BUTTON_ATTACK|BUTTON_ALT_ATTACK);
 
 		(*ucmd)->weapon = ent->client->ps.weapon; //WP_EMPLACED_GUN;
+
+		if ( ent->health <= 0 )
+		{
+			ExitEmplacedWeapon( ent );
+		}
 	}
 }
 
@@ -1639,12 +1721,133 @@ void G_StopCinematicSkip( void )
 	gi.cvar_set("skippingCinematic", "0");
 	gi.cvar_set("timescale", "1");
 }
+
 void G_StartCinematicSkip( void )
 {
-	// no... so start skipping...
-	gi.cvar_set("skippingCinematic", "1");
-	gi.cvar_set("timescale", "100");
+	
+	if (cinematicSkipScript[0])
+	{
+		ICARUS_RunScript( &g_entities[0], va( "%s/%s", Q3_SCRIPT_DIR, cinematicSkipScript ) );
+		memset( cinematicSkipScript, 0, sizeof( cinematicSkipScript ) );
+		gi.cvar_set("skippingCinematic", "1");
+		gi.cvar_set("timescale", "100");
+	}
+	else 
+	{
+		// no... so start skipping...
+		gi.cvar_set("skippingCinematic", "1");
+		gi.cvar_set("timescale", "100");
+	}
 }
+
+void G_CheckClientIdle( gentity_t *ent, usercmd_t *ucmd ) 
+{
+	if ( !ent || !ent->client || ent->health <= 0 )
+	{
+		return;
+	}
+	if ( !ent->s.number && ( !cg.renderingThirdPerson || cg.zoomMode ) )
+	{
+		if ( ent->client->idleTime < level.time )
+		{
+			ent->client->idleTime = level.time;
+		}
+		return;
+	}
+	if ( !VectorCompare( vec3_origin, ent->client->ps.velocity ) 
+		|| ucmd->buttons || ucmd->forwardmove || ucmd->rightmove || ucmd->upmove 
+		|| !PM_StandingAnim( ent->client->ps.legsAnim ) 
+		|| ent->enemy 
+		|| ent->client->ps.legsAnimTimer
+		|| ent->client->ps.torsoAnimTimer )
+	{//FIXME: also check for turning?
+		if ( !VectorCompare( vec3_origin, ent->client->ps.velocity ) 
+			|| ucmd->buttons || ucmd->forwardmove || ucmd->rightmove || ucmd->upmove 
+			|| ent->enemy )
+		{
+			//if in an idle, break out
+			switch ( ent->client->ps.legsAnim )
+			{
+			case BOTH_STAND1IDLE1:
+			case BOTH_STAND2IDLE1:
+			case BOTH_STAND2IDLE2:
+			case BOTH_STAND3IDLE1:
+			case BOTH_STAND4IDLE1:
+				ent->client->ps.legsAnimTimer = 0;
+				break;
+			}
+			switch ( ent->client->ps.torsoAnim )
+			{
+			case BOTH_STAND1IDLE1:
+			case BOTH_STAND2IDLE1:
+			case BOTH_STAND2IDLE2:
+			case BOTH_STAND3IDLE1:
+			case BOTH_STAND4IDLE1:
+				ent->client->ps.torsoAnimTimer = 0;
+				break;
+			}
+		}
+		//
+		if ( ent->client->idleTime < level.time )
+		{
+			ent->client->idleTime = level.time;
+		}
+	}
+	else if ( level.time - ent->client->idleTime > 5000 )
+	{//been idle for 5 seconds
+		int	idleAnim = -1;
+		switch ( ent->client->ps.legsAnim )
+		{
+		case BOTH_STAND1:
+			idleAnim = BOTH_STAND1IDLE1;
+			break;
+		case BOTH_STAND2:
+			idleAnim = Q_irand(BOTH_STAND2IDLE1,BOTH_STAND2IDLE2);
+			break;
+		case BOTH_STAND3:
+			idleAnim = BOTH_STAND3IDLE1;
+			break;
+		case BOTH_STAND4:
+			idleAnim = BOTH_STAND4IDLE1;
+			break;
+		}
+		if ( idleAnim != -1 && PM_HasAnimation( ent, idleAnim ) )
+		{
+			NPC_SetAnim( ent, SETANIM_BOTH, idleAnim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+			//don't idle again after this anim for a while
+			ent->client->idleTime = level.time + PM_AnimLength( ent->client->clientInfo.animFileIndex, (animNumber_t)idleAnim ) + Q_irand( 0, 2000 );
+		}
+	}
+}
+
+void G_CheckMovingLoopingSounds( gentity_t *ent, usercmd_t *ucmd )
+{
+	if ( ent->client )
+	{
+		if ( (ent->NPC&&!VectorCompare( vec3_origin, ent->client->ps.moveDir ))//moving using moveDir
+			|| ucmd->forwardmove || ucmd->rightmove//moving using ucmds
+			|| (ucmd->upmove&&FlyingCreature( ent ))//flier using ucmds to move
+			|| (FlyingCreature( ent )&&!VectorCompare( vec3_origin, ent->client->ps.velocity )&&ent->health>0))//flier using velocity to move
+		{
+			if ( ent->client->NPC_class == CLASS_R2D2 )
+			{
+				ent->s.loopSound = G_SoundIndex( "sound/chars/r2d2/misc/r2_move_lp.wav" );
+			}
+			if ( ent->client->NPC_class == CLASS_R5D2 )
+			{
+				ent->s.loopSound = G_SoundIndex( "sound/chars/r2d2/misc/r2_move_lp2.wav" );
+			}
+		}
+		else
+		{//not moving under your own control, stop loopSound
+			if ( ent->client->NPC_class == CLASS_R2D2 || ent->client->NPC_class == CLASS_R5D2 )
+			{
+				ent->s.loopSound = 0;
+			}
+		}
+	}
+}
+
 /*
 ==============
 ClientThink
@@ -1886,60 +2089,67 @@ extern cvar_t	*g_skippingcin;
 				&& !(groundEnt->client->ps.eFlags&EF_LOCKED_TO_WEAPON) 
 				&& !inSpinFlipAttack )
 			{//landed on a live client who is on the ground, jump off them and knock them down
-				if ( !PM_InRoll( &ent->client->ps ) 
-					&& !PM_FlippingAnim( ent->client->ps.legsAnim ) )
+				if ( ent->health > 0 )
 				{
-					if ( ent->s.number && ent->s.weapon == WP_SABER )
+					if ( !PM_InRoll( &ent->client->ps ) 
+						&& !PM_FlippingAnim( ent->client->ps.legsAnim ) )
 					{
-						ent->client->ps.forceJumpCharge = 320;//FIXME: calc this intelligently?
+						if ( ent->s.number && ent->s.weapon == WP_SABER )
+						{
+							ent->client->ps.forceJumpCharge = 320;//FIXME: calc this intelligently?
+						}
+						else if ( !ucmd->upmove )
+						{//if not ducking (which should cause a roll), then jump
+							ucmd->upmove = 127;
+						}
+						if ( !ucmd->forwardmove && !ucmd->rightmove )
+						{//  If not moving, don't want to jump straight up
+							//FIXME: trace for clear di?
+							if ( !Q_irand( 0, 3 ) )
+							{
+								ucmd->forwardmove = 127;
+							}
+							else if ( !Q_irand( 0, 3 ) )
+							{
+								ucmd->forwardmove = -127;
+							}
+							else if ( !Q_irand( 0, 1 ) )
+							{
+								ucmd->rightmove = 127;
+							}
+							else
+							{
+								ucmd->rightmove = -127;
+							}
+						}
+						if ( !ent->s.number && ucmd->upmove < 0 )
+						{//player who should roll- force it
+							int	rollAnim = BOTH_ROLL_F;
+							if ( ucmd->forwardmove >= 0 )
+							{
+								rollAnim = BOTH_ROLL_F;
+							}
+							else if ( ucmd->forwardmove < 0 )
+							{
+								rollAnim = BOTH_ROLL_B;
+							}
+							else if ( ucmd->rightmove > 0 )
+							{
+								rollAnim = BOTH_ROLL_R;
+							}
+							else if ( ucmd->rightmove < 0 )
+							{
+								rollAnim = BOTH_ROLL_L;
+							}
+							NPC_SetAnim(ent,SETANIM_BOTH,rollAnim,SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
+							G_AddEvent( ent, EV_ROLL, 0 );
+							ent->client->ps.saberMove = LS_NONE;
+						}
 					}
-					else if ( !ucmd->upmove )
-					{//if not ducking (which should cause a roll), then jump
-						ucmd->upmove = 127;
-					}
-					if ( !ucmd->forwardmove && !ucmd->rightmove )
-					{//  If not moving, don't want to jump straight up
-						//FIXME: trace for clear di?
-						if ( !Q_irand( 0, 3 ) )
-						{
-							ucmd->forwardmove = 127;
-						}
-						else if ( !Q_irand( 0, 3 ) )
-						{
-							ucmd->forwardmove = -127;
-						}
-						else if ( !Q_irand( 0, 1 ) )
-						{
-							ucmd->rightmove = 127;
-						}
-						else
-						{
-							ucmd->rightmove = -127;
-						}
-					}
-					if ( !ent->s.number && ucmd->upmove < 0 )
-					{//player who should roll- force it
-						int	rollAnim = BOTH_ROLL_F;
-						if ( ucmd->forwardmove >= 0 )
-						{
-							rollAnim = BOTH_ROLL_F;
-						}
-						else if ( ucmd->forwardmove < 0 )
-						{
-							rollAnim = BOTH_ROLL_B;
-						}
-						else if ( ucmd->rightmove > 0 )
-						{
-							rollAnim = BOTH_ROLL_R;
-						}
-						else if ( ucmd->rightmove < 0 )
-						{
-							rollAnim = BOTH_ROLL_L;
-						}
-						NPC_SetAnim(ent,SETANIM_BOTH,rollAnim,SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
-						G_AddEvent( ent, EV_ROLL, 0 );
-						ent->client->ps.saberMove = LS_NONE;
-					}
+				}
+				else
+				{//a corpse?  Shit
+					ent->clipmask &= ~CONTENTS_BODY;
 				}
 				//FIXME: need impact sound event
 				GEntity_PainFunc( groundEnt, ent, ent, groundEnt->currentOrigin, 0, MOD_CRUSH );
@@ -2115,8 +2325,17 @@ extern cvar_t	*g_skippingcin;
 					else
 					{
 						//Slow down on turns - don't orbit!!!
-						float turndelta = (180 - fabs( AngleDelta( ent->currentAngles[YAW], ent->NPC->desiredYaw ) ))/180;
-						
+						float turndelta = 0; 
+						// if the NPC is locked into a Yaw, we want to check the lockedDesiredYaw...otherwise the NPC can't walk backwards, because it always thinks it trying to turn according to desiredYaw
+						if( client->renderInfo.renderFlags & RF_LOCKEDANGLE ) // yeah I know the RF_ flag is a pretty ugly hack...
+						{	
+							turndelta = (180 - fabs( AngleDelta( ent->currentAngles[YAW], ent->NPC->lockedDesiredYaw ) ))/180;
+						}
+						else
+						{
+							turndelta = (180 - fabs( AngleDelta( ent->currentAngles[YAW], ent->NPC->desiredYaw ) ))/180;
+						}
+												
 						if ( turndelta < 0.75f )
 						{
 							client->ps.speed = 0;
@@ -2320,11 +2539,13 @@ extern cvar_t	*g_skippingcin;
 	//NEED to do this every frame, since these overrides do not go into the save/load data
 	if ( ent->client->ps.vehicleModel != 0 )
 	{
+		cg.overrides.active |= (CG_OVERRIDE_3RD_PERSON_RNG|CG_OVERRIDE_FOV);
 		cg.overrides.thirdPersonRange = 240;
 		cg.overrides.fov = 100;
 	}
 	else if ( client->ps.eFlags&EF_IN_ATST )
 	{
+		cg.overrides.active |= (CG_OVERRIDE_3RD_PERSON_RNG|CG_OVERRIDE_3RD_PERSON_POF|CG_OVERRIDE_3RD_PERSON_VOF);
 		cg.overrides.thirdPersonRange = 240;
 		if ( ent->client->ps.viewangles[PITCH] > 0 )
 		{
@@ -2350,6 +2571,10 @@ extern cvar_t	*g_skippingcin;
 			cg.overrides.thirdPersonVertOffset = 200;
 		}
 	}
+
+	//play/stop any looping sounds tied to controlled movement
+	G_CheckMovingLoopingSounds( ent, ucmd );
+
 	//remember your last angles
 	VectorCopy ( ent->client->ps.viewangles, ent->lastAngles );
 	// set up for pmove
@@ -2499,6 +2724,8 @@ extern cvar_t	*g_skippingcin;
 		}
 	}
 */
+	//try some idle anims on ent if getting no input and not moving for some time
+	G_CheckClientIdle( ent, ucmd );
 }
 
 /*
@@ -2518,10 +2745,10 @@ void ClientThink( int clientNum, usercmd_t *ucmd ) {
 
 	if ( ent->client->ps.viewEntity > 0 && ent->client->ps.viewEntity < ENTITYNUM_WORLD )
 	{//you're controlling another NPC
-		if ( (ucmd->buttons&BUTTON_BLOCKING) )
-		{//firing gets you out of it FIXME: check some other button instead... like ESCAPE... so you could even have total control over an NPC?
+		if ( ucmd->upmove > 0 )//if ( (ucmd->buttons&BUTTON_BLOCKING) )
+		{//jumping gets you out of it FIXME: check some other button instead... like ESCAPE... so you could even have total control over an NPC?
 			G_ClearViewEntity( ent );
-			ucmd->buttons = 0;
+			ucmd->upmove = 0;//ucmd->buttons = 0;
 		}
 		else
 		{
@@ -2533,6 +2760,15 @@ void ClientThink( int clientNum, usercmd_t *ucmd ) {
 			ucmd->angles[YAW] = ANGLE2SHORT( ent->client->ps.viewangles[YAW] ) - ent->client->ps.delta_angles[YAW];
 		}
 	}
+	else if ( ent->client->NPC_class == CLASS_ATST )
+	{
+		if ( ucmd->upmove > 0 )//if ( (ucmd->buttons&BUTTON_BLOCKING) )
+		{//get out of ATST
+			GEntity_UseFunc( ent->activator, ent, ent );
+			ucmd->upmove = 0;//ucmd->buttons = 0;
+		}
+	}
+
 
 	if ( (ucmd->buttons&BUTTON_BLOCKING) )
 	{

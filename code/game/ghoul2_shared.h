@@ -16,6 +16,14 @@ using namespace std;
 Ghoul2 Insert End
 */
 
+#define G2T_SV_TIME (0)
+#define G2T_CG_TIME (1)
+#define NUM_G2T_TIME (2)
+
+void		G2API_SetTime(int currentTime,int clock);
+int			G2API_GetTime(int argTime); // this may or may not return arg depending on ghoul2_time cvar
+
+
 //===================================================================
 //
 //   G H O U L  I I  D E F I N E S
@@ -52,17 +60,18 @@ surfaceInfo_t():
 #define BONE_ANIM_OVERRIDE_DEFAULT	(0x0020 + BONE_ANIM_OVERRIDE)
 #define BONE_ANIM_OVERRIDE_FREEZE	(0x0040 + BONE_ANIM_OVERRIDE)	// Causes Last Frame To Freeze And Not Loop To Beginning
 #define BONE_ANIM_BLEND				0x0080		// Blends to and from previously played frame on same bone for given time
-#define BONE_ANIM_BLEND_FROM_PARENT	0x0100		// Used to start an animation, begins playback but blends from animation on parent bone to current animation for given time
-#define BONE_ANIM_BLEND_TO_PARENT	0x0200		// Used to stop an animation, ends playback on bone and blends last frame to frames of parent bone for given time
-#define BONE_ANIM_TOTAL				( BONE_ANIM_OVERRIDE | BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_OVERRIDE_DEFAULT | BONE_ANIM_OVERRIDE_FREEZE | BONE_ANIM_BLEND	| BONE_ANIM_BLEND_TO_PARENT | BONE_ANIM_BLEND_FROM_PARENT )
+#define	BONE_ANIM_NO_LERP			0x1000
+#define BONE_ANIM_TOTAL				(BONE_ANIM_NO_LERP| BONE_ANIM_OVERRIDE | BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_OVERRIDE_DEFAULT | BONE_ANIM_OVERRIDE_FREEZE | BONE_ANIM_BLEND )
 
 #define BONE_INDEX_INVALID			-1
 
-#define MDXABONEDEF				// used in the mdxformat.h file to stop redefinitions of the bone struct.
+/*#define MDXABONEDEF				// used in the mdxformat.h file to stop redefinitions of the bone struct.
 
 typedef struct {
 	float		matrix[3][4];
 } mdxaBone_t;
+*/
+#include "../renderer/mdx_format.h"
 
 // we save the whole structure here.
 struct  boneInfo_t
@@ -112,7 +121,6 @@ struct boltInfo_t{
 	int			surfaceNumber;	// surface number bolt attaches to 
 	int			surfaceType;	// if we attach to a surface, this tells us if it is an original surface or a generated one - doesn't go across the network
 	int			boltUsed;		// nor does this
-	mdxaBone_t	position;		// this does not go across the network
 	boltInfo_t():
 	boneNumber(-1),
 	surfaceNumber(-1),
@@ -137,6 +145,10 @@ typedef vector <mdxaBone_t> mdxaBone_v;
 
 
 // NOTE order in here matters. We save out from mModelindex to mFlags, but not the STL vectors that are at the top or the bottom.
+class CBoneCache;
+struct model_s;
+//struct mdxaHeader_t;
+
 class CGhoul2Info
 {
 public:
@@ -149,7 +161,6 @@ public:
 	qhandle_t		mCustomSkin;
 	int				mModelBoltLink;
 	int				mSurfaceRoot;
-	int				mCreationID;
 	int				mLodBias;
 	int				mNewOrigin;	// this contains the bolt index of the new origin for this model
 	qhandle_t		mModel;		// this and the next entries do NOT go across the network. They are for gameside access ONLY
@@ -160,8 +171,17 @@ public:
 	int				mFlags;	// used for determining whether to do full collision detection against this object
 // to here
 	int				*mTransformedVertsArray;	// used to create an array of pointers to transformed verts per surface for collision detection
-	mdxaBone_v		mTempBoneList;
+	CBoneCache		*mBoneCache;
 	int				mSkin;
+
+	// these occasionally are not valid (like after a vid_restart)
+	// call the questionably efficient G2_SetupModelPointers(this) to insure validity
+	bool				mValid; // all the below are proper and valid
+	const model_s		*currentModel;
+	int					currentModelSize;
+	const model_s		*animModel;
+	int					currentAnimModelSize;
+	const mdxaHeader_t	*aHeader;
 
 	CGhoul2Info():
 	mModelindex(-1),
@@ -173,22 +193,20 @@ public:
 	mAnimFrameDefault(0),
 	mSkelFrameNum(-1),
 	mMeshFrameNum(-1),
-	mCreationID(0),
 	mFlags(0),
 	mTransformedVertsArray(0),
 	mLodBias(0),
 	mSkin(0),
-	mNewOrigin(-1)
+	mNewOrigin(-1),
+	mBoneCache(0),
+	currentModel(0),
+	currentModelSize(0),
+	animModel(0),
+	currentAnimModelSize(0),
+	aHeader(0),
+	mValid(false)
 	{
 		mFileName[0] = 0;
-	}
-
-	~CGhoul2Info(void)
-	{
-		mSlist.~surfaceInfo_v();
-		mBltlist.~boltInfo_v();
-		mBlist.~boneInfo_v();
-		mTempBoneList.~mdxaBone_v();
 	}
 }; 
 
@@ -265,6 +283,14 @@ public:
 		{
 			Alloc();
 			Array()=other.Array();
+			int i;
+			for (i=0;i<size();i++)
+			{
+				Array()[i].mBoneCache=0;
+				Array()[i].mTransformedVertsArray=0;
+				Array()[i].mSkelFrameNum=0;
+				Array()[i].mMeshFrameNum=0;
+			}
 		}
 	}
 	CGhoul2Info &operator[](int idx)
@@ -364,15 +390,6 @@ enum EG2_Collision
 	G2_RETURNONHIT
 };
 
-//typedef map < float, CCollisionRecord > CCollisionRecord_m;
-
-enum EWraithInstFlags
-{
-	WF_BASEMODEL =					(1<<0),
-	WF_CLIENTONLY =					(1<<1),
-	WF_SERVERONLY =					(1<<2),
-	WF_NPC =						(1<<3),
-};
 
 
 //====================================================================

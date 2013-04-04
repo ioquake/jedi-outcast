@@ -1862,6 +1862,11 @@ int BotCanHear(bot_state_t *bs, gentity_t *en, float endist)
 		break;
 	}
 checkStep:
+	if (BotMindTricked(bs->client, en->s.number))
+	{ //if mindtricked by this person, cut down on the minlen
+		minlen /= 4;
+	}
+
 	if (endist <= minlen)
 	{
 		return 1;
@@ -2257,6 +2262,32 @@ gentity_t *GetNearestBadThing(bot_state_t *bs)
 					bestindex = i;
 					bestdist = glen;
 					foundindex = 1;
+				}
+			}
+		}
+
+		if (ent && !ent->client && ent->inuse && ent->damage && ent->s.weapon && ent->r.ownerNum < MAX_CLIENTS && ent->r.ownerNum >= 0)
+		{ //if we're in danger of a projectile belonging to someone and don't have an enemy, set the enemy to them
+			gentity_t *projOwner = &g_entities[ent->r.ownerNum];
+
+			if (projOwner && projOwner->inuse && projOwner->client)
+			{
+				if (!bs->currentEnemy)
+				{
+					if (PassStandardEnemyChecks(bs, projOwner))
+					{
+						if (PassLovedOneCheck(bs, projOwner))
+						{
+							VectorSubtract(bs->origin, ent->r.currentOrigin, hold);
+							glen = VectorLength(hold);
+
+							if (glen < 512)
+							{
+								bs->currentEnemy = projOwner;
+								bs->enemySeenTime = level.time + ENEMY_FORGET_MS;
+							}
+						}
+					}
 				}
 			}
 		}
@@ -6182,11 +6213,15 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 	{
 		/*if (g_gametype.integer == GT_TOURNAMENT)*/
 		{ //helps them get out of messy situations
-			if ((level.time - bs->forceJumpChargeTime) > /*500*/3500)
+			/*if ((level.time - bs->forceJumpChargeTime) > 3500)
 			{
 				bs->forceJumpChargeTime = level.time + 2000;
 				trap_EA_MoveForward(bs->client);
 			}
+			*/
+			bs->jumpTime = level.time + 1500;
+			bs->jumpHoldTime = level.time + 1500;
+			bs->jDelay = 0;
 		}
 		doingFallback = BotFallbackNavigation(bs);
 	}
@@ -6335,12 +6370,13 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 			}
 			else if (bs->saberThrowTime < level.time && !bs->cur_ps.saberInFlight &&
 				(bs->cur_ps.fd.forcePowersKnown & (1 << FP_SABERTHROW)) &&
-				InFieldOfVision(bs->viewangles, 30, a_fo))
+				InFieldOfVision(bs->viewangles, 30, a_fo) &&
+				bs->frame_Enemy_Len < BOT_SABER_THROW_RANGE)
 			{
 				bs->doAltAttack = 1;
 				bs->doAttack = 0;
 			}
-			else if (bs->cur_ps.saberInFlight && bs->frame_Enemy_Len > 300)
+			else if (bs->cur_ps.saberInFlight && bs->frame_Enemy_Len > 300 && bs->frame_Enemy_Len < BOT_SABER_THROW_RANGE)
 			{
 				bs->doAltAttack = 1;
 				bs->doAttack = 0;
@@ -6569,9 +6605,29 @@ void StandardBotAI(bot_state_t *bs, float thinktime)
 	}
 #endif
 
+	if (bs->forceJumpChargeTime > level.time)
+	{
+		bs->jumpHoldTime = ((bs->forceJumpChargeTime - level.time)/2) + level.time;
+		bs->forceJumpChargeTime = 0;
+	}
+
+	if (bs->jumpHoldTime > level.time)
+	{
+		bs->jumpTime = bs->jumpHoldTime;
+	}
+
 	if (bs->jumpTime > level.time && bs->jDelay < level.time)
 	{
-		if (!(bs->cur_ps.pm_flags & PMF_JUMP_HELD))
+		if (bs->jumpHoldTime > level.time)
+		{
+			trap_EA_Jump(bs->client);
+			trap_EA_MoveForward(bs->client);
+			if (g_entities[bs->client].client->ps.groundEntityNum == ENTITYNUM_NONE)
+			{
+				g_entities[bs->client].client->ps.pm_flags |= PMF_JUMP_HELD;
+			}
+		}
+		else if (!(bs->cur_ps.pm_flags & PMF_JUMP_HELD))
 		{
 			trap_EA_Jump(bs->client);
 		}

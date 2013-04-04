@@ -236,6 +236,12 @@ int	TAG_GetOrigin( const char *owner, const char *name, vec3_t origin )
 {
 	reference_tag_t	*tag = TAG_Find( owner, name );
 
+	if (!tag)
+	{
+		VectorClear(origin);
+		return false;
+	}
+
 	VALIDATEB( tag );
 
 	VectorCopy( tag->origin, origin );

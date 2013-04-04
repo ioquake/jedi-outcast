@@ -540,6 +540,8 @@ void SP_misc_holocron(gentity_t *ent)
 		}
 	}
 
+	ent->s.isJediMaster = qtrue;
+
 	VectorSet( ent->r.maxs, 8, 8, 8 );
 	VectorSet( ent->r.mins, -8, -8, -8 );
 
@@ -1359,4 +1361,176 @@ int G_PlayerBecomeATST(gentity_t *ent)
 	ent->client->ps.weaponTime = 1000;
 
 	return 1;
+}
+
+/*QUAKED fx_runner (0 0 1) (-8 -8 -8) (8 8 8) STARTOFF ONESHOT
+	STARTOFF - effect starts off, toggles on/off when used
+	ONESHOT - effect fires only when used
+
+    "angles"   - 3-float vector, angle the effect should play (unless fxTarget is supplied)
+	"fxFile"   - name of the effect file to play
+	"fxTarget" - aim the effect toward this object, otherwise defaults to up
+	"target"   - uses its target when the fx gets triggered
+	"delay"    - how often to call the effect, don't over-do this ( default 400 )
+			     note that it has to send an event each time it plays, so don't kill bandwidth or I will cry
+	"random"   - random amount of time to add to delay, ( default 0, 200 = 0ms to 200ms )
+*/
+#define FX_RUNNER_RESERVED 0x800000
+#define FX_ENT_RADIUS 8 //32
+
+//----------------------------------------------------------
+void fx_runner_think( gentity_t *ent )
+{
+	// call the effect with the desired position and orientation
+	G_AddEvent( ent, EV_PLAY_EFFECT_ID, ent->bolt_Head );
+
+	ent->nextthink = level.time + ent->delay + random() * ent->random;
+
+	if ( ent->target )
+	{
+		// let our target know that we have spawned an effect
+		G_UseTargets( ent, ent );
+	}
+}
+
+//----------------------------------------------------------
+void fx_runner_use( gentity_t *self, gentity_t *other, gentity_t *activator )
+{
+	if ( self->spawnflags & 2 ) // ONESHOT
+	{
+		// call the effect with the desired position and orientation, as a safety thing,
+		//	make sure we aren't thinking at all.
+		fx_runner_think( self );
+		self->nextthink = -1;
+
+		if ( self->target )
+		{
+			// let our target know that we have spawned an effect
+			G_UseTargets( self, self );
+		}
+	}
+	else
+	{
+		// ensure we are working with the right think function
+		self->think = fx_runner_think;
+
+		// toggle our state
+		if ( self->nextthink == -1 )
+		{
+			// NOTE: we fire the effect immediately on use, the fx_runner_think func will set
+			//	up the nextthink time.
+			fx_runner_think( self );
+		}
+		else
+		{
+			// turn off for now
+			self->nextthink = -1;
+		}
+	}
+}
+
+//----------------------------------------------------------
+void fx_runner_link( gentity_t *ent )
+{
+	vec3_t	dir;
+
+	if ( ent->roffname && ent->roffname[0] )
+	{
+		// try to use the target to override the orientation
+		gentity_t	*target = NULL;
+
+		target = G_Find( target, FOFS(targetname), ent->roffname );
+
+		if ( !target )
+		{
+			// Bah, no good, dump a warning, but continue on and use the UP vector
+			Com_Printf( "fx_runner_link: target specified but not found: %s\n", ent->roffname );
+			Com_Printf( "  -assuming UP orientation.\n" );
+		}
+		else
+		{
+			// Our target is valid so let's override the default UP vector
+			VectorSubtract( target->s.origin, ent->s.origin, dir );
+			VectorNormalize( dir );
+			vectoangles( dir, ent->s.angles );
+		}
+	}
+
+	// don't really do anything with this right now other than do a check to warn the designers if the target is bogus
+	if ( ent->target )
+	{
+		gentity_t	*target = NULL;
+
+		target = G_Find( target, FOFS(targetname), ent->target );
+
+		if ( !target )
+		{
+			// Target is bogus, but we can still continue
+			Com_Printf( "fx_runner_link: target was specified but is not valid: %s\n", ent->target );
+		}
+	}
+
+	G_SetAngles( ent, ent->s.angles );
+
+	if ( ent->spawnflags & 1 || ent->spawnflags & 2 ) // STARTOFF || ONESHOT
+	{
+		// We won't even consider thinking until we are used
+		ent->nextthink = -1;
+	}
+	else
+	{
+		// Let's get to work right now!
+		ent->think = fx_runner_think;
+		ent->nextthink = level.time + 100; // wait a small bit, then start working
+	}
+}
+
+//----------------------------------------------------------
+void SP_fx_runner( gentity_t *ent )
+{
+	char		*fxFile;
+
+	// Get our defaults
+	G_SpawnInt( "delay", "400", &ent->delay );
+	G_SpawnFloat( "random", "0", &ent->random );
+
+	if (!ent->s.angles[0] && !ent->s.angles[1] && !ent->s.angles[2])
+	{
+		// didn't have angles, so give us the default of up
+		VectorSet( ent->s.angles, -90, 0, 0 );
+	}
+
+	// make us useable if we can be targeted
+	if ( ent->targetname )
+	{
+		ent->use = fx_runner_use;
+	}
+
+	G_SpawnString( "fxFile", "", &fxFile );
+
+	G_SpawnString( "fxTarget", "", &ent->roffname );
+
+	if ( !fxFile || !fxFile[0] )
+	{
+		Com_Printf( S_COLOR_RED"ERROR: fx_runner %s at %s has no fxFile specified\n", ent->targetname, vtos(ent->s.origin) );
+		G_FreeEntity( ent );
+		return;
+	}
+
+	// Try and associate an effect file, unfortunately we won't know if this worked or not 
+	//	until the CGAME trys to register it...
+	ent->bolt_Head = G_EffectIndex( fxFile );
+	//It is dirty, yes. But no one likes adding things to the entity structure.
+
+	// Give us a bit of time to spawn in the other entities, since we may have to target one of 'em
+	ent->think = fx_runner_link; 
+	ent->nextthink = level.time + 300;
+
+	// Save our position and link us up!
+	G_SetOrigin( ent, ent->s.origin );
+
+	VectorSet( ent->r.maxs, FX_ENT_RADIUS, FX_ENT_RADIUS, FX_ENT_RADIUS );
+	VectorScale( ent->r.maxs, -1, ent->r.mins );
+
+	trap_LinkEntity( ent );
 }

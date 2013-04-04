@@ -154,16 +154,16 @@ sFlagPair FlagPairs[] =
 
 sFlagPair LanguagePairs[] =
 {
-	{ TK_TEXT_LANGUAGE1,	TEXT_LANGUAGE1 },
-	{ TK_TEXT_LANGUAGE2,	TEXT_LANGUAGE2 },
-	{ TK_TEXT_LANGUAGE3,	TEXT_LANGUAGE3 },
-	{ TK_TEXT_LANGUAGE4,	TEXT_LANGUAGE4 },
-	{ TK_TEXT_LANGUAGE5,	TEXT_LANGUAGE5 },
-	{ TK_TEXT_LANGUAGE6,	TEXT_LANGUAGE6 },
-	{ TK_TEXT_LANGUAGE7,	TEXT_LANGUAGE7 },
-	{ TK_TEXT_LANGUAGE8,	TEXT_LANGUAGE8 },
-	{ TK_TEXT_LANGUAGE9,	TEXT_LANGUAGE9 },
-	{ TK_TEXT_LANGUAGE10,	TEXT_LANGUAGE10},
+	{ TK_TEXT_LANGUAGE1,	SP_LANGUAGE_ENGLISH },
+	{ TK_TEXT_LANGUAGE2,	SP_LANGUAGE_FRENCH },
+	{ TK_TEXT_LANGUAGE3,	SP_LANGUAGE_GERMAN },
+	{ TK_TEXT_LANGUAGE4,	SP_LANGUAGE_BRITISH },
+	{ TK_TEXT_LANGUAGE5,	SP_LANGUAGE_KOREAN },
+	{ TK_TEXT_LANGUAGE6,	SP_LANGUAGE_TAIWANESE },
+	{ TK_TEXT_LANGUAGE7,	SP_LANGUAGE_ITALIAN },
+	{ TK_TEXT_LANGUAGE8,	SP_LANGUAGE_SPANISH },
+	{ TK_TEXT_LANGUAGE9,	SP_LANGUAGE_JAPANESE },
+	{ TK_TEXT_LANGUAGE10,	SP_LANGUAGE_10},
 	{ TK_INVALID,		0 }
 };
 
@@ -187,14 +187,14 @@ int FindToken(char *token, bool whole)
 	{
 		if (whole)
 		{
-			if (strcmpi(token, Tokens[token_value]) == 0)
+			if (Q_stricmp(token, Tokens[token_value]) == 0)
 			{
 				return token_value;
 			}
 		}
 		else
 		{
-			if (_strnicmp(token, Tokens[token_value], strlen(Tokens[token_value])) == 0)
+			if (Q_stricmpn(token, Tokens[token_value], strlen(Tokens[token_value])) == 0)
 			{
 				i = strlen(Tokens[token_value]);
 				while(token[i] == ' ')
@@ -681,6 +681,7 @@ void cStringsED::SetNotes(char *newNotes)
 	strcpy(Notes, newNotes);
 }
 
+
 bool cStringsED::UnderstandToken(int token, char *data, cCriteria &Criteria)
 {
 	sFlagPair		*LanguagePair;
@@ -816,6 +817,64 @@ void cStringsSingle::SetText(const char *newText)
 	strcpy(Dest, newText);
 }
 	
+// fix problems caused by fucking morons entering clever "rich" chars in to new text files *after* the auto-stripper
+//	removed them all in the first place...
+//
+// ONLY DO THIS FOR ENGLISH, OR IT BREAKS ASIAN STRINGS!!!!!!!!!!!!!!!!!!!!!
+//
+static void FixIllegalChars(char *psText)
+{
+	char *p;
+
+//	strXLS_Speech.Replace(va("%c",0x92),va("%c",0x27));	// "'"
+	while ((p=strchr(psText,0x92))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = 0x27;
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x93),"\"");			// smart quotes -> '"'
+	while ((p=strchr(psText,0x93))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = '"';
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x94),"\"");			// smart quotes -> '"'
+	while ((p=strchr(psText,0x94))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = '"';
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x0B),".");			// full stop
+	while ((p=strchr(psText,0x0B))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = '.';
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x85),"...");			// "..."-char ->  3-char "..."
+	while ((p=strchr(psText,0x85))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = '.';	// can't do in-string replace of "." with "...", so just forget it
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x91),va("%c",0x27));	// "'"
+	while ((p=strchr(psText,0x91))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = 0x27;
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x96),va("%c",0x2D));	// "-"
+	while ((p=strchr(psText,0x96))!=NULL)
+	{
+		*p = 0x2D;
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x97),va("%c",0x2D));	// "-"
+	while ((p=strchr(psText,0x97))!=NULL)
+	{
+		*p = 0x2D;
+	}
+}
+
 bool cStringsSingle::UnderstandToken(int token, char *data)
 {
 	sFlagPair		*LanguagePair;
@@ -823,15 +882,24 @@ bool cStringsSingle::UnderstandToken(int token, char *data)
 //	switch(token)
 //	{
 //		default:
+
 			for(LanguagePair = LanguagePairs; LanguagePair->Name != TK_INVALID; LanguagePair++)
 			{
 				if (LanguagePair->Name == TK_TEXT_LANGUAGE1 && token == TK_TEXT_LANGUAGE1 && !Text)
 				{	// default to english in case there is no foreign
+					if (LanguagePair->Name == TK_TEXT_LANGUAGE1)
+					{
+						FixIllegalChars(data);
+					}
 					SetText(data);
 					return true;
 				}
 				else if (LanguagePair->Name == token && LanguagePair->Value == (int)sp_language->value)
 				{
+					if (LanguagePair->Name == TK_TEXT_LANGUAGE1)
+					{
+						FixIllegalChars(data);
+					}
 					SetText(data);
 					return true;
 				}
@@ -1412,7 +1480,7 @@ cStringPackageSingle *SP_Register(const char *inPackage, unsigned char Registrat
 	assert(SP_ListByName.size() == SP_ListByID.size());
 
 	Q_strncpyz(Package, inPackage, MAX_QPATH);
-	strupr(Package);
+	Q_strupr(Package);
 
 	i = SP_ListByName.find(Package);
 	if (i != SP_ListByName.end())
@@ -1616,11 +1684,7 @@ static void SP_UpdateLanguage(void)
 
 void SP_Init(void)
 {
-	sp_language = Cvar_Get("sp_language", va("%d", TEXT_LANGUAGE1), CVAR_ARCHIVE);
-	if (sp_language->integer>= TK_TEXT_LANGUAGE1){	// error correction for badly archived old stuff
-		sp_language->integer =    TEXT_LANGUAGE1;
-	}
-
+	sp_language = Cvar_Get("sp_language", va("%d", SP_LANGUAGE_ENGLISH), CVAR_ARCHIVE);
 	sp_show_strip = Cvar_Get ("sv_show_strip", "0", 0);
 
 	SP_UpdateLanguage();

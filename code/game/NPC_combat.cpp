@@ -123,6 +123,193 @@ qboolean G_TeamEnemy( gentity_t *self )
 	return qfalse;
 }
 
+void G_AttackDelay( gentity_t *self, gentity_t *enemy )
+{
+	if ( enemy && self->client && self->NPC )
+	{//delay their attack based on how far away they're facing from enemy
+		vec3_t		fwd, dir;
+		int			attDelay;
+
+		VectorSubtract( self->client->renderInfo.eyePoint, enemy->currentOrigin, dir );//purposely backwards
+		AngleVectors( self->client->renderInfo.eyeAngles, fwd, NULL, NULL );
+		//dir[2] = fwd[2] = 0;//ignore z diff?
+		
+		attDelay = (4-g_spskill->integer)*500;//initial: from 1000ms delay on hard to 2000ms delay on easy
+		if ( self->client->playerTeam == TEAM_PLAYER )
+		{//invert
+			attDelay = 2000-attDelay;
+		}
+		attDelay += floor( (DotProduct( fwd, dir )+1.0f) * 2000.0f );//add up to 4000ms delay if they're facing away
+
+		//FIXME: should distance matter, too?
+
+		//Now modify the delay based on NPC_class, weapon, and team
+		//NOTE: attDelay should be somewhere between 1000 to 6000 milliseconds
+		switch ( self->client->NPC_class )
+		{
+		case CLASS_IMPERIAL://they give orders and hang back
+			attDelay += Q_irand( 500, 1500 );
+			break;
+		case CLASS_STORMTROOPER://stormtroopers shoot sooner
+			if ( self->NPC->rank >= RANK_LT )
+			{//officers shoot even sooner
+				attDelay -= Q_irand( 500, 1500 );
+			}
+			else
+			{//normal stormtroopers don't have as fast reflexes as officers
+				attDelay -= Q_irand( 0, 1000 );
+			}
+			break;
+		case CLASS_SWAMPTROOPER://shoot very quickly?  What about guys in water?
+			attDelay -= Q_irand( 1000, 2000 );
+			break;
+		case CLASS_IMPWORKER://they panic, don't fire right away
+			attDelay += Q_irand( 1000, 2500 );
+			break;
+		case CLASS_TRANDOSHAN:
+			attDelay -= Q_irand( 500, 1500 );
+			break;
+		case CLASS_JAN:				
+		case CLASS_LANDO:			
+		case CLASS_PRISONER:
+		case CLASS_REBEL:
+			attDelay -= Q_irand( 500, 1500 );
+			break;
+		case CLASS_GALAKMECH:	
+		case CLASS_ATST:		
+			attDelay -= Q_irand( 1000, 2000 );
+			break;
+		case CLASS_REELO:
+		case CLASS_UGNAUGHT:
+			return;
+			break;
+		case CLASS_MINEMONSTER:
+		case CLASS_MURJJ:
+			return;
+			break;
+		case CLASS_INTERROGATOR:
+		case CLASS_PROBE:		
+		case CLASS_MARK1:		
+		case CLASS_MARK2:		
+		case CLASS_SENTRY:		
+			return;
+			break;
+		case CLASS_REMOTE:
+		case CLASS_SEEKER:
+			return;
+			break;
+		/*
+		case CLASS_GRAN:
+		case CLASS_RODIAN:
+		case CLASS_WEEQUAY:
+			break;
+		case CLASS_JEDI:				
+		case CLASS_SHADOWTROOPER:
+		case CLASS_TAVION:
+		case CLASS_REBORN:
+		case CLASS_LUKE:				
+		case CLASS_DESANN:			
+			break;
+		*/
+		}
+
+		switch ( self->s.weapon )
+		{
+		case WP_NONE:
+		case WP_SABER:
+			return;
+			break;
+		case WP_BRYAR_PISTOL:
+			break;
+		case WP_BLASTER:
+			if ( self->NPC->scriptFlags & SCF_ALT_FIRE )
+			{//rapid-fire blasters
+				attDelay += Q_irand( 0, 500 );
+			}
+			else
+			{//regular blaster
+				attDelay -= Q_irand( 0, 500 );
+			}
+			break;
+		case WP_BOWCASTER:
+			attDelay += Q_irand( 0, 500 );
+			break;
+		case WP_REPEATER:
+			if ( !(self->NPC->scriptFlags&SCF_ALT_FIRE) )
+			{//rapid-fire blasters
+				attDelay += Q_irand( 0, 500 );
+			}
+			break;
+		case WP_FLECHETTE:
+			attDelay += Q_irand( 500, 1500 );
+			break;
+		case WP_ROCKET_LAUNCHER:
+			attDelay += Q_irand( 500, 1500 );
+			break;
+		case WP_BLASTER_PISTOL:	// apparently some enemy only version of the blaster
+			attDelay -= Q_irand( 500, 1500 );
+			break;
+		case WP_DISRUPTOR://sniper's don't delay?
+			return;
+			break;
+		case WP_THERMAL://grenade-throwing has a built-in delay
+			return;
+			break;
+		case WP_MELEE:			// Any ol' melee attack
+			return;
+			break;
+		case WP_EMPLACED_GUN:
+			return;
+			break;
+		case WP_TURRET:			// turret guns 
+			return;
+			break;
+		case WP_BOT_LASER:		// Probe droid	- Laser blast
+			return;
+			break;
+		/*
+		case WP_DEMP2:
+			break;
+		case WP_TRIP_MINE:
+			break;
+		case WP_DET_PACK:
+			break;
+		case WP_STUN_BATON:
+			break;
+		case WP_ATST_MAIN:
+			break;
+		case WP_ATST_SIDE:
+			break;
+		case WP_TIE_FIGHTER:
+			break;
+		case WP_RAPID_FIRE_CONC:
+			break;
+		*/
+		}
+
+		if ( self->client->playerTeam == TEAM_PLAYER )
+		{//clamp it
+			if ( attDelay > 2000 )
+			{
+				attDelay = 2000;
+			}
+		}
+
+		//don't shoot right away
+		TIMER_Set( self, "attackDelay", attDelay );//Q_irand( 1500, 4500 ) );
+		//don't move right away either
+		if ( attDelay > 4000 )
+		{
+			attDelay = 4000 - Q_irand(500, 1500);
+		}
+		else
+		{
+			attDelay -= Q_irand(500, 1500);
+		}
+
+		TIMER_Set( self, "roamTime", attDelay );//was Q_irand( 1000, 3500 );
+	}
+}
 /*
 -------------------------
 G_SetEnemy
@@ -221,10 +408,12 @@ void G_SetEnemy( gentity_t *self, gentity_t *enemy )
 		}
 		
 		if ( self->s.weapon == WP_BLASTER || self->s.weapon == WP_REPEATER ||
-			self->s.weapon == WP_THERMAL || self->s.weapon == WP_BLASTER_PISTOL )
-		{
+			self->s.weapon == WP_THERMAL || self->s.weapon == WP_BLASTER_PISTOL 
+			|| self->s.weapon == WP_BOWCASTER )
+		{//Hmm, how about sniper and bowcaster?
 			//When first get mad, aim is bad
-			G_AimSet( self, Q_irand( self->NPC->stats.aim - 9, self->NPC->stats.aim - 3 ) );
+			//Hmm, base on game difficulty, too?  Rank?
+			G_AimSet( self, Q_irand( self->NPC->stats.aim - (15*(3-g_spskill->integer)), self->NPC->stats.aim - (5*(3-g_spskill->integer)) ) );
 		}
 		
 		//Alert anyone else in the area
@@ -233,18 +422,9 @@ void G_SetEnemy( gentity_t *self, gentity_t *enemy )
 			G_AngerAlert( self );
 		}
 
-		//TEMP HACK: Stormtroopers don't fire right away!
-		if ( self->s.weapon == WP_BLASTER )
-		{
-			if ( self->NPC && self->NPC->rank == RANK_LT )
-			{
-				TIMER_Set( self, "attackDelay", Q_irand( 400, 1000 ) );
-			}
-			else
-			{
-				TIMER_Set( self, "attackDelay", Q_irand( 750, 2500 ) );
-			}
-		}
+		//Stormtroopers don't fire right away!
+		G_AttackDelay( self, enemy );
+
 		//FIXME: this is a disgusting hack that is supposed to make the Imperials start with their weapon holstered- need a better way
 		if ( self->client->ps.weapon == WP_NONE && !Q_strncmp( self->NPC_type, "imp", 3 ) && !(self->NPC->scriptFlags & SCF_FORCED_MARCH)  )
 		{
@@ -1829,11 +2009,12 @@ int NPC_ShotEntity( gentity_t *ent, vec3_t impactPos )
 	{//they want to know *where* the hit would be, too
 		VectorCopy( tr.endpos, impactPos );
 	}
+/* // NPCs should be able to shoot even if the muzzle would be inside their target
 	if ( tr.startsolid || tr.allsolid )
 	{
 		return ENTITYNUM_NONE;
 	}
-
+*/
 	return tr.entityNum;
 }
 
@@ -2592,13 +2773,19 @@ gentity_t *NPC_SearchForWeapons( void )
 {
 	gentity_t *found = g_entities, *bestFound = NULL;
 	float		dist, bestDist = Q3_INFINITE;
-
-	for ( found = g_entities; found < &g_entities[globals.num_entities] ; found++)
+	int i;
+//	for ( found = g_entities; found < &g_entities[globals.num_entities] ; found++)
+	for ( i = 0; i<globals.num_entities; i++)
 	{
-		if ( !found->inuse )
-		{
+//		if ( !found->inuse )
+//		{
+//			continue;
+//		}
+		if(!PInUse(i))
 			continue;
-		}
+		
+		found=&g_entities[i];
+		
 		if ( found->s.eType != ET_ITEM )
 		{
 			continue;
@@ -2671,7 +2858,10 @@ void NPC_AimAdjust( int change )
 {
 	if ( !TIMER_Exists( NPC, "aimDebounce" ) )
 	{
-		TIMER_Set( NPC, "aimDebounce", Q_irand( 1500, 4000 ) );
+		int debounce = 500+(3-g_spskill->integer)*100;
+		TIMER_Set( NPC, "aimDebounce", Q_irand( debounce,debounce+1000 ) );
+		//int debounce = 1000+(3-g_spskill->integer)*500;
+		//TIMER_Set( NPC, "aimDebounce", Q_irand( debounce, debounce+2000 ) );
 		return;
 	}
 	if ( TIMER_Done( NPC, "aimDebounce" ) )
@@ -2681,12 +2871,30 @@ void NPC_AimAdjust( int change )
 		{//can never be better than max aim
 			NPCInfo->currentAim = NPCInfo->stats.aim;
 		}
-		TIMER_Set( NPC, "aimDebounce", Q_irand( 1500, 4000 ) );
+		else if ( NPCInfo->currentAim < -30 )
+		{//can never be worse than this
+			NPCInfo->currentAim = -30;
+		}
+
+		//Com_Printf( "%s new aim = %d\n", NPC->NPC_type, NPCInfo->currentAim );
+
+		int debounce = 500+(3-g_spskill->integer)*100;
+		TIMER_Set( NPC, "aimDebounce", Q_irand( debounce,debounce+1000 ) );
+		//int debounce = 1000+(3-g_spskill->integer)*500;
+		//TIMER_Set( NPC, "aimDebounce", Q_irand( debounce, debounce+2000 ) );
 	}
 }
 
 void G_AimSet( gentity_t *self, int aim )
 {
-	self->NPC->currentAim = aim;
-	TIMER_Set( self, "aimDebounce", Q_irand( 1500, 4000 ) );
+	if ( self->NPC )
+	{
+		self->NPC->currentAim = aim;
+		//Com_Printf( "%s new aim = %d\n", self->NPC_type, self->NPC->currentAim );
+
+		int debounce = 500+(3-g_spskill->integer)*100;
+		TIMER_Set( self, "aimDebounce", Q_irand( debounce,debounce+1000 ) );
+	//	int debounce = 1000+(3-g_spskill->integer)*500;
+	//	TIMER_Set( self, "aimDebounce", Q_irand( debounce,debounce+2000 ) );
+	}
 }

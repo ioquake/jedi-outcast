@@ -273,10 +273,24 @@ void GunRackAddItem( gitem_t *gun, vec3_t org, vec3_t angs, float ffwd, float fr
 				it_ent->count = 2;
 				break;
 			}
+
+			// then scale based on skill
+			switch ( g_spskill->integer )
+			{
+			case 0:
+				it_ent->count *= 5;
+				break;
+			case 1:
+				it_ent->count *= 3;
+				break;
+			case 2: // No soup for you!, or something..
+				break;
+			}
 		}
 		else
 		{
 			rotate = qfalse;
+
 			// must deliberately make it small, or else the objects will spawn inside of each other.
 			VectorSet( it_ent->maxs, 6.75f, 6.75f, 6.75f );
 			VectorScale( it_ent->maxs, -1, it_ent->mins );
@@ -288,6 +302,23 @@ void GunRackAddItem( gitem_t *gun, vec3_t org, vec3_t angs, float ffwd, float fr
 
 		// FinishSpawningItem handles everything, so clear the thinkFunc that was set in G_SpawnItem
 		FinishSpawningItem( it_ent );
+
+		if ( gun->giType == IT_AMMO )
+		{
+			// scale ammo based on skill
+			switch ( g_spskill->integer )
+			{
+			case 0: // do default
+				break;
+			case 1:
+				it_ent->count *= 0.75f;
+				break;
+			case 2:
+				it_ent->count *= 0.5f;
+				break;
+			}
+		}
+
 		it_ent->nextthink = 0;
 
 		VectorCopy( org, it_ent->s.origin );
@@ -298,20 +329,7 @@ void GunRackAddItem( gitem_t *gun, vec3_t org, vec3_t angs, float ffwd, float fr
 		VectorCopy( angs, it_ent->s.angles );
 
 		// by doing this, we can force the amount of ammo we desire onto the weapon for when it gets picked-up
-		it_ent->flags |= FL_DROPPED_ITEM;
-
-		// then scale based on skill
-		switch ( g_spskill->integer )
-		{
-		case 0:
-			it_ent->count *= 5;
-			break;
-		case 1:
-			it_ent->count *= 3;
-			break;
-		case 2: // No soup for you!, or something..
-			break;
-		}
+		it_ent->flags |= ( FL_DROPPED_ITEM | FL_FORCE_PULLABLE_ONLY );
 
 		for ( int t = 0; t < 3; t++ )
 		{
@@ -352,17 +370,17 @@ void SP_misc_model_gun_rack( gentity_t *ent )
 	// If BLASTER is checked...or nothing is checked then we'll do blasters
 	if (( ent->spawnflags & RACK_BLASTER ) || !(ent->spawnflags & ( RACK_BLASTER | RACK_REPEATER | RACK_ROCKET )))
 	{
-		blaster	= FindItem( "E11 Blaster Rifle" );
+		blaster	= FindItemForWeapon( WP_BLASTER );
 	}
 
 	if (( ent->spawnflags & RACK_REPEATER ))
 	{
-		repeater = FindItem( "Imperial Heavy Repeater" );
+		repeater = FindItemForWeapon( WP_REPEATER );
 	}
 
 	if (( ent->spawnflags & RACK_ROCKET ))
 	{
-		rocket = FindItem( "Merr-Sonn Missile System" );
+		rocket = FindItemForWeapon( WP_ROCKET_LAUNCHER );
 	}
 
 	//---------weapon types
@@ -434,8 +452,62 @@ PWR_CELL - Adds one or more power cell packs that are compatible with the Disupt
 NO_FILL - Only puts selected ammo on the rack, it never fills up all three slots if only one or two items were checked
 */
 
+extern gitem_t	*FindItemForAmmo( ammo_t ammo );
+
 //---------------------------------------------
 void SP_misc_model_ammo_rack( gentity_t *ent )
+{
+// If BLASTER is checked...or nothing is checked then we'll do blasters
+	if (( ent->spawnflags & RACK_BLASTER ) || !(ent->spawnflags & ( RACK_BLASTER | RACK_METAL_BOLTS | RACK_ROCKETS | RACK_PWR_CELL )))
+	{
+		if ( ent->spawnflags & RACK_WEAPONS )
+		{
+			RegisterItem( FindItemForWeapon( WP_BLASTER ));
+		}
+		RegisterItem( FindItemForAmmo( AMMO_BLASTER ));
+	}
+
+	if (( ent->spawnflags & RACK_METAL_BOLTS ))
+	{
+		if ( ent->spawnflags & RACK_WEAPONS )
+		{
+			RegisterItem( FindItemForWeapon( WP_REPEATER ));
+		}
+		RegisterItem( FindItemForAmmo( AMMO_METAL_BOLTS ));
+	}
+
+	if (( ent->spawnflags & RACK_ROCKETS ))
+	{
+		if ( ent->spawnflags & RACK_WEAPONS )
+		{
+			RegisterItem( FindItemForWeapon( WP_ROCKET_LAUNCHER ));
+		}
+		RegisterItem( FindItemForAmmo( AMMO_ROCKETS ));
+	}
+
+	if (( ent->spawnflags & RACK_PWR_CELL ))
+	{
+		RegisterItem( FindItemForAmmo( AMMO_POWERCELL ));
+	}
+
+	if (( ent->spawnflags & RACK_HEALTH ))
+	{
+		RegisterItem( FindItem( "item_medpak_instant" ));
+	}
+
+	ent->e_ThinkFunc = thinkF_spawn_rack_goods;
+	ent->nextthink = level.time + 100;
+
+	G_SetOrigin( ent, ent->s.origin );
+	G_SetAngles( ent, ent->s.angles );
+
+	ent->contents = CONTENTS_SHOTCLIP|CONTENTS_PLAYERCLIP|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;//CONTENTS_SOLID;//so use traces can go through them
+
+	gi.linkentity( ent );
+}
+
+// AMMO RACK!!
+void spawn_rack_goods( gentity_t *ent )
 {
 	float		v_off = 0;
 	gitem_t		*blaster = NULL, *metal_bolts = NULL, *rockets = NULL, *it = NULL;
@@ -444,49 +516,44 @@ void SP_misc_model_ammo_rack( gentity_t *ent )
 	int			pos = 0, ct = 0;
 	gitem_t		*itemList[4]; // allocating 4, but we only use 3.  done so I don't have to validate that the array isn't full before I add another
 
+	gi.unlinkentity( ent );
+
 	// If BLASTER is checked...or nothing is checked then we'll do blasters
 	if (( ent->spawnflags & RACK_BLASTER ) || !(ent->spawnflags & ( RACK_BLASTER | RACK_METAL_BOLTS | RACK_ROCKETS | RACK_PWR_CELL )))
 	{
 		if ( ent->spawnflags & RACK_WEAPONS )
 		{
-			blaster	= FindItem( "E11 Blaster Rifle" );
-			RegisterItem( blaster );
+			blaster	= FindItemForWeapon( WP_BLASTER );
 		}
-		am_blaster	= FindItem( "Blaster Pack" );
-		RegisterItem( am_blaster );
+		am_blaster	= FindItemForAmmo( AMMO_BLASTER );
 	}
 
 	if (( ent->spawnflags & RACK_METAL_BOLTS ))
 	{
 		if ( ent->spawnflags & RACK_WEAPONS )
 		{
-			metal_bolts = FindItem( "Imperial Heavy Repeater" );
-			RegisterItem( metal_bolts );
+			metal_bolts = FindItemForWeapon( WP_REPEATER );
 		}
-		am_metal_bolts = FindItem( "Metallic Bolts" );
-		RegisterItem( am_metal_bolts );
+		am_metal_bolts = FindItemForAmmo( AMMO_METAL_BOLTS );
 	}
 
 	if (( ent->spawnflags & RACK_ROCKETS ))
 	{
 		if ( ent->spawnflags & RACK_WEAPONS )
 		{
-			rockets = FindItem( "Merr-Sonn Missile System" );
-			RegisterItem( rockets );
+			rockets = FindItemForWeapon( WP_ROCKET_LAUNCHER );
 		}
-		am_rockets = FindItem( "Rockets" );
-		RegisterItem( am_rockets );
+		am_rockets = FindItemForAmmo( AMMO_ROCKETS );
 	}
 
 	if (( ent->spawnflags & RACK_PWR_CELL ))
 	{
-		am_pwr_cell = FindItem( "Power Cell" );
-		RegisterItem( am_pwr_cell );
+		am_pwr_cell = FindItemForAmmo( AMMO_POWERCELL );
 	}
 
 	if (( ent->spawnflags & RACK_HEALTH ))
 	{
-		health = FindItem( "Medpack" );
+		health = FindItem( "item_medpak_instant" );
 		RegisterItem( health );
 	}
 
@@ -511,7 +578,7 @@ void SP_misc_model_ammo_rack( gentity_t *ent )
 		itemList[ct++] = am_rockets;
 	}
 
-	if ( !(ent->spawnflags & RACK_NO_FILL) && ct ) //double negative...basically do this if the flag isn't checked..should always have at least one item on their, but just being safe
+	if ( !(ent->spawnflags & RACK_NO_FILL) && ct ) //double negative..should always have at least one item on there, but just being safe
 	{
 		for ( ; ct < 3 ; ct++ )
 		{
@@ -588,8 +655,6 @@ void SP_misc_model_ammo_rack( gentity_t *ent )
 	G_SetOrigin( ent, ent->s.origin );
 	G_SetAngles( ent, ent->s.angles );
 
-	ent->contents = CONTENTS_SHOTCLIP|CONTENTS_PLAYERCLIP|CONTENTS_MONSTERCLIP|CONTENTS_BOTCLIP;//CONTENTS_SOLID;//so use traces can go through them
-
 	gi.linkentity( ent );
 }
 
@@ -608,14 +673,14 @@ SHIELDS - instant shields
 BACTA - bacta tanks
 BATTERIES -
 
-"health" - how much damage to take before blowing up ( default 60 )
+"health" - how much damage to take before blowing up ( default 25 )
 "splashRadius" - damage range when it explodes ( default 96 )
-"splashDamage" - damage to do within explode range ( default 24 )
+"splashDamage" - damage to do within explode range ( default 1 )
 
 */
 extern gentity_t *LaunchItem( gitem_t *item, vec3_t origin, vec3_t velocity, char *target );
 
-void misc_model_cargo_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int hitLoc )
+void misc_model_cargo_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int dFlags, int hitLoc )
 {
 	int		flags;
 	vec3_t	org, temp;
@@ -629,7 +694,7 @@ void misc_model_cargo_die( gentity_t *self, gentity_t *inflictor, gentity_t *att
 	self->spawnflags = 8; // NO_DMODEL
 
 	// pass through to get the effects and such
-	misc_model_breakable_die( self, inflictor, attacker, damage, mod, hitLoc );
+	misc_model_breakable_die( self, inflictor, attacker, damage, mod );
 
 	// now that the model is broken, we can safely spawn these in it's place without them being in solid
 	temp[2] = org[2] + 16;
@@ -637,7 +702,7 @@ void misc_model_cargo_die( gentity_t *self, gentity_t *inflictor, gentity_t *att
 	// annoying, but spawn each thing in its own little quadrant so that they don't end up on top of each other
 	if (( flags & DROP_MEDPACK ))
 	{
-		health = FindItem( "Medpack" );
+		health = FindItem( "item_medpak_instant" );
 
 		if ( health )
 		{
@@ -649,7 +714,7 @@ void misc_model_cargo_die( gentity_t *self, gentity_t *inflictor, gentity_t *att
 	}
 	if (( flags & DROP_SHIELDS ))
 	{
-		shields = FindItem( "Shield Small" );
+		shields = FindItem( "item_shield_sm_instant" );
 
 		if ( shields )
 		{
@@ -662,7 +727,7 @@ void misc_model_cargo_die( gentity_t *self, gentity_t *inflictor, gentity_t *att
 
 	if (( flags & DROP_BACTA ))
 	{
-		bacta = FindItem( "Medpac" ); // name is dangerously close to the instant medpack
+		bacta = FindItem( "item_bacta" );
 
 		if ( bacta )
 		{
@@ -675,7 +740,7 @@ void misc_model_cargo_die( gentity_t *self, gentity_t *inflictor, gentity_t *att
 
 	if (( flags & DROP_BATTERIES ))
 	{
-		batteries = FindItem( "Batteries" );
+		batteries = FindItem( "item_battery" );
 
 		if ( batteries )
 		{
@@ -691,29 +756,29 @@ void misc_model_cargo_die( gentity_t *self, gentity_t *inflictor, gentity_t *att
 void SP_misc_model_cargo_small( gentity_t *ent )
 {
 	G_SpawnInt( "splashRadius", "96", &ent->splashRadius );
-	G_SpawnInt( "splashDamage", "24", &ent->splashDamage );
+	G_SpawnInt( "splashDamage", "1", &ent->splashDamage );
 
 	if (( ent->spawnflags & DROP_MEDPACK ))
 	{
-		RegisterItem( FindItem( "Medpack" ));
+		RegisterItem( FindItem( "item_medpak_instant" ));
 	}
 
 	if (( ent->spawnflags & DROP_SHIELDS ))
 	{
-		RegisterItem( FindItem( "Shield Small" ));
+		RegisterItem( FindItem( "item_shield_sm_instant" ));
 	}
 
 	if (( ent->spawnflags & DROP_BACTA ))
 	{
-		RegisterItem( FindItem( "Medpac" )); // name is dangerously close to the instant medpack
+		RegisterItem( FindItem( "item_bacta" ));
 	}
 
 	if (( ent->spawnflags & DROP_BATTERIES ))
 	{
-		RegisterItem( FindItem( "Batteries" ));
+		RegisterItem( FindItem( "item_battery" ));
 	}
 
-	G_SpawnInt( "health", "60", &ent->health );
+	G_SpawnInt( "health", "25", &ent->health );
 
 	SetMiscModelDefaults( ent, useF_NULL, "11", CONTENTS_SOLID, NULL, qtrue, NULL );
 	ent->s.modelindex2 = G_ModelIndex("/models/map_objects/kejim/cargo_small.md3");	// Precache model

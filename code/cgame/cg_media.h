@@ -82,6 +82,7 @@ typedef struct {
 //Chunks
 	qhandle_t	chunkModels[NUM_CHUNK_TYPES][4];
 	sfxHandle_t	chunkSound;
+	sfxHandle_t	grateSound;
 	sfxHandle_t	rockBreakSound;
 	sfxHandle_t	rockBounceSound[2];
 	sfxHandle_t	metalBounceSound[2];
@@ -110,7 +111,6 @@ typedef struct {
 	qhandle_t	surfaceExplosionShader;
 
 	qhandle_t	solidWhiteShader;
-	qhandle_t	disruptorShader;
 	qhandle_t	electricBodyShader;
 	qhandle_t	electricBody2Shader;
 	qhandle_t	shieldShader;
@@ -293,7 +293,7 @@ typedef struct
 // loaded or calculated from the gamestate.  It will NOT
 // be cleared when a tournement restart is done, allowing
 // all clients to begin playing instantly
-#define STRIPED_LEVELNAME_VARIATIONS 3	// sigh, to cope with levels that use text from >1 SP file
+#define STRIPED_LEVELNAME_VARIATIONS 3	// sigh, to cope with levels that use text from >1 SP file (plus 1 for common)
 typedef struct {
 	gameState_t		gameState;			// gamestate from server
 	glconfig_t		glconfig;			// rendering configuration

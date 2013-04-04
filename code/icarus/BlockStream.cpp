@@ -166,7 +166,6 @@ CBlockMember *CBlockMember::Duplicate( void )
 
 CBlock::CBlock( void )
 {
-	m_numMembers	= 0;
 	m_flags			= 0;
 	m_id			= 0;
 }
@@ -184,7 +183,6 @@ Init
 
 int CBlock::Init( void )
 {
-	m_numMembers	= 0;
 	m_flags			= 0;
 	m_id			= 0;
 
@@ -228,7 +226,6 @@ int CBlock::Free( void )
 	}
 
 	m_members.clear();			//List of all CBlockMembers owned by this list
-	m_numMembers = 0;
 
 	return true;
 }
@@ -317,8 +314,6 @@ AddMember
 int	CBlock::AddMember( CBlockMember *member )
 {
 	m_members.insert( m_members.end(), member );
-	m_numMembers++;
-
 	return true;
 }
 
@@ -330,9 +325,10 @@ GetMember
 
 CBlockMember *CBlock::GetMember( int memberNum )
 {
-	if ( memberNum > m_numMembers-1 )
+	if ( memberNum > GetNumMembers()-1 )
+	{
 		return false;
-
+	}
 	return m_members[ memberNum ];
 }
 
@@ -344,9 +340,10 @@ GetMemberData
 
 void *CBlock::GetMemberData( int memberNum )
 {
-	if ( memberNum > m_numMembers-1 )
+	if ( memberNum > GetNumMembers()-1 )
+	{
 		return NULL;
-
+	}
 	return (void *) ((GetMember( memberNum ))->GetData());
 }
 

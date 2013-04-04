@@ -868,7 +868,7 @@ void turret_die(gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int 
 	// hack the effect angle so that explode death can orient the effect properly
 	VectorSet( self->s.angles, 0, 0, 1 );
 
-	G_PlayEffect(EFFECT_EXPLOSION, self->s.pos.trBase, self->s.angles);
+	G_PlayEffect(EFFECT_EXPLOSION_PAS, self->s.pos.trBase, self->s.angles);
 	G_RadiusDamage(self->s.pos.trBase, &g_entities[self->boltpoint3], 30, 256, self, MOD_UNKNOWN);
 
 	g_entities[self->boltpoint3].client->ps.fd.sentryDeployed = qfalse;
@@ -909,6 +909,8 @@ void SP_PAS( gentity_t *base )
 
 	base->takedamage = qtrue;
 	base->die  = turret_die;
+
+	base->physicsObject = qtrue;
 
 	G_Sound( base, CHAN_BODY, G_SoundIndex( "sound/chars/turret/startup.wav" ));
 }
@@ -1512,6 +1514,10 @@ gentity_t *LaunchItem( gitem_t *item, vec3_t origin, vec3_t velocity ) {
 
 	dropped->s.eType = ET_ITEM;
 	dropped->s.modelindex = item - bg_itemlist;	// store item number in modelindex
+	if (dropped->s.modelindex < 0)
+	{
+		dropped->s.modelindex = 0;
+	}
 	dropped->s.modelindex2 = 1; // This is non-zero is it's a dropped item
 
 	dropped->classname = item->classname;
@@ -1570,6 +1576,8 @@ gentity_t *LaunchItem( gitem_t *item, vec3_t origin, vec3_t velocity ) {
 	{
 		dropped->s.angles[ROLL] = -90;
 	}
+
+	dropped->physicsObject = qtrue;
 
 	trap_LinkEntity (dropped);
 

@@ -182,45 +182,38 @@ typedef enum {
 
 
 // entityState_t->eFlags
-#define	EF_DEAD				0x00000001		// don't draw a foe marker over players with EF_DEAD
-#define	EF_NPC				0x00000002		// An NPC
-#define	EF_TELEPORT_BIT		0x00000004		// toggled every time the origin abruptly changes
-#define	EF_SHADER_ANIM		0x00000008		// Animating shader (by s.frame)
-#define	EF_BOUNCE			0x00000010		// for missiles
-#define	EF_BOUNCE_HALF		0x00000020		// for missiles
-#define EF_MISSILE_STICK	0x00000040		// missiles that stick to the wall.
-#define	EF_NODRAW			0x00000080		// may have an event, but no model (unspawned items)
-#define	EF_FIRING			0x00000100		// for lightning gun
-#define EF_ALT_FIRING		0x00000200		// for alt-fires, mostly for lightning guns though
-//#define	EF_MOVER_STOP		0x00000400		// will push otherwise
-#define	EF_NO_TED			0x00000400		// won't show up on TED unless actively scan with tricorder
-#define	EF_AUTO_SIZE		0x00000800		//CG_Ents will create the mins & max itself based on model bounds
-//#define	EF_TALK				0x00001000		// draw a talk balloon
-#define	EF_BOUNCE_SHRAPNEL	0x00001000		// special shrapnel flag
-#define	EF_CONNECTION		0x00002000		// draw a connection trouble sprite
-#define EF_ANIM_ALLFAST		0x00004000		// automatically cycle through all frames at 10hz
-#define EF_ANIM_ONCE		0x00008000		// cycle through all frames just once then stop
-
-#define EF_PLANTED_CHARGE	0x00010000		// For detpack charge
-#define EF_PROX_TRIP		0x00020000		// Proximity trip mine has been activated
-#define EF_LOCKED_TO_WEAPON	0x00040000		// When we use an emplaced weapon, we turn this on to lock us to that weapon
-#define EF_FIXING			0x00080000		// Etherian fixits set this on their "enemy" when they start to fix him
-#define EF_SCALE_UP			0x00100000		// When something scales up
-#define EF_SCALE_DOWN		0x00200000		// When something scales down
-#define EF_BEAM_IN			0x00400000		// When something beams in
-#define EF_BEAM_OUT			0x00800000		// When something beams out
-//#define EF_SCAV_BEAM_OUT	0x01000000		// When scav beams something out
-#define EF_IN_ATST			0x01000000		// Driving an ATST
-#define EF_DISINTEGRATION	0x02000000		// Disruptor effect
-#define EF_DISINT_1			0x02000000		// Disintegration effect 1
-#define EF_DISINT_2			0x04000000		// Disintegration effect 2
-#define EF_DISINT_3			0x08000000		// Disintegration effect 3
-#define EF_DISABLE_SHADER_ANIM	0x10000000		// Normally shader animation chugs along, but movers can force shader animation to be on frame 1
-#define EF_FORCE_GRIPPED	0x20000000		// Force gripped effect
-#define EF_DISINT_6			0x40000000		// 
-
-#define EF_BANK_STRAFE		0x80000000		// hunterseeker- shared with next
-#define EF_BLOCKED_MOVER	0x80000000		// for movers that are blocked - shared with previous
+#define	EF_DEAD					0x00000001	// don't draw a foe marker over players with EF_DEAD
+#define	EF_NPC					0x00000002	// An NPC
+#define	EF_TELEPORT_BIT			0x00000004	// toggled every time the origin abruptly changes
+#define	EF_SHADER_ANIM			0x00000008	// Animating shader (by s.frame)
+#define	EF_BOUNCE				0x00000010	// for missiles
+#define	EF_BOUNCE_HALF			0x00000020	// for missiles
+#define EF_MISSILE_STICK		0x00000040	// missiles that stick to the wall.
+#define	EF_NODRAW				0x00000080	// may have an event, but no model (unspawned items)
+#define	EF_FIRING				0x00000100	// for lightning gun
+#define EF_ALT_FIRING			0x00000200	// for alt-fires, mostly for lightning guns though
+#define	EF_NO_TED				0x00000400	// won't show up on TED unless actively scan with tricorder
+#define	EF_AUTO_SIZE			0x00000800	// CG_Ents will create the mins & max itself based on model bounds
+#define	EF_BOUNCE_SHRAPNEL		0x00001000	// special shrapnel flag
+#define	EF_CONNECTION			0x00002000	// draw a connection trouble sprite
+#define EF_ANIM_ALLFAST			0x00004000	// automatically cycle through all frames at 10hz
+#define EF_ANIM_ONCE			0x00008000	// cycle through all frames just once then stop
+#define EF_PLANTED_CHARGE		0x00010000	// For detpack charge
+#define EF_PROX_TRIP			0x00020000	// Proximity trip mine has been activated
+#define EF_LOCKED_TO_WEAPON		0x00040000	// When we use an emplaced weapon, we turn this on to lock us to that weapon
+//#define EF_use_me				0x00080000	// Not used
+//#define EF_use_me				0x00100000	// Not used
+//#define EF_use_me				0x00200000	// Not used
+//#define EF_use_me				0x00400000	// Not used
+//#define EF_use_me				0x00800000	// Not used
+#define EF_IN_ATST				0x01000000	// Driving an ATST
+#define EF_DISINTEGRATION		0x02000000	// Disruptor effect
+//#define EF_use_me				0x04000000	// Not used
+//#define EF_use_me				0x08000000	// Not used
+#define EF_DISABLE_SHADER_ANIM	0x10000000	// Normally shader animation chugs along, but movers can force shader animation to be on frame 1
+#define EF_FORCE_GRIPPED		0x20000000	// Force gripped effect
+//#define EF_use_me				0x40000000	// Not used
+#define EF_BLOCKED_MOVER		0x80000000	// for movers that are blocked - shared with previous
 
 typedef enum {
 	PW_NONE,
@@ -231,7 +224,7 @@ typedef enum {
 	PW_UNCLOAKING,
 	PW_DISRUPTION,
 	PW_GALAK_SHIELD,
-	PW_WEAPON_OVERCHARGE,
+//	PW_WEAPON_OVERCHARGE,
 	PW_SEEKER,
 	PW_SHOCKED,//electricity effect
 	PW_DISINT_2,//ghost
@@ -518,7 +511,6 @@ typedef struct gitem_s {
 	char		*world_model;
 
 	char		*icon;
-	char		*pickup_name;	// for printing on pickup
 
 	int			quantity;		// for ammo how much, or duration of powerup
 	itemType_t  giType;			// IT_* flags
@@ -556,7 +548,7 @@ extern ammoData_t ammoData[];
 
 //==============================================================================
 
-gitem_t	*FindItem( const char *pickupName );
+gitem_t	*FindItem( const char *className );
 gitem_t	*FindItemForWeapon( weapon_t weapon );
 gitem_t	*FindItemForInventory( int inv );
 

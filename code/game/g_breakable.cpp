@@ -159,7 +159,7 @@ void funcBBrushDieGo (gentity_t *self)
 	//G_FreeEntity( self );
 }
 
-void funcBBrushDie (gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int hitLoc)
+void funcBBrushDie (gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int dFlags,int hitLoc)
 {
 	self->takedamage = qfalse;//stop chain reaction runaway loops
 
@@ -399,7 +399,7 @@ void misc_model_breakable_pain ( gentity_t *self, gentity_t *inflictor, gentity_
 	}
 }
 
-void misc_model_breakable_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath,int hitLoc ) 
+void misc_model_breakable_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath,int dFlags,int hitLoc ) 
 {
 	int		numChunks;
 	float	size = 0, scale;
@@ -483,11 +483,19 @@ void misc_model_breakable_die( gentity_t *self, gentity_t *inflictor, gentity_t 
 		// Ok, we are allowed to explode, so do it now!
 		if(self->splashDamage > 0 && self->splashRadius > 0)
 		{//explode
+			vec3_t org;
 			AddSightEvent( attacker, self->currentOrigin, 256, AEL_DISCOVERED, 100 );
 			AddSoundEvent( attacker, self->currentOrigin, 128, AEL_DISCOVERED );
 			//FIXME: specify type of explosion?  (barrel, electrical, etc.)  Also, maybe just use the explosion effect below since it's
 			//				a bit better?
-			G_RadiusDamage( self->currentOrigin, self, self->splashDamage, self->splashRadius, self, MOD_UNKNOWN );
+			// up the origin a little for the damage check, because several models have their origin on the ground, so they don't alwasy do damage, not the optimal solution...
+			VectorCopy( self->currentOrigin, org );
+			if ( self->mins[2] > -4 )
+			{//origin is going to be below it or very very low in the model
+				//center the origin
+				org[2] = self->currentOrigin[2] + self->mins[2] + (self->maxs[2] - self->mins[2])/2.0f;
+			}
+			G_RadiusDamage( org, self, self->splashDamage, self->splashRadius, self, MOD_UNKNOWN );
 
 			if ( self->model && Q_stricmp( "models/map_objects/ships/tie_fighter.md3", self->model ) == 0 )
 			{//TEMP HACK for Tie Fighters- they're HUGE
@@ -939,7 +947,7 @@ extern void CG_DoGlass( vec3_t verts[4], vec3_t normal, vec3_t dmgPt, vec3_t dmg
 extern	cgs_t			cgs;
 
 //-----------------------------------------------------
-void funcGlassDie( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int hitLoc )
+void funcGlassDie( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int dFlags,int hitLoc )
 {
 	vec3_t		verts[4], normal;
 

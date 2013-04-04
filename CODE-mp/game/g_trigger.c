@@ -408,6 +408,15 @@ If dmg is set to -1 this brush will use the fade-kill method
 
 */
 void hurt_use( gentity_t *self, gentity_t *other, gentity_t *activator ) {
+	if (activator && activator->inuse && activator->client)
+	{
+		self->activator = activator;
+	}
+	else
+	{
+		self->activator = NULL;
+	}
+
 	if ( self->r.linked ) {
 		trap_UnlinkEntity( self );
 	} else {
@@ -468,7 +477,14 @@ void hurt_touch( gentity_t *self, gentity_t *other, trace_t *trace ) {
 	}
 	else	
 	{
-		G_Damage (other, self, self, NULL, NULL, self->damage, dflags, MOD_TRIGGER_HURT);
+		if (self->activator && self->activator->inuse && self->activator->client)
+		{
+			G_Damage (other, self->activator, self->activator, NULL, NULL, self->damage, dflags, MOD_TRIGGER_HURT);
+		}
+		else
+		{
+			G_Damage (other, self, self, NULL, NULL, self->damage, dflags, MOD_TRIGGER_HURT);
+		}
 	}
 }
 

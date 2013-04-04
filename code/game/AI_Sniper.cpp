@@ -492,7 +492,11 @@ qboolean Sniper_EvaluateShot( int hit )
 		return qfalse;
 	}
 
-	if ( hit == NPC->enemy->s.number || (&g_entities[hit] != NULL && (g_entities[hit].svFlags&SVF_GLASS_BRUSH)) )
+	gentity_t *hitEnt = &g_entities[hit];
+	if ( hit == NPC->enemy->s.number 
+		|| ( hitEnt && hitEnt->client && hitEnt->client->playerTeam == NPC->client->enemyTeam )
+		|| ( hitEnt && hitEnt->takedamage && ((hitEnt->svFlags&SVF_GLASS_BRUSH)||hitEnt->health < 40||NPC->s.weapon == WP_EMPLACED_GUN) )
+		|| ( hitEnt && (hitEnt->svFlags&SVF_GLASS_BRUSH)) )
 	{//can hit enemy or will hit glass, so shoot anyway
 		return qtrue;
 	}
@@ -702,10 +706,7 @@ void NPC_BSSniper_Attack( void )
 			gi.trace ( &tr, muzzle, NULL, NULL, end, NPC->s.number, MASK_SHOT, G2_RETURNONHIT, 0 );
 
 			int hit = tr.entityNum;
-			/*
 			//can we shoot our target?
-			int hit = NPC_ShotEntity( NPC->enemy );
-			*/
 			if ( Sniper_EvaluateShot( hit ) )
 			{
 				VectorCopy( NPC->enemy->currentOrigin, NPCInfo->enemyLastSeenLocation );

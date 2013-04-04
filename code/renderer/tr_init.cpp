@@ -152,9 +152,7 @@ cvar_t	*r_modelpoolmegs;
 Ghoul2 Insert Start
 */
 
-cvar_t	*r_noServerGhoul2;
 cvar_t	*r_noGhoul2;
-cvar_t	*r_Ghoul2Test;
 cvar_t	*r_Ghoul2AnimSmooth;
 cvar_t	*r_Ghoul2UnSqash;
 cvar_t	*r_Ghoul2TimeBase=0;
@@ -410,9 +408,9 @@ void R_TakeScreenshot( int x, int y, int width, int height, char *fileName ) {
 		qglReadPixels( x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer ); 
 
 		// gamma correct
-//		if ( glConfig.deviceSupportsGamma ) {
-//			R_GammaCorrect( buffer, glConfig.vidWidth * glConfig.vidHeight * 4 );
-//		}
+		if ( tr.overbrightBits>0 && glConfig.deviceSupportsGamma ) {
+			R_GammaCorrect( buffer, glConfig.vidWidth * glConfig.vidHeight * 4 );
+		}
 
 		SaveJPG(fileName, 95, width, height, buffer);
 	}
@@ -440,9 +438,9 @@ void R_TakeScreenshot( int x, int y, int width, int height, char *fileName ) {
 		}
 
 		// gamma correct
-//		if ( glConfig.deviceSupportsGamma ) {
-//			R_GammaCorrect( buffer + 18, glConfig.vidWidth * glConfig.vidHeight * 3 );
-//		}
+		if ( tr.overbrightBits>0 && glConfig.deviceSupportsGamma ) {
+			R_GammaCorrect( buffer + 18, glConfig.vidWidth * glConfig.vidHeight * 3 );
+		}
 		ri.FS_WriteFile( fileName, buffer, c );
 	}
 	
@@ -1003,7 +1001,8 @@ void R_Register( void )
 	r_simpleMipMaps = ri.Cvar_Get( "r_simpleMipMaps", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	r_vertexLight = ri.Cvar_Get( "r_vertexLight", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_subdivisions = ri.Cvar_Get ("r_subdivisions", "4", CVAR_ARCHIVE | CVAR_LATCH);
-	r_smp = ri.Cvar_Get( "r_smp", "0", CVAR_ARCHIVE | CVAR_LATCH);
+//	r_smp = ri.Cvar_Get( "r_smp", "0", CVAR_ARCHIVE | CVAR_LATCH);
+	r_smp = ri.Cvar_Get( "r_smp", "0", CVAR_ROM);
 	r_ignoreFastPath = ri.Cvar_Get( "r_ignoreFastPath", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	r_intensity = ri.Cvar_Get ("r_intensity", "1", CVAR_LATCH|CVAR_ARCHIVE );
 	
@@ -1059,7 +1058,7 @@ void R_Register( void )
 	//
 	// temporary variables that can change at any time
 	//
-	r_showImages = ri.Cvar_Get( "r_showImages", "0", CVAR_TEMP );
+	r_showImages = ri.Cvar_Get( "r_showImages", "0", CVAR_CHEAT );
 
 	r_debugLight = ri.Cvar_Get( "r_debuglight", "0", CVAR_TEMP );
 	r_debugStyle = ri.Cvar_Get( "r_debugStyle", "-1", CVAR_CHEAT );
@@ -1079,7 +1078,7 @@ void R_Register( void )
 	r_skipBackEnd = ri.Cvar_Get ("r_skipBackEnd", "0", CVAR_CHEAT);
 
 	r_measureOverdraw = ri.Cvar_Get( "r_measureOverdraw", "0", CVAR_CHEAT );
-	r_lodscale = ri.Cvar_Get( "r_lodscale", "4", CVAR_CHEAT );//4 was a bit overkill
+	r_lodscale = ri.Cvar_Get( "r_lodscale", "6", CVAR_CHEAT );
 	r_norefresh = ri.Cvar_Get ("r_norefresh", "0", CVAR_CHEAT);
 	r_drawentities = ri.Cvar_Get ("r_drawentities", "1", CVAR_CHEAT );
 	r_ignore = ri.Cvar_Get( "r_ignore", "1", CVAR_TEMP );
@@ -1098,7 +1097,7 @@ void R_Register( void )
 	r_clear = ri.Cvar_Get ("r_clear", "0", CVAR_CHEAT);
 	r_offsetFactor = ri.Cvar_Get( "r_offsetfactor", "-1", CVAR_CHEAT );
 	r_offsetUnits = ri.Cvar_Get( "r_offsetunits", "-2", CVAR_CHEAT );
-	r_drawBuffer = ri.Cvar_Get( "r_drawBuffer", "GL_BACK", 0 );
+	r_drawBuffer = ri.Cvar_Get( "r_drawBuffer", "GL_BACK", CVAR_CHEAT );
 	r_lockpvs = ri.Cvar_Get ("r_lockpvs", "0", CVAR_CHEAT);
 	r_noportals = ri.Cvar_Get ("r_noportals", "0", CVAR_CHEAT);
 	r_shadows = ri.Cvar_Get( "cg_shadows", "1", 0 );
@@ -1106,10 +1105,8 @@ void R_Register( void )
 /*
 Ghoul2 Insert Start
 */
-	r_noServerGhoul2 = ri.Cvar_Get( "r_noserverghoul2", "0", 0);
-	r_noGhoul2 = ri.Cvar_Get( "r_noghoul2", "0", 0);
-	r_Ghoul2Test = ri.Cvar_Get( "r_ghoul2test", "0", 0);
-	r_Ghoul2AnimSmooth = ri.Cvar_Get( "r_ghoul2animsmooth", "0", 0);
+	r_noGhoul2 = ri.Cvar_Get( "r_noghoul2", "0", CVAR_CHEAT);
+	r_Ghoul2AnimSmooth = ri.Cvar_Get( "r_ghoul2animsmooth", "0.25", 0);
 	r_Ghoul2UnSqash = ri.Cvar_Get( "r_ghoul2unsquash", "1", 0);
 	r_Ghoul2TimeBase = ri.Cvar_Get( "r_ghoul2timebase", "2", 0);
 	r_Ghoul2NoLerp = ri.Cvar_Get( "r_ghoul2nolerp", "0", 0);
@@ -1355,6 +1352,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.BeginRegistration = RE_BeginRegistration;
 	re.RegisterModel = RE_RegisterModel;
 	re.RegisterSkin = RE_RegisterSkin;
+	re.GetAnimationCFG = RE_GetAnimationCFG;
 	re.RegisterShader = RE_RegisterShader;
 	re.RegisterShaderNoMip = RE_RegisterShaderNoMip;
 	re.LoadWorld = RE_LoadWorldMap;

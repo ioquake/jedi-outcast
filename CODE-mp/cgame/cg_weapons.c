@@ -118,7 +118,7 @@ CG_MapTorsoToWeaponFrame
 =================
 */
 static int CG_MapTorsoToWeaponFrame( clientInfo_t *ci, int frame, int animNum ) {
-	animation_t *animations = ci->animations;
+	animation_t *animations = bgGlobalAnimations;
 
 	switch( animNum )
 	{
@@ -148,6 +148,7 @@ static int CG_MapTorsoToWeaponFrame( clientInfo_t *ci, int frame, int animNum ) 
 	case BOTH_ATTACK10:
 	case BOTH_ATTACK11:
 	case BOTH_ATTACK12:
+	case BOTH_THERMAL_THROW:
 		if ( frame >= animations[animNum].firstFrame && frame < animations[animNum].firstFrame + 6 ) 
 		{
 			return 1 + ( frame - animations[animNum].firstFrame );
@@ -393,6 +394,7 @@ void CG_AddPlayerWeapon( refEntity_t *parent, playerState_t *ps, centity_t *cent
 	weapon_t	weaponNum;
 	weaponInfo_t	*weapon;
 	centity_t	*nonPredictedCent;
+	refEntity_t	flash;
 
 	weaponNum = cent->currentState.weapon;
 
@@ -484,6 +486,11 @@ Ghoul2 Insert Start
 Ghoul2 Insert End
 */
 
+	memset (&flash, 0, sizeof(flash));
+	CG_PositionEntityOnTag( &flash, &gun, gun.hModel, "tag_flash");
+
+	VectorCopy(flash.origin, cg.lastFPFlashPoint);
+
 	// Do special charge bits
 	//-----------------------
 	if ( (ps || cg.renderingThirdPerson || cg.predictedPlayerState.clientNum != cent->currentState.number) &&
@@ -496,13 +503,9 @@ Ghoul2 Insert End
 		float	scale = 1.0f;
 		addspriteArgStruct_t fxSArgs;
 		vec3_t flashorigin, flashdir;
-		refEntity_t	flash;
-
-		memset (&flash, 0, sizeof(flash));
 
 		if (!thirdPerson)
 		{
-			CG_PositionEntityOnTag( &flash, &gun, gun.hModel, "tag_flash");
 			VectorCopy(flash.origin, flashorigin);
 			VectorCopy(flash.axis[0], flashdir);
 		}
@@ -1310,7 +1313,8 @@ void CG_Weapon_f( void ) {
 	{
 		if (cg.snap->ps.weaponTime < 1)
 		{
-			trap_SendClientCommand("sv_saberswitch");
+			//trap_SendClientCommand("sv_saberswitch");
+			trap_SendConsoleCommand("sv_saberswitch");
 		}
 		return;
 	}
@@ -1332,7 +1336,7 @@ void CG_Weapon_f( void ) {
 		}
 	}
 
-	if (num > WP_DET_PACK)
+	if (num > WP_DET_PACK+1)
 	{ //other weapons are off limits due to not actually being weapon weapons
 		return;
 	}
@@ -1498,6 +1502,28 @@ void CG_FireATST(centity_t *cent, qboolean altFire)
 #endif
 
 	trap_S_StartSound(NULL, cent->currentState.number, CHAN_WEAPON, trap_S_RegisterSound(va("sound/weapons/atst/ATSTfire1.wav"/*, Q_irand(1,4)*/)));
+}
+
+void CG_GetClientWeaponMuzzleBoltPoint(int clIndex, vec3_t to)
+{
+	centity_t *cent;
+	mdxaBone_t	boltMatrix;
+
+	if (clIndex < 0 || clIndex >= MAX_CLIENTS)
+	{
+		return;
+	}
+
+	cent = &cg_entities[clIndex];
+
+	if (!cent || !cent->ghoul2 || !trap_G2_HaveWeGhoul2Models(cent->ghoul2) ||
+		!trap_G2API_HasGhoul2ModelOnIndex(&(cent->ghoul2), 1))
+	{
+		return;
+	}
+
+	trap_G2API_GetBoltMatrix(cent->ghoul2, 1, 0, &boltMatrix, cent->turAngles, cent->lerpOrigin, cg.time, cgs.gameModels, cent->modelScale);
+	trap_G2API_GiveMeVectorFromMatrix(&boltMatrix, ORIGIN, to);
 }
 
 /*

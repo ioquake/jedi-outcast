@@ -1528,7 +1528,7 @@ void FX_AddSprite( vec3_t origin, vec3_t vel, vec3_t accel,
 							rotation, 0,
 							vec3_origin, vec3_origin, bounce,
 							0, 0,
-							life, shader, 0 );
+							life, shader, flags );
 }
 
 //---------------------------------------------------

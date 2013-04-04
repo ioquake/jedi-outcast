@@ -1358,6 +1358,7 @@ typedef struct playerState_s {
 	// not communicated over the net at all
 	// !!
 	int			useTime;	//not sent
+	int			lastShotTime;//last time you shot your weapon
 	int			ping;			// server to game info for scoreboard
 	int			lastOnGround;	//last time you were on the ground
 	int			lastStationary;	//last time you were on the ground

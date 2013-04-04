@@ -98,7 +98,6 @@ void CTaskGroup::Init( void )
 {
 	m_completedTasks.clear();
 
-	m_numTasks		= 0;
 	m_numCompleted	= 0;
 	m_parent		= NULL;
 }
@@ -112,8 +111,6 @@ Add
 int CTaskGroup::Add( CTask *task )
 {
 	m_completedTasks[ task->GetGUID() ] = false;
-	m_numTasks++;
-
 	return TASK_OK;	
 }
 
@@ -129,14 +126,6 @@ bool CTaskGroup::MarkTaskComplete( int id )
 	{
 		m_completedTasks[ id ] = true;
 		m_numCompleted++;
-
-		//Release the extra baggage, we only need to know that we're done now
-		/*
-		if ( m_numCompleted == m_numTasks )
-		{
-			m_completedTasks.clear();
-		}
-		*/
 
 		return true;
 	}
@@ -183,11 +172,11 @@ int	CTaskManager::Init( CSequencer *owner )
 	if ( owner == NULL )
 		return TASK_FAILED;
 
+	m_tasks.clear();
 	m_owner		= owner;
 	m_ownerID	= owner->GetOwnerID();
 	m_curGroup	= NULL;
 	m_GUID		= 0;
-	m_numTasks	= 0;
 	m_resident	= false;
 
 	return TASK_OK;
@@ -328,6 +317,10 @@ Update
 
 int CTaskManager::Update( void )
 {
+	if ( (g_entities[m_ownerID].svFlags&SVF_ICARUS_FREEZE) )
+	{
+		return TASK_FAILED;
+	}
 	m_count = 0;	//Needed for runaway init
 	m_resident = true;
 
@@ -966,14 +959,12 @@ int	CTaskManager::PushTask( CTask *task, int flag )
 	{
 	case PUSH_FRONT:
 		m_tasks.insert(m_tasks.begin(), task);
-		m_numTasks++;
 
 		return TASK_OK;
 		break;
 
 	case PUSH_BACK:
 		m_tasks.insert(m_tasks.end(), task);
-		m_numTasks++;
 
 		return TASK_OK;
 		break;
@@ -1003,7 +994,6 @@ CTask *CTaskManager::PopTask( int flag )
 	case POP_FRONT:
 		task = m_tasks.front();
 		m_tasks.pop_front();
-		m_numTasks--;
 		
 		return task;
 		break;
@@ -1011,7 +1001,6 @@ CTask *CTaskManager::PopTask( int flag )
 	case POP_BACK:
 		task = m_tasks.back();
 		m_tasks.pop_back();
-		m_numTasks--;
 		
 		return task;
 		break;
@@ -1660,7 +1649,8 @@ void CTaskManager::Save( void )
 	(m_owner->GetInterface())->I_WriteSaveData( 'TMID', &m_GUID, sizeof( m_GUID ) );	//FIXME: This can be reconstructed
 
 	//Save out the number of tasks that will follow
-	(m_owner->GetInterface())->I_WriteSaveData( 'TSK#', &m_numTasks, sizeof( m_numTasks ) );
+	int iNumTasks = m_tasks.size();
+	(m_owner->GetInterface())->I_WriteSaveData( 'TSK#', &iNumTasks, sizeof(iNumTasks) );
 
 	//Save out all the tasks
 	tasks_l::iterator	ti;
@@ -1703,7 +1693,7 @@ void CTaskManager::Save( void )
 		(m_owner->GetInterface())->I_WriteSaveData( 'TKGP', &id, sizeof( id ) );
 
 		//Save out the number of commands
-		numCommands = (*tgi)->m_numTasks;
+		numCommands = (*tgi)->m_completedTasks.size();
 		(m_owner->GetInterface())->I_WriteSaveData( 'TGNC', &numCommands, sizeof( numCommands ) );
 
 		//Save out the command map
@@ -1865,6 +1855,10 @@ void CTaskManager::Load( void )
 				block->Write( ID_TAG, (float) ID_TAG );
 				break;
 
+			case ID_GET:
+				block->Write( ID_GET, (float) ID_GET );
+				break;
+
 			default:
 				(m_owner->GetInterface())->I_DPrintf( WL_ERROR, "Invalid Block id %d\n", bID);
 				assert( 0 );
@@ -1878,7 +1872,6 @@ void CTaskManager::Load( void )
 		task->SetBlock( block );
 
 		STL_INSERT( m_tasks, task );
-		m_numTasks++;
 	}
 
 	//Load the task groups
@@ -1921,9 +1914,6 @@ void CTaskManager::Load( void )
 
 		//Get the number of commands in this group
 		(m_owner->GetInterface())->I_ReadSaveData( 'TGNC', &numMembers, sizeof( numMembers ) );
-
-		//Save the number of members
-		taskGroup->m_numTasks = numMembers;
 
 		//Get each command and its completion state
 		for ( int j = 0; j < numMembers; j++ )

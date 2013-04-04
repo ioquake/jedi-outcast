@@ -211,6 +211,32 @@ static byte s_scantokey_italian[128] =
 }; 
 
 /*
+// returns true if key should be ignored because NUMLOCK is on and therefore KP arrows should be numbers only...
+//
+qboolean SwallowBadNumLockedKPKey( int iKey )
+{
+	switch (iKey)
+	{
+		case K_KP_HOME:
+		case K_KP_UPARROW:
+		case K_KP_PGUP:
+		case K_KP_LEFTARROW:
+		case K_KP_RIGHTARROW:
+		case K_KP_END:
+		case K_KP_DOWNARROW:
+		case K_KP_PGDN:
+
+			if (GetKeyState(VK_NUMLOCK) & 0x8001)
+			{
+				return qtrue;
+			}
+	}
+
+	return qfalse;
+}
+*/
+
+/*
 =======
 MapKey
 

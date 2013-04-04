@@ -85,6 +85,9 @@ typedef enum
 
 //============================================================================
 
+extern void *precachedKyle;
+extern void *g2SaberInstance;
+
 typedef struct gentity_s gentity_t;
 typedef struct gclient_s gclient_t;
 
@@ -394,7 +397,6 @@ struct gclient_s {
 
 	char		*areabits;
 
-	animation_t	animations[MAX_TOTALANIMATIONS];
 	void		*ghoul2;		// In parallel with the centity, there is a corresponding ghoul2 model for players.
 								// This is an instance that is maintained on the server side that is used for 
 								// determining saber position and per-poly collision
@@ -520,6 +522,10 @@ void BroadcastTeamChange( gclient_t *client, int oldTeam );
 void SetTeam( gentity_t *ent, char *s );
 void Cmd_FollowCycle_f( gentity_t *ent, int dir );
 void Cmd_SaberAttackCycle_f(gentity_t *ent);
+int G_ItemUsable(playerState_t *ps, int forcedUse);
+void Cmd_ToggleSaber_f(gentity_t *ent);
+void Cmd_EngageDuel_f(gentity_t *ent);
+
 gentity_t *G_GetDuelWinner(gclient_t *client);
 
 //
@@ -556,6 +562,7 @@ void SaveRegisteredItems( void );
 //
 int G_ModelIndex( char *name );
 int		G_SoundIndex( char *name );
+int		G_EffectIndex( char *name );
 void	G_TeamCommand( team_t team, char *cmd );
 void	G_KillBox (gentity_t *ent);
 gentity_t *G_Find (gentity_t *from, int fieldofs, const char *match);
@@ -829,7 +836,8 @@ qboolean G_BotConnect( int clientNum, qboolean restart );
 void Svcmd_AddBot_f( void );
 void Svcmd_BotList_f( void );
 void BotInterbreedEndMatch( void );
-void G_RefreshNextMap(int gametype);
+qboolean G_DoesMapSupportGametype(const char *mapname, int gametype);
+const char *G_RefreshNextMap(int gametype, qboolean forced);
 
 // w_saber.c
 qboolean HasSetSaberOnly(void);

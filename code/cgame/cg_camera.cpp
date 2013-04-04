@@ -79,6 +79,12 @@ void CGCam_Enable( void )
 		VectorClear( g_entities[0].client->ps.velocity );
 		g_entities[0].contents = 0;
 
+		if ( cg.zoomMode )
+		{
+			// need to shut off some form of zooming
+			cg.zoomMode = 0;
+		}
+
 		for ( int i = 0; i < NUM_FORCE_POWERS; i++ )
 		{//deactivate any active force powers
 			g_entities[0].client->ps.forcePowerDuration[i] = 0;
@@ -113,7 +119,7 @@ void CGCam_Disable( void )
 
 	if ( &g_entities[0] && g_entities[0].client )
 	{
-		g_entities[0].contents = MASK_PLAYERSOLID;
+		g_entities[0].contents = CONTENTS_BODY;//MASK_PLAYERSOLID;
 	}
 
 	gi.SendServerCommand( NULL, "cts");
@@ -719,10 +725,16 @@ void CGCam_FollowUpdate ( void )
 	
 	if ( client_camera.followInitLerp )
 	{//Lerping
+		float frac = cg.frametime/100.0f * client_camera.followSpeed/100.f;
 		for( i = 0; i < 3; i++ )
 		{
-			cameraAngles[i] = LerpAngle( client_camera.angles[i], cameraAngles[i], cg.frametime/100.0f * client_camera.followSpeed/100.f );
+			cameraAngles[i] = AngleNormalize180( cameraAngles[i] );
+			cameraAngles[i] = AngleNormalize180( client_camera.angles[i] + frac * AngleNormalize180(cameraAngles[i] - client_camera.angles[i]) );
+			cameraAngles[i] = AngleNormalize180( cameraAngles[i] );
 		}
+#ifdef _DEBUG
+		Com_Printf( "%s\n", vtos(cameraAngles) );
+#endif
 	}
 	else
 	{//Snapping, should do this first time if follow_lerp_to_start_duration is zero
@@ -1098,6 +1110,7 @@ void CGCam_Update( void )
 	CGCam_UpdateFade();
 
 	//Update shaking if there's any
+	//CGCam_UpdateSmooth( cg.refdef.vieworg, cg.refdefViewAngles );
 	CGCam_UpdateShake( cg.refdef.vieworg, cg.refdefViewAngles );
 }
 
@@ -1205,6 +1218,47 @@ void CGCam_UpdateShake( vec3_t origin, vec3_t angles )
 	VectorAdd( angles, moveDir, angles );
 }
 
+void CGCam_Smooth( float intensity, int duration )
+{
+	client_camera.smooth_active=false; // means smooth_origin and angles are valid
+	if ( intensity>1.0f||intensity==0.0f||duration<1)
+	{
+		client_camera.info_state &= ~CAMERA_SMOOTHING;
+		return;
+	}
+	client_camera.info_state |= CAMERA_SMOOTHING;
+	client_camera.smooth_intensity = intensity;
+	client_camera.smooth_duration = duration;
+	client_camera.smooth_start = cg.time;
+}
+
+void CGCam_UpdateSmooth( vec3_t origin, vec3_t angles )
+{
+	if (!(client_camera.info_state&CAMERA_SMOOTHING)||cg.time > ( client_camera.smooth_start + client_camera.smooth_duration ))
+	{
+		client_camera.info_state &= ~CAMERA_SMOOTHING;
+		return;
+	}
+	if (!client_camera.smooth_active)
+	{
+		client_camera.smooth_active=true;
+		VectorCopy(origin,client_camera.smooth_origin);
+		return;
+	}
+	float factor=client_camera.smooth_intensity;
+	if (client_camera.smooth_duration>200&&cg.time > ( client_camera.smooth_start + client_camera.smooth_duration-100 ))
+	{
+		factor+=(1.0f-client_camera.smooth_intensity)*
+			(100.0f-(client_camera.smooth_start + client_camera.smooth_duration-cg.time))/100.0f;
+	}
+	int i;
+	for (i=0;i<3;i++)
+	{
+		client_camera.smooth_origin[i]*=(1.0f-factor);
+		client_camera.smooth_origin[i]+=factor*origin[i];
+		origin[i]=client_camera.smooth_origin[i];
+	}
+}
 /*
 -------------------------
 CGCam_StartRoff

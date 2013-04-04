@@ -735,25 +735,21 @@ static rserr_t GLW_SetMode( int mode,
 												"display can be initialized with the current\n"
 												"desktop display depth.  Select 'OK' to try\n"
 												"anyway.  Select 'Cancel' to try a fullscreen\n"
-												"mode instead. (e.g. if you have a 3Dfx Voodoo,\n"
-												"Voodoo-2, or Voodoo Rush 3D accelerator installed)";
+												"mode instead.";
 			
 			const char *psErrorTitle_German =	"Falsche Desktop-Farbtiefe";
 			const char *psErrorBody_German = 	"Es ist unwahrscheinlich, dass bei der momentanen\n"
 												"Desktop-Farbiefe ein Fenstermodus initialisiert\n"
 												"werden kann. Mit 'OK' versuchen Sie es dennoch,\n"
 												"mit 'Abbrechen' wechselt das Spiel in den\n"
-												"Vollbildmodus (wenn Sie z. B. eine 3Dfx Voodoo 1\n"
-												"oder 2 sowie Voodoo Rush 3D-Karte besitzen)";
+												"Vollbildmodus.";
 
 			const char *psErrorTitle_French =	"Basse Intensité De la Couleur DeskTop";
 			const char *psErrorBody_French = 	"Il est fortement peu probable qu'un correct windowed\n"
 												"l'affichage peut être initialisé avec la profondeur\n"
 												"de bureau actuelle d'affichage. Choisissez 'OK'\n"
 												"pour essayer de toute façon. Choisissez 'ANNUL'\n"
-												"pour essayer a fullscreen le mode à la place\n"
-												"(par exemple si vous faites installer un 3Dfx Voodoo,\n"
-												"Voodoo-2, ou accélérateur de Voodoo Rush 3D)";
+												"pour essayer a fullscreen le mode à la place.";
 
 			const char *psHeadText = psErrorTitle_English;
 			const char *psBodyText = psErrorBody_English;
@@ -1221,7 +1217,7 @@ static void GLW_InitExtensions( void )
 	// GL_ATI_pn_triangles
 	qglPNTrianglesiATI = NULL;
 	r_ATI_NPATCH_available = ri.Cvar_Get( "r_ATI_NPATCH_available", "0",CVAR_ROM );
-	if ( strstr( glConfig.extensions_string, "GL_ATI_pn_triangles" ) )
+/*	if ( strstr( glConfig.extensions_string, "GL_ATI_pn_triangles" ) )
 	{
 		ri.Cvar_Set( "r_ATI_NPATCH_available", "1" );
 		if ( r_ati_pn_triangles->integer )
@@ -1241,6 +1237,7 @@ static void GLW_InitExtensions( void )
 	{
 		ri.Printf( PRINT_ALL, "...GL_ATI_pn_triangles not found\n" );
 	}
+*/
 #endif // _NPATCH
 }
 

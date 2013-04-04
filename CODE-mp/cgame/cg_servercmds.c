@@ -175,7 +175,8 @@ CG_SetConfigValues
 Called on load to set the initial values from configure strings
 ================
 */
-void CG_SetConfigValues( void ) {
+void CG_SetConfigValues( void ) 
+{
 	const char *s;
 
 	cgs.scores1 = atoi( CG_ConfigString( CS_SCORES1 ) );
@@ -187,6 +188,9 @@ void CG_SetConfigValues( void ) {
 		cgs.blueflag = s[1] - '0';
 	}
 	cg.warmup = atoi( CG_ConfigString( CS_WARMUP ) );
+
+	// Track who the jedi master is
+	cgs.jediMaster = atoi ( CG_ConfigString ( CS_CLIENT_JEDIMASTER ) );
 }
 
 /*
@@ -259,6 +263,8 @@ static void CG_ConfigStringModified( void ) {
 		cgs.scores1 = atoi( str );
 	} else if ( num == CS_SCORES2 ) {
 		cgs.scores2 = atoi( str );
+	} else if ( num == CS_CLIENT_JEDIMASTER ) {
+		cgs.jediMaster = atoi ( str );
 	} else if ( num == CS_LEVEL_START_TIME ) {
 		cgs.levelStartTime = atoi( str );
 	} else if ( num == CS_VOTE_TIME ) {
@@ -294,6 +300,10 @@ static void CG_ConfigStringModified( void ) {
 	} else if ( num >= CS_SOUNDS && num < CS_SOUNDS+MAX_SOUNDS ) {
 		if ( str[0] != '*' ) {	// player specific sounds don't register here
 			cgs.gameSounds[ num-CS_SOUNDS] = trap_S_RegisterSound( str );
+		}
+	} else if ( num >= CS_EFFECTS && num < CS_SOUNDS+MAX_SOUNDS ) {
+		if ( str[0] != '*' ) {	// player specific sounds don't register here
+			cgs.gameEffects[ num-CS_EFFECTS] = trap_FX_RegisterEffect( str );
 		}
 	} else if ( num >= CS_PLAYERS && num < CS_PLAYERS+MAX_CLIENTS ) {
 		CG_NewClientInfo( num - CS_PLAYERS, qtrue);

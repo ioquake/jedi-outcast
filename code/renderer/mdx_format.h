@@ -25,9 +25,8 @@
 //
 // normal version numbers...
 //
-#define MDXM_VERSION		4
-#define MDXA_VERSION		4
-#define MDXA_VERSION_QUAT	5
+#define MDXM_VERSION 6
+#define MDXA_VERSION 6
 
 // (Note that since there is now a "<modelname>_info.txt" file written out by carcass any changes made in here that
 //		introduce new data should also be reflected in the info-output)
@@ -54,12 +53,19 @@
 
 // triangle side-ordering stuff for tags...
 //
-#define iG2_TRISIDE_MIDDLE		1
-#define iG2_TRISIDE_LONGEST		0
-#define iG2_TRISIDE_SHORTEST	2
+#define iG2_TRISIDE_MIDDLE				1
+#define iG2_TRISIDE_LONGEST				0
+#define iG2_TRISIDE_SHORTEST			2
+
+#define fG2_BONEWEIGHT_RECIPROCAL_MULT	((float)(1.0f/1023.0f))
+#define iG2_BITS_PER_BONEREF			5
+#define iMAX_G2_BONEREFS_PER_SURFACE	(1<<iG2_BITS_PER_BONEREF)	// (32)
+#define iMAX_G2_BONEWEIGHTS_PER_VERT	4	// can't just be blindly increased, affects cache size etc
+
+#define iG2_BONEWEIGHT_TOPBITS_SHIFT	((iG2_BITS_PER_BONEREF * iMAX_G2_BONEWEIGHTS_PER_VERT) - 8)	// 8 bits because of 8 in the BoneWeight[] array entry
+#define iG2_BONEWEIGHT_TOPBITS_AND		0x300	// 2 bits, giving 10 total, or 10 bits, for 1023/1024 above
 
 
-#define MAX_G2_BONEREFS_PER_SURFACE 28	// currently only enforced when compiling Q3/G2 models, not xmen view-only tests
 #define sDEFAULT_GLA_NAME "*default"	// used when making special simple ghoul2 models, usually from MD3 files
 
 
@@ -67,12 +73,29 @@
 //
 // these structs are defined here purely because of structure dependancy order...
 //
-typedef struct {
+/*
+#ifdef __cplusplus
+struct mdxmWeight_t
+#else
+typedef struct 
+#endif
+{
 	int			boneIndex;		// these are indexes into the surface boneReferences, not the global bone index
 	float		boneWeight;		// not the global per-frame bone list
-} mdxmWeight_t;
 
-
+	// I'm defining this '<' operator so this struct can be used with an STL <set>...
+	// (note that I've defined it using '>' internally, so it sorts with higher weights being "less", for distance weight-culling
+	//
+	#ifdef __cplusplus
+	bool operator < (const mdxmWeight_t& _X) const {return (boneWeight>_X.boneWeight);}
+	#endif
+} 
+#ifndef __cplusplus
+mdxmWeight_t
+#endif
+;
+*/
+/*
 #ifdef __cplusplus
 struct mdxaCompBone_t
 #else
@@ -91,7 +114,7 @@ typedef struct
 mdxaCompBone_t
 #endif
 ;
-
+*/
 #ifdef __cplusplus
 struct mdxaCompQuatBone_t
 #else
@@ -206,8 +229,6 @@ typedef struct {
 					int			numTriangles;
 					int			ofsTriangles;
 
-					int			maxVertBoneWeights;	// ... per vertex for hardware to reference. This number subtract the vert->numWeights gives # pad weights (which software will ignore)
-
 					// Bone references are a set of ints representing all the bones
 					// present in any vertex weights for this surface.  This is
 					// needed because a model may have surfaces that need to be
@@ -235,16 +256,71 @@ typedef struct {
 				// for each vert... (mdxmSurface_t->numVerts)
 				// {
 						// mdxVertex_t - this is an array with number of verts from the surface definition as its bounds. It contains normal info, texture coors and number of weightings for this bone
-
+						// (this is now kept at 32 bytes for cache-aligning)
 						typedef struct {
 							vec3_t			normal;
 							vec3_t			vertCoords;
-							vec2_t			texCoords;
-							int				numWeights;		// remember, this is for software counts, look at mdxmSurface_t->numActualWeights for skipping purposes to account for padded weights
-							mdxmWeight_t	weights[1];		// variable sized
+
+							// packed int...
+							unsigned int	uiNmWeightsAndBoneIndexes;	// 32 bits.  format: 
+																		// 31 & 30:  0..3 (= 1..4) weight count
+																		// 29 & 28 (spare)
+																		//	2 bit pairs at 20,22,24,26 are 2-bit overflows from 4 BonWeights below (20=[0], 22=[1]) etc)
+																		//  5-bits each (iG2_BITS_PER_BONEREF) for boneweights
+							// effectively a packed int, each bone weight converted from 0..1 float to 0..255 int...
+							//  promote each entry to float and multiply by fG2_BONEWEIGHT_RECIPROCAL_MULT to convert.
+							byte			BoneWeightings[iMAX_G2_BONEWEIGHTS_PER_VERT];	// 4
+
 						} mdxmVertex_t;
 
 				// } vert
+
+#ifdef __cplusplus
+
+// these are convenience functions that I can invoked in code. Do NOT change them (because this is a shared file), 
+//	but if you want to copy the logic out and use your own versions then fine...
+//
+static inline int G2_GetVertWeights( const mdxmVertex_t *pVert )
+{
+	int iNumWeights = (pVert->uiNmWeightsAndBoneIndexes >> 30)+1;	// 1..4 count 
+
+	return iNumWeights;
+}
+
+static inline int G2_GetVertBoneIndex( const mdxmVertex_t *pVert, const int iWeightNum)
+{ 
+	int iBoneIndex = (pVert->uiNmWeightsAndBoneIndexes>>(iG2_BITS_PER_BONEREF*iWeightNum))&((1<<iG2_BITS_PER_BONEREF)-1);
+
+	return iBoneIndex;
+}
+
+static inline float G2_GetVertBoneWeight( const mdxmVertex_t *pVert, const int iWeightNum )
+{
+	int iTemp = pVert->BoneWeightings[iWeightNum];
+		iTemp|= (pVert->uiNmWeightsAndBoneIndexes >> (iG2_BONEWEIGHT_TOPBITS_SHIFT+(iWeightNum*2)) ) & iG2_BONEWEIGHT_TOPBITS_AND;
+
+	float fBoneWeight = fG2_BONEWEIGHT_RECIPROCAL_MULT * iTemp;
+
+	if (fBoneWeight == 0.0f)
+	{
+		// special case to fix flatten-to-zero cases for extremely light weightings. Could probably be omitted if desperate...
+		//
+		fBoneWeight = 0.00045f;
+	}
+			
+	return fBoneWeight;
+}
+#endif															 
+				// for each vert... (mdxmSurface_t->numVerts)  (seperated from mdxmVertex_t struct for cache reasons)
+				// {
+						// mdxVertex_t - this is an array with number of verts from the surface definition as its bounds. It contains normal info, texture coors and number of weightings for this bone
+
+						typedef struct {
+							vec2_t			texCoords;
+						} mdxmVertexTexCoord_t;
+
+				// } vert
+
 
 		// } surface
 // } LOD
@@ -271,7 +347,7 @@ typedef struct {
 	// frames and bones are shared by all levels of detail
 	//
 	int			numFrames;
-	int			ofsFrames;
+	int			ofsFrames;			// points at mdxaFrame_t array
 	int			numBones;			// (no offset to these since they're inside the frames array)
 	int			ofsCompBonePool;	// offset to global compressed-bone pool that all frames use
 	int			ofsSkel;			// offset to mdxaSkel_t info
@@ -307,18 +383,24 @@ typedef struct {
 // }
 
 
-
-// for each frame... (mdxaHeader_t->numFrames)
-// {
-		// mdxaFrame_t - which contains the header for the bones for this surface, plus the actual bone matrices themselves
-
-		typedef struct {
-			// (used to contain frame bounds info etc as well, doesn't now)
-			//
-			int				boneIndexes[1];		// [numBones]   ... into compressed bone pool
-		} mdxaFrame_t;	// struct size = (int)( &((mdxaFrame_t *)0)->bones[ mdxaHeader_t->numBones ] );
-
-// }
+	// (offset @ mdxaHeader_t->ofsFrames)
+	//
+	//  array of 3 byte indices here (hey, 25% saving over 4-byte really adds up)...
+	//
+	//
+	// access as follows to get the index for a given <iFrameNum, iBoneNum>
+	//
+	// (iFrameNum * mdxaHeader_t->numBones * 3) + (iBoneNum * 3)
+	//
+	//  then read the int at that location and AND it with 0x00FFFFFF. I use the struct below simply for easy searches
+	typedef struct
+	{
+		int iIndex;	// this struct for pointing purposes, need to and with 0x00FFFFFF to be meaningful
+	} mdxaIndex_t;
+	//
+	// (note that there's then an alignement-pad here to get the next struct back onto 32-bit alignement)
+	//
+	// this index then points into the following...
 
 
 // Compressed-bone pool that all frames use  (mdxaHeader_t->ofsCompBonePool)  (defined at end because size unknown until end)

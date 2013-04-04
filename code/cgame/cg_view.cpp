@@ -886,6 +886,10 @@ CG_OffsetFirstPersonView
 
 ===============
 */
+extern qboolean PM_InForceGetUp( playerState_t *ps );
+extern qboolean PM_InGetUp( playerState_t *ps );
+extern qboolean PM_InKnockDown( playerState_t *ps );
+extern int PM_AnimLength( int index, animNumber_t anim );
 static void CG_OffsetFirstPersonView( qboolean firstPersonSaber ) {
 	float			*origin;
 	float			*angles;
@@ -912,6 +916,25 @@ static void CG_OffsetFirstPersonView( qboolean firstPersonSaber ) {
 		angles[YAW] = cg.snap->ps.stats[STAT_DEAD_YAW];
 		origin[2] += cg.predicted_player_state.viewheight;
 		return;
+	}
+
+	if ( g_entities[0].client && PM_InKnockDown( &g_entities[0].client->ps ) )
+	{
+		float perc, animLen = (float)PM_AnimLength( g_entities[0].client->clientInfo.animFileIndex, (animNumber_t)g_entities[0].client->ps.legsAnim );
+		if ( PM_InGetUp( &g_entities[0].client->ps ) || PM_InForceGetUp( &g_entities[0].client->ps ) )
+		{//start righting the view
+			perc = (float)g_entities[0].client->ps.legsAnimTimer/animLen*2;
+		}
+		else
+		{//tilt the view
+			perc = (animLen-g_entities[0].client->ps.legsAnimTimer)/animLen*2;
+		}
+		if ( perc > 1.0f )
+		{
+			perc = 1.0f;
+		}
+		angles[ROLL] = perc*40;
+		angles[PITCH] = perc*-15;
 	}
 
 	// add angles based on weapon kick
@@ -1157,6 +1180,27 @@ qboolean CG_CalcFOVFromX( float fov_x )
 
 	return (inwater);
 }
+
+float CG_ForceSpeedFOV( void )
+{
+	float fov;
+	float timeLeft = player->client->ps.forcePowerDuration[FP_SPEED] - cg.time;
+	float length = FORCE_SPEED_DURATION*forceSpeedValue[player->client->ps.forcePowerLevel[FP_SPEED]];
+	float amt = forceSpeedFOVMod[player->client->ps.forcePowerLevel[FP_SPEED]];
+	if ( timeLeft < 500 )
+	{//start going back
+		fov = cg_fov.value + (timeLeft)/500*amt;
+	}
+	else if ( length - timeLeft < 1000 )
+	{//start zooming in
+		fov = cg_fov.value + (length - timeLeft)/1000*amt;
+	}
+	else
+	{//stay at this FOV
+		fov = cg_fov.value+amt;
+	}
+	return fov;
+}
 /*
 ====================
 CG_CalcFov
@@ -1202,23 +1246,9 @@ static qboolean	CG_CalcFov( void ) {
 			}
 		}
 	} 
-	else if ( cg.renderingThirdPerson && (cg.snap->ps.forcePowersActive&(1<<FP_SPEED)) && player->client->ps.forcePowerDuration[FP_SPEED] )
+	else if ( (cg.snap->ps.forcePowersActive&(1<<FP_SPEED)) && player->client->ps.forcePowerDuration[FP_SPEED] )//cg.renderingThirdPerson && 
 	{
-		float timeLeft = player->client->ps.forcePowerDuration[FP_SPEED] - cg.time;
-		float length = FORCE_SPEED_DURATION*forceSpeedValue[player->client->ps.forcePowerLevel[FP_SPEED]];
-		float amt = forceSpeedFOVMod[player->client->ps.forcePowerLevel[FP_SPEED]];
-		if ( timeLeft < 500 )
-		{//start going back
-			fov_x = cg_fov.value + (timeLeft)/500*amt;
-		}
-		else if ( length - timeLeft < 1000 )
-		{//start zooming in
-			fov_x = cg_fov.value + (length - timeLeft)/1000*amt;
-		}
-		else
-		{//stay at this FOV
-			fov_x = cg_fov.value+amt;
-		}
+		fov_x = CG_ForceSpeedFOV();
 	} else {
 		// user selectable
 		if ( cg.overrides.active & CG_OVERRIDE_FOV )
@@ -1419,11 +1449,9 @@ static qboolean CG_CalcViewValues( void ) {
 	CG_CalcVrect();
 
 	ps = &cg.predicted_player_state;
-
-#if _DEBUG
+#ifndef FINAL_BUILD
 	trap_Com_SetOrgAngles(ps->origin,ps->viewangles);
 #endif
-
 	// intermission view
 	if ( ps->pm_type == PM_INTERMISSION ) {
 		VectorCopy( ps->origin, cg.refdef.vieworg );
@@ -1537,6 +1565,7 @@ static qboolean CG_CalcViewValues( void ) {
 
 	//VectorCopy( cg.refdef.vieworg, cgRefdefVieworg );
 	// shake the camera if necessary
+	CGCam_UpdateSmooth( cg.refdef.vieworg, cg.refdefViewAngles );
 	CGCam_UpdateShake( cg.refdef.vieworg, cg.refdefViewAngles );
 
 	// see if we are drugged by an interrogator.  We muck with the angles here, just a bit earlier, we mucked with the FOV
@@ -1577,12 +1606,12 @@ static void CG_PowerupTimerSounds( void )
 		if ( time > 0 && time < cg.time ) 
 		{
 			// add any special powerup expiration sounds here
-			switch( i )
-			{
-			case PW_WEAPON_OVERCHARGE:
-				cgi_S_StartSound( NULL, cg.snap->ps.clientNum, CHAN_ITEM, cgs.media.overchargeEndSound );
-				break;
-			}
+//			switch( i )
+//			{
+//			case PW_WEAPON_OVERCHARGE:
+//				cgi_S_StartSound( NULL, cg.snap->ps.clientNum, CHAN_ITEM, cgs.media.overchargeEndSound );
+//				break;
+//			}
 		}
 	}
 }
@@ -1680,6 +1709,18 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 	//FIXME: should really send forcePowersActive over network onto cg.snap->ps...
 	float speed = cg.refdef.fov_y / 75.0 * ((cg_entities[0].gent->client->ps.forcePowersActive&(1<<FP_SPEED))?1.0f:cg_timescale.value);
 
+//FIXME: junk code, BUG:168
+
+static bool wasForceSpeed=false;
+bool isForceSpeed=cg_entities[0].gent->client->ps.forcePowersActive&(1<<FP_SPEED)?true:false;
+if (isForceSpeed&&!wasForceSpeed)
+{
+	CGCam_Smooth(0.75f,5000);
+}
+wasForceSpeed=isForceSpeed;
+
+//
+
 	if ( cg_entities[0].gent->s.eFlags & EF_LOCKED_TO_WEAPON && 
 				cg.snap->ps.clientNum == 0 ) 
 	{
@@ -1694,7 +1735,7 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 	CG_PredictPlayerState();
 
 	// decide on third person view
-	cg.renderingThirdPerson = cg_thirdPerson.integer || (cg.snap->ps.stats[STAT_HEALTH] <= 0);
+	cg.renderingThirdPerson = cg_thirdPerson.integer || (cg.snap->ps.stats[STAT_HEALTH] <= 0) || (g_entities[0].client&&g_entities[0].client->NPC_class==CLASS_ATST);
 
 	if ( cg.zoomMode )
 	{
@@ -1759,9 +1800,13 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 	CG_RunEmplacedWeapon();
 
 	// Don't draw the in-view weapon when in camera mode
-	if ( !in_camera && !cg_pano.integer && 
-		( cg.snap->ps.viewEntity == 0 || cg.snap->ps.viewEntity >= ENTITYNUM_WORLD ) )
+	if ( !in_camera 
+		&& !cg_pano.integer 
+		&& cg.snap->ps.weapon != WP_SABER
+		&& ( cg.snap->ps.viewEntity == 0 || cg.snap->ps.viewEntity >= ENTITYNUM_WORLD ) )
+	{
 		CG_AddViewWeapon( &cg.predicted_player_state );
+	}
 
 	if ( !cg.hyperspace ) 
 	{

@@ -292,6 +292,7 @@ int iFilesUpdated;
 int iErrors;
 qboolean qbForceRescan;
 qboolean qbForceStereo;
+string strErrors;
 
 void R_CheckMP3s( const char *psDir )
 {
@@ -445,32 +446,36 @@ void R_CheckMP3s( const char *psDir )
 								}
 								else
 								{
-									Com_Printf("*********** Failed write to file!\n");
+									Com_Printf("*********** Failed write to file \"%s\"!\n",sFilename);
 									iErrors++;
+									strErrors += va("Failed to write: \"%s\"\n",sFilename);
 								}
 							}
 							else
 							{
-								Com_Printf("*********** Failed write to file!\n");
+								Com_Printf("*********** Failed write to file \"%s\"!\n",sFilename);
 								iErrors++;
+								strErrors += va("Failed to write: \"%s\"\n",sFilename);
 							}
 							FS_FCloseFile( f );
 						}
 						else
 						{
-							Com_Printf("*********** Failed to re-open for write!\n");
+							Com_Printf("*********** Failed to re-open for write \"%s\"!\n",sFilename);
 							iErrors++;
+							strErrors += va("Failed to re-open for write: \"%s\"\n",sFilename);
 						}					
 					}
 					else
 					{
-						Com_Error(ERR_DROP, "******* This MP3 should be deleted: %s\n",sFilename);
+						Com_Error(ERR_DROP, "******* This MP3 should be deleted: \"%s\"\n",sFilename);
 					}
 				}
 				else
 				{
-					Com_Printf("*********** File was not a valid MP3!\n");
+					Com_Printf("*********** File was not a valid MP3!: \"%s\"\n",sFilename);
 					iErrors++;
+					strErrors += va("Not game-legal MP3 format: \"%s\"\n",sFilename);
 				}
 			}
 			else
@@ -507,6 +512,7 @@ void S_MP3_CalcVols_f( void )
 	iFilesFound		= 0;
 	iFilesUpdated	= 0;
 	iErrors			= 0;
+	strErrors		= "";
 
 	for (int i=1; i<Cmd_Argc(); i++)
 	{
@@ -537,6 +543,11 @@ void S_MP3_CalcVols_f( void )
 	R_CheckMP3s( sStartDir );
 
 	Com_Printf("\n%d files found/scanned, %d files updated      ( %d errors total)\n",iFilesFound,iFilesUpdated,iErrors);
+
+	if (iErrors)
+	{
+		Com_Printf("\nBad Files:\n%s\n",strErrors.c_str());
+	}
 }
 
 
@@ -910,26 +921,6 @@ qboolean S_LoadSound( sfx_t *sfx )
 	gbInsideLoadSound = qfalse;	// !!!!!!!!!!!!!
 
 	return bReturn;
-}
-
-
-
-
-
-// returns length in milliseconds of supplied sound effect...  (else 0 for bad handle now)
-//
-float S_GetSampleLengthInMilliSeconds( sfxHandle_t sfxHandle)
-{
-	sfx_t *sfx;
-
-	if ( sfxHandle < 0 || sfxHandle >= s_numSfx )
-		return 0.0f;
-
-	sfx = &s_knownSfx[ sfxHandle ];
-
-	float f = (float)sfx->iSoundLengthInSamples / (float)dma.speed;
-
-	return (f * 1000);
 }
 
 

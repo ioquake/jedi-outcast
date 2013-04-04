@@ -506,7 +506,14 @@ void CL_PlayDemo_f( void ) {
 	
 	FS_FOpenFileRead( name, &clc.demofile, qtrue );
 	if (!clc.demofile) {
-		Com_Error( ERR_DROP, "couldn't open %s", name);
+		if (!Q_stricmp(arg, "(null)"))
+		{
+			Com_Error( ERR_DROP, "No demo selected.", name);
+		}
+		else
+		{
+			Com_Error( ERR_DROP, "couldn't open %s", name);
+		}
 		return;
 	}
 	Q_strncpyz( clc.demoName, Cmd_Argv(1), sizeof( clc.demoName ) );
@@ -1918,7 +1925,8 @@ void CL_CheckTimeout( void ) {
 	    && cls.realtime - clc.lastPacketTime > cl_timeout->value*1000) {
 		if (++cl.timeoutcount > 5) {	// timeoutcount saves debugger
 			Com_Printf ("\nServer connection timed out.\n");
-			CL_Disconnect( qtrue );
+			Com_Error(ERR_DROP, "Server connection timed out.");
+			//CL_Disconnect( qtrue );
 			return;
 		}
 	} else {

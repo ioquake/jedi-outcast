@@ -80,7 +80,7 @@ void NPC_GalakMech_Init( gentity_t *ent )
 	else
 	{
 //		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "helmet", TURN_OFF );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_shield", TURN_OFF );
+		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_shield_off", TURN_OFF );
 		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galakface_off", TURN_ON );
 		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galakhead_off", TURN_ON );
 		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_eyes_mouth_off", TURN_ON );
@@ -211,7 +211,7 @@ void NPC_GM_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, ve
 				NPC_Mark1_Part_Explode(self,newBolt);
 			}
 
-			gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "torso_shield", TURN_OFF );
+			gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "torso_shield_off", TURN_OFF );
 			gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "torso_antenna", TURN_OFF );
 			gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "torso_antenna_base_cap_off", TURN_ON );
 			self->client->ps.powerups[PW_GALAK_SHIELD] = 0;//temp, for effect
@@ -536,8 +536,9 @@ void NPC_BSGM_Attack( void )
 						knockAnim = BOTH_KNOCKDOWN4;
 					}
 					//throw them
-					smackDir[2] -= 20;
-					G_Throw( NPC->enemy, smackDir, 30 );
+					smackDir[2] = 1;
+					VectorNormalize( smackDir );
+					G_Throw( NPC->enemy, smackDir, 50 );
 					NPC_SetAnim( NPC->enemy, SETANIM_BOTH, knockAnim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 				}
 				else
@@ -727,8 +728,11 @@ void NPC_BSGM_Attack( void )
 			else
 			{
 				int hit = NPC_ShotEntity( NPC->enemy, impactPos );
-				if ( hit == NPC->enemy->s.number || (&g_entities[hit] != NULL && g_entities[hit].takedamage && ((g_entities[hit].svFlags&SVF_GLASS_BRUSH)||g_entities[hit].health < 40||NPC->s.weapon == WP_EMPLACED_GUN) ) )
-				{//can hit enemy or will hit glass or other minor breakable (or in emplaced gun), so shoot anyway
+				gentity_t *hitEnt = &g_entities[hit];
+				if ( hit == NPC->enemy->s.number 
+					|| ( hitEnt && hitEnt->client && hitEnt->client->playerTeam == NPC->client->enemyTeam )
+					|| ( hitEnt && hitEnt->takedamage ) )
+				{//can hit enemy or will hit glass or other breakable, so shoot anyway
 					enemyCS = qtrue;
 					NPC_AimAdjust( 2 );//adjust aim better longer we have clear shot at enemy
 					VectorCopy( NPC->enemy->currentOrigin, NPCInfo->enemyLastSeenLocation );
@@ -736,7 +740,6 @@ void NPC_BSGM_Attack( void )
 				else
 				{//Hmm, have to get around this bastard
 					NPC_AimAdjust( 1 );//adjust aim better longer we can see enemy
-					gentity_t *hitEnt = &g_entities[hit];
 					if ( hitEnt && hitEnt->client && hitEnt->client->playerTeam == NPC->client->playerTeam )
 					{//would hit an ally, don't fire!!!
 						hitAlly = qtrue;
@@ -750,9 +753,20 @@ void NPC_BSGM_Attack( void )
 	}
 	else if ( gi.inPVS( NPC->enemy->currentOrigin, NPC->currentOrigin ) )
 	{
-		NPCInfo->enemyLastSeenTime = level.time;
-		faceEnemy = qtrue;
-		NPC_AimAdjust( -1 );//adjust aim worse longer we cannot see enemy
+		int hit = NPC_ShotEntity( NPC->enemy, impactPos );
+		gentity_t *hitEnt = &g_entities[hit];
+		if ( hit == NPC->enemy->s.number 
+			|| ( hitEnt && hitEnt->client && hitEnt->client->playerTeam == NPC->client->enemyTeam )
+			|| ( hitEnt && hitEnt->takedamage ) )
+		{//can hit enemy or will hit glass or other breakable, so shoot anyway
+			enemyCS = qtrue;
+		}
+		else
+		{
+			NPCInfo->enemyLastSeenTime = level.time;
+			faceEnemy = qtrue;
+			NPC_AimAdjust( -1 );//adjust aim worse longer we cannot see enemy
+		}
 	}
 
 	if ( enemyLOS )
@@ -804,9 +818,9 @@ void NPC_BSGM_Attack( void )
 		
 		VectorCopy( NPC->enemy->currentOrigin, target );
 
-		target[0] += Q_flrand( -5, 5 )+(crandom()*(6-NPCInfo->currentAim)*4);
-		target[1] += Q_flrand( -5, 5 )+(crandom()*(6-NPCInfo->currentAim)*4);
-		target[2] += Q_flrand( -5, 5 )+(crandom()*(6-NPCInfo->currentAim)*4);
+		target[0] += Q_flrand( -5, 5 )+(crandom()*(6-NPCInfo->currentAim)*2);
+		target[1] += Q_flrand( -5, 5 )+(crandom()*(6-NPCInfo->currentAim)*2);
+		target[2] += Q_flrand( -5, 5 )+(crandom()*(6-NPCInfo->currentAim)*2);
 
 		//Find the desired angles
 		qboolean clearshot = WP_LobFire( NPC, muzzle, target, mins, maxs, MASK_SHOT|CONTENTS_LIGHTSABER, 
@@ -876,10 +890,14 @@ void NPC_BSGM_Attack( void )
 
 	if ( !faceEnemy )
 	{//we want to face in the dir we're running
-		NPCInfo->desiredYaw = NPCInfo->lastPathAngles[YAW];
-		NPCInfo->desiredPitch = 0;
+		if ( !move )
+		{//if we haven't moved, we should look in the direction we last looked?
+			VectorCopy( NPC->client->ps.viewangles, NPCInfo->lastPathAngles );
+		}
 		if ( move )
 		{//don't run away and shoot
+			NPCInfo->desiredYaw = NPCInfo->lastPathAngles[YAW];
+			NPCInfo->desiredPitch = 0;
 			shoot = qfalse;
 		}
 	}
@@ -951,7 +969,7 @@ void NPC_BSGM_Default( void )
 		{//armor gone
 			if ( !NPCInfo->investigateDebounceTime )
 			{//start regenerating the armor
-				gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield", TURN_OFF );
+				gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_OFF );
 				NPC->flags &= ~FL_SHIELDED;//no more reflections
 				VectorSet( NPC->mins, -20, -20, -24 );
 				VectorSet( NPC->maxs, 20, 20, 64 );
@@ -979,7 +997,7 @@ void NPC_BSGM_Default( void )
 					NPCInfo->investigateDebounceTime = 0;
 					NPC->flags |= FL_SHIELDED;//reflect normal shots
 					NPC->fx_time = level.time;
-					gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield", TURN_ON );
+					gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_ON );
 				}
 			}
 		}

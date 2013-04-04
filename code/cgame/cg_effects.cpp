@@ -402,7 +402,7 @@ void CG_Chunks( int owner, vec3_t origin, const vec3_t normal, const vec3_t mins
 		return;
 		break;
 	case MAT_GRATE1:
-		cgi_S_StartSound( NULL, owner, CHAN_BODY, cgs.media.chunkSound ); // own sound?
+		cgi_S_StartSound( NULL, owner, CHAN_BODY, cgs.media.grateSound );
 		return;
 		break;
 	case MAT_ELECTRICAL:// (sparks)

@@ -816,6 +816,10 @@ Cmd_Team_f
 */
 void Cmd_ForceChanged_f( gentity_t *ent )
 {
+	char fpChStr[1024];
+	const char *buf;
+	int i = 0;
+	int ccount = 0;
 //	Cmd_Kill_f(ent);
 	if (ent->client->sess.sessionTeam == TEAM_SPECTATOR)
 	{ //if it's a spec, just make the changes now
@@ -823,7 +827,23 @@ void Cmd_ForceChanged_f( gentity_t *ent )
 		WP_InitForcePowers( ent );
 		return;
 	}
-	trap_SendServerCommand( ent-g_entities, va("print \"%s\n\"", G_GetStripEdString("SVINGAME", "FORCEPOWERCHANGED")) );
+
+	buf = G_GetStripEdString("SVINGAME", "FORCEPOWERCHANGED");
+
+	strcpy(fpChStr, buf);
+
+	while (i < 1024 && fpChStr[i])
+	{
+		if (ccount > 24 && fpChStr[i] == ' ')
+		{
+			fpChStr[i] = '\n';
+			ccount = 0;
+		}
+		ccount++;
+		i++;
+	}
+
+	trap_SendServerCommand( ent-g_entities, va("cp \"%s\n\"", fpChStr) );
 
 	ent->client->ps.fd.forceDoInit = 1;
 }
@@ -1412,6 +1432,12 @@ void Cmd_CallVote_f( gentity_t *ent ) {
 		// this allows a player to change maps, but not upset the map rotation
 		char	s[MAX_STRING_CHARS];
 
+		if (!G_DoesMapSupportGametype(arg2, trap_Cvar_VariableIntegerValue("g_gametype")))
+		{
+			trap_SendServerCommand( ent-g_entities, "print \"You can't vote for this map, it isn't supported by the current gametype.\n\"" );
+			return;
+		}
+
 		trap_Cvar_VariableStringBuffer( "nextmap", s, sizeof(s) );
 		if (*s) {
 			Com_sprintf( level.voteString, sizeof( level.voteString ), "%s %s; set nextmap \"%s\"", arg1, arg2, s );
@@ -1753,6 +1779,11 @@ int G_ItemUsable(playerState_t *ps, int forcedUse)
 			return 0;
 		}
 
+		if (ps->stats[STAT_HEALTH] <= 0)
+		{
+			return 0;
+		}
+
 		return 1;
 	case HI_SEEKER:
 		if (ps->eFlags & EF_SEEKERDRONE)
@@ -1911,13 +1942,13 @@ void Cmd_SaberAttackCycle_f(gentity_t *ent)
 	switch ( selectLevel )
 	{
 	case FORCE_LEVEL_1:
-		trap_SendServerCommand( ent-g_entities, "print \"Saber Attack Set: fast\n\"" );
+		trap_SendServerCommand( ent-g_entities, va("print \"Saber Attack Set: %sfast\n\"", S_COLOR_GREEN) );
 		break;
 	case FORCE_LEVEL_2:
-		trap_SendServerCommand( ent-g_entities, "print \"Saber Attack Set: medium\n\"" );
+		trap_SendServerCommand( ent-g_entities, va("print \"Saber Attack Set: %smedium\n\"", S_COLOR_YELLOW) );
 		break;
 	case FORCE_LEVEL_3:
-		trap_SendServerCommand( ent-g_entities, "print \"Saber Attack Set: strong\n\"" );
+		trap_SendServerCommand( ent-g_entities, va("print \"Saber Attack Set: %sstrong\n\"", S_COLOR_RED) );
 		break;
 	}
 
@@ -2153,8 +2184,100 @@ void ClientCommand( int clientNum ) {
 	}
 
 	// ignore all other commands when at intermission
-	if (level.intermissiontime) {
-		Cmd_Say_f (ent, qfalse, qtrue);
+	if (level.intermissiontime)
+	{
+		qboolean giveError = qfalse;
+
+		if (!Q_stricmp(cmd, "give"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "god"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "notarget"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "noclip"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "kill"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "teamtask"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "levelshot"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "follow"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "follownext"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "followprev"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "team"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "forcechanged"))
+		{ //special case: still update force change
+			Cmd_ForceChanged_f (ent);
+			return;
+		}
+		else if (!Q_stricmp(cmd, "where"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "callvote"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "vote"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "callteamvote"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "teamvote"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "gc"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "setviewpos"))
+		{
+			giveError = qtrue;
+		}
+		else if (!Q_stricmp(cmd, "stats"))
+		{
+			giveError = qtrue;
+		}
+
+		if (giveError)
+		{
+			trap_SendServerCommand( clientNum, va("print \"You cannot perform this task (%s) during the intermission.\n\"", cmd ) );
+		}
+		else
+		{
+			Cmd_Say_f (ent, qfalse, qtrue);
+		}
 		return;
 	}
 
@@ -2200,112 +2323,6 @@ void ClientCommand( int clientNum ) {
 		Cmd_SetViewpos_f( ent );
 	else if (Q_stricmp (cmd, "stats") == 0)
 		Cmd_Stats_f( ent );
-	else if (Q_stricmp (cmd, "sv_saberswitch") == 0)
-		Cmd_ToggleSaber_f(ent);
-	else if (Q_stricmp (cmd, "engage_duel") == 0)
-		Cmd_EngageDuel_f(ent);
-	else if (Q_stricmp (cmd, "force_heal") == 0)
-		ForceHeal(ent);
-	else if (Q_stricmp (cmd, "force_speed") == 0)
-		ForceSpeed(ent, 0);
-	else if (Q_stricmp (cmd, "force_throw") == 0)
-		ForceThrow( ent, qfalse );
-	else if (Q_stricmp (cmd, "force_pull") == 0)
-		ForceThrow( ent, qtrue );
-	else if (Q_stricmp (cmd, "force_distract") == 0)
-		ForceTelepathy( ent );
-	else if (Q_stricmp (cmd, "force_rage") == 0)
-		ForceRage(ent);
-	else if (Q_stricmp (cmd, "force_protect") == 0)
-		ForceProtect(ent);
-	else if (Q_stricmp (cmd, "force_absorb") == 0)
-		ForceAbsorb(ent);
-	else if (Q_stricmp (cmd, "force_healother") == 0)
-		ForceTeamHeal(ent);
-	else if (Q_stricmp (cmd, "force_forcepowerother") == 0)
-		ForceTeamForceReplenish(ent);
-	else if (Q_stricmp (cmd, "force_seeing") == 0)
-		ForceSeeing(ent);
-	else if (Q_stricmp (cmd, "use_seeker") == 0)
-	{
-		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_SEEKER)) &&
-			G_ItemUsable(&ent->client->ps, HI_SEEKER) )
-		{
-			ItemUse_Seeker(ent);
-			G_AddEvent(ent, EV_USE_ITEM0+HI_SEEKER, 0);
-			ent->client->ps.stats[STAT_HOLDABLE_ITEMS] &= ~(1 << HI_SEEKER);
-		}
-	}
-	else if (Q_stricmp (cmd, "use_field") == 0)
-	{
-		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_SHIELD)) &&
-			G_ItemUsable(&ent->client->ps, HI_SHIELD) )
-		{
-			ItemUse_Shield(ent);
-			G_AddEvent(ent, EV_USE_ITEM0+HI_SHIELD, 0);
-			ent->client->ps.stats[STAT_HOLDABLE_ITEMS] &= ~(1 << HI_SHIELD);
-		}
-	}
-	else if (Q_stricmp (cmd, "use_bacta") == 0)
-	{
-		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_MEDPAC)) &&
-			G_ItemUsable(&ent->client->ps, HI_MEDPAC) )
-		{
-			ItemUse_MedPack(ent);
-			G_AddEvent(ent, EV_USE_ITEM0+HI_MEDPAC, 0);
-			ent->client->ps.stats[STAT_HOLDABLE_ITEMS] &= ~(1 << HI_MEDPAC);
-		}
-	}
-	else if (Q_stricmp (cmd, "use_electrobinoculars") == 0)
-	{
-		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_BINOCULARS)) &&
-			G_ItemUsable(&ent->client->ps, HI_BINOCULARS) )
-		{
-			ItemUse_Binoculars(ent);
-			if (ent->client->ps.zoomMode == 0)
-			{
-				G_AddEvent(ent, EV_USE_ITEM0+HI_BINOCULARS, 1);
-			}
-			else
-			{
-				G_AddEvent(ent, EV_USE_ITEM0+HI_BINOCULARS, 2);
-			}
-		}
-	}
-	else if (Q_stricmp (cmd, "zoom") == 0)
-	{ //cheap way of doing this
-		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_BINOCULARS)) &&
-			G_ItemUsable(&ent->client->ps, HI_BINOCULARS) )
-		{
-			ItemUse_Binoculars(ent);
-			if (ent->client->ps.zoomMode == 0)
-			{
-				G_AddEvent(ent, EV_USE_ITEM0+HI_BINOCULARS, 1);
-			}
-			else
-			{
-				G_AddEvent(ent, EV_USE_ITEM0+HI_BINOCULARS, 2);
-			}
-		}
-	}
-	else if (Q_stricmp (cmd, "use_sentry") == 0)
-	{
-		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_SENTRY_GUN)) &&
-			G_ItemUsable(&ent->client->ps, HI_SENTRY_GUN) )
-		{
-			ItemUse_Sentry(ent);
-			G_AddEvent(ent, EV_USE_ITEM0+HI_SENTRY_GUN, 0);
-			ent->client->ps.stats[STAT_HOLDABLE_ITEMS] &= ~(1 << HI_SENTRY_GUN);
-		}
-	}
-	else if (Q_stricmp (cmd, "bot_order") == 0)
-	{
-		BotOrder(ent, atoi(ConcatArgs( 1 )), atoi(ConcatArgs( 2 )));
-	}
-	else if (Q_stricmp (cmd, "saberAttackCycle") == 0)
-	{
-		Cmd_SaberAttackCycle_f(ent);
-	}
 	else if (Q_stricmp(cmd, "#mm") == 0 && CheatsOk( ent ))
 	{
 		G_PlayerBecomeATST(ent);
@@ -2361,5 +2378,14 @@ void ClientCommand( int clientNum ) {
 	}
 	*/
 	else
-		trap_SendServerCommand( clientNum, va("print \"unknown cmd %s\n\"", cmd ) );
+	{
+		if (Q_stricmp(cmd, "addbot") == 0)
+		{ //because addbot isn't a recognized command unless you're the server, but it is in the menus regardless
+			trap_SendServerCommand( clientNum, va("print \"You can only add bots as the server.\n\"" ) );
+		}
+		else
+		{
+			trap_SendServerCommand( clientNum, va("print \"unknown cmd %s\n\"", cmd ) );
+		}
+	}
 }

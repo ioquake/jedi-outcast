@@ -140,6 +140,9 @@ void CG_MissionFailed(void)
 		case MISSIONFAILED_KYLECAPTURE:
 			cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED_KYLECAPTURE", text, sizeof(text) );
 			break;
+		case MISSIONFAILED_TOOMANYALLIESDIED:
+			cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED_TOOMANYALLIESDIED:", text, sizeof(text) );
+			break;
 		default:
 			cgi_SP_GetStringTextString( "INGAME_MISSIONFAILED_UNKNOWN", text, sizeof(text) );
 			break;
@@ -181,13 +184,14 @@ w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);
 	cgi_R_Font_DrawString(x+w,  y, va("%d of %d", cg_entities[0].gent->client->sess.missionStats.secretsFound, cg_entities[0].gent->client->sess.missionStats.totalSecrets),
 							colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
 
-	y +=20;
+	y +=pad;
 	cgi_SP_GetStringTextString( "INGAME_ENEMIESKILLED", text, sizeof(text) );
 w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);	
 	cgi_R_Font_DrawString(x, y, text, colorTable[CT_LTGOLD1], cgs.media.qhFontSmall, -1, 0.8f);
 	cgi_R_Font_DrawString(x+w,y, va("%d",cg_entities[0].gent->client->sess.missionStats.enemiesKilled), colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
 
-	y +=20;
+	y +=pad;
+	y +=pad;
 	cgi_SP_GetStringTextString( "INGAME_FAVORITEWEAPON", text, sizeof(text) );
 w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);	
 	cgi_R_Font_DrawString(x, y, text, colorTable[CT_LTGOLD1], cgs.media.qhFontSmall, -1, 0.8f);
@@ -202,10 +206,16 @@ w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);
 			wpn = i;
 		}
 	}
-	cgi_R_Font_DrawString(x+w, y, va("%d",wpn), colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
 
+	if ( wpn )
+	{
+		gitem_t	*wItem= FindItemForWeapon( (weapon_t)wpn);
+		cgi_SP_GetStringTextString( va("INGAME_%s",wItem->classname ), text, sizeof( text ));
+	//	cgi_R_Font_DrawString(x+w, y, va("%d",wpn), colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
+		cgi_R_Font_DrawString(x+w, y, text, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
+	}
 
-	x = 334;
+	x = 334+70;
 	y = 86;
 	cgi_SP_GetStringTextString( "INGAME_SHOTSFIRED", text, sizeof(text) );
 w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);	
@@ -230,7 +240,7 @@ w = cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, 0.8f);
 
 	y =180;
 	cgi_SP_GetStringTextString( "INGAME_FORCEUSE", text, sizeof(text) );
-	cgi_R_Font_DrawString(x, y, text, colorTable[CT_LTGOLD1], cgs.media.qhFontSmall, -1, 0.8f);
+	cgi_R_Font_DrawString(x, y, text, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
 
 	y +=pad;
 	cgi_SP_GetStringTextString( "INGAME_HEAL", text, sizeof(text) );

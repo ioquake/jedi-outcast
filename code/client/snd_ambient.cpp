@@ -876,13 +876,17 @@ static void AS_UpdateCurrentSet( int id )
 
 		old = aSets.GetSet( oldSet );
 		current = aSets.GetSet( currentSet );
-
+		// Ste, I just put this null check in for now, not sure if there's a more graceful way to exit this function - dmv
+		if( !current )
+		{
+			return;
+		}
 		if ( old )
 		{
 			old->masterVolume = MAX_SET_VOLUME;
 			old->fadeTime = cls.realtime;
 		}
-
+	
 		current->masterVolume = 0;
 
 		//Set the fading starts

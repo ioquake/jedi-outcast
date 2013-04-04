@@ -72,7 +72,7 @@ public:
 	void SetGUID( int GUID );
 	void SetParent( CTaskGroup *group )	{	m_parent = group;	}
 
-	bool Complete( void )			const { return ( m_numTasks == m_numCompleted );	}
+	bool Complete(void)		const { return ( m_numCompleted == m_completedTasks.size() ); }
 
 	bool MarkTaskComplete( int id );
 
@@ -85,7 +85,6 @@ public:
 
 	CTaskGroup	*m_parent;
 
-	int		m_numTasks;
 	int		m_numCompleted;
 	int		m_GUID;
 };
@@ -174,7 +173,6 @@ protected:
 	taskGroup_v				m_taskGroups;
 	tasks_l					m_tasks;
 
-	int						m_numTasks;
 	int						m_GUID;
 	int						m_count;
 	

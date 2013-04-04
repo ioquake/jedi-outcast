@@ -126,7 +126,7 @@ void CG_RegisterWeapon( int weaponNum) {
 		break;
 	case WP_SABER:
 		MAKERGB( weaponInfo->flashDlightColor, 0.6f, 0.6f, 1.0f );
-		weaponInfo->firingSound = trap_S_RegisterSound( "sound/weapons/saber/saberhum.wav" );
+		weaponInfo->firingSound = trap_S_RegisterSound( "sound/weapons/saber/saberhum.wav1" );
 		weaponInfo->missileModel		= trap_R_RegisterModel( "models/weapons2/saber/saber_w.glm" );
 		break;
 

@@ -37,6 +37,9 @@ extern qboolean PM_InSlopeAnim( int anim );
 extern qboolean PM_ForceAnim( int anim );
 extern qboolean PM_InKnockDownOnGround( playerState_t *ps );
 extern qboolean PM_InSpecialJump( int anim );
+extern qboolean PM_RunningAnim( int anim );
+extern qboolean PM_WalkingAnim( int anim );
+extern qboolean PM_SwimmingAnim( int anim );
 
 int PM_AnimLength( int index, animNumber_t anim );
 // Okay, here lies the much-dreaded Pat-created FSM movement chart...  Heretic II strikes again!
@@ -486,7 +489,7 @@ qboolean PM_InAnimForSaberMove( int anim, int saberMove )
 	}
 	int animLevel = PM_AnimLevelForSaberAnim( anim );
 	if ( animLevel <= 0 )
-	{
+	{//NOTE: this will always return false for the ready poses and putaway/draw...
 		return qfalse;
 	}
 	//drop the anim to the first level and start the checks there
@@ -849,7 +852,84 @@ saberMoveName_t PM_AttackMoveForQuad( int quad )
 	return LS_NONE;
 }
 
-qboolean PM_SaberKataDone( void )
+int saberMoveTransitionAngle[Q_NUM_QUADS][Q_NUM_QUADS] = 
+{
+	0,//Q_BR,Q_BR,
+	45,//Q_BR,Q_R,
+	90,//Q_BR,Q_TR,
+	135,//Q_BR,Q_T,
+	180,//Q_BR,Q_TL,
+	215,//Q_BR,Q_L,
+	270,//Q_BR,Q_BL,
+	45,//Q_BR,Q_B,
+	45,//Q_R,Q_BR,
+	0,//Q_R,Q_R,
+	45,//Q_R,Q_TR,
+	90,//Q_R,Q_T,
+	135,//Q_R,Q_TL,
+	180,//Q_R,Q_L,
+	215,//Q_R,Q_BL,
+	90,//Q_R,Q_B,
+	90,//Q_TR,Q_BR,
+	45,//Q_TR,Q_R,
+	0,//Q_TR,Q_TR,
+	45,//Q_TR,Q_T,
+	90,//Q_TR,Q_TL,
+	135,//Q_TR,Q_L,
+	180,//Q_TR,Q_BL,
+	135,//Q_TR,Q_B,
+	135,//Q_T,Q_BR,
+	90,//Q_T,Q_R,
+	45,//Q_T,Q_TR,
+	0,//Q_T,Q_T,
+	45,//Q_T,Q_TL,
+	90,//Q_T,Q_L,
+	135,//Q_T,Q_BL,
+	180,//Q_T,Q_B,
+	180,//Q_TL,Q_BR,
+	135,//Q_TL,Q_R,
+	90,//Q_TL,Q_TR,
+	45,//Q_TL,Q_T,
+	0,//Q_TL,Q_TL,
+	45,//Q_TL,Q_L,
+	90,//Q_TL,Q_BL,
+	135,//Q_TL,Q_B,
+	215,//Q_L,Q_BR,
+	180,//Q_L,Q_R,
+	135,//Q_L,Q_TR,
+	90,//Q_L,Q_T,
+	45,//Q_L,Q_TL,
+	0,//Q_L,Q_L,
+	45,//Q_L,Q_BL,
+	90,//Q_L,Q_B,
+	270,//Q_BL,Q_BR,
+	215,//Q_BL,Q_R,
+	180,//Q_BL,Q_TR,
+	135,//Q_BL,Q_T,
+	90,//Q_BL,Q_TL,
+	45,//Q_BL,Q_L,
+	0,//Q_BL,Q_BL,
+	45,//Q_BL,Q_B,
+	45,//Q_B,Q_BR,
+	90,//Q_B,Q_R,
+	135,//Q_B,Q_TR,
+	180,//Q_B,Q_T,
+	135,//Q_B,Q_TL,
+	90,//Q_B,Q_L,
+	45,//Q_B,Q_BL,
+	0//Q_B,Q_B,
+};
+
+int PM_SaberAttackChainAngle( int move1, int move2 )
+{
+	if ( move1 == -1 || move2 == -1 )
+	{
+		return -1;
+	}
+	return saberMoveTransitionAngle[saberMoveData[move1].endQuad][saberMoveData[move2].startQuad];
+}
+
+qboolean PM_SaberKataDone( int curmove = LS_NONE, int newmove = LS_NONE )
 {
 	/*
 	if ( pm->gent && pm->gent->client )
@@ -869,10 +949,48 @@ qboolean PM_SaberKataDone( void )
 	//		not you can chain?  Like if you were completely missed, you can't chain as much, or...?
 	//		And/Or based on FP_SABER_OFFENSE level?  So number of attacks you can chain
 	//		increases with your FP_SABER_OFFENSE skill?
-	if ( (pm->ps->saberAnimLevel >= FORCE_LEVEL_3 && pm->ps->saberAttackChainCount > Q_irand( 0, 1 )) ||
-		( pm->ps->saberAnimLevel == FORCE_LEVEL_2 && pm->ps->saberAttackChainCount > Q_irand( 2, 5 ) ) )
+	if ( pm->ps->saberAnimLevel == FORCE_LEVEL_3 )
 	{
-		return qtrue;
+		if ( curmove == LS_NONE || newmove == LS_NONE )
+		{
+			if ( pm->ps->saberAnimLevel >= FORCE_LEVEL_3 && pm->ps->saberAttackChainCount > Q_irand( 0, 1 ) )
+			{
+				return qtrue;
+			}
+		}
+		else if ( pm->ps->saberAttackChainCount > Q_irand( 2, 3 ) )
+		{
+			return qtrue;
+		}
+		else if ( pm->ps->saberAttackChainCount > 0 )
+		{
+			int chainAngle = PM_SaberAttackChainAngle( curmove, newmove );
+			if ( chainAngle < 135 || chainAngle > 215 )
+			{//if trying to chain to a move that doesn't continue the momentum
+				return qtrue;
+			}
+			else if ( chainAngle == 180 )
+			{//continues the momentum perfectly, allow it to chain 66% of the time
+				if ( pm->ps->saberAttackChainCount > 1 )
+				{
+					return qtrue;
+				}
+			}
+			else
+			{//would continue the movement somewhat, 50% chance of continuing
+				if ( pm->ps->saberAttackChainCount > 2 )
+				{
+					return qtrue;
+				}
+			}
+		}
+	}
+	else 
+	{//FIXME: have chainAngle influence fast and medium chains as well?
+		if ( pm->ps->saberAnimLevel == FORCE_LEVEL_2 && pm->ps->saberAttackChainCount > Q_irand( 2, 5 ) )
+		{
+			return qtrue;
+		}
 	}
 	return qfalse;
 }
@@ -1295,7 +1413,7 @@ int PM_SaberAttackForMovement( int forwardmove, int rightmove, int move )
 				if ( (pm->ps->saberAnimLevel == FORCE_LEVEL_1 || (pm->gent&&pm->gent->client&&pm->gent->client->NPC_class == CLASS_DESANN && !Q_irand( 0, 2 )))
 					//&& !PM_InKnockDown( pm->ps )
 					&& (pm->cmd.upmove < 0 || pm->ps->pm_flags&PMF_DUCKED)
-					&& (pm->ps->legsAnim == BOTH_STAND2||level.time-pm->ps->lastStationary<=500)  )
+					&& (pm->ps->legsAnim == BOTH_STAND2||pm->ps->legsAnim == BOTH_SABERFAST_STANCE||pm->ps->legsAnim == BOTH_SABERSLOW_STANCE||level.time-pm->ps->lastStationary<=500)  )
 				{//not moving (or just started), ducked and using fast attacks
 					if ( !pm->ps->clientNum || 
 						( pm->gent && pm->gent->NPC && pm->gent->NPC->rank >= RANK_LT_JG ) )
@@ -1311,7 +1429,7 @@ int PM_SaberAttackForMovement( int forwardmove, int rightmove, int move )
 					&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 //can force jump
 					&& pm->gent && !(pm->gent->flags&FL_LOCK_PLAYER_WEAPONS) // yes this locked weapons check also includes force powers, if we need a separate check later I'll make one
 					&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=500) //on ground or just jumped (if not player)
-					//&& (pm->ps->legsAnim == BOTH_STAND2||level.time-pm->ps->lastStationary<=500)//standing or just started moving
+					//&& (pm->ps->legsAnim == BOTH_STAND2||pm->ps->legsAnim == BOTH_SABERFAST_STANCE||pm->ps->legsAnim == BOTH_SABERSLOW_STANCE||level.time-pm->ps->lastStationary<=500)//standing or just started moving
 					&& (pm->cmd.upmove||pm->ps->pm_flags&PMF_JUMPING))//jumping
 				{//strong attack: jump-hack
 					if ( //!pm->ps->clientNum || 
@@ -1406,46 +1524,50 @@ int PM_SaberAttackForMovement( int forwardmove, int rightmove, int move )
 		}
 		else if ( PM_SaberInBounce( move ) )
 		{//bounces should go to their default attack if you don't specify a direction but are attacking
-			if ( PM_SaberKataDone() )
+			int newmove;
+			if ( pm->ps->clientNum && Q_irand( 0, 3 ) )
+			{//use NPC random
+				newmove = PM_NPCSaberAttackFromQuad( saberMoveData[move].endQuad );
+			}
+			else
+			{//player uses chain-attack
+				newmove = saberMoveData[move].chain_attack;
+			}
+			if ( PM_SaberKataDone( move, newmove ) )
 			{
 				return saberMoveData[move].chain_idle;
 			}
 			else
 			{
-				if ( pm->ps->clientNum && Q_irand( 0, 3 ) )
-				{//use NPC random
-					PM_NPCSaberAttackFromQuad( saberMoveData[move].endQuad );
-				}
-				else
-				{//player uses chain-attack
-					return saberMoveData[move].chain_attack;
-				}
+				return newmove;
 			}
 		}
 		else if ( PM_SaberInKnockaway( move ) )
 		{//bounces should go to their default attack if you don't specify a direction but are attacking
-			if ( PM_SaberKataDone() )
+			int newmove;
+			if ( pm->ps->clientNum && Q_irand( 0, 3 ) )
+			{//use NPC random
+				newmove = PM_NPCSaberAttackFromQuad( saberMoveData[move].endQuad );
+			}
+			else
+			{
+				if ( pm->ps->saberAnimLevel == FORCE_LEVEL_1 ||
+					pm->ps->saberAnimLevel == FORCE_LEVEL_5 )
+				{//player is in fast attacks, so come right back down from the same spot
+					newmove = PM_AttackMoveForQuad( saberMoveData[move].endQuad );
+				}
+				else
+				{//use a transition to wrap to another attack from a different dir
+					newmove = saberMoveData[move].chain_attack;
+				}
+			}
+			if ( PM_SaberKataDone( move, newmove ) )
 			{
 				return saberMoveData[move].chain_idle;
 			}
 			else
 			{
-				if ( pm->ps->clientNum && Q_irand( 0, 3 ) )
-				{//use NPC random
-					PM_NPCSaberAttackFromQuad( saberMoveData[move].endQuad );
-				}
-				else
-				{
-					if ( pm->ps->saberAnimLevel == FORCE_LEVEL_1 ||
-						pm->ps->saberAnimLevel == FORCE_LEVEL_5 )
-					{//player is in fast attacks, so come right back down from the same spot
-						return PM_AttackMoveForQuad( saberMoveData[move].endQuad );
-					}
-					else
-					{//use a transition to wrap to another attack from a different dir
-						return saberMoveData[move].chain_attack;
-					}
-				}
+				return newmove;
 			}
 		}
 		else if ( move == LS_READY || move == LS_A_FLIP_STAB || move == LS_A_FLIP_SLASH )
@@ -1524,7 +1646,7 @@ int PM_SaberAnimTransitionAnim( int curmove, int newmove )
 				//going into another attack...
 				//allow endless chaining in level 1 attacks, several in level 2 and only one or a few in level 3
 				//FIXME: don't let strong attacks chain to an attack in the opposite direction ( > 45 degrees?)
-				if ( PM_SaberKataDone() )
+				if ( PM_SaberKataDone( curmove, newmove ) )
 				{//done with this kata, must return to ready before attack again
 					retmove = LS_R_TL2BR + (newmove-LS_A_TL2BR);
 				}
@@ -1967,7 +2089,10 @@ void PM_SetAnimFinal(int *torsoAnim,int *legsAnim,
 		{//see if we need to tell ghoul2 to play it again because of a animSpeed change
 			int		blah;
 			float	junk;
-			gi.G2API_GetBoneAnimIndex( &gent->ghoul2[gent->playerModel], gent->lowerLumbarBone, actualTime, &junk, &blah, &blah, &blah, &oldAnimSpeed, NULL );//gent->upperLumbarBone
+			if (!gi.G2API_GetBoneAnimIndex( &gent->ghoul2[gent->playerModel], gent->lowerLumbarBone, actualTime, &junk, &blah, &blah, &blah, &oldAnimSpeed, NULL ))
+			{
+				animSpeed = oldAnimSpeed;
+			}
 		}
 
 		if ( oldAnimSpeed == animSpeed )
@@ -2184,7 +2309,10 @@ setAnimLegs:
 		{//see if we need to tell ghoul2 to play it again because of a animSpeed change
 			int		blah;
 			float	junk;
-			gi.G2API_GetBoneAnimIndex( &gent->ghoul2[gent->playerModel], gent->rootBone, actualTime, &junk, &blah, &blah, &blah, &oldAnimSpeed, NULL );
+			if (!gi.G2API_GetBoneAnimIndex( &gent->ghoul2[gent->playerModel], gent->rootBone, actualTime, &junk, &blah, &blah, &blah, &oldAnimSpeed, NULL ))
+			{
+				animSpeed = oldAnimSpeed;
+			}
 		}
 
 		if ( oldAnimSpeed == animSpeed )
@@ -2505,24 +2633,14 @@ void PM_TorsoAnimLightsaber()
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_GUARD_IDLE1,SETANIM_FLAG_NORMAL);
 			pm->ps->saberMove = LS_READY;
 		}
-		else if( pm->ps->legsAnim == BOTH_STAND2_RANDOM1 )
+		else if( pm->ps->legsAnim == BOTH_STAND1IDLE1 
+			|| pm->ps->legsAnim == BOTH_STAND2IDLE1
+			|| pm->ps->legsAnim == BOTH_STAND2IDLE2
+			|| pm->ps->legsAnim == BOTH_STAND3IDLE1
+			|| pm->ps->legsAnim == BOTH_STAND4IDLE1
+			|| pm->ps->legsAnim == BOTH_STAND5IDLE1 )
 		{
-			PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND2_RANDOM1,SETANIM_FLAG_NORMAL);
-			pm->ps->saberMove = LS_READY;
-		}
-		else if( pm->ps->legsAnim == BOTH_STAND2_RANDOM2 )
-		{
-			PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND2_RANDOM2,SETANIM_FLAG_NORMAL);
-			pm->ps->saberMove = LS_READY;
-		}
-		else if( pm->ps->legsAnim == BOTH_STAND2_RANDOM3 )
-		{
-			PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND2_RANDOM3,SETANIM_FLAG_NORMAL);
-			pm->ps->saberMove = LS_READY;
-		}
-		else if( pm->ps->legsAnim == BOTH_STAND2_RANDOM4 )
-		{
-			PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND2_RANDOM4,SETANIM_FLAG_NORMAL);
+			PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
 			pm->ps->saberMove = LS_READY;
 		}
 		else if( pm->ps->legsAnim == BOTH_STAND2TO4 )
@@ -2629,6 +2747,11 @@ void PM_TorsoAnimation( void )
 		return;
 	}
 
+	if( pm->gent && pm->gent->NPC && (pm->gent->NPC->scriptFlags & SCF_FORCED_MARCH) )
+	{
+		return;
+	}
+
 	if(pm->gent != NULL && pm->gent->client)
 	{
 		pm->gent->client->renderInfo.torsoFpsMod = 1.0f;
@@ -2730,6 +2853,29 @@ void PM_TorsoAnimation( void )
 	}
 
 
+	qboolean weaponBusy = qfalse;
+
+	if ( pm->ps->weapon == WP_NONE )
+	{
+		weaponBusy = qfalse;
+	}
+	else if ( pm->ps->weaponstate == WEAPON_FIRING || pm->ps->weaponstate == WEAPON_CHARGING || pm->ps->weaponstate == WEAPON_CHARGING_ALT )
+	{
+		weaponBusy = qtrue;
+	}
+	else if ( pm->ps->lastShotTime > level.time - 3000 )
+	{
+		weaponBusy = qtrue;
+	}
+	else if ( pm->ps->weaponTime )
+	{
+		weaponBusy = qtrue;
+	}
+	else if ( pm->gent && pm->gent->client->fireDelay > 0 )
+	{
+		weaponBusy = qtrue;
+	}
+
 	if (	pm->ps->weapon == WP_NONE || 
 			pm->ps->weaponstate == WEAPON_READY || 
 			pm->ps->weaponstate == WEAPON_CHARGING ||
@@ -2739,19 +2885,19 @@ void PM_TorsoAnimation( void )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_ATTACK1,SETANIM_FLAG_NORMAL);//TORSO_WEAPONREADY1
 		}
-		else if( pm->ps->legsAnim == BOTH_RUN1 )
+		else if( pm->ps->legsAnim == BOTH_RUN1 && !weaponBusy )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_RUN1,SETANIM_FLAG_NORMAL);
 		}
-		else if( pm->ps->legsAnim == BOTH_RUN2 && (!pm->gent || pm->gent->attackDebounceTime < level.time - 2000) )
+		else if( pm->ps->legsAnim == BOTH_RUN2 && !weaponBusy )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_RUN2,SETANIM_FLAG_NORMAL);
 		}
-		else if( pm->ps->legsAnim == BOTH_WALK1 )
+		else if( pm->ps->legsAnim == BOTH_WALK1 && !weaponBusy  )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_WALK1,SETANIM_FLAG_NORMAL);
 		}
-		else if( pm->ps->legsAnim == BOTH_WALK2 )
+		else if( pm->ps->legsAnim == BOTH_WALK2 && !weaponBusy  )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_WALK2,SETANIM_FLAG_NORMAL);
 		}
@@ -2760,23 +2906,23 @@ void PM_TorsoAnimation( void )
 			//??? Why nothing?  What if you were running???
 			//PM_SetAnim(pm,SETANIM_TORSO,BOTH_CROUCH1IDLE,SETANIM_FLAG_NORMAL);
 		}
-		else if( pm->ps->legsAnim == BOTH_JUMP1 )
+		else if( pm->ps->legsAnim == BOTH_JUMP1 && !weaponBusy )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_JUMP1,SETANIM_FLAG_NORMAL, 100);	// Only blend over 100ms
 		}
-		else if( pm->ps->legsAnim == BOTH_SWIM_IDLE1 )
+		else if( pm->ps->legsAnim == BOTH_SWIM_IDLE1 && !weaponBusy )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_SWIM_IDLE1,SETANIM_FLAG_NORMAL);
 		}
-		else if( pm->ps->legsAnim == BOTH_SWIMFORWARDSTART )
+		else if( pm->ps->legsAnim == BOTH_SWIMFORWARDSTART && !weaponBusy )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_SWIMFORWARDSTART,SETANIM_FLAG_NORMAL);
 		}
-		else if( pm->ps->legsAnim == BOTH_SWIMFORWARD )
+		else if( pm->ps->legsAnim == BOTH_SWIMFORWARD && !weaponBusy )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_SWIMFORWARD,SETANIM_FLAG_NORMAL);
 		}
-		else if( pm->ps->legsAnim == BOTH_SWIMFORWARDSTOP )
+		else if( pm->ps->legsAnim == BOTH_SWIMFORWARDSTOP && !weaponBusy )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_SWIMFORWARDSTOP,SETANIM_FLAG_NORMAL);
 		}
@@ -2839,20 +2985,52 @@ void PM_TorsoAnimation( void )
 				// ********************************************************
 
 				case WP_BRYAR_PISTOL:
+					//FIXME: if recently fired, hold the ready!
+					if ( pm->ps->weaponstate == WEAPON_CHARGING_ALT || weaponBusy )
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY2,SETANIM_FLAG_NORMAL);
+					}
+					else if ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) )
+					{//running w/1-handed weapon uses full-body anim
+						PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
+					}
+					else
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY2,SETANIM_FLAG_NORMAL);
+					}
+					break;
 				case WP_BLASTER_PISTOL:
-					PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY2,SETANIM_FLAG_NORMAL);
+					if ( weaponBusy )
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY2,SETANIM_FLAG_NORMAL);
+					}
+					else if ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) )
+					{//running w/1-handed weapon uses full-body anim
+						PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
+					}
+					else
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY2,SETANIM_FLAG_NORMAL);
+					}
 					break;
 				case WP_NONE:
 					//NOTE: should never get here
 					break;
 				case WP_MELEE:
-					if ( pm->gent && pm->gent->client && !PM_DroidMelee( pm->gent->client->NPC_class ) )
-					{
-						PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND6,SETANIM_FLAG_NORMAL);
+					if ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) )
+					{//running w/1-handed weapon uses full-body anim
+						PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
 					}
 					else
 					{
-						PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND1,SETANIM_FLAG_NORMAL);
+						if ( pm->gent && pm->gent->client && !PM_DroidMelee( pm->gent->client->NPC_class ) )
+						{
+							PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND6,SETANIM_FLAG_NORMAL);
+						}
+						else
+						{
+							PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND1,SETANIM_FLAG_NORMAL);
+						}
 					}
 					break;
 				case WP_BLASTER:
@@ -2866,13 +3044,20 @@ void PM_TorsoAnimation( void )
 					PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE2,SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_RESTART|SETANIM_FLAG_HOLD);
 					break;
 				case WP_THERMAL:
-					if ( !pm->ps->clientNum && (pm->ps->weaponstate == WEAPON_CHARGING || pm->ps->weaponstate == WEAPON_CHARGING_ALT) )
-					{//player pulling back to throw
-						PM_SetAnim( pm, SETANIM_TORSO, BOTH_THERMAL_READY, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+					if ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) )
+					{//running w/1-handed weapon uses full-body anim
+						PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
 					}
 					else
 					{
-						PM_SetAnim( pm, SETANIM_TORSO, TORSO_WEAPONREADY10, SETANIM_FLAG_NORMAL );
+						if ( !pm->ps->clientNum && (pm->ps->weaponstate == WEAPON_CHARGING || pm->ps->weaponstate == WEAPON_CHARGING_ALT) )
+						{//player pulling back to throw
+							PM_SetAnim( pm, SETANIM_TORSO, BOTH_THERMAL_READY, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+						}
+						else
+						{
+							PM_SetAnim( pm, SETANIM_TORSO, TORSO_WEAPONREADY10, SETANIM_FLAG_NORMAL );
+						}
 					}
 					break;
 				case WP_REPEATER:
@@ -2892,6 +3077,17 @@ void PM_TorsoAnimation( void )
 						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY3,SETANIM_FLAG_NORMAL);
 					}
 					break;
+				case WP_TRIP_MINE:
+				case WP_DET_PACK:
+					if ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) )
+					{//running w/1-handed weapon uses full-body anim
+						PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
+					}
+					else
+					{
+						PM_SetAnim( pm, SETANIM_TORSO, TORSO_WEAPONREADY10, SETANIM_FLAG_NORMAL );
+					}
+					break;
 				default:
 					PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY3,SETANIM_FLAG_NORMAL);
 					break;
@@ -2909,21 +3105,15 @@ void PM_TorsoAnimation( void )
 		{
 			PM_SetAnim(pm,SETANIM_TORSO,BOTH_GUARD_IDLE1,SETANIM_FLAG_NORMAL);
 		}
-		else if( pm->ps->legsAnim == BOTH_STAND2_RANDOM1 )
+		else if( pm->ps->legsAnim == BOTH_STAND1IDLE1 
+			|| pm->ps->legsAnim == BOTH_STAND2IDLE1
+			|| pm->ps->legsAnim == BOTH_STAND2IDLE2
+			|| pm->ps->legsAnim == BOTH_STAND3IDLE1
+			|| pm->ps->legsAnim == BOTH_STAND4IDLE1
+			|| pm->ps->legsAnim == BOTH_STAND5IDLE1 )
 		{
-			PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND2_RANDOM1,SETANIM_FLAG_NORMAL);
-		}
-		else if( pm->ps->legsAnim == BOTH_STAND2_RANDOM2 )
-		{
-			PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND2_RANDOM2,SETANIM_FLAG_NORMAL);
-		}
-		else if( pm->ps->legsAnim == BOTH_STAND2_RANDOM3 )
-		{
-			PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND2_RANDOM3,SETANIM_FLAG_NORMAL);
-		}
-		else if( pm->ps->legsAnim == BOTH_STAND2_RANDOM4 )
-		{
-			PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND2_RANDOM4,SETANIM_FLAG_NORMAL);
+			PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
+			pm->ps->saberMove = LS_READY;
 		}
 		else if( pm->ps->legsAnim == BOTH_STAND2TO4 )
 		{
@@ -2967,71 +3157,153 @@ void PM_TorsoAnimation( void )
 		}
 		else
 		{
-			switch(pm->ps->weapon)
+			if ( !weaponBusy 
+				&& pm->ps->weapon != WP_BOWCASTER
+				&& pm->ps->weapon != WP_REPEATER
+				&& pm->ps->weapon != WP_FLECHETTE
+				&& pm->ps->weapon != WP_ROCKET_LAUNCHER
+				&& ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) ) )
+			{//running w/1-handed or light 2-handed weapon uses full-body anim if you're not using the weapon right now
+				PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
+			}
+			else
 			{
-			// ********************************************************
-			case WP_SABER:		// WP_LIGHTSABER
-				// Shouldn't get here, should go to TorsoAnimLightsaber
-				break;
-			// ********************************************************
-
-			case WP_BRYAR_PISTOL:
-			case WP_BLASTER_PISTOL:
-				PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE2,SETANIM_FLAG_NORMAL);
-				break;
-
-			case WP_NONE:
-				//NOTE: should never get here
-				break;
-
-			case WP_MELEE:
-				if ( pm->gent && pm->gent->client && !PM_DroidMelee( pm->gent->client->NPC_class ) )
+				switch ( pm->ps->weapon )
 				{
-					PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND6,SETANIM_FLAG_NORMAL);
-				}
-				else
-				{
-					PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND1,SETANIM_FLAG_NORMAL);
-				}
-				break;
+				// ********************************************************
+				case WP_SABER:		// WP_LIGHTSABER
+					// Shouldn't get here, should go to TorsoAnimLightsaber
+					break;
+				// ********************************************************
 
-			case WP_BLASTER:
-				PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE3,SETANIM_FLAG_NORMAL);
-				break;
-
-			case WP_DISRUPTOR:
-				PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY3,SETANIM_FLAG_NORMAL);//TORSO_WEAPONIDLE4//SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_RESTART|SETANIM_FLAG_HOLD
-				break;
-
-			case WP_BOT_LASER:
-				PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE2,SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_RESTART|SETANIM_FLAG_HOLD);
-				break;
-
-			case WP_THERMAL:
-				PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE10,SETANIM_FLAG_NORMAL);//SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_RESTART|SETANIM_FLAG_HOLD
-				break;
-
-			case WP_REPEATER:
-				if ( pm->gent && pm->gent->client && pm->gent->client->NPC_class == CLASS_GALAKMECH )
-				{//
-					if ( pm->gent->alt_fire )
+				case WP_BRYAR_PISTOL:
+					if ( pm->ps->weaponstate == WEAPON_CHARGING_ALT || weaponBusy )
 					{
-						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE3,SETANIM_FLAG_NORMAL);
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY2,SETANIM_FLAG_NORMAL);
+					}
+					else if ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) )
+					{//running w/1-handed weapon uses full-body anim
+						PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
 					}
 					else
 					{
-						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE1,SETANIM_FLAG_NORMAL);
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE2,SETANIM_FLAG_NORMAL);
 					}
-				}
-				else
-				{
-					PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE3,SETANIM_FLAG_NORMAL);
-				}
-				break;
+					break;
+				case WP_BLASTER_PISTOL:
+					if ( weaponBusy )
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY2,SETANIM_FLAG_NORMAL);
+					}
+					else if ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) )
+					{//running w/1-handed weapon uses full-body anim
+						PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
+					}
+					else
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE2,SETANIM_FLAG_NORMAL);
+					}
+					break;
 
-			default:
-				PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE3,SETANIM_FLAG_NORMAL);
-				break;
+				case WP_NONE:
+					//NOTE: should never get here
+					break;
+
+				case WP_MELEE:
+					if ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) )
+					{//running w/1-handed weapon uses full-body anim
+						PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
+					}
+					else
+					{
+						if ( pm->gent && pm->gent->client && !PM_DroidMelee( pm->gent->client->NPC_class ) )
+						{
+							PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND6,SETANIM_FLAG_NORMAL);
+						}
+						else
+						{
+							PM_SetAnim(pm,SETANIM_TORSO,BOTH_STAND1,SETANIM_FLAG_NORMAL);
+						}
+					}
+					break;
+
+				case WP_BLASTER:
+					if ( weaponBusy )
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY3,SETANIM_FLAG_NORMAL);
+					}
+					else
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE3,SETANIM_FLAG_NORMAL);
+					}
+					break;
+
+				case WP_DISRUPTOR:
+					PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY3,SETANIM_FLAG_NORMAL);//TORSO_WEAPONIDLE4//SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_RESTART|SETANIM_FLAG_HOLD
+					break;
+
+				case WP_BOT_LASER:
+					PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE2,SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_RESTART|SETANIM_FLAG_HOLD);
+					break;
+
+				case WP_THERMAL:
+					if ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) )
+					{//running w/1-handed weapon uses full-body anim
+						PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
+					}
+					else
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE10,SETANIM_FLAG_NORMAL);//SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_RESTART|SETANIM_FLAG_HOLD
+					}
+					break;
+
+				case WP_REPEATER:
+					if ( pm->gent && pm->gent->client && pm->gent->client->NPC_class == CLASS_GALAKMECH )
+					{//
+						if ( pm->gent->alt_fire )
+						{
+							PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE3,SETANIM_FLAG_NORMAL);
+						}
+						else
+						{
+							PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE1,SETANIM_FLAG_NORMAL);
+						}
+					}
+					else
+					{
+						if ( weaponBusy )
+						{
+							PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY3,SETANIM_FLAG_NORMAL);
+						}
+						else
+						{
+							PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE3,SETANIM_FLAG_NORMAL);
+						}
+					}
+					break;
+				case WP_TRIP_MINE:
+				case WP_DET_PACK:
+					if ( PM_RunningAnim( pm->ps->legsAnim ) || PM_WalkingAnim( pm->ps->legsAnim ) || PM_SwimmingAnim( pm->ps->legsAnim ) )
+					{//running w/1-handed weapon uses full-body anim
+						PM_SetAnim(pm,SETANIM_TORSO,pm->ps->legsAnim,SETANIM_FLAG_NORMAL);
+					}
+					else
+					{
+						PM_SetAnim( pm, SETANIM_TORSO, TORSO_WEAPONIDLE10, SETANIM_FLAG_NORMAL );
+					}
+					break;
+
+				default:
+					if ( weaponBusy )
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONREADY3,SETANIM_FLAG_NORMAL);
+					}
+					else
+					{
+						PM_SetAnim(pm,SETANIM_TORSO,TORSO_WEAPONIDLE3,SETANIM_FLAG_NORMAL);
+					}
+					break;
+				}
 			}
 		}
 	}
@@ -3051,16 +3323,18 @@ int PM_GetTurnAnim( gentity_t *gent, int anim )
 	switch( anim )
 	{
 	case BOTH_STAND1:			//# Standing idle: no weapon: hands down
-	case BOTH_STAND1_RANDOM1:	//# Random standing idle
-	case BOTH_STAND1_RANDOM2:	//# Random standing idle
+	case BOTH_STAND1IDLE1:		//# Random standing idle
 	case BOTH_STAND2:			//# Standing idle with a weapon
-	case BOTH_STAND2_RANDOM1:	//# Random standing idle
-	case BOTH_STAND2_RANDOM2:	//# Random standing idle
-	case BOTH_STAND2_RANDOM3:	//# Random standing idle
-	case BOTH_STAND2_RANDOM4:	//# Random standing idle
+	case BOTH_SABERFAST_STANCE:
+	case BOTH_SABERSLOW_STANCE:
+	case BOTH_STAND2IDLE1:		//# Random standing idle
+	case BOTH_STAND2IDLE2:		//# Random standing idle
 	case BOTH_STAND3:			//# Standing hands behind back: at ease: etc.
+	case BOTH_STAND3IDLE1:		//# Random standing idle
 	case BOTH_STAND4:			//# two handed: gun down: relaxed stand
+	case BOTH_STAND4IDLE1:		//# Random standing idle
 	case BOTH_STAND5:			//# standing idle, no weapon, hand down, back straight
+	case BOTH_STAND5IDLE1:		//# Random standing idle
 	case BOTH_STAND6:			//# one handed: gun at side: relaxed stand
 	case BOTH_STAND1TO3:			//# Transition from stand1 to stand3
 	case BOTH_STAND3TO1:			//# Transition from stand3 to stand1
@@ -3098,6 +3372,99 @@ int PM_GetTurnAnim( gentity_t *gent, int anim )
 		if ( PM_HasAnimation( gent, LEGS_TURN2 ) )
 		{
 			return LEGS_TURN2;
+		}
+		else
+		{
+			return -1;
+		}
+		break;
+	default:
+		return -1;
+		break;
+	}
+}
+
+int PM_TurnAnimForLegsAnim( gentity_t *gent, int anim )
+{
+	if ( !gent )
+	{
+		return -1;
+	}
+
+	switch( anim )
+	{
+	case BOTH_STAND1:			//# Standing idle: no weapon: hands down
+	case BOTH_STAND1IDLE1:		//# Random standing idle
+		if ( PM_HasAnimation( gent, BOTH_TURNSTAND1 ) )
+		{
+			return BOTH_TURNSTAND1;
+		}
+		else
+		{
+			return -1;
+		}
+		break;
+	case BOTH_STAND2:			//# Standing idle with a weapon
+	case BOTH_SABERFAST_STANCE:
+	case BOTH_SABERSLOW_STANCE:
+	case BOTH_STAND2IDLE1:		//# Random standing idle
+	case BOTH_STAND2IDLE2:		//# Random standing idle
+		if ( PM_HasAnimation( gent, BOTH_TURNSTAND2 ) )
+		{
+			return BOTH_TURNSTAND2;
+		}
+		else
+		{
+			return -1;
+		}
+		break;
+	case BOTH_STAND3:			//# Standing hands behind back: at ease: etc.
+	case BOTH_STAND3IDLE1:		//# Random standing idle
+		if ( PM_HasAnimation( gent, BOTH_TURNSTAND3 ) )
+		{
+			return BOTH_TURNSTAND3;
+		}
+		else
+		{
+			return -1;
+		}
+		break;
+	case BOTH_STAND4:			//# two handed: gun down: relaxed stand
+	case BOTH_STAND4IDLE1:		//# Random standing idle
+		if ( PM_HasAnimation( gent, BOTH_TURNSTAND4 ) )
+		{
+			return BOTH_TURNSTAND4;
+		}
+		else
+		{
+			return -1;
+		}
+		break;
+	case BOTH_STAND5:			//# standing idle, no weapon, hand down, back straight
+	case BOTH_STAND5IDLE1:		//# Random standing idle
+		if ( PM_HasAnimation( gent, BOTH_TURNSTAND5 ) )
+		{
+			return BOTH_TURNSTAND5;
+		}
+		else
+		{
+			return -1;
+		}
+		break;
+	case BOTH_CROUCH1:			//# Transition from standing to crouch
+	case BOTH_CROUCH1IDLE:		//# Crouching idle
+	/*
+	case BOTH_UNCROUCH1:			//# Transition from crouch to standing
+	case BOTH_CROUCH2IDLE:		//# crouch and resting on back righ heel: no weapon
+	case BOTH_CROUCH2TOSTAND1:	//# going from crouch2 to stand1
+	case BOTH_CROUCH3:			//# Desann crouching down to Kyle (cin 9)
+	case BOTH_UNCROUCH3:			//# Desann uncrouching down to Kyle (cin 9)
+	case BOTH_CROUCH4:			//# Slower version of crouch1 for cinematics
+	case BOTH_UNCROUCH4:			//# Slower version of uncrouch1 for cinematics
+	*/
+		if ( PM_HasAnimation( gent, BOTH_TURNCROUCH1 ) )
+		{
+			return BOTH_TURNCROUCH1;
 		}
 		else
 		{
@@ -3306,6 +3673,20 @@ qboolean PM_InCartwheel( int anim )
 	case BOTH_ARIAL_F1:
 	case BOTH_CARTWHEEL_LEFT:
 	case BOTH_CARTWHEEL_RIGHT:
+		return qtrue;
+		break;
+	}
+	return qfalse;
+}
+
+qboolean PM_StandingAnim( int anim )
+{//NOTE: does not check idles or special (cinematic) stands
+	switch ( anim )
+	{
+	case BOTH_STAND1:
+	case BOTH_STAND2:
+	case BOTH_STAND3:
+	case BOTH_STAND4:
 		return qtrue;
 		break;
 	}

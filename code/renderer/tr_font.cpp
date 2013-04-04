@@ -395,15 +395,14 @@ CFontInfo::CFontInfo(const char *fontName)
 			char sTemp[MAX_QPATH];
 			int iGlyphTPs = 0;
 			const char *psLang = NULL;
-			int iAsianGlyphsAcross;
 
 			for (int iLang=0; iLang<3; iLang++)
 			{
 				switch (iLang)
 				{
-					case 0:	iAsianGlyphsAcross = Korean_InitFields		(iGlyphTPs, psLang);	break;
-					case 1: iAsianGlyphsAcross = Taiwanese_InitFields	(iGlyphTPs, psLang);	break;
-					case 2: iAsianGlyphsAcross = Japanese_InitFields	(iGlyphTPs, psLang);	break;
+					case 0:	m_iAsianGlyphsAcross = Korean_InitFields	(iGlyphTPs, psLang);	break;
+					case 1: m_iAsianGlyphsAcross = Taiwanese_InitFields	(iGlyphTPs, psLang);	break;
+					case 2: m_iAsianGlyphsAcross = Japanese_InitFields	(iGlyphTPs, psLang);	break;
 				}
 
 				for (int i=0; i<iGlyphTPs; i++)

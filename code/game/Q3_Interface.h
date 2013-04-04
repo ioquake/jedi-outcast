@@ -43,6 +43,7 @@ typedef enum //# setType_e
 	SET_FFDEATHSCRIPT,//## %s="NULL" !!"W:\game\base\scripts\!!#*.txt" # Script to run when player kills a teammate
 	SET_MINDTRICKSCRIPT,//## %s="NULL" !!"W:\game\base\scripts\!!#*.txt" # Script to run when player kills a teammate
 	SET_VIDEO_PLAY,//## %s="filename" !!"W:\game\base\video\!!#*.roq" # Play a video (inGame)
+	SET_CINEMATIC_SKIPSCRIPT, //## %s="filename" !!"W:\game\base\scripts\!!#*.txt" # Script to run when skipping the running cinematic 
 
 	//# #sep Standard strings
 	SET_ENEMY,//## %s="NULL" # Set enemy by targetname
@@ -74,6 +75,8 @@ typedef enum //# setType_e
 	SET_FULLNAME,//## %s="NULL" # This name will appear when ent is scanned by tricorder
 	SET_VIEWENTITY,//## %s="NULL" # Make the player look through this ent's eyes - also shunts player movement control to this ent
 	SET_LOOPSOUND,//## %s="NULL" # Looping sound to play on entity
+	SET_ICARUS_FREEZE,//## %s="NULL" # Specify name of entity to freeze - !!!NOTE!!! since the ent is frozen, it cannot unfreeze itself, you must have some other entity unfreeze a frozen ent!!!
+	SET_ICARUS_UNFREEZE,//## %s="NULL" # Specify name of entity to unfreeze - !!!NOTE!!! since the ent is frozen, it cannot unfreeze itself, you must have some other entity unfreeze a frozen ent!!!
 
 	SET_SCROLLTEXT,	//## %s="" # key of text string to print
 	SET_LCARSTEXT,	//## %s="" # key of text string to print in LCARS frame
@@ -105,6 +108,7 @@ typedef enum //# setType_e
 	SET_FACEEYESOPENED,	//## %f="0.0" # Set face to Eyes open
 	SET_WAIT,		//## %f="0.0" # Change an entity's wait field
 	SET_FOLLOWDIST,		//## %f="0.0" # How far away to stay from leader in BS_FOLLOW_LEADER
+	SET_SCALE,			//## %f="0.0" # Scale the entity model
 
 	//# #sep ints
 	SET_ANIM_HOLDTIME_LOWER,//## %d="0" # Hold lower anim for number of milliseconds
@@ -185,6 +189,11 @@ typedef enum //# setType_e
 	SET_MISSION_STATUS_SCREEN,//## %t="BOOL_TYPES" # Display Mission Status screen before advancing to next level
 	SET_END_SCREENDISSOLVE,//## %t="BOOL_TYPES" # End of game dissolve into star background and credits
 	SET_USE_CP_NEAREST,//## %t="BOOL_TYPES" # NPCs will use their closest combat points, not try and find ones next to the player, or flank player
+	SET_MORELIGHT,//## %t="BOOL_TYPES" # NPC will have a minlight of 96
+	SET_NO_FORCE,//## %t="BOOL_TYPES" # NPC will not be affected by force powers
+	SET_NO_FALLTODEATH,//## %t="BOOL_TYPES" # NPC will not scream and tumble and fall to hit death over large drops
+	SET_DISMEMBERABLE,//## %t="BOOL_TYPES" # NPC will not be dismemberable if you set this to false (default is true)
+	SET_NO_ACROBATICS,//## %t="BOOL_TYPES" # Jedi won't jump, roll or cartwheel
 
 	//# #sep calls
 	SET_SKILL,//## %r%d="0" # Cannot set this, only get it - valid values are 0 through 3
@@ -254,6 +263,8 @@ typedef enum //# playType_e
 
 
 const	int	Q3_TIME_SCALE	= 1;	//MILLISECONDS
+
+extern char	cinematicSkipScript[1024];
 
 //General
 extern	void		Q3_TaskIDClear( int *taskID );

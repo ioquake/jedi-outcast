@@ -127,7 +127,7 @@ public:
 	CBlock *Duplicate( void );
 
 	int	GetBlockID( void )		const	{	return m_id;			}	//Get the ID for the block
-	int	GetNumMembers( void )	const	{	return m_numMembers;	}	//Get the number of member in the block's list
+	int	GetNumMembers( void )	const	{	return m_members.size();}	//Get the number of member in the block's list
 
 	void SetFlags( unsigned char flags )	{	m_flags = flags;	}
 	void SetFlag( unsigned char flag )		{	m_flags |= flag;	}
@@ -138,7 +138,6 @@ public:
 protected:
 
 	blockMember_v				m_members;			//List of all CBlockMembers owned by this list
-	int							m_numMembers;		//Number of members in m_members
 	int							m_id;				//ID of the block
 	unsigned char				m_flags;
 };

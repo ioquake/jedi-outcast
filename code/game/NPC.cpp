@@ -32,6 +32,9 @@ extern void NPC_BSCinematic( void );
 extern int GetTime ( int lastTime );
 extern void NPC_BSGM_Default( void );
 
+extern cvar_t	*g_dismemberment;
+extern cvar_t	*g_realisticSaberDamage;
+
 //Local Variables
 // ai debug cvars
 cvar_t		*debugNPCAI;			// used to print out debug info about the bot AI
@@ -83,6 +86,14 @@ void CorpsePhysics( gentity_t *self )
 		if ( !(self->client->ps.eFlags&EF_NODRAW) )
 		{
 			AddSightEvent( self->enemy, self->currentOrigin, 384, AEL_DISCOVERED );
+		}
+	}
+
+	if ( level.time - self->s.time > 3000 )
+	{//been dead for 3 seconds
+		if ( g_dismemberment->integer < 4 && !g_realisticSaberDamage->integer )
+		{//can't be dismembered once dead
+			self->client->dismembered = qtrue;
 		}
 	}
 
@@ -153,7 +164,7 @@ void NPC_RemoveBody( gentity_t *self )
 	///	if ( self->client->playerTeam == TEAM_SCAVENGERS || self->client->playerTeam == TEAM_KLINGON 
 	//		|| self->client->playerTeam == TEAM_HIROGEN || self->client->playerTeam == TEAM_MALON )
 		// should I check NPC_class here instead of TEAM ? - dmv
-		if( self->client->playerTeam == TEAM_ENEMY )
+		if( self->client->playerTeam == TEAM_ENEMY || self->client->NPC_class == CLASS_PROTOCOL )
 		{
 			self->nextthink = level.time + FRAMETIME; // try back in a second
 
@@ -258,7 +269,7 @@ int BodyRemovalPadTime( gentity_t *ent )
 	case CLASS_GONK:
 	case CLASS_R2D2:
 	case CLASS_R5D2:
-	case CLASS_PROTOCOL:
+	//case CLASS_PROTOCOL:
 	case CLASS_MARK1:
 	case CLASS_MARK2:
 	case CLASS_PROBE:
@@ -330,7 +341,7 @@ static void NPC_RemoveBodyEffect(void)
 	case CLASS_GONK:
 	case CLASS_R2D2:
 	case CLASS_R5D2:
-	case CLASS_PROTOCOL:
+	//case CLASS_PROTOCOL:
 	case CLASS_MARK1:
 	case CLASS_MARK2:
 	case CLASS_INTERROGATOR:
@@ -776,7 +787,7 @@ static void DeadThink ( void )
 				// check for droids
 				if ( npc_class == CLASS_SEEKER || npc_class == CLASS_REMOTE || npc_class == CLASS_PROBE || npc_class == CLASS_MOUSE ||
 					 npc_class == CLASS_GONK || npc_class == CLASS_R2D2 || npc_class == CLASS_R5D2 ||
-					 npc_class == CLASS_PROTOCOL || npc_class == CLASS_MARK2 || npc_class == CLASS_SENTRY )
+					 npc_class == CLASS_MARK2 || npc_class == CLASS_SENTRY )//npc_class == CLASS_PROTOCOL ||
 				{
 					NPC->client->ps.eFlags |= EF_NODRAW;
 					NPCInfo->timeOfDeath = level.time + FRAMETIME * 8;
@@ -996,7 +1007,8 @@ void NPC_HandleAIFlags (void)
 		if ( NPCInfo->ffireFadeDebounce < level.time )
 		{
 			NPCInfo->ffireCount--;
-			NPCInfo->ffireFadeDebounce = level.time + 2000;
+			//Com_Printf( "drop: %d < %d\n", NPCInfo->ffireCount, 3+((2-g_spskill->integer)*2) );
+			NPCInfo->ffireFadeDebounce = level.time + 3000;
 		}
 	}
 
@@ -1580,6 +1592,19 @@ void NPC_RunBehavior( int team, int bState )
 	else if ( NPC->client->ps.weapon == WP_EMPLACED_GUN )
 	{
 		NPC_BSEmplaced();
+		if ( NPC->client->playerTeam == TEAM_PLAYER && NPCInfo->charmedTime && NPCInfo->charmedTime < level.time && NPC->client )
+		{//we were charmed, set us back!
+			//NOTE: presumptions here...
+			team_t	savTeam = NPC->client->enemyTeam;
+			NPC->client->enemyTeam = NPC->client->playerTeam;
+			NPC->client->playerTeam = savTeam;
+			NPC->client->leader = NULL;
+			if ( NPCInfo->tempBehavior == BS_FOLLOW_LEADER )
+			{
+				NPCInfo->tempBehavior = BS_DEFAULT;
+			}
+			G_ClearEnemy( NPC );
+		}
 		return;
 	}
 	else if ( NPC->client->ps.weapon == WP_SABER )
@@ -1959,7 +1984,7 @@ void NPC_Think ( gentity_t *self)//, int msec )
 	VectorCopy( self->client->ps.moveDir, oldMoveDir );
 	VectorClear( self->client->ps.moveDir );
 	// see if NPC ai is frozen
-	if ( debugNPCFreeze->value ) 
+	if ( debugNPCFreeze->value || (NPC->svFlags&SVF_ICARUS_FREEZE) ) 
 	{
 		NPC_UpdateAngles( qtrue, qtrue );
 		ClientThink(self->s.number, &ucmd);
@@ -2082,16 +2107,16 @@ void NPC_Think ( gentity_t *self)//, int msec )
 
 void NPC_InitAI ( void ) 
 {
-	debugNoRoam = gi.cvar ( "d_noroam", "0", 0 );
-	debugNPCAimingBeam = gi.cvar ( "d_npcaiming", "0", 0 );
-	debugBreak = gi.cvar ( "d_break", "0", 0  );
+	debugNoRoam = gi.cvar ( "d_noroam", "0", CVAR_CHEAT );
+	debugNPCAimingBeam = gi.cvar ( "d_npcaiming", "0", CVAR_CHEAT );
+	debugBreak = gi.cvar ( "d_break", "0", CVAR_CHEAT );
 
-	debugNPCAI = gi.cvar ( "d_npcai", "0", 0  );
-	debugNPCFreeze = gi.cvar ( "d_npcfreeze", "0", 0 );
-	d_JediAI = gi.cvar ( "d_JediAI", "0", 0 );
-	d_noGroupAI = gi.cvar ( "d_noGroupAI", "0", 0 );
-	d_asynchronousGroupAI = gi.cvar ( "d_asynchronousGroupAI", "1", 0 );
-	d_altRoutes = gi.cvar ( "d_altRoutes", "0", 0 );
+	debugNPCAI = gi.cvar ( "d_npcai", "0", CVAR_CHEAT );
+	debugNPCFreeze = gi.cvar ( "d_npcfreeze", "0", CVAR_CHEAT);
+	d_JediAI = gi.cvar ( "d_JediAI", "0", CVAR_CHEAT );
+	d_noGroupAI = gi.cvar ( "d_noGroupAI", "0", CVAR_CHEAT );
+	d_asynchronousGroupAI = gi.cvar ( "d_asynchronousGroupAI", "1", CVAR_CHEAT );
+	d_altRoutes = gi.cvar ( "d_altRoutes", "1", CVAR_CHEAT );
 
 	//0 = never (BORING)
 	//1 = kyle only
@@ -2102,7 +2127,7 @@ void NPC_InitAI ( void )
 	//6 = also when kyle takes pain or enemy jedi dodges player saber swing or does an acrobatic evasion
 	d_slowmodeath = gi.cvar ( "d_slowmodeath", "3", CVAR_ARCHIVE );//save this setting
 
-	d_saberCombat = gi.cvar ( "d_saberCombat", "0", 0 );
+	d_saberCombat = gi.cvar ( "d_saberCombat", "0", CVAR_CHEAT );
 }
 
 /*

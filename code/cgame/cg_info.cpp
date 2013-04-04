@@ -235,30 +235,6 @@ void MissionInformation_Draw( centity_t *cent )
 }
 
 /*
-====================
-CG_DrawMissionInformation
-====================
-*/
-/*
-void CG_DrawMissionInformation( void ) 
-{
-	centity_t *cent;
-
-	// Don't show if dead
-	if (cg.predicted_player_state.pm_type == PM_DEAD)
-	{
-		return;
-	}
-
-	cent = &cg_entities[cg.snap->ps.clientNum];
-
-	MissionInformation_Draw(cent);
-
-	missionInfo_Updated = qfalse;	// Player saw it
-	cg.missionInfoFlashTime = 0;
-
-}
-*/
 
 //-------------------------------------------------------
 static void CG_DrawForceCount( const int force, int x, float *y, const int pad,qboolean *hasForcePowers )
@@ -276,15 +252,6 @@ static void CG_DrawForceCount( const int force, int x, float *y, const int pad,q
 		return;
 	}
 
-/*	if (( val < 1 ) || (val> NUM_FORCE_POWERS))	
-	{
-		textColor = CT_MDGREY;
-	}
-	else
-	{
-		textColor = CT_ICON_BLUE;
-	}
-*/
 	textColor = CT_ICON_BLUE;
 
 	// Draw title
@@ -316,6 +283,7 @@ static void CG_DrawForceCount( const int force, int x, float *y, const int pad,q
 CG_LoadScreen_PersonalInfo
 ====================
 */
+/*
 static void CG_LoadScreen_PersonalInfo(void)
 {
 	float	x, y;
@@ -356,6 +324,7 @@ static void CG_LoadScreen_PersonalInfo(void)
 	}
 
 }
+*/
 
 static void CG_LoadBar(void)
 {
@@ -368,6 +337,8 @@ static void CG_LoadBar(void)
 	xLength = 21;
 
 	cgi_R_SetColor( colorTable[CT_WHITE]);
+	CG_DrawPic(166,428,640-(164*2), 32, cgs.media.levelLoad);
+
 	for (i=0;i < cg.loadLCARSStage;i++)
 	{
 		CG_DrawPic(x + (i*pad) + (i*xLength),y, 32, 8, cgs.media.loadTick);
@@ -383,16 +354,13 @@ overylays UI_DrawConnectText from ui_connect.cpp
 ====================
 */
 void CG_DrawInformation( void ) {
-	const char	*s;
-	qhandle_t	levelshot;
 	int			y;
 
 
 	// draw the dialog background
-//	const char	*info = CG_ConfigString( CS_SERVERINFO );
-//	s = Info_ValueForKey( info, "mapname" );
-//	levelshot = cgi_R_RegisterShaderNoMip( va( "levelshots/%s.tga", s ) );	
-	levelshot = cgs.media.levelLoad;
+	const char	*info	= CG_ConfigString( CS_SERVERINFO );
+	const char	*s		= Info_ValueForKey( info, "mapname" );
+	const qhandle_t	levelshot = cgi_R_RegisterShaderNoMip( va( "levelshots/%s", s ) );	
 
 	extern SavedGameJustLoaded_e g_eSavedGameJustLoaded;	// hack! (hey, it's the last week of coding, ok?
 	if ( !levelshot || g_eSavedGameJustLoaded == eFULL ) 
@@ -408,13 +376,17 @@ void CG_DrawInformation( void ) {
 		CG_DrawPic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, levelshot );
 	}
 
-	if (cg_missionstatusscreen.integer && cg.loadLCARSStage < 7 )
+	if ( !strcmp(s,"kejim_post") )//special case for first map!
 	{
-		CG_MissionCompletion();
+		char	text[1024]={0};
+		cgi_SP_GetStringTextString( "INGAME_ALONGTIME", text, sizeof(text) );
+		int w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontMedium, 1.5f);
+		cgi_R_Font_DrawString((320)-(w/2), 140, text,  colorTable[CT_ICON_BLUE], cgs.media.qhFontMedium, -1, 1.5f);
 	}
 	else
+	if (cg_missionstatusscreen.integer )
 	{
-		CG_LoadScreen_PersonalInfo();
+		CG_MissionCompletion();
 	}
 	CG_LoadBar();
 

@@ -579,6 +579,30 @@ void SV_SendClientGameState( client_t *client ) {
 }
 
 
+void SV_SendClientMapChange( client_t *client ) 
+{
+	msg_t		msg;
+	byte		msgBuffer[MAX_MSGLEN];
+
+	MSG_Init( &msg, msgBuffer, sizeof( msgBuffer ) );
+
+	// NOTE, MRE: all server->client messages now acknowledge
+	// let the client know which reliable clientCommands we have received
+	MSG_WriteLong( &msg, client->lastClientCommand );
+
+	// send any server commands waiting to be sent first.
+	// we have to do this cause we send the client->reliableSequence
+	// with a gamestate and it sets the clc.serverCommandSequence at
+	// the client side
+	SV_UpdateServerCommandsToClient( client, &msg );
+
+	// send the gamestate
+	MSG_WriteByte( &msg, svc_mapchange );
+
+	// deliver this to the client
+	SV_SendMessageToClient( &msg, client );
+}
+
 /*
 ==================
 SV_ClientEnterWorld

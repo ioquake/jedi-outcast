@@ -22,20 +22,19 @@ NPC_Interrogator_Precache
 */
 void NPC_Interrogator_Precache(gentity_t *self)
 {
-
 	G_SoundIndex( "sound/chars/probe/misc/talk.wav");
-
+	G_SoundIndex( "sound/chars/interrogator/misc/torture_droid_inject.mp3" );
 //	G_SoundIndex( "sound/chars/probe/misc/probedroidloop.wav" );
 //	G_SoundIndex("sound/chars/probe/misc/anger1.wav");
 	G_EffectIndex( "probeexplosion1");
-
+	G_EffectIndex( "droidexplosion1" );
 }
 /*
 -------------------------
 Interrogator_die
 -------------------------
 */
-void Interrogator_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int hitLoc )
+void Interrogator_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod,int dFlags,int hitLoc )
 {
 	self->client->ps.velocity[2] = -100;
 	self->locationDamage[HL_NONE] += damage;
@@ -350,6 +349,8 @@ void Interrogator_Melee( qboolean visible, qboolean advance )
 			// Drug our enemy up and do the wonky vision thing
 			gentity_t *tent = G_TempEntity( NPC->enemy->currentOrigin, EV_DRUGGED );
 			tent->owner = NPC->enemy;
+
+			G_Sound( NPC, G_SoundIndex( "sound/chars/interrogator/misc/torture_droid_inject.mp3" ));
 		}
 	}
 

@@ -537,6 +537,22 @@ static qboolean PM_CheckJump( void )
 	}
 	*/
 
+	if (pm->ps->fd.forcePowersActive & (1 << FP_LEVITATION))
+	{
+		if (pm->ps->fd.forcePowerDebounce[FP_LEVITATION] < pm->cmd.serverTime)
+		{
+			BG_ForcePowerDrain( pm->ps, FP_LEVITATION, 5 );
+			if (pm->ps->fd.forcePowerLevel[FP_LEVITATION] >= FORCE_LEVEL_2)
+			{
+				pm->ps->fd.forcePowerDebounce[FP_LEVITATION] = pm->cmd.serverTime + 300;
+			}
+			else
+			{
+				pm->ps->fd.forcePowerDebounce[FP_LEVITATION] = pm->cmd.serverTime + 200;
+			}
+		}
+	}
+
 	if (pm->ps->forceJumpFlip)
 	{
 		int anim = BOTH_FORCEINAIR1;
@@ -1501,6 +1517,13 @@ static void PM_WalkMove( void ) {
 			wishspeed = pm->ps->speed * pm_duckScale;
 		}
 	}
+	else if ( (pm->ps->pm_flags & PMF_ROLLING) && !BG_InRoll(pm->ps, pm->ps->legsAnim) &&
+		!PM_InRollComplete(pm->ps, pm->ps->legsAnim))
+	{
+		if ( wishspeed > pm->ps->speed * pm_duckScale ) {
+			wishspeed = pm->ps->speed * pm_duckScale;
+		}
+	}
 
 	// clamp the speed lower if wading or walking on the bottom
 	if ( pm->waterlevel ) {
@@ -2381,7 +2404,7 @@ static void PM_Footsteps( void ) {
 	if ( !pm->cmd.forwardmove && !pm->cmd.rightmove ) {
 		if (  pm->xyspeed < 5 ) {
 			pm->ps->bobCycle = 0;	// start at beginning of cycle again
-			if ( pm->ps->pm_flags & PMF_DUCKED ) {
+			if ( (pm->ps->pm_flags & PMF_DUCKED) || (pm->ps->pm_flags & PMF_ROLLING) ) {
 				PM_ContinueLegsAnim( BOTH_CROUCH1IDLE );
 			} else {
 				if (pm->ps->weapon == WP_DISRUPTOR && pm->ps->zoomMode == 1)
@@ -2447,7 +2470,23 @@ static void PM_Footsteps( void ) {
 		}
 		PM_ContinueLegsAnim( LEGS_BACK );
 	*/
-	} else {
+	}
+	else if ((pm->ps->pm_flags & PMF_ROLLING) && !BG_InRoll(pm->ps, pm->ps->legsAnim) &&
+		!PM_InRollComplete(pm->ps, pm->ps->legsAnim))
+	{
+		bobmove = 0.5;	// ducked characters bob much faster
+
+		if ( pm->ps->pm_flags & PMF_BACKWARDS_RUN )
+		{
+			PM_ContinueLegsAnim( BOTH_CROUCH1WALKBACK );
+		}
+		else
+		{
+			PM_ContinueLegsAnim( BOTH_CROUCH1WALK );
+		}
+	}
+	else
+	{
 		if ( !( pm->cmd.buttons & BUTTON_WALKING ) ) {
 			bobmove = 0.4f;	// faster speeds bob faster
 			if ( pm->ps->pm_flags & PMF_BACKWARDS_RUN ) {
@@ -2458,7 +2497,7 @@ static void PM_Footsteps( void ) {
 			}
 			footstep = qtrue;
 		} else {
-			bobmove = 0.3f;	// walking bobs slow
+			bobmove = 0.2f;	// walking bobs slow
 			if ( pm->ps->pm_flags & PMF_BACKWARDS_RUN ) {
 				PM_ContinueLegsAnim( BOTH_WALKBACK1 );
 			}
@@ -2638,16 +2677,27 @@ static qboolean PM_DoChargedWeapons( void )
 		//	implement our alt-fire locking stuff
 		if ( (pm->cmd.buttons & BUTTON_ALT_ATTACK) && pm->ps->ammo[weaponData[pm->ps->weapon].ammoIndex] >= weaponData[pm->ps->weapon].altEnergyPerShot )
 		{
+			vec3_t muzzleOffPoint, muzzlePoint, forward, right, up;
+
+			AngleVectors( pm->ps->viewangles, forward, right, up );
+
 			charging = qtrue;
 			altFire = qtrue;
 
 			AngleVectors(pm->ps->viewangles, ang, NULL, NULL);
 
-			ang[0] = pm->ps->origin[0] + ang[0]*2048;
-			ang[1] = pm->ps->origin[1] + ang[1]*2048;
-			ang[2] = pm->ps->origin[2] + ang[2]*2048;
+			VectorCopy( pm->ps->origin, muzzlePoint );
+			VectorCopy(WP_MuzzlePoint[WP_ROCKET_LAUNCHER], muzzleOffPoint);
 
-			pm->trace(&tr, pm->ps->origin, NULL, NULL, ang, pm->ps->clientNum, MASK_PLAYERSOLID);
+			VectorMA(muzzlePoint, muzzleOffPoint[0], forward, muzzlePoint);
+			VectorMA(muzzlePoint, muzzleOffPoint[1], right, muzzlePoint);
+			muzzlePoint[2] += pm->ps->viewheight + muzzleOffPoint[2];
+
+			ang[0] = muzzlePoint[0] + ang[0]*2048;
+			ang[1] = muzzlePoint[1] + ang[1]*2048;
+			ang[2] = muzzlePoint[2] + ang[2]*2048;
+
+			pm->trace(&tr, muzzlePoint, NULL, NULL, ang, pm->ps->clientNum, MASK_PLAYERSOLID);
 
 			if (tr.fraction != 1 && tr.entityNum < MAX_CLIENTS && tr.entityNum != pm->ps->clientNum)
 			{
@@ -2669,7 +2719,10 @@ static qboolean PM_DoChargedWeapons( void )
 					}
 				}
 
-				pm->ps->rocketTargetTime = pm->cmd.serverTime + 500;
+				if (pm->ps->rocketLockIndex == tr.entityNum)
+				{
+					pm->ps->rocketTargetTime = pm->cmd.serverTime + 500;
+				}
 			}
 			else if (pm->ps->rocketTargetTime < pm->cmd.serverTime)
 			{
@@ -3127,6 +3180,28 @@ static void PM_Weapon( void ) {
 		pm->ps->saberHolstered = qfalse;
 	}
 
+	if (pm->ps->weapon == WP_THERMAL ||
+		pm->ps->weapon == WP_TRIP_MINE ||
+		pm->ps->weapon == WP_DET_PACK)
+	{
+		if (pm->ps->weapon == WP_THERMAL)
+		{
+			if ((pm->ps->torsoAnim&~ANIM_TOGGLEBIT) == WeaponAttackAnim[pm->ps->weapon] &&
+				(pm->ps->weaponTime-200) <= 0)
+			{
+				PM_StartTorsoAnim( WeaponReadyAnim[pm->ps->weapon] );
+			}
+		}
+		else
+		{
+			if ((pm->ps->torsoAnim&~ANIM_TOGGLEBIT) == WeaponAttackAnim[pm->ps->weapon] &&
+				(pm->ps->weaponTime-700) <= 0)
+			{
+				PM_StartTorsoAnim( WeaponReadyAnim[pm->ps->weapon] );
+			}
+		}
+	}
+
 	// don't allow attack until all buttons are up
 	if ( pm->ps->pm_flags & PMF_RESPAWNED ) {
 		return;
@@ -3464,6 +3539,7 @@ static void PM_Animate( void ) {
 			PM_StartTorsoAnim( BOTH_TALKGESTURE3 );
 			pm->ps->torsoTimer = TIMER_GESTURE;
 			*/
+
 			pm->ps->forceHandExtend = HANDEXTEND_TAUNT;
 
 			//FIXME: random taunt anims?
@@ -3471,6 +3547,8 @@ static void PM_Animate( void ) {
 
 			pm->ps->forceHandExtendTime = pm->cmd.serverTime + 1000;
 			
+			pm->ps->weaponTime = 100;
+
 			PM_AddEvent( EV_TAUNT );
 		}
 #if 0
@@ -3599,7 +3677,7 @@ void PM_AdjustAttackStates( pmove_t *pm )
 	}
 
 	// disruptor alt-fire should toggle the zoom mode, but only bother doing this for the player?
-	if ( pm->ps->weapon == WP_DISRUPTOR)
+	if ( pm->ps->weapon == WP_DISRUPTOR && pm->ps->weaponstate == WEAPON_READY )
 	{
 		if ( !(pm->ps->eFlags & EF_ALT_FIRING) && (pm->cmd.buttons & BUTTON_ALT_ATTACK) &&
 			pm->cmd.upmove <= 0 && !pm->cmd.forwardmove && !pm->cmd.rightmove)

@@ -730,7 +730,7 @@ void ClientEvents( gentity_t *ent, int oldEventSequence ) {
 		case EV_FALL:
 		case EV_ROLL:
 			{
-				int delta = ent->s.eventParm;
+				int delta = client->ps.eventParms[ i & (MAX_PS_EVENTS-1) ];
 
 				if (ent->client && ent->client->ps.fallingToDeath)
 				{
@@ -1331,7 +1331,7 @@ void ClientThink_real( gentity_t *ent ) {
 	pm.pmove_fixed = pmove_fixed.integer | client->pers.pmoveFixed;
 	pm.pmove_msec = pmove_msec.integer;
 
-	pm.animations = client->animations;//NULL;
+	pm.animations = bgGlobalAnimations;//NULL;
 
 	pm.gametype = g_gametype.integer;
 
@@ -1392,6 +1392,122 @@ void ClientThink_real( gentity_t *ent ) {
 	}
 
 	Pmove (&pm);
+
+	switch(pm.cmd.generic_cmd)
+	{
+	case 0:
+		break;
+	case GENCMD_SABERSWITCH:
+		Cmd_ToggleSaber_f(ent);
+		break;
+	case GENCMD_ENGAGE_DUEL:
+		Cmd_EngageDuel_f(ent);
+		break;
+	case GENCMD_FORCE_HEAL:
+		ForceHeal(ent);
+		break;
+	case GENCMD_FORCE_SPEED:
+		ForceSpeed(ent, 0);
+		break;
+	case GENCMD_FORCE_THROW:
+		ForceThrow(ent, qfalse);
+		break;
+	case GENCMD_FORCE_PULL:
+		ForceThrow(ent, qtrue);
+		break;
+	case GENCMD_FORCE_DISTRACT:
+		ForceTelepathy(ent);
+		break;
+	case GENCMD_FORCE_RAGE:
+		ForceRage(ent);
+		break;
+	case GENCMD_FORCE_PROTECT:
+		ForceProtect(ent);
+		break;
+	case GENCMD_FORCE_ABSORB:
+		ForceAbsorb(ent);
+		break;
+	case GENCMD_FORCE_HEALOTHER:
+		ForceTeamHeal(ent);
+		break;
+	case GENCMD_FORCE_FORCEPOWEROTHER:
+		ForceTeamForceReplenish(ent);
+		break;
+	case GENCMD_FORCE_SEEING:
+		ForceSeeing(ent);
+		break;
+	case GENCMD_USE_SEEKER:
+		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_SEEKER)) &&
+			G_ItemUsable(&ent->client->ps, HI_SEEKER) )
+		{
+			ItemUse_Seeker(ent);
+			G_AddEvent(ent, EV_USE_ITEM0+HI_SEEKER, 0);
+			ent->client->ps.stats[STAT_HOLDABLE_ITEMS] &= ~(1 << HI_SEEKER);
+		}
+		break;
+	case GENCMD_USE_FIELD:
+		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_SHIELD)) &&
+			G_ItemUsable(&ent->client->ps, HI_SHIELD) )
+		{
+			ItemUse_Shield(ent);
+			G_AddEvent(ent, EV_USE_ITEM0+HI_SHIELD, 0);
+			ent->client->ps.stats[STAT_HOLDABLE_ITEMS] &= ~(1 << HI_SHIELD);
+		}
+		break;
+	case GENCMD_USE_BACTA:
+		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_MEDPAC)) &&
+			G_ItemUsable(&ent->client->ps, HI_MEDPAC) )
+		{
+			ItemUse_MedPack(ent);
+			G_AddEvent(ent, EV_USE_ITEM0+HI_MEDPAC, 0);
+			ent->client->ps.stats[STAT_HOLDABLE_ITEMS] &= ~(1 << HI_MEDPAC);
+		}
+		break;
+	case GENCMD_USE_ELECTROBINOCULARS:
+		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_BINOCULARS)) &&
+			G_ItemUsable(&ent->client->ps, HI_BINOCULARS) )
+		{
+			ItemUse_Binoculars(ent);
+			if (ent->client->ps.zoomMode == 0)
+			{
+				G_AddEvent(ent, EV_USE_ITEM0+HI_BINOCULARS, 1);
+			}
+			else
+			{
+				G_AddEvent(ent, EV_USE_ITEM0+HI_BINOCULARS, 2);
+			}
+		}
+		break;
+	case GENCMD_ZOOM:
+		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_BINOCULARS)) &&
+			G_ItemUsable(&ent->client->ps, HI_BINOCULARS) )
+		{
+			ItemUse_Binoculars(ent);
+			if (ent->client->ps.zoomMode == 0)
+			{
+				G_AddEvent(ent, EV_USE_ITEM0+HI_BINOCULARS, 1);
+			}
+			else
+			{
+				G_AddEvent(ent, EV_USE_ITEM0+HI_BINOCULARS, 2);
+			}
+		}
+		break;
+	case GENCMD_USE_SENTRY:
+		if ( (ent->client->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << HI_SENTRY_GUN)) &&
+			G_ItemUsable(&ent->client->ps, HI_SENTRY_GUN) )
+		{
+			ItemUse_Sentry(ent);
+			G_AddEvent(ent, EV_USE_ITEM0+HI_SENTRY_GUN, 0);
+			ent->client->ps.stats[STAT_HOLDABLE_ITEMS] &= ~(1 << HI_SENTRY_GUN);
+		}
+		break;
+	case GENCMD_SABERATTACKCYCLE:
+		Cmd_SaberAttackCycle_f(ent);
+		break;
+	default:
+		break;
+	}
 
 	// save results of pmove
 	if ( ent->client->ps.eventSequence != oldEventSequence ) {

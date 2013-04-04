@@ -22,8 +22,83 @@ static int				navCalcPathTime = 0;
 level_locals_t	level;
 game_import_t	gi;
 game_export_t	globals;
-
 gentity_t		g_entities[MAX_GENTITIES];
+unsigned int	g_entityInUseBits[MAX_GENTITIES/32];
+
+void ClearAllInUse(void)
+{
+	memset(g_entityInUseBits,0,sizeof(g_entityInUseBits));
+}
+
+void SetInUse(gentity_t *ent)
+{
+	assert(((unsigned int)ent)>=(unsigned int)g_entities);
+	assert(((unsigned int)ent)<=(unsigned int)(g_entities+MAX_GENTITIES-1));
+	unsigned int entNum=ent-g_entities;
+	g_entityInUseBits[entNum/32]|=((unsigned int)1)<<(entNum&0x1f);
+}
+
+void ClearInUse(gentity_t *ent)
+{
+	assert(((unsigned int)ent)>=(unsigned int)g_entities);
+	assert(((unsigned int)ent)<=(unsigned int)(g_entities+MAX_GENTITIES-1));
+	unsigned int entNum=ent-g_entities;
+	g_entityInUseBits[entNum/32]&=~(((unsigned int)1)<<(entNum&0x1f));
+}
+
+qboolean PInUse(unsigned int entNum)
+{
+	assert(entNum>=0);
+	assert(entNum<MAX_GENTITIES);
+	return((g_entityInUseBits[entNum/32]&(((unsigned int)1)<<(entNum&0x1f)))!=0);
+}
+
+qboolean PInUse2(gentity_t *ent)
+{
+	assert(((unsigned int)ent)>=(unsigned int)g_entities);
+	assert(((unsigned int)ent)<=(unsigned int)(g_entities+MAX_GENTITIES-1));
+	unsigned int entNum=ent-g_entities;
+	return((g_entityInUseBits[entNum/32]&(((unsigned int)1)<<(entNum&0x1f)))!=0);
+}
+
+void WriteInUseBits(void)
+{
+	gi.AppendToSaveGame('INUS', &g_entityInUseBits, sizeof(g_entityInUseBits) );
+}
+
+void ReadInUseBits(void)
+{
+	gi.ReadFromSaveGame('INUS', &g_entityInUseBits, sizeof(g_entityInUseBits));
+	// This is only temporary. Once I have converted all the ent->inuse refs,
+	// it won;t be needed -MW.
+	for(int i=0;i<MAX_GENTITIES;i++)
+	{
+		g_entities[i].inuse=PInUse(i);
+	}
+}
+
+void ValidateInUseBits(void)
+{
+	for(int i=0;i<MAX_GENTITIES;i++)
+	{
+		assert(g_entities[i].inuse==PInUse(i));
+	}
+}
+
+class CGEntCleaner
+{
+public:
+	~CGEntCleaner()
+	{
+		for (int i=0; i<MAX_GENTITIES; i++)
+		{
+			gi.G2API_CleanGhoul2Models(g_entities[i].ghoul2);
+		}
+	}
+};
+
+// CGEntCleaner TheGEntCleaner; I don't think we want this
+
 gentity_t		*player;
 
 cvar_t	*g_speed;
@@ -35,6 +110,7 @@ cvar_t	*g_developer;
 cvar_t	*g_timescale;
 cvar_t	*g_knockback;
 cvar_t	*g_dismemberment;
+cvar_t	*g_dismemberProbabilities;
 
 cvar_t	*g_inactivity;
 cvar_t	*g_debugMove;
@@ -326,9 +402,15 @@ void G_FindTeams( void ) {
 
 	c = 0;
 	c2 = 0;
-	for ( i=1, e=g_entities,i ; i < globals.num_entities ; i++,e++ ){
-		if (!e->inuse)
+//	for ( i=1, e=g_entities,i ; i < globals.num_entities ; i++,e++ )
+	for ( i=1 ; i < globals.num_entities ; i++ )
+	{
+//		if (!e->inuse)
+//			continue;
+		if(!PInUse(i))
 			continue;
+		e=&g_entities[i];
+
 		if (!e->team)
 			continue;
 		if (e->flags & FL_TEAMSLAVE)
@@ -336,10 +418,15 @@ void G_FindTeams( void ) {
 		e->teammaster = e;
 		c++;
 		c2++;
-		for (j=i+1, e2=e+1 ; j < globals.num_entities ; j++,e2++)
+//		for (j=i+1, e2=e+1 ; j < globals.num_entities ; j++,e2++)
+		for (j=i+1; j < globals.num_entities ; j++)
 		{
-			if (!e2->inuse)
+//			if (!e2->inuse)
+//				continue;
+			if(!PInUse(j))
 				continue;
+			
+			e2=&g_entities[j];
 			if (!e2->team)
 				continue;
 			if (e2->flags & FL_TEAMSLAVE)
@@ -384,25 +471,26 @@ void G_InitCvars( void ) {
 	// latched vars
 
 	// change anytime vars
-	g_speed = gi.cvar( "g_speed", "250", 0 );
-	g_gravity = gi.cvar( "g_gravity", "800", CVAR_USERINFO );	//using userinfo as savegame flag
+	g_speed = gi.cvar( "g_speed", "250", CVAR_CHEAT );
+	g_gravity = gi.cvar( "g_gravity", "800", CVAR_USERINFO|CVAR_CHEAT );	//using userinfo as savegame flag
 	g_sex = gi.cvar ("sex", "male", CVAR_USERINFO | CVAR_ARCHIVE );
 	g_spskill = gi.cvar ("g_spskill", "0", CVAR_ARCHIVE | CVAR_USERINFO);	//using userinfo as savegame flag
-	g_knockback = gi.cvar( "g_knockback", "1000", 0 );
+	g_knockback = gi.cvar( "g_knockback", "1000", CVAR_CHEAT );
 	g_dismemberment = gi.cvar ( "g_dismemberment", "3", CVAR_ARCHIVE );//0 = none, 1 = arms and hands, 2 = legs, 3 = waist and head, 4 = mega dismemberment
+	g_dismemberProbabilities = gi.cvar ( "g_dismemberProbabilities", "1", CVAR_ARCHIVE );//0 = ignore probabilities, 1 = use probabilities
 
 	g_inactivity = gi.cvar ("g_inactivity", "0", 0);
-	g_debugMove = gi.cvar ("g_debugMove", "0", 0);
-	g_debugDamage = gi.cvar ("g_debugDamage", "0", 0);
-	g_ICARUSDebug = gi.cvar( "g_ICARUSDebug", "0", 0 );
+	g_debugMove = gi.cvar ("g_debugMove", "0", CVAR_CHEAT );
+	g_debugDamage = gi.cvar ("g_debugDamage", "0", CVAR_CHEAT );
+	g_ICARUSDebug = gi.cvar( "g_ICARUSDebug", "0", CVAR_CHEAT );
 	g_timescale = gi.cvar( "timescale", "1", 0 );
 
-	g_subtitles = gi.cvar ("g_subtitles", "2", CVAR_ARCHIVE);
+	g_subtitles = gi.cvar( "g_subtitles", "2", CVAR_ARCHIVE );
 	com_buildScript = gi.cvar ("com_buildscript", "0", 0);
 
 	g_autoBlocking = gi.cvar( "autoBlocking", "1", 0 );
-	g_realisticSaberDamage = gi.cvar( "g_realisticSaberDamage", "0", 0 );
-	g_AIsurrender = gi.cvar( "g_AIsurrender", "0", 0 );
+	g_realisticSaberDamage = gi.cvar( "g_realisticSaberDamage", "0", CVAR_CHEAT );
+	g_AIsurrender = gi.cvar( "g_AIsurrender", "0", CVAR_CHEAT );
 }
 
 /*
@@ -459,7 +547,7 @@ void InitGame(  const char *mapname, const char *spawntarget, int checkSum, cons
 	// initialize all entities for this game
 	memset( g_entities, 0, MAX_GENTITIES * sizeof(g_entities[0]) );
 	globals.gentities = g_entities;
-
+	ClearAllInUse();
 	// initialize all clients for this game
 	level.maxclients = 1;
 	level.clients = (struct gclient_s *) G_Alloc( level.maxclients * sizeof(level.clients[0]) );
@@ -517,7 +605,7 @@ void InitGame(  const char *mapname, const char *spawntarget, int checkSum, cons
 	}
 
 	if ( navCalculatePaths )
-	{
+	{//not loaded - need to calc paths
 		navCalcPathTime = level.time + START_TIME_NAV_CALC;//make sure all ents are in and linked
 	}
 	else
@@ -529,6 +617,11 @@ void InitGame(  const char *mapname, const char *spawntarget, int checkSum, cons
 		//need to do this, because combatpoint waypoints aren't saved out...?
 		CP_FindCombatPointWaypoints();
 		navCalcPathTime = 0;
+
+		if ( g_eSavedGameJustLoaded == eNO )
+		{//clear all the failed edges unless we just loaded the game (which would include failed edges)
+			navigator.ClearAllFailedEdges();
+		}
 	}
 
 	player = &g_entities[0];
@@ -839,8 +932,8 @@ void G_Animate ( gentity_t *self )
 				gi.G2API_GetBoneAnimIndex( &self->ghoul2[self->playerModel], self->rootBone, 
 									(cg.time?cg.time:level.time), &frame, &junk, &junk, &junk, &junk2, NULL );
 
-				// this might be a frame off?
-				if ( frame == self->endFrame )
+				// It NEVER seems to get to what you'd think the last frame would be, so I'm doing this to try and catch when the animation has stopped
+				if ( frame + 1 >= self->endFrame )
 				{
 					self->svFlags &= ~SVF_ANIMATING;
 					Q3_TaskIDComplete( self, TID_ANIM_BOTH );
@@ -1016,10 +1109,11 @@ void G_CheckEndLevelTimers( gentity_t *ent )
 void NAV_CheckCalcPaths( void )
 {	
 	if ( navCalcPathTime && navCalcPathTime < level.time )
-	{
-		//Calculate all paths
+	{//first time we've ever loaded this map...
+		//clear all the failed edges
 		navigator.ClearAllFailedEdges();
 
+		//Calculate all paths
 		NAV_CalculatePaths( level.mapname, giMapChecksum );
 		
 		navigator.CalculatePaths();
@@ -1079,10 +1173,17 @@ void G_RunFrame( int levelTime ) {
 	navigator.ClearCheckedNodes();
 
 	//remember last waypoint, clear current one
-	for ( i = 0, ent = &g_entities[0]; i < globals.num_entities ; i++, ent++) 
+//	for ( i = 0, ent = &g_entities[0]; i < globals.num_entities ; i++, ent++) 
+	for ( i = 0; i < globals.num_entities ; i++) 
 	{
-		if ( !ent->inuse )
+//		if ( !ent->inuse )
+//			continue;
+
+		if(!PInUse(i))
 			continue;
+
+		ent = &g_entities[i];
+	
 		if ( ent->waypoint != WAYPOINT_NONE 
 			&& ent->noWaypointTime < level.time )
 		{
@@ -1103,10 +1204,16 @@ void G_RunFrame( int levelTime ) {
 	}
 
 	//Run the frame for all entities
-	for ( i = 0, ent = &g_entities[0]; i < globals.num_entities ; i++, ent++)
+//	for ( i = 0, ent = &g_entities[0]; i < globals.num_entities ; i++, ent++)
+	for ( i = 0; i < globals.num_entities ; i++) 
 	{
-		if ( !ent->inuse )
+//		if ( !ent->inuse )
+//			continue;
+
+		if(!PInUse(i))
 			continue;
+
+		ent = &g_entities[i];
 
 		// clear events that are too old
 		if ( level.time - ent->eventTime > EVENT_VALID_MSEC ) {
@@ -1154,7 +1261,10 @@ void G_RunFrame( int levelTime ) {
 Ghoul2 Insert Start
 */
 
-		gi.G2API_AnimateG2Models(ent->ghoul2, cg.time);
+		if (ent->ghoul2.IsValid())
+		{
+			gi.G2API_AnimateG2Models(ent->ghoul2, cg.time);
+		}
 /*
 Ghoul2 Insert End
 */
@@ -1271,6 +1381,13 @@ Ghoul2 Insert End
 	if ( delayedShutDown != 0 && delayedShutDown < level.time )
 	{
 		G_Error( "Game Errors. Scroll up the console to read them.\n" );
+	}
+#endif
+
+#ifdef _DEBUG
+	if(!(level.framenum&0xff))
+	{
+		ValidateInUseBits();
 	}
 #endif
 }

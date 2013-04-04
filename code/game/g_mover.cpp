@@ -385,7 +385,8 @@ qboolean G_MoverPush( gentity_t *pusher, vec3_t move, vec3_t amove, gentity_t **
 			}
 		}
 
-		if ( (pusher->spawnflags&2) && !Q_stricmp( "func_breakable", pusher->classname ) )
+		if ( ((pusher->spawnflags&2)&&!Q_stricmp("func_breakable",pusher->classname))
+			||((pusher->spawnflags&16)&&!Q_stricmp("func_static",pusher->classname)) )
 		{//ugh, avoid stricmp with a unique flag
 			//Damage on impact
 			if ( pusher->damage )
@@ -713,10 +714,11 @@ void Reached_BinaryMover( gentity_t *ent )
 		// play sound
 		G_PlayDoorSound( ent, BMS_END );
 
-		if(ent->wait < 0)
+		if ( ent->wait < 0 )
 		{//Done for good
 			ent->e_ThinkFunc = thinkF_NULL;
 			ent->nextthink = -1;
+			ent->e_UseFunc = useF_NULL;
 		}
 		else
 		{
@@ -826,15 +828,31 @@ void Use_BinaryMover_Go( gentity_t *ent )
 	// only partway down before reversing
 	if ( ent->moverState == MOVER_2TO1 ) 
 	{
-		total = ent->s.pos.trDuration;
-		partial = level.time - ent->s.pos.trTime;//ent->s.time;
-		ent->s.pos.trTime = level.time;//ent->s.time;
+		total = ent->s.pos.trDuration-50;
+		if ( ent->s.pos.trType == TR_NONLINEAR_STOP )
+		{
+			vec3_t curDelta;
+			VectorSubtract( ent->currentOrigin, ent->pos1, curDelta );
+			float fPartial = VectorLength( curDelta )/VectorLength( ent->s.pos.trDelta );
+			VectorScale( ent->s.pos.trDelta, fPartial, curDelta );
+			fPartial /= ent->s.pos.trDuration;
+			fPartial /= 0.001f;
+			fPartial = acos( fPartial );
+			fPartial = RAD2DEG( fPartial );
+			fPartial = (90.0f - fPartial)/90.0f*ent->s.pos.trDuration;
+			partial = total - floor( fPartial );
+		}
+		else
+		{
+			partial = level.time - ent->s.pos.trTime;//ent->s.time;
+		}
 
 		if ( partial > total ) {
 			partial = total;
 		}
+		ent->s.pos.trTime = level.time - ( total - partial );//ent->s.time;
 
-		MatchTeam( ent, MOVER_1TO2, level.time - ( total - partial ) );
+		MatchTeam( ent, MOVER_1TO2, ent->s.pos.trTime );
 
 		G_PlayDoorSound( ent, BMS_START );
 
@@ -844,15 +862,30 @@ void Use_BinaryMover_Go( gentity_t *ent )
 	// only partway up before reversing
 	if ( ent->moverState == MOVER_1TO2 ) 
 	{
-		total = ent->s.pos.trDuration;
-		partial = level.time - ent->s.pos.trTime;//ent->s.time;
-		ent->s.pos.trTime = level.time;//ent->s.time;
-
+		total = ent->s.pos.trDuration-50;
+		if ( ent->s.pos.trType == TR_NONLINEAR_STOP )
+		{
+			vec3_t curDelta;
+			VectorSubtract( ent->currentOrigin, ent->pos2, curDelta );
+			float fPartial = VectorLength( curDelta )/VectorLength( ent->s.pos.trDelta );
+			VectorScale( ent->s.pos.trDelta, fPartial, curDelta );
+			fPartial /= ent->s.pos.trDuration;
+			fPartial /= 0.001f;
+			fPartial = acos( fPartial );
+			fPartial = RAD2DEG( fPartial );
+			fPartial = (90.0f - fPartial)/90.0f*ent->s.pos.trDuration;
+			partial = total - floor( fPartial );
+		}
+		else
+		{
+			partial = level.time - ent->s.pos.trTime;//ent->s.time;
+		}
 		if ( partial > total ) {
 			partial = total;
 		}
 
-		MatchTeam( ent, MOVER_2TO1, level.time - ( total - partial ) );
+		ent->s.pos.trTime = level.time - ( total - partial );//ent->s.time;
+		MatchTeam( ent, MOVER_2TO1, ent->s.pos.trTime );
 
 		G_PlayDoorSound( ent, BMS_START );
 
@@ -894,6 +927,11 @@ void Use_BinaryMover( gentity_t *ent, gentity_t *other, gentity_t *activator )
 {
 	int	key;
 	char *text;
+
+	if ( ent->e_UseFunc == useF_NULL )
+	{//I cannot be used anymore, must be a door with a wait of -1 that's opened.
+		return;
+	}
 
 	// only the master should be used
 	if ( ent->flags & FL_TEAMSLAVE ) 
@@ -1008,7 +1046,7 @@ void InitMover( gentity_t *ent )
 				ent->rootBone = gi.G2API_GetBoneIndex( &ent->ghoul2[ent->playerModel], "model_root", qtrue );
 			}
 
-			ent->s.radius = 90;
+			ent->s.radius = 120;
 		}
 		else
 		{
@@ -1079,8 +1117,18 @@ Blocked_Door
 ================
 */
 void Blocked_Door( gentity_t *ent, gentity_t *other ) {
-	// remove anything other than a client
-	if ( !other->client ) {
+	
+	// remove anything other than a client -- no longer the case
+
+	// don't remove security keys or goodie keys
+	if ( (other->s.eType == ET_ITEM) && (other->item->giTag >= INV_GOODIE_KEY1 && other->item->giTag <= INV_SECURITY_KEY5) )
+	{
+		// should we be doing anything special if a key blocks it... move it somehow..?
+	}
+	// if your not a client, or your a dead client remove yourself...
+	else if ( other->s.number && (!other->client || (other->client && other->health <= 0 && other->contents == CONTENTS_CORPSE && !other->message)) )
+	{
+		// if an item or weapon can we do a little explosion..?
 		G_FreeEntity( other );
 		return;
 	}
@@ -1790,12 +1838,6 @@ void Reached_Train( gentity_t *ent ) {
 		ent->e_ThinkFunc = thinkF_Think_BeginMoving;
 		ent->s.pos.trType = TR_STATIONARY;
 	}
-
-	if ( ent->playerModel >= 0 && ent->spawnflags & 32 ) // loop...dunno, could support it on other things, but for now I need it for the glider...so...kill the flag
-	{
-		// this is a bad place for this
-		gi.G2API_SetBoneAnim( &ent->ghoul2[ent->playerModel], "model_root", ent->startFrame, ent->endFrame, BONE_ANIM_OVERRIDE_LOOP, 1, 0 ); // looping, always use time zero as a base?  yeah..yeah, I know
-	}
 }
 
 void TrainUse( gentity_t *ent, gentity_t *other, gentity_t *activator )
@@ -1896,7 +1938,7 @@ void SP_path_corner( gentity_t *self ) {
 }
 
 
-void func_train_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int hitLoc )
+void func_train_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, int dFlags, int hitLoc )
 {
 	if ( self->target3 )
 	{
@@ -1996,6 +2038,15 @@ void SP_func_train (gentity_t *self) {
 	// a chance to spawn
 	self->nextthink = level.time + START_TIME_LINK_ENTS;
 	self->e_ThinkFunc = thinkF_Think_SetupTrainTargets;
+
+
+	if ( self->playerModel >= 0 && self->spawnflags & 32 ) // loop...dunno, could support it on other things, but for now I need it for the glider...so...kill the flag
+	{
+		self->spawnflags &= ~32; // once only
+
+		gi.G2API_SetBoneAnim( &self->ghoul2[self->playerModel], "model_root", self->startFrame, self->endFrame, BONE_ANIM_OVERRIDE_LOOP, 1.0f + crandom() * 0.1f, 0 );
+		self->endFrame = 0; // don't allow it to do anything with the animation function in G_main
+	}
 }
 
 /*
@@ -2006,11 +2057,12 @@ STATIC
 ===============================================================================
 */
 
-/*QUAKED func_static (0 .5 .8) ? F_PUSH F_PULL SWITCH_SHADER CRUSHER x x PLAYER_USE INACTIVE BROADCAST
+/*QUAKED func_static (0 .5 .8) ? F_PUSH F_PULL SWITCH_SHADER CRUSHER IMPACT x PLAYER_USE INACTIVE BROADCAST
 F_PUSH		Will be used when you Force-Push it
 F_PULL		Will be used when you Force-Pull it
 SWITCH_SHADER	Toggle the shader anim frame between 1 and 2 when used
 CRUSHER		Make it do damage when it's blocked
+IMPACT		Make it do damage when it hits any entity
 PLAYER_USE	Player can use it with the use button
 INACTIVE	must be used by a target_activate before it can be used
 BROADCAST   don't ever use this, it's evil
@@ -2403,12 +2455,15 @@ void security_panel_use( gentity_t *self, gentity_t *other, gentity_t *activator
 
 	if ( INV_SecurityKeyCheck( activator, self->message ) )
 	{//congrats!
-		gi.SendServerCommand( NULL, "cp \"Your security key unlocked the door\"" );
+		gi.SendServerCommand( NULL, "cp @INGAME_SECURITY_KEY_UNLOCKEDDOOR" );
 		//use targets
 		G_UseTargets( self, activator );
 		//take key
 		INV_SecurityKeyTake( activator, self->message );
-		gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "l_arm_key", 0x00000002 );
+		if ( activator->ghoul2.size() )
+		{
+			gi.G2API_SetSurfaceOnOff( &activator->ghoul2[activator->playerModel], "l_arm_key", 0x00000002 );
+		}
 		//FIXME: maybe set frame on me to have key sticking out?
 		//self->s.frame = 1;
 		//play sound
@@ -2418,7 +2473,14 @@ void security_panel_use( gentity_t *self, gentity_t *other, gentity_t *activator
 	}
 	else
 	{//failure sound/display
-		gi.SendServerCommand( NULL, "cp \"You need a security key!\"" );
+		if ( self->message )
+		{//have a key, just the wrong one
+			gi.SendServerCommand( NULL, "cp @INGAME_INCORRECT_KEY" );
+		}
+		else
+		{//don't have a key at all
+			gi.SendServerCommand( NULL, "cp @INGAME_NEED_SECURITY_KEY" );
+		}
 		G_UseTargets2( self, activator, self->target2 );
 		//FIXME: change display?  Maybe shader animmap change?
 		//play sound

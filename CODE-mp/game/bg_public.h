@@ -71,6 +71,8 @@
 
 #define	CS_ITEMS				27		// string of 0's and 1's that tell which items are present
 
+#define CS_CLIENT_JEDIMASTER	28		// current jedi master
+
 // these are also in be_aas_def.h - argh (rjr)
 #define	CS_MODELS				32
 #define	CS_SOUNDS				(CS_MODELS+MAX_MODELS)
@@ -163,6 +165,8 @@ typedef struct animation_s {
 	int		flipflop;			// true if animation should flipflop back to base
 } animation_t;
 
+extern qboolean			BGPAFtextLoaded;
+extern animation_t		bgGlobalAnimations[MAX_TOTALANIMATIONS];
 
 // flip the togglebit every time an animation
 // changes so a restart of the same anim can be detected
@@ -362,6 +366,7 @@ typedef enum {
 	EFFECT_NONE = 0,
 	EFFECT_SMOKE,
 	EFFECT_EXPLOSION,
+	EFFECT_EXPLOSION_PAS,
 	EFFECT_SPARK_EXPLOSION,
 	EFFECT_EXPLOSION_TRIPMINE,
 	EFFECT_EXPLOSION_DETPACK,
@@ -525,6 +530,7 @@ typedef enum {
 	EV_MISSILE_STICK,		// eventParm will be the soundindex
 
 	EV_PLAY_EFFECT,
+	EV_PLAY_EFFECT_ID,
 
 	EV_MUTE_SOUND,
 	EV_GENERAL_SOUND,
@@ -973,6 +979,8 @@ qboolean BG_InDeathAnim( int anim );
 
 void BG_SaberStartTransAnim( int saberAnimLevel, int anim, float *animSpeed );
 
+void BG_ForcePowerDrain( playerState_t *ps, forcePowers_t forcePower, int overrideAmt );
+
 void	BG_EvaluateTrajectory( const trajectory_t *tr, int atTime, vec3_t result );
 void	BG_EvaluateTrajectoryDelta( const trajectory_t *tr, int atTime, vec3_t result );
 
@@ -988,7 +996,7 @@ void	BG_G2PlayerAngles( vec3_t startAngles, vec3_t legs[3], vec3_t legsAngles, i
 
 qboolean	BG_PlayerTouchesItem( playerState_t *ps, entityState_t *item, int atTime );
 
-qboolean	BG_ParseAnimationFile( const char *filename, animation_t *animations);
+qboolean	BG_ParseAnimationFile(const char *filename);
 
 int BG_GetItemIndexByTag(int tag, int type);
 

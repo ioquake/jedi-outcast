@@ -245,6 +245,8 @@ void CL_InitUI( void ) {
 	uii.R_AddLightToScene		= re.AddLightToScene;
 	uii.R_RenderScene			= re.RenderScene;
 
+	uii.R_ModelBounds			= re.ModelBounds;
+
 	uii.R_SetColor				= re.SetColor;
 	uii.R_DrawStretchPic		= re.DrawStretchPic;
 	uii.UpdateScreen			= SCR_UpdateScreen;
@@ -362,6 +364,9 @@ int CL_UISystemCalls( int *args )
 	case UI_CVAR_UPDATE:
 		Cvar_Update( (vmCvar_t *) VMA(1) );
 		return 0;
+
+	case UI_R_REGISTERMODEL:
+		return re.RegisterModel((const char *) VMA(1) );
 
 	case UI_R_REGISTERSHADERNOMIP:
 		return re.RegisterShaderNoMip((const char *) VMA(1) );

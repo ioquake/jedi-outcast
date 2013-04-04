@@ -243,6 +243,10 @@ static saber_colors_t TranslateSaberColor( const char *name )
 	{
 		return SABER_PURPLE;
 	}
+	if ( !Q_stricmp( name, "random" ) ) 
+	{
+		return ((saber_colors_t)(Q_irand( SABER_ORANGE, SABER_PURPLE )));
+	}
 	return SABER_BLUE;
 }
 
@@ -326,26 +330,24 @@ qboolean G_ParseAnimationFile( const char *af_filename )
 	float		fps;
 	int			skip;
 	char		text[40000];
-	fileHandle_t	f;
 	int			animNum;
 	animation_t	*animations = level.knownAnimFileSets[level.numKnownAnimFileSets].animations;
 
-	// load the file
-	len = gi.FS_FOpenFile( af_filename, &f, FS_READ );
+	len = gi.RE_GetAnimationCFG(af_filename, NULL, 0);
+	if (len <= 0)
+	{
+		return qfalse;
+	}
 	if ( len <= 0 ) 
 	{
 		return qfalse;
 	}
 	if ( len >= sizeof( text ) - 1 ) 
 	{
-		gi.FS_FCloseFile( f );
 		G_Error( "G_ParseAnimationFile: File %s too long\n (%d > %d)", af_filename, len, sizeof( text ) - 1);
 		return qfalse;
 	}
-
-	gi.FS_Read( text, len, f );
-	text[len] = 0;
-	gi.FS_FCloseFile( f );
+	len = gi.RE_GetAnimationCFG(af_filename, text, sizeof(text));
 
 	// parse the text
 	text_p = text;
@@ -493,13 +495,22 @@ void G_LoadAnimFileSet( gentity_t *ent, const char *modelName )
 	}
 	//get the location of the animation.cfg
 	GLAName = gi.G2API_GetGLAName( &ent->ghoul2[ent->playerModel] );
-	Q_strncpyz( animName, GLAName, sizeof( animName ), qtrue );
-	slash = strrchr( animName, '/' );
-	if ( slash )
+	//now load and parse the animation.cfg, animsounds.cfg and set the animFileIndex
+	if ( !GLAName) 
 	{
-		*slash = 0;
+		Com_Printf( S_COLOR_RED"Failed find animation file name models/players/%s/animation.cfg\n", modelName );
+		strippedName="broken";
 	}
-	strippedName = COM_SkipPath( animName );
+	else
+	{
+		Q_strncpyz( animName, GLAName, sizeof( animName ), qtrue );
+		slash = strrchr( animName, '/' );
+		if ( slash )
+		{
+			*slash = 0;
+		}
+		strippedName = COM_SkipPath( animName );
+	}
 
 	//now load and parse the animation.cfg, animsounds.cfg and set the animFileIndex
 	if ( !G_ParseAnimFileSet( modelName, strippedName, &ent->client->clientInfo.animFileIndex ) ) 
@@ -663,12 +674,13 @@ void NPC_Precache ( gentity_t *spawner )
 	char	sound[MAX_QPATH];
 	qboolean	md3Model = qfalse;
 	char	playerModel[MAX_QPATH];
-	char	*customSkin = NULL;
+	char	customSkin[MAX_QPATH];
 
 	if ( !Q_stricmp( "random", spawner->NPC_type ) )
 	{//sorry, can't precache a random just yet
 		return;
 	}
+	strcpy(customSkin,"default");
 
 	p = NPCParms;
 	COM_BeginParseSession();
@@ -782,7 +794,7 @@ void NPC_Precache ( gentity_t *spawner )
 			{
 				continue;
 			}
-			customSkin = G_NewString( value );			
+			Q_strncpyz( customSkin, value, sizeof(customSkin), qtrue);			
 			continue;
 		}
 
@@ -1005,7 +1017,7 @@ qboolean NPC_ParseParms( const char *NPCName, gentity_t *NPC )
 	char	*patch;
 	char	sound[MAX_QPATH];
 	char	playerModel[MAX_QPATH];
-	char	*customSkin = NULL;
+	char	customSkin[MAX_QPATH];
 	clientInfo_t	*ci = &NPC->client->clientInfo;
 	renderInfo_t	*ri = &NPC->client->renderInfo;
 	gNPCstats_t		*stats = NULL;
@@ -1013,6 +1025,7 @@ qboolean NPC_ParseParms( const char *NPCName, gentity_t *NPC )
 	char	surfOff[1024];
 	char	surfOn[1024];
 
+	strcpy(customSkin,"default");
 	if ( !NPCName || !NPCName[0]) 
 	{
 		NPCName = "Player";
@@ -1101,6 +1114,7 @@ qboolean NPC_ParseParms( const char *NPCName, gentity_t *NPC )
 
 	NPC->client->dismemberProbHead = 100;
 	NPC->client->dismemberProbArms = 100;
+	NPC->client->dismemberProbHands = 100;
 	NPC->client->dismemberProbWaist = 100;
 	NPC->client->dismemberProbLegs = 100;
 	
@@ -1235,7 +1249,7 @@ qboolean NPC_ParseParms( const char *NPCName, gentity_t *NPC )
 				{
 					continue;
 				}
-				customSkin = G_NewString( value );
+				Q_strncpyz( customSkin, value, sizeof(customSkin), qtrue);			
 				continue;
 			}
 
@@ -1839,6 +1853,24 @@ qboolean NPC_ParseParms( const char *NPCName, gentity_t *NPC )
 				if ( NPC->NPC )
 				{
 					NPC->client->dismemberProbArms = n;
+				}
+				continue;
+			}
+
+			// dismemberment probability for hands
+			if ( !Q_stricmp( token, "dismemberProbHands" ) ) {
+				if ( COM_ParseInt( &p, &n ) ) {
+					SkipRestOfLine( &p );
+					continue;
+				}
+				if ( n < 0 ) 
+				{
+					gi.Printf( "bad %s in NPC '%s'\n", token, NPCName );
+					continue;
+				}
+				if ( NPC->NPC )
+				{
+					NPC->client->dismemberProbHands = n;
 				}
 				continue;
 			}

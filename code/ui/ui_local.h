@@ -11,7 +11,8 @@
 #include "ui_shared.h"
 
 
-#define MAX_DEMOS 256
+#define	MAX_DEMOS				256
+#define MAX_DEFERRED_SCRIPT		1024
 
 //
 // ui_qmenu.c
@@ -115,6 +116,10 @@ typedef struct {
 	int previewMovie;
 
 	int modCount;
+
+	char		deferredScript [ MAX_DEFERRED_SCRIPT ];
+	itemDef_t*	deferredScriptItem;
+
 }	uiInfo_t;
 
 extern uiInfo_t uiInfo;
@@ -148,6 +153,8 @@ void			trap_Key_SetOverstrikeMode( qboolean state );
 void			trap_R_DrawStretchPic( float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader );
 void			trap_R_ModelBounds( clipHandle_t model, vec3_t mins, vec3_t maxs );
 void			trap_R_SetColor( const float *rgba );
+void			trap_R_ClearScene( void );
+void			trap_R_AddRefEntityToScene( const refEntity_t *re );
 void			trap_R_RenderScene( const refdef_t *fd );
 sfxHandle_t		trap_S_RegisterSound( const char *sample, qboolean compressed );
 void			trap_S_StartLocalSound( sfxHandle_t sfx, int channelNum );

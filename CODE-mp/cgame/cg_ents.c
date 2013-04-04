@@ -644,7 +644,7 @@ static void CG_General( centity_t *cent ) {
 					else
 					*/
 					{
-						anim = &ci->animations[ limb_anim ];
+						anim = &bgGlobalAnimations[ limb_anim ];
 					}
 				}
 
@@ -1140,9 +1140,20 @@ Ghoul2 Insert End
 		}
 		else
 		{ //neutral
-			ent.shaderRGBA[0] = 0;
-			ent.shaderRGBA[1] = wv*255;
-			ent.shaderRGBA[2] = wv*255;
+			if ((s1->modelindex+128) == FP_SABERATTACK ||
+				(s1->modelindex+128) == FP_SABERDEFEND ||
+				(s1->modelindex+128) == FP_SABERTHROW)
+			{ //saber power
+				ent.shaderRGBA[0] = 0;
+				ent.shaderRGBA[1] = wv*255;
+				ent.shaderRGBA[2] = 0;
+			}
+			else
+			{
+				ent.shaderRGBA[0] = 0;
+				ent.shaderRGBA[1] = wv*255;
+				ent.shaderRGBA[2] = wv*255;
+			}
 		}
 
 		ent.modelScale[0] = 1.1;
@@ -1175,8 +1186,8 @@ Ghoul2 Insert End
 
 		if (cent->currentState.trickedentindex3 == 1)
 		{ //dark
-			fxSArgs.sAlpha *= 2;
-			fxSArgs.eAlpha *= 2;
+			fxSArgs.sAlpha *= 3;
+			fxSArgs.eAlpha *= 3;
 			fxSArgs.shader = cgs.media.redSaberGlowShader;
 			trap_FX_AddSprite(&fxSArgs);
 		}
@@ -1193,12 +1204,24 @@ Ghoul2 Insert End
 		}
 		else
 		{ //neutral
-			fxSArgs.sAlpha *= 0.5;
-			fxSArgs.eAlpha *= 0.5;
-			fxSArgs.shader = cgs.media.greenSaberGlowShader;
-			trap_FX_AddSprite(&fxSArgs);
-			fxSArgs.shader = cgs.media.blueSaberGlowShader;
-			trap_FX_AddSprite(&fxSArgs);
+			if ((s1->modelindex+128) == FP_SABERATTACK ||
+				(s1->modelindex+128) == FP_SABERDEFEND ||
+				(s1->modelindex+128) == FP_SABERTHROW)
+			{ //saber power
+				fxSArgs.sAlpha *= 1.5;
+				fxSArgs.eAlpha *= 1.5;
+				fxSArgs.shader = cgs.media.greenSaberGlowShader;
+				trap_FX_AddSprite(&fxSArgs);
+			}
+			else
+			{
+				fxSArgs.sAlpha *= 0.5;
+				fxSArgs.eAlpha *= 0.5;
+				fxSArgs.shader = cgs.media.greenSaberGlowShader;
+				trap_FX_AddSprite(&fxSArgs);
+				fxSArgs.shader = cgs.media.blueSaberGlowShader;
+				trap_FX_AddSprite(&fxSArgs);
+			}
 		}
 	}
 

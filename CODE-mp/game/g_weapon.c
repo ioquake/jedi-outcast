@@ -432,6 +432,15 @@ static void WP_DisruptorMainFire( gentity_t *ent )
 
 		traceEnt = &g_entities[tr.entityNum];
 
+		if (traceEnt && traceEnt->client && traceEnt->client->ps.duelInProgress &&
+			traceEnt->client->ps.duelIndex != ent->s.number)
+		{
+			VectorCopy( tr.endpos, start );
+			ignore = tr.entityNum;
+			traces++;
+			continue;
+		}
+
 		if ( Jedi_DodgeEvasion( traceEnt, ent, &tr, G_GetHitLocation(traceEnt, tr.endpos) ) )
 		{//act like we didn't even hit him
 			VectorCopy( tr.endpos, start );
@@ -447,6 +456,7 @@ static void WP_DisruptorMainFire( gentity_t *ent )
 
 				tent = G_TempEntity( tr.endpos, EV_DISRUPTOR_MAIN_SHOT );
 				VectorCopy( muzzle, tent->s.origin2 );
+				tent->s.eventParm = ent->s.number;
 
 				te = G_TempEntity( tr.endpos, EV_SABER_BLOCK );
 				VectorCopy(tr.endpos, te->s.origin);
@@ -472,6 +482,7 @@ static void WP_DisruptorMainFire( gentity_t *ent )
 	// always render a shot beam, doing this the old way because I don't much feel like overriding the effect.
 	tent = G_TempEntity( tr.endpos, EV_DISRUPTOR_MAIN_SHOT );
 	VectorCopy( muzzle, tent->s.origin2 );
+	tent->s.eventParm = ent->s.number;
 
 	traceEnt = &g_entities[tr.entityNum];
 
@@ -582,6 +593,14 @@ void WP_DisruptorAltFire( gentity_t *ent )
 
 		traceEnt = &g_entities[tr.entityNum];
 
+		if (traceEnt && traceEnt->client && traceEnt->client->ps.duelInProgress &&
+			traceEnt->client->ps.duelIndex != ent->s.number)
+		{
+			skip = tr.entityNum;
+			VectorCopy(tr.endpos, start);
+			continue;
+		}
+
 		if (Jedi_DodgeEvasion(traceEnt, ent, &tr, G_GetHitLocation(traceEnt, tr.endpos)))
 		{
 			skip = tr.entityNum;
@@ -597,6 +616,7 @@ void WP_DisruptorAltFire( gentity_t *ent )
 				tent = G_TempEntity( tr.endpos, EV_DISRUPTOR_SNIPER_SHOT );
 				VectorCopy( muzzle, tent->s.origin2 );
 				tent->s.shouldtarget = fullCharge;
+				tent->s.eventParm = ent->s.number;
 
 				te = G_TempEntity( tr.endpos, EV_SABER_BLOCK );
 				VectorCopy(tr.endpos, te->s.origin);
@@ -615,6 +635,7 @@ void WP_DisruptorAltFire( gentity_t *ent )
 		tent = G_TempEntity( tr.endpos, EV_DISRUPTOR_SNIPER_SHOT );
 		VectorCopy( muzzle, tent->s.origin2 );
 		tent->s.shouldtarget = fullCharge;
+		tent->s.eventParm = ent->s.number;
 
 		// If the beam hits a skybox, etc. it would look foolish to add impact effects
 		if ( render_impact ) 
@@ -1627,6 +1648,8 @@ THERMAL DETONATOR
 #define TD_ALT_MIN_CHARGE	0.15f
 #define TD_ALT_TIME			3000
 
+void thermalThinkStandard(gentity_t *ent);
+
 //---------------------------------------------------------
 void thermalDetonatorExplode( gentity_t *ent )
 //---------------------------------------------------------
@@ -1635,7 +1658,9 @@ void thermalDetonatorExplode( gentity_t *ent )
 	{
 		G_Sound( ent, CHAN_VOICE, G_SoundIndex( "sound/weapons/thermal/warning.wav" ) );
 		ent->count = 1;
-		ent->nextthink = level.time + 500;
+		ent->bolt_Head = level.time + 500;
+		ent->think = thermalThinkStandard;
+		ent->nextthink = level.time;
 		ent->r.svFlags |= SVF_BROADCAST;//so everyone hears/sees the explosion?
 	}
 	else
@@ -1663,6 +1688,18 @@ void thermalDetonatorExplode( gentity_t *ent )
 	}
 }
 
+void thermalThinkStandard(gentity_t *ent)
+{
+	if (ent->bolt_Head < level.time)
+	{
+		ent->think = thermalDetonatorExplode;
+		ent->nextthink = level.time;
+		return;
+	}
+
+	G_RunObject(ent);
+	ent->nextthink = level.time;
+}
 
 //---------------------------------------------------------
 gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean altFire )
@@ -1677,8 +1714,12 @@ gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean altFire )
 
 	bolt = G_Spawn();
 	
+	bolt->physicsObject = qtrue;
+
 	bolt->classname = "thermal_detonator";
-	bolt->think = thermalDetonatorExplode;
+	bolt->think = thermalThinkStandard;
+	bolt->nextthink = level.time;
+	bolt->touch = touch_NULL;
 //	bolt->mass = 10;		// NOTENOTE No mass implementation yet
 
 	// How 'bout we give this thing a size...
@@ -1706,7 +1747,7 @@ gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean altFire )
 	}
 
 	// normal ones bounce, alt ones explode on impact
-	bolt->nextthink = level.time + TD_TIME; // How long 'til she blows
+	bolt->bolt_Head = level.time + TD_TIME; // How long 'til she blows
 	bolt->s.pos.trType = TR_GRAVITY;
 	bolt->parent = ent;
 	bolt->r.ownerNum = ent->s.number;
@@ -2141,6 +2182,9 @@ void charge_stick (gentity_t *self, gentity_t *other, trace_t *trace)
 		self->s.pos.trDelta[0] += vNor[0]*(tN[0]*(((float)Q_irand(1, 10))*0.1));
 		self->s.pos.trDelta[1] += vNor[1]*(tN[1]*(((float)Q_irand(1, 10))*0.1));
 		self->s.pos.trDelta[2] += vNor[1]*(tN[2]*(((float)Q_irand(1, 10))*0.1));
+
+		vectoangles(vNor, self->s.angles);
+		vectoangles(vNor, self->s.apos.trBase);
 		self->touch = charge_stick;
 		return;
 	}
@@ -2271,6 +2315,8 @@ void drop_charge (gentity_t *self, vec3_t start, vec3_t dir)
 	bolt->s.solid = 2;
 	bolt->r.contents = MASK_SHOT;
 	bolt->touch = charge_stick;
+
+	bolt->physicsObject = qtrue;
 
 	bolt->s.genericenemyindex = self->s.number+1024;
 	//rww - so client prediction knows we own this and won't hit it
@@ -2462,6 +2508,21 @@ void WP_FireStunBaton( gentity_t *ent, qboolean alt_fire )
 	}
 
 	tr_ent = &g_entities[tr.entityNum];
+
+	if (tr_ent && tr_ent->takedamage && tr_ent->client)
+	{
+		if (tr_ent->client->ps.duelInProgress &&
+			tr_ent->client->ps.duelIndex != ent->s.number)
+		{
+			return;
+		}
+
+		if (ent->client->ps.duelInProgress &&
+			ent->client->ps.duelIndex != tr_ent->s.number)
+		{
+			return;
+		}
+	}
 
 	if ( tr_ent && tr_ent->takedamage )
 	{

@@ -48,6 +48,126 @@ void IN_MLookUp( void ) {
 	}
 }
 
+void IN_GenCMD1( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_SABERSWITCH;
+}
+
+void IN_GenCMD2( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_ENGAGE_DUEL;
+}
+
+void IN_GenCMD3( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_HEAL;
+}
+
+void IN_GenCMD4( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_SPEED;
+}
+
+void IN_GenCMD5( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_PULL;
+}
+
+void IN_GenCMD6( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_DISTRACT;
+}
+
+void IN_GenCMD7( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_RAGE;
+}
+
+void IN_GenCMD8( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_PROTECT;
+}
+
+void IN_GenCMD9( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_ABSORB;
+}
+
+void IN_GenCMD10( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_HEALOTHER;
+}
+
+void IN_GenCMD11( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_FORCEPOWEROTHER;
+}
+
+void IN_GenCMD12( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_SEEING;
+}
+
+void IN_GenCMD13( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_USE_SEEKER;
+}
+
+void IN_GenCMD14( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_USE_FIELD;
+}
+
+void IN_GenCMD15( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_USE_BACTA;
+}
+
+void IN_GenCMD16( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_USE_ELECTROBINOCULARS;
+}
+
+void IN_GenCMD17( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_ZOOM;
+}
+
+void IN_GenCMD18( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_USE_SENTRY;
+}
+
+void IN_GenCMD19( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_SABERATTACKCYCLE;
+}
+
+void IN_GenCMD20( void )
+{
+	cl.gcmdSendValue = qtrue;
+	cl.gcmdValue = GENCMD_FORCE_THROW;
+}
+
 void IN_KeyDown( kbutton_t *b ) {
 	int		k;
 	char	*c;
@@ -298,7 +418,7 @@ void CL_KeyMove( usercmd_t *cmd ) {
 		cmd->buttons &= ~BUTTON_WALKING;
 	} else {
 		cmd->buttons |= BUTTON_WALKING;
-		movespeed = 64;
+		movespeed = 32;
 	}
 
 	forward = 0;
@@ -490,6 +610,16 @@ void CL_FinishMove( usercmd_t *cmd ) {
 	cmd->weapon = cl.cgameUserCmdValue;
 	cmd->forcesel = cl.cgameForceSelection;
 	cmd->invensel = cl.cgameInvenSelection;
+
+	if (cl.gcmdSendValue)
+	{
+		cmd->generic_cmd = cl.gcmdValue;
+		cl.gcmdSendValue = qfalse;
+	}
+	else
+	{
+		cmd->generic_cmd = 0;
+	}
 
 	// send the current server time so the amount of movement
 	// can be determined without allowing cheating
@@ -961,6 +1091,27 @@ void CL_InitInput( void ) {
 	Cmd_AddCommand ("-button14", IN_Button14Up);
 	Cmd_AddCommand ("+mlook", IN_MLookDown);
 	Cmd_AddCommand ("-mlook", IN_MLookUp);
+
+	Cmd_AddCommand ("sv_saberswitch", IN_GenCMD1);
+	Cmd_AddCommand ("engage_duel", IN_GenCMD2);
+	Cmd_AddCommand ("force_heal", IN_GenCMD3);
+	Cmd_AddCommand ("force_speed", IN_GenCMD4);
+	Cmd_AddCommand ("force_pull", IN_GenCMD5);
+	Cmd_AddCommand ("force_distract", IN_GenCMD6);
+	Cmd_AddCommand ("force_rage", IN_GenCMD7);
+	Cmd_AddCommand ("force_protect", IN_GenCMD8);
+	Cmd_AddCommand ("force_absorb", IN_GenCMD9);
+	Cmd_AddCommand ("force_healother", IN_GenCMD10);
+	Cmd_AddCommand ("force_forcepowerother", IN_GenCMD11);
+	Cmd_AddCommand ("force_seeing", IN_GenCMD12);
+	Cmd_AddCommand ("use_seeker", IN_GenCMD13);
+	Cmd_AddCommand ("use_field", IN_GenCMD14);
+	Cmd_AddCommand ("use_bacta", IN_GenCMD15);
+	Cmd_AddCommand ("use_electrobinoculars", IN_GenCMD16);
+	Cmd_AddCommand ("zoom", IN_GenCMD17);
+	Cmd_AddCommand ("use_sentry", IN_GenCMD18);
+	Cmd_AddCommand ("saberAttackCycle", IN_GenCMD19);
+	Cmd_AddCommand ("force_throw", IN_GenCMD20);
 
 	cl_nodelta = Cvar_Get ("cl_nodelta", "0", 0);
 	cl_debugMove = Cvar_Get ("cl_debugMove", "0", 0);

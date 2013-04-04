@@ -728,6 +728,13 @@ void NPC_BSDefault( void )
 		WeaponThink( qtrue );
 	}
 
+	if ( NPCInfo->scriptFlags & SCF_FORCED_MARCH )
+	{//being forced to walk
+		if( NPC->client->ps.torsoAnim != TORSO_SURRENDER_START )
+		{
+			NPC_SetAnim( NPC, SETANIM_TORSO, TORSO_SURRENDER_START, SETANIM_FLAG_HOLD );
+		}
+	}
 	//look for a new enemy if don't have one and are allowed to look, validate current enemy if have one
 	NPC_CheckEnemy( (NPCInfo->scriptFlags&SCF_LOOK_FOR_ENEMIES), qfalse );
 	if ( !NPC->enemy )
@@ -920,6 +927,10 @@ void NPC_BSDefault( void )
 			//move toward goal
 			NPC_MoveToGoal( qtrue );
 		}
+	}
+	else if ( !NPC->enemy && NPC->client->leader )
+	{
+		NPC_BSFollowLeader();
 	}
 
 	//update angles

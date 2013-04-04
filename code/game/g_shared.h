@@ -59,6 +59,7 @@ typedef enum //# taskID_e
 typedef enum //# material_e
 {
 	MAT_METAL = 0,	// scorched blue-grey metal
+	MAT_GLASS,		// not a real chunk type, just plays an effect with glass sprites
 	MAT_ELECTRICAL,	// sparks only
 	MAT_ELEC_METAL,	// sparks/electrical type metal
 	MAT_DRK_STONE,	// brown
@@ -69,12 +70,10 @@ typedef enum //# material_e
 	MAT_GREY_STONE,	// grey
 	MAT_METAL3,		// METAL and METAL2 chunks
 	MAT_CRATE1,		// yellow multi-colored crate chunks
-	MAT_CRATE2,		// read multi-colored crate chunks
 	MAT_GRATE1,		// grate chunks
 	MAT_ROPE,		// for yavin trial...no chunks, just wispy bits
+	MAT_CRATE2,		// read multi-colored crate chunks
 
-//NOTE: Anything after MAT_GLASS will take extra impact damage!
-	MAT_GLASS,		// not a real chunk type, just plays an effect with glass sprites
 	NUM_MATERIALS
 
 } material_t;
@@ -446,6 +445,7 @@ struct gclient_s {
 	int			respawnTime;		// can respawn when time > this, force after g_forcerespwan
 	int			inactivityTime;		// kick players when time > this
 	qboolean	inactivityWarning;	// qtrue if the five seoond warning has been given
+	int			idleTime;			// for playing idleAnims
 
 	int			airOutTime;
 
@@ -486,10 +486,11 @@ struct gclient_s {
 	saberTrail_t	saberTrail;
 
 	//dismember tracker
-	qboolean	dismemberable;
+	qboolean	dismembered;
 	char		dismemberProbLegs;	// probability of the legs being dismembered (located in NPC.cfg, 0 = never, 100 = always)
 	char		dismemberProbHead;  // probability of the head being dismembered (located in NPC.cfg, 0 = never, 100 = always)
 	char		dismemberProbArms;  // probability of the arms being dismembered (located in NPC.cfg, 0 = never, 100 = always)
+	char		dismemberProbHands; // probability of the hands being dismembered (located in NPC.cfg, 0 = never, 100 = always)
 	char		dismemberProbWaist; // probability of the waist being dismembered (located in NPC.cfg, 0 = never, 100 = always)
 
 	int			standheight;
@@ -734,6 +735,7 @@ Ghoul2 Insert End
 	int			thoracicBone;
 	int			upperLumbarBone;
 	int			lowerLumbarBone;
+	int			hipsBone;
 	int			motionBone;
 	int			rootBone;
 	int			footLBone;
@@ -880,6 +882,7 @@ enum
 	EDGE_PATH,
 	EDGE_BLOCKED,
 	EDGE_FAILED,
+	EDGE_MOVEDIR
 };
 
 enum

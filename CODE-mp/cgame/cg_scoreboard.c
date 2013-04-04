@@ -84,17 +84,17 @@ static void CG_DrawClientScore( int y, score_t *score, float *color, float fade,
 		}
 	} else if ( ci->powerups & ( 1 << PW_REDFLAG ) ) {
 		if( largeFormat ) {
-			CG_DrawFlagModel( iconx, y - ( 32 - BIGCHAR_HEIGHT ) / 2, 32, 32, TEAM_RED, qfalse );
+			CG_DrawFlagModel( iconx, y*1.63, 32, 32, TEAM_RED, qfalse );
 		}
 		else {
-			CG_DrawFlagModel( iconx, y, 16, 16, TEAM_RED, qfalse );
+			CG_DrawFlagModel( iconx, y*1.63, 32, 32, TEAM_RED, qfalse );
 		}
 	} else if ( ci->powerups & ( 1 << PW_BLUEFLAG ) ) {
 		if( largeFormat ) {
-			CG_DrawFlagModel( iconx, y - ( 32 - BIGCHAR_HEIGHT ) / 2, 32, 32, TEAM_BLUE, qfalse );
+			CG_DrawFlagModel( iconx, y*1.63, 32, 32, TEAM_BLUE, qfalse );
 		}
 		else {
-			CG_DrawFlagModel( iconx, y, 16, 16, TEAM_BLUE, qfalse );
+			CG_DrawFlagModel( iconx, y*1.63, 32, 32, TEAM_BLUE, qfalse );
 		}
 	} else {
 		/*
@@ -182,7 +182,7 @@ static void CG_DrawClientScore( int y, score_t *score, float *color, float fade,
 
 	// add the "ready" marker for intermission exiting
 	if ( cg.snap->ps.stats[ STAT_CLIENTS_READY ] & ( 1 << score->client ) ) {
-		CG_DrawBigStringColor( iconx, y, "READY", color );
+		CG_DrawBigStringColor( iconx-64, y+6, "READY", color );
 	}
 }
 
@@ -383,10 +383,12 @@ qboolean CG_DrawOldScoreboard( void ) {
 		}
 	}
 
+/*
 	// load any models that have been deferred
 	if ( ++cg.deferredPlayerLoading > 10 ) {
 		CG_LoadDeferredPlayers();
 	}
+*/
 
 	return qtrue;
 }

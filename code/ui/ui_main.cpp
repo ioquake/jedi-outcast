@@ -62,16 +62,15 @@ int				Text_Width(const char *text, float scale, int iFontIndex );
 void			_UI_DrawTopBottom(float x, float y, float w, float h, float size);
 void			_UI_DrawSides(float x, float y, float w, float h, float size);
 void			UI_CheckVid1Data(const char *menuTo,const char *warningMenuName);
-void			UI_GetVid1Data(void);
+void			UI_GetVideoSetup ( void );
+void			UI_UpdateVideoSetup ( void );
 void			UI_LoadMenus(const char *menuFile, qboolean reset);
 static void		UI_OwnerDraw(float x, float y, float w, float h, float text_x, float text_y, int ownerDraw, int ownerDrawFlags, int align, float special, float scale, vec4_t color, qhandle_t shader, int textStyle, int iFontIndex);
 static qboolean UI_OwnerDrawVisible(int flags);
 int				UI_OwnerDrawWidth(int ownerDraw, float scale);
 static void		UI_Update(const char *name);
 void			UI_UpdateCvars( void );
-void			UI_UpdateVid1Data(void);
 void			UI_ResetDefaults( void );
-void			UI_SetVid1Data(const char *menuName);
 
 
 static int gamecodetoui[] = {4,2,3,0,5,1,6};
@@ -171,7 +170,7 @@ void _UI_Refresh( int realtime )
 	{
 		if (uiInfo.uiDC.cursorShow == qtrue)
 		{
-			UI_DrawHandlePic( uiInfo.uiDC.cursorx, uiInfo.uiDC.cursory, 32, 32, uiInfo.uiDC.Assets.cursor);
+			UI_DrawHandlePic( uiInfo.uiDC.cursorx, uiInfo.uiDC.cursory, 48, 48, uiInfo.uiDC.Assets.cursor);
 		}
 	}
 }
@@ -387,10 +386,54 @@ static int CreateNextSaveName(char *fileName)
 
 /*
 ===============
+UI_DeferMenuScript
+
+Return true if the menu script should be deferred for later
+===============
+*/
+static qboolean UI_DeferMenuScript ( const char **args )
+{
+	const char* name;
+
+	// Whats the reason for being deferred?
+	if (!String_Parse(args, &name)) 
+	{
+		return qfalse;
+	}
+
+	// Handle the custom cases
+	if ( !Q_stricmp ( name, "VideoSetup" ) )
+	{
+		const char* warningMenuName;
+		qboolean	deferred;
+
+		// No warning menu specified
+		if ( !String_Parse(args, &warningMenuName) )
+		{
+			return qfalse;
+		}
+
+		// Defer if the video options were modified
+		deferred = Cvar_VariableValue ( "ui_r_modified" ) ? qtrue : qfalse;
+
+		if ( deferred )
+		{
+			// Open the warning menu
+			Menus_OpenByName(warningMenuName);
+		}
+
+		return deferred;
+	}
+
+	return qfalse;
+}
+
+/*
+===============
 UI_RunMenuScript
 ===============
 */
-static void UI_RunMenuScript(const char **args) 
+static qboolean UI_RunMenuScript ( const char **args ) 
 {
 	const char *name, *name2,*mapName,*menuName,*warningMenuName;
 
@@ -416,13 +459,11 @@ static void UI_RunMenuScript(const char **args)
 		}
 		else if (Q_stricmp(name, "saveControls") == 0) 
 		{
-			// FIXME BOB : is this correct?
-			Controls_SetConfig2(qtrue);
+			Controls_SetConfig(qtrue);
 		} 
 		else if (Q_stricmp(name, "loadControls") == 0) 
 		{
-			// FIXME BOB : is this correct?
-			Controls_GetConfig2();
+			Controls_GetConfig();
 		} 
 		else if (Q_stricmp(name, "clearError") == 0) 
 		{
@@ -517,18 +558,13 @@ static void UI_RunMenuScript(const char **args)
 			Menus_CloseAll();
 			Menus_ActivateByName("mainMenu");
 		} 
-		else if (Q_stricmp(name, "getvid1data") == 0) 
+		else if (Q_stricmp(name, "getvideosetup") == 0) 
 		{
-			UI_GetVid1Data();
+			UI_GetVideoSetup ( );
 		}
-		else if (Q_stricmp(name, "setvid1data") == 0) 
+		else if (Q_stricmp(name, "updatevideosetup") == 0)
 		{
-			String_Parse(args, &menuName);
-			UI_SetVid1Data(menuName);
-		}
-		else if (Q_stricmp(name, "updatevid1data") == 0) 
-		{
-			UI_UpdateVid1Data();
+			UI_UpdateVideoSetup ( );
 		}
 		else if (Q_stricmp(name, "nextDataPadForcePower") == 0)		
 		{
@@ -597,7 +633,7 @@ static void UI_RunMenuScript(const char **args)
 		} 
 		else if (Q_stricmp(name, "glCustom") == 0) 
 		{
-			Cvar_Set("ui_glCustom", "4");
+			Cvar_Set("ui_r_glCustom", "4");
 		} 
 		else if (Q_stricmp(name, "update") == 0) 
 		{
@@ -611,6 +647,8 @@ static void UI_RunMenuScript(const char **args)
 			}
 		}
 	}
+
+	return qtrue;
 }
 
 /*
@@ -797,8 +835,12 @@ void _UI_Init( qboolean inGameLoad )
 	uiInfo.uiDC.ownerDrawItem		= &UI_OwnerDraw;
 	uiInfo.uiDC.Print				= &Com_Printf; 
 	uiInfo.uiDC.registerSound		= &trap_S_RegisterSound;
+	uiInfo.uiDC.registerModel		= ui.R_RegisterModel;
+	uiInfo.uiDC.clearScene			= &trap_R_ClearScene;
+	uiInfo.uiDC.addRefEntityToScene = &trap_R_AddRefEntityToScene;
 	uiInfo.uiDC.renderScene			= &trap_R_RenderScene;
 	uiInfo.uiDC.runScript			= &UI_RunMenuScript;
+	uiInfo.uiDC.deferScript			= &UI_DeferMenuScript;
 	uiInfo.uiDC.setBinding			= &trap_Key_SetBinding;
 	uiInfo.uiDC.setColor			= &UI_SetColor;
 	uiInfo.uiDC.setCVar				= Cvar_Set;
@@ -1392,102 +1434,118 @@ static void UI_Update(const char *name)
 	{
 		Cvar_Set( "ui_Name", UI_Cvar_VariableString("name"));
  	} 
-	else if (Q_stricmp(name, "r_colorbits") == 0) 
+	else if (Q_stricmp(name, "ui_r_colorbits") == 0) 
 	{
 		switch (val) 
 		{
 			case 0:
-				Cvar_SetValue( "r_depthbits", 0 );
-				Cvar_SetValue( "r_stencilbits", 8 );
-			break;
+				Cvar_SetValue( "ui_r_depthbits", 0 );
+				Cvar_SetValue( "ui_r_stencilbits", 8 );
+				break;
+
 			case 16:
-				Cvar_SetValue( "r_depthbits", 16 );
-				Cvar_SetValue( "r_stencilbits", 0 );
-			break;
+				Cvar_SetValue( "ui_r_depthbits", 16 );
+				Cvar_SetValue( "ui_r_stencilbits", 0 );
+				break;
+
 			case 32:
-				Cvar_SetValue( "r_depthbits", 24 );
-				Cvar_SetValue( "r_stencilbits", 8 );
-			break;
+				Cvar_SetValue( "ui_r_depthbits", 24 );
+				Cvar_SetValue( "ui_r_stencilbits", 8 );
+				break;
 		}
-	} else if (Q_stricmp(name, "r_lodbias") == 0) {
-		switch (val) {
+	} 
+	else if (Q_stricmp(name, "ui_r_lodbias") == 0) 
+	{
+		switch (val) 
+		{
 			case 0:
-				Cvar_SetValue( "r_subdivisions", 4 );
-			break;
+				Cvar_SetValue( "ui_r_subdivisions", 4 );
+				break;
 			case 1:
-				Cvar_SetValue( "r_subdivisions", 12 );
-			break;
+				Cvar_SetValue( "ui_r_subdivisions", 12 );
+				break;
+
 			case 2:
-				Cvar_SetValue( "r_subdivisions", 20 );
-			break;
+				Cvar_SetValue( "ui_r_subdivisions", 20 );
+				break;
 		}
-	} else if (Q_stricmp(name, "ui_glCustom") == 0) {
-		switch (val) {
+	} 
+	else if (Q_stricmp(name, "ui_r_glCustom") == 0) 
+	{
+		switch (val) 
+		{
 			case 0:	// high quality
-				Cvar_SetValue( "r_fullScreen", 1 );
-				Cvar_SetValue( "r_subdivisions", 4 );
-				Cvar_SetValue( "r_vertexlight", 0 );
-				Cvar_SetValue( "r_lodbias", 0 );
-				Cvar_SetValue( "r_colorbits", 32 );
-				Cvar_SetValue( "r_depthbits", 24 );
-				Cvar_SetValue( "r_picmip", 0 );
-				Cvar_SetValue( "r_mode", 4 );
-				Cvar_SetValue( "r_texturebits", 32 );
-				Cvar_SetValue( "r_fastSky", 0 );
-				Cvar_SetValue( "r_inGameVideo", 1 );
-				Cvar_SetValue( "cg_shadows", 2 );//stencil
-				Cvar_Set( "r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
-			break;
+
+				Cvar_SetValue( "ui_r_fullScreen", 1 );
+				Cvar_SetValue( "ui_r_subdivisions", 4 );
+				Cvar_SetValue( "ui_r_lodbias", 0 );
+				Cvar_SetValue( "ui_r_colorbits", 32 );
+				Cvar_SetValue( "ui_r_depthbits", 24 );
+				Cvar_SetValue( "ui_r_picmip", 0 );
+				Cvar_SetValue( "ui_r_mode", 4 );
+				Cvar_SetValue( "ui_r_texturebits", 32 );
+				Cvar_SetValue( "ui_r_fastSky", 0 );
+				Cvar_SetValue( "ui_r_inGameVideo", 1 );
+				Cvar_SetValue( "ui_cg_shadows", 2 );//stencil
+				Cvar_Set( "ui_r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
+				break;
+
 			case 1: // normal 
-				Cvar_SetValue( "r_fullScreen", 1 );
-				Cvar_SetValue( "r_subdivisions", 12 );
-				Cvar_SetValue( "r_vertexlight", 0 );
-				Cvar_SetValue( "r_lodbias", 0 );
-				Cvar_SetValue( "r_colorbits", 0 );
-				Cvar_SetValue( "r_depthbits", 24 );
-				Cvar_SetValue( "r_picmip", 0 );
-				Cvar_SetValue( "r_mode", 3 );
-				Cvar_SetValue( "r_texturebits", 0 );
-				Cvar_SetValue( "r_fastSky", 0 );
-				Cvar_SetValue( "r_inGameVideo", 1 );
-				Cvar_Set( "r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
-				Cvar_SetValue( "cg_shadows", 2 );
-			break;
+				Cvar_SetValue( "ui_r_fullScreen", 1 );
+				Cvar_SetValue( "ui_r_subdivisions", 12 );
+				Cvar_SetValue( "ui_r_lodbias", 0 );
+				Cvar_SetValue( "ui_r_colorbits", 0 );
+				Cvar_SetValue( "ui_r_depthbits", 24 );
+				Cvar_SetValue( "ui_r_picmip", 0 );
+				Cvar_SetValue( "ui_r_mode", 3 );
+				Cvar_SetValue( "ui_r_texturebits", 0 );
+				Cvar_SetValue( "ui_r_fastSky", 0 );
+				Cvar_SetValue( "ui_r_inGameVideo", 1 );
+				Cvar_Set( "ui_r_texturemode", "GL_LINEAR_MIPMAP_LINEAR" );
+				Cvar_SetValue( "ui_cg_shadows", 2 );
+				break;
+
 			case 2: // fast
-				Cvar_SetValue( "r_fullScreen", 1 );
-				Cvar_SetValue( "r_subdivisions", 8 );
-				Cvar_SetValue( "r_vertexlight", 0 );
-				Cvar_SetValue( "r_lodbias", 1 );
-				Cvar_SetValue( "r_colorbits", 0 );
-				Cvar_SetValue( "r_depthbits", 0 );
-				Cvar_SetValue( "r_picmip", 1 );
-				Cvar_SetValue( "r_mode", 3 );
-				Cvar_SetValue( "r_texturebits", 0 );
-				Cvar_SetValue( "cg_shadows", 1 );
-				Cvar_SetValue( "r_fastSky", 1 );
-				Cvar_SetValue( "r_inGameVideo", 0 );
-				Cvar_Set( "r_texturemode", "GL_LINEAR_MIPMAP_NEAREST" );
-			break;
+
+				Cvar_SetValue( "ui_r_fullScreen", 1 );
+				Cvar_SetValue( "ui_r_subdivisions", 8 );
+				Cvar_SetValue( "ui_r_lodbias", 1 );
+				Cvar_SetValue( "ui_r_colorbits", 0 );
+				Cvar_SetValue( "ui_r_depthbits", 0 );
+				Cvar_SetValue( "ui_r_picmip", 1 );
+				Cvar_SetValue( "ui_r_mode", 3 );
+				Cvar_SetValue( "ui_r_texturebits", 0 );
+				Cvar_SetValue( "ui_cg_shadows", 1 );
+				Cvar_SetValue( "ui_r_fastSky", 1 );
+				Cvar_SetValue( "ui_r_inGameVideo", 0 );
+				Cvar_Set( "ui_r_texturemode", "GL_LINEAR_MIPMAP_NEAREST" );
+				break;
+
 			case 3: // fastest
-				Cvar_SetValue( "r_fullScreen", 1 );
-				Cvar_SetValue( "r_subdivisions", 20 );
-				Cvar_SetValue( "r_vertexlight", 1 );
-				Cvar_SetValue( "r_lodbias", 2 );
-				Cvar_SetValue( "r_colorbits", 16 );
-				Cvar_SetValue( "r_depthbits", 16 );
-				Cvar_SetValue( "r_mode", 3 );
-				Cvar_SetValue( "r_picmip", 2 );
-				Cvar_SetValue( "r_texturebits", 16 );
-				Cvar_SetValue( "cg_shadows", 0 );
-				Cvar_SetValue( "r_fastSky", 1 );
-				Cvar_SetValue( "r_inGameVideo", 0 );
-				Cvar_Set( "r_texturemode", "GL_LINEAR_MIPMAP_NEAREST" );
+
+				Cvar_SetValue( "ui_r_fullScreen", 1 );
+				Cvar_SetValue( "ui_r_subdivisions", 20 );
+				Cvar_SetValue( "ui_r_lodbias", 2 );
+				Cvar_SetValue( "ui_r_colorbits", 16 );
+				Cvar_SetValue( "ui_r_depthbits", 16 );
+				Cvar_SetValue( "ui_r_mode", 3 );
+				Cvar_SetValue( "ui_r_picmip", 2 );
+				Cvar_SetValue( "ui_r_texturebits", 16 );
+				Cvar_SetValue( "ui_cg_shadows", 0 );
+				Cvar_SetValue( "ui_r_fastSky", 1 );
+				Cvar_SetValue( "ui_r_inGameVideo", 0 );
+				Cvar_Set( "ui_r_texturemode", "GL_LINEAR_MIPMAP_NEAREST" );
 			break;
 		}
-	} else if (Q_stricmp(name, "ui_mousePitch") == 0) {
-		if (val == 0) {
+	} 
+	else if (Q_stricmp(name, "ui_mousePitch") == 0) 
+	{
+		if (val == 0) 
+		{
 			Cvar_SetValue( "m_pitch", 0.022f );
-		} else {
+		} 
+		else 
+		{
 			Cvar_SetValue( "m_pitch", -0.022f );
 		}
 	}
@@ -1620,7 +1678,7 @@ static void UI_DrawKeyBindStatus(rectDef_t *rect, float scale, vec4_t color, int
 	} 
 	else 
 	{
-		Text_Paint(rect->x, rect->y, scale, color, ui.SP_GetStringTextString("MENUS_ENTERTOCHANGE"), 0, textStyle, iFontIndex);
+//		Text_Paint(rect->x, rect->y, scale, color, ui.SP_GetStringTextString("MENUS_ENTERTOCHANGE"), 0, textStyle, iFontIndex);
 	}
 }
 
@@ -2006,7 +2064,7 @@ int UI_OwnerDrawWidth(int ownerDraw, float scale)
 		} 
 		else 
 		{
-			s = ui.SP_GetStringTextString("MENUS_ENTERTOCHANGE");
+//			s = ui.SP_GetStringTextString("MENUS_ENTERTOCHANGE");
 		}
 		break;
 	
@@ -2086,6 +2144,11 @@ UI_KeyEvent
 */
 void _UI_KeyEvent( int key, qboolean down ) 
 {
+/*	extern qboolean SwallowBadNumLockedKPKey( int iKey );
+	if (SwallowBadNumLockedKPKey(key)){
+		return;
+	}
+*/
 
 	if (Menu_Count() > 0) 
 	{
@@ -2153,11 +2216,27 @@ UI_DataPadMenu
 */
 void UI_DataPadMenu(void)
 {
+	int	newForcePower,newObjective;
+
 	ui.PrecacheScreenshot();
 
 	Menus_CloseByName("mainhud");
 
-	Menus_ActivateByName("datapadMissionMenu");
+	newForcePower = (int)trap_Cvar_VariableValue("cg_updatedDataPadForcePower");
+	newObjective = (int)trap_Cvar_VariableValue("cg_updatedDataPadObjective");
+
+	if (newForcePower)
+	{
+		Menus_ActivateByName("datapadForcePowersMenu");
+	}
+	else if (newObjective)
+	{
+		Menus_ActivateByName("datapadMissionMenu");
+	}
+	else
+	{
+		Menus_ActivateByName("datapadMissionMenu");
+	}
 	ui.Key_SetCatcher( KEYCATCH_UI );
 
 }
@@ -2246,325 +2325,86 @@ void Menu_Cache( void )
 
 /*
 =================
-UI_GetVid1Data
+UI_UpdateVideoSetup
+
+Copies the temporary user interface version of the video cvars into
+their real counterparts.  This is to create a interface which allows 
+you to discard your changes if you did something you didnt want
 =================
 */
-void UI_GetVid1Data(void)
+void UI_UpdateVideoSetup ( void )
 {
-	itemDef_t *gl_extensions,*video_mode,*color_depth,*fullscreen,*geometric_detail,
-		*texture_detail,*texture_quality,*texture_filter,*simple_shaders,*compressed_textures;
-	menuDef_t *menu;
-
-	menu = Menu_GetFocused();	// Get current menu (either video or ingame video, I would assume)
-
-	if (!menu)
-	{
-		Com_Printf(S_COLOR_YELLOW"WARNING: No videoMenu was found. Video data could not be set\n");
-		return;
-	}
-
-	gl_extensions = (itemDef_s *) Menu_FindItemByName(menu, "gl_extensions");
-	video_mode = (itemDef_s *) Menu_FindItemByName(menu, "video_mode");
-	color_depth = (itemDef_s *) Menu_FindItemByName(menu, "color_depth");
-	fullscreen = (itemDef_s *) Menu_FindItemByName(menu, "fullscreen");
-	geometric_detail = (itemDef_s *) Menu_FindItemByName(menu, "geometric_detail");
-	texture_detail = (itemDef_s *) Menu_FindItemByName(menu, "texture_detail");
-	texture_quality = (itemDef_s *) Menu_FindItemByName(menu, "texture_quality");
-	texture_filter = (itemDef_s *) Menu_FindItemByName(menu, "texture_filter");
-	simple_shaders = (itemDef_s *) Menu_FindItemByName(menu, "simple_shaders");
-	compressed_textures = (itemDef_s *) Menu_FindItemByName(menu, "compressed_textures");
-
-	if ((!gl_extensions) || (!video_mode) || (!color_depth) || 
-		(!fullscreen) || (!geometric_detail) || (!texture_detail) || (!texture_quality) || 
-		(!texture_filter) || (!simple_shaders) || (!compressed_textures))
-	{
-		Com_Printf(S_COLOR_YELLOW"WARNING: Unable to locate a video data1 field.\n");
-		return;
-	}
-
-	// GL Driver info
-	gl_extensions->value = ui.Cvar_VariableValue("r_allowExtensions");
-
-	// Video mode info
-	video_mode->value = ui.Cvar_VariableValue( "r_mode" ) - 3;
-	if ( video_mode->value < 0 )
-	{
-		video_mode->value = 1;
-	}
-
-	switch ( ( int ) ui.Cvar_VariableValue( "r_colorbits" ) )
-	{
-	default:
-	case 0:
-		color_depth->value = 0;
-		break;
-	case 16:
-		color_depth->value = 1;
-		break;
-	case 32:
-		color_depth->value = 2;
-		break;
-	}
-
-	// Get fullscreen cvar value
-	fullscreen->value = ui.Cvar_VariableValue("r_fullscreen");
-
-	// Get geometric detail
-	if ( ui.Cvar_VariableValue( "r_lodBias" ) > 0 )
-	{
-		if ( ui.Cvar_VariableValue( "r_subdivisions" ) >= 20 )
-		{
-			geometric_detail->value = 0;			// Setting LOW
-		}
-		else
-		{
-			geometric_detail->value = 1;			// Setting MED
-		}
-	}
-	else 
-	{
-		geometric_detail->value = 2;			// Setting HIGH
-	}
-
-
-	texture_detail->value = 3-ui.Cvar_VariableValue( "r_picmip");
-	if ( texture_detail->value < 0 )
-	{
-		texture_detail->value = 0;
-	}
-	else if ( texture_detail->value > 3 )
-	{
-		texture_detail->value = 3;
-	}
-
-	switch ( ( int ) ui.Cvar_VariableValue( "r_texturebits" ) )
-	{
-	default:
-	case 0:
-		texture_quality->value = 0;
-		break;
-	case 16:
-		texture_quality->value = 1;
-		break;
-	case 32:
-		texture_quality->value = 2;
-		break;
-	}
-
-	if ( !Q_stricmp( UI_Cvar_VariableString( "r_textureMode" ), "GL_LINEAR_MIPMAP_NEAREST" ) )
-	{
-		texture_filter->value = 0;
-	}
-	else
-	{
-		texture_filter->value = 1;
-	}
-
-	simple_shaders->value = ui.Cvar_VariableValue("r_detailtextures");
-
-	compressed_textures->value = ui.Cvar_VariableValue("r_ext_compress_textures");
-
-	if ( fullscreen->value == 0 )
-	{
-		color_depth->value = 0;
-		color_depth->window.flags |= WINDOW_INACTIVE;
-	}
-	else
-	{
-		color_depth->window.flags &= ~WINDOW_INACTIVE;
-	}
-}
-
-/*
-=================
-UI_SetVid1Data
-=================
-*/
-void UI_SetVid1Data(const char *menuName)
-{
-	itemDef_t *gl_extensions,*video_mode,*color_depth,*fullscreen,*geometric_detail,
-		*texture_detail,*texture_quality,*texture_filter,*simple_shaders,*compressed_textures;
-	menuDef_t *menu;
-
-	menu = Menus_FindByName(menuName);	// Get current menu (either video or ingame video, I would assume)
-
-	if (!menu)
-	{
-		Com_Printf(S_COLOR_YELLOW"WARNING: No videoMenu was found. Video data could not be set\n");
-		return;
-	}
-
-	gl_extensions = (itemDef_s *) Menu_FindItemByName(menu, "gl_extensions");
-	video_mode = (itemDef_s *) Menu_FindItemByName(menu, "video_mode");
-	color_depth = (itemDef_s *) Menu_FindItemByName(menu, "color_depth");
-	fullscreen = (itemDef_s *) Menu_FindItemByName(menu, "fullscreen");
-	geometric_detail = (itemDef_s *) Menu_FindItemByName(menu, "geometric_detail");
-	texture_detail = (itemDef_s *) Menu_FindItemByName(menu, "texture_detail");
-	texture_quality = (itemDef_s *) Menu_FindItemByName(menu, "texture_quality");
-	texture_filter = (itemDef_s *) Menu_FindItemByName(menu, "texture_filter");
-	simple_shaders = (itemDef_s *) Menu_FindItemByName(menu, "simple_shaders");
-	compressed_textures = (itemDef_s *) Menu_FindItemByName(menu, "compressed_textures");
-
-	if ((!gl_extensions) || (!video_mode) || (!color_depth) || 
-		(!fullscreen) || (!geometric_detail) || (!texture_detail) || (!texture_quality) || 
-		(!texture_filter) || (!simple_shaders) || (!compressed_textures))
-	{
-		Com_Printf(S_COLOR_YELLOW"WARNING: Unable to locate a video data1 field.\n");
-		return;
-	}
-
-
-	// Set GL Driver info
-	// GL Extensions
-	ui.Cvar_SetValue( "r_allowExtensions", gl_extensions->value );
-	
-	// Adding 3 because we don't show 320x200 , 400X300, or 512x384
-	// Video Resolution Setting
-	ui.Cvar_SetValue( "r_mode", (video_mode->value + 3) );
-
-	// Color Depth
-	switch ( color_depth->value )
-	{
-	case 0:
-		ui.Cvar_SetValue( "r_colorbits", 0 );
-		ui.Cvar_SetValue( "r_depthbits", 0 );
-		ui.Cvar_SetValue( "r_stencilbits", 8 );
-		break;
-	case 1:
-		ui.Cvar_SetValue( "r_colorbits", 16 );
-		ui.Cvar_SetValue( "r_depthbits", 16 );
-		ui.Cvar_SetValue( "r_stencilbits", 0 );
-		break;
-	case 2:
-		ui.Cvar_SetValue( "r_colorbits", 32 );
-		ui.Cvar_SetValue( "r_depthbits", 24 );
-		ui.Cvar_SetValue( "r_stencilbits", 8 );
-		break;
-	}
-	
-	// Set Fullscreen cvar
-	fullscreen = (itemDef_s *) Menu_FindItemByName(menu, "fullscreen");
-	if (fullscreen)
-	{
-		ui.Cvar_SetValue( "r_fullscreen", fullscreen->value );
-	}
-
-	// Geometric Detail
-	if ( geometric_detail->value == 2)		//	Setting is HIGH
-	{
-		ui.Cvar_SetValue( "r_lodBias", 0 );
-		ui.Cvar_SetValue( "r_subdivisions", 4 );
-	}
-	else if ( geometric_detail->value == 1)	//	Setting is MED
-	{
-		ui.Cvar_SetValue( "r_lodBias", 1 );
-		ui.Cvar_SetValue( "r_subdivisions", 12 );
-	}
-	else											//	Setting is LOW
-	{
-		ui.Cvar_SetValue( "r_lodBias", 1 );
-		ui.Cvar_SetValue( "r_subdivisions", 20 );
-	}
-
-	// Texture detail
-	ui.Cvar_SetValue( "r_picmip", 3 - texture_detail->value );
-
-	// Texture Quality
-	switch ( texture_quality->value  )
-	{
-	case 0:
-		ui.Cvar_SetValue( "r_texturebits", 0 );
-		break;
-	case 1:
-		ui.Cvar_SetValue( "r_texturebits", 16 );
-		break;
-	case 2:
-		ui.Cvar_SetValue( "r_texturebits", 32 );
-		break;
-	}
-
-	if ( texture_filter->value )
-	{
-		ui.Cvar_Set( "r_textureMode", "GL_LINEAR_MIPMAP_LINEAR" );
-	}
-	else
-	{
-		ui.Cvar_Set( "r_textureMode", "GL_LINEAR_MIPMAP_NEAREST" );
-	}
-
-	ui.Cvar_SetValue( "r_detailtextures", simple_shaders->value );
-	
-	ui.Cvar_SetValue( "r_ext_compress_textures", compressed_textures->value );
-
+	Cvar_Set ( "r_glCustom", Cvar_VariableString ( "ui_r_glCustom" ) );
+	Cvar_Set ( "r_mode", Cvar_VariableString ( "ui_r_mode" ) );
+	Cvar_Set ( "r_fullscreen", Cvar_VariableString ( "ui_r_fullscreen" ) );
+	Cvar_Set ( "r_colorbits", Cvar_VariableString ( "ui_r_colorbits" ) );
+	Cvar_Set ( "r_lodbias", Cvar_VariableString ( "ui_r_lodbias" ) );
+	Cvar_Set ( "r_picmip", Cvar_VariableString ( "ui_r_picmip" ) );
+	Cvar_Set ( "r_texturebits", Cvar_VariableString ( "ui_r_texturebits" ) );
+	Cvar_Set ( "r_texturemode", Cvar_VariableString ( "ui_r_texturemode" ) );
+	Cvar_Set ( "r_detailtextures", Cvar_VariableString ( "ui_r_detailtextures" ) );
+	Cvar_Set ( "r_ext_compress_textures", Cvar_VariableString ( "ui_r_ext_compress_textures" ) );
+	Cvar_Set ( "r_depthbits", Cvar_VariableString ( "ui_r_depthbits" ) );
+	Cvar_Set ( "r_subdivisions", Cvar_VariableString ( "ui_r_subdivisions" ) );
+	Cvar_Set ( "r_fastSky", Cvar_VariableString ( "ui_r_fastSky" ) );
+	Cvar_Set ( "r_inGameVideo", Cvar_VariableString ( "ui_r_inGameVideo" ) );
+	Cvar_Set ( "cg_shadows", Cvar_VariableString ( "ui_cg_shadows" ) );
+	Cvar_Set ( "ui_r_modified", "0" );
 
 	Cbuf_ExecuteText( EXEC_APPEND, "vid_restart;" );
-
 }
-
 
 /*
 =================
-UI_UpdateVid1Data
+UI_GetVideoSetup
+
+Retrieves the current actual video settings into the temporary user
+interface versions of the cvars.
 =================
 */
-void UI_UpdateVid1Data(void)
+void UI_GetVideoSetup ( void )
 {
-	itemDef_t *gl_extensions,*video_mode,*color_depth,*fullscreen,*geometric_detail,
-		*texture_detail,*texture_quality,*texture_filter,*compressed_textures;
-	menuDef_t *menu;
-
-	menu = Menu_GetFocused();	// Get current menu (either video or ingame video, I would assume)
-
-	if (!menu)
-	{
-		Com_Printf(S_COLOR_YELLOW"WARNING: No videoMenu was found. Video data could not be set\n");
-		return;
-	}
-
-	gl_extensions = (itemDef_s *) Menu_FindItemByName(menu, "gl_extensions");
-	video_mode = (itemDef_s *) Menu_FindItemByName(menu, "video_mode");
-	color_depth = (itemDef_s *) Menu_FindItemByName(menu, "color_depth");
-	fullscreen = (itemDef_s *) Menu_FindItemByName(menu, "fullscreen");
-	geometric_detail = (itemDef_s *) Menu_FindItemByName(menu, "geometric_detail");
-	texture_detail = (itemDef_s *) Menu_FindItemByName(menu, "texture_detail");
-	texture_quality = (itemDef_s *) Menu_FindItemByName(menu, "texture_quality");
-	texture_filter = (itemDef_s *) Menu_FindItemByName(menu, "texture_filter");
-	compressed_textures = (itemDef_s *) Menu_FindItemByName(menu, "compressed_textures");
-
-	if ((!gl_extensions) || (!video_mode) || (!color_depth) || 
-		(!fullscreen) || (!geometric_detail) || (!texture_detail) || (!texture_quality) || 
-		(!texture_filter)  || (!compressed_textures))
-	{
-		Com_Printf(S_COLOR_YELLOW"WARNING: Unable to locate a video data1 field.\n");
-		return;
-	}
-
-
-	if ( fullscreen->value == 0 )
-	{
-		color_depth->value = 0;
-		color_depth->window.flags |= WINDOW_INACTIVE;
-	}
-	else
-	{
-		color_depth->window.flags &= ~WINDOW_INACTIVE;
-	}
-
-	// If you change the extension enable, texture quality changes automatically
-	if ( gl_extensions->value == 0 )
-	{
-		if ( texture_quality->value == 0 )
-		{
-			texture_quality->value = 1;
-		}
-	}
+	// Make sure the cvars are registered as read only.
+	Cvar_Register ( NULL, "ui_r_glCustom",				"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_mode",					"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_fullscreen",			"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_colorbits",				"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_lodbias",				"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_picmip",				"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_texturebits",			"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_texturemode",			"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_detailtextures",		"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_ext_compress_textures",	"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_depthbits",				"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_subdivisions",			"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_fastSky",				"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_inGameVideo",			"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_cg_shadows",				"0", CVAR_ROM );
+	Cvar_Register ( NULL, "ui_r_modified",				"0", CVAR_ROM );
+	
+	// Copy over the real video cvars into their temporary counterparts
+	Cvar_Set ( "ui_r_glCustom", Cvar_VariableString ( "r_glCustom" ) );
+	Cvar_Set ( "ui_r_mode", Cvar_VariableString ( "r_mode" ) );
+	Cvar_Set ( "ui_r_colorbits", Cvar_VariableString ( "r_colorbits" ) );
+	Cvar_Set ( "ui_r_fullscreen", Cvar_VariableString ( "r_fullscreen" ) );
+	Cvar_Set ( "ui_r_lodbias", Cvar_VariableString ( "r_lodbias" ) );
+	Cvar_Set ( "ui_r_picmip", Cvar_VariableString ( "r_picmip" ) );
+	Cvar_Set ( "ui_r_texturebits", Cvar_VariableString ( "r_texturebits" ) );
+	Cvar_Set ( "ui_r_texturemode", Cvar_VariableString ( "r_texturemode" ) );
+	Cvar_Set ( "ui_r_ext_compress_textures", Cvar_VariableString ( "r_ext_compress_textures" ) );
+	Cvar_Set ( "ui_r_depthbits", Cvar_VariableString ( "r_depthbits" ) );
+	Cvar_Set ( "ui_r_subdivisions", Cvar_VariableString ( "r_subdivisions" ) );
+	Cvar_Set ( "ui_r_fastSky", Cvar_VariableString ( "r_fastSky" ) );
+	Cvar_Set ( "ui_r_inGameVideo", Cvar_VariableString ( "r_inGameVideo" ) );
+	Cvar_Set ( "ui_cg_shadows", Cvar_VariableString ( "cg_shadows" ) );
+	Cvar_Set ( "ui_r_modified", "0" );
 }
 
 char GoToMenu[1024];
 
 /*
 =================
-UI_CheckVid1Data
+Menus_SaveGoToMenu
 =================
 */
 void Menus_SaveGoToMenu(const char *menuTo)
@@ -2594,21 +2434,21 @@ void UI_CheckVid1Data(const char *menuTo,const char *warningMenuName)
 
 	if (!applyChanges)
 	{
-		Menus_CloseAll();
+//		Menus_CloseAll();
 		Menus_OpenByName(menuTo);
 		return;
 	}
 
 	if ((applyChanges->window.flags & WINDOW_VISIBLE))	// Is the APPLY CHANGES button active?
 	{
-		Menus_SaveGoToMenu(menuTo);							// Save menu you're going to
-		Menus_HideItems(menu->window.name);					// HIDE videMenu in case you have to come back
+//		Menus_SaveGoToMenu(menuTo);							// Save menu you're going to
+//		Menus_HideItems(menu->window.name);					// HIDE videMenu in case you have to come back
 		Menus_OpenByName(warningMenuName);				// Give warning
 	}
 	else
 	{
-		Menus_CloseAll();
-		Menus_OpenByName(menuTo);
+//		Menus_CloseAll();
+//		Menus_OpenByName(menuTo);
 	}
 }
 

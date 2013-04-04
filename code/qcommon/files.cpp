@@ -557,7 +557,9 @@ qboolean FS_CopyUserGenFile( const char *filename_src, const char *filename_dst 
 		Com_Printf( "FS_CopyUserGenFile: %s to %s\n", ospath_src, ospath_dst );
 	}
 
-	return FS_CopyFile( ospath_src, ospath_dst, qtrue );
+	remove(ospath_dst);
+	return (0 == rename (ospath_src, ospath_dst ));
+	//return FS_CopyFile( ospath_src, ospath_dst, qtrue );
 }
 
 /*

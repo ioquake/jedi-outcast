@@ -548,9 +548,20 @@ void NPC_BSFollowLeader (void)
 			NPCInfo->enemyCheckDebounceTime = level.time + Q_irand( 3000, 10000 );
 		}
 	}
-	else if ( NPC->client->ps.weapon && NPCInfo->enemyCheckDebounceTime < level.time )
+	else 
 	{
-		NPC_CheckEnemy( (NPCInfo->confusionTime<level.time||NPCInfo->tempBehavior!=BS_FOLLOW_LEADER), qfalse );//don't find new enemy if this is tempbehav
+		if ( NPC->enemy->health <= 0 || (NPC->enemy->flags&FL_NOTARGET) )
+		{
+			G_ClearEnemy( NPC );
+			if ( NPCInfo->enemyCheckDebounceTime > level.time + 1000 )
+			{
+				NPCInfo->enemyCheckDebounceTime = level.time + Q_irand( 1000, 2000 );
+			}
+		}
+		else if ( NPC->client->ps.weapon && NPCInfo->enemyCheckDebounceTime < level.time )
+		{
+			NPC_CheckEnemy( (NPCInfo->confusionTime<level.time||NPCInfo->tempBehavior!=BS_FOLLOW_LEADER), qfalse );//don't find new enemy if this is tempbehav
+		}
 	}
 	
 	if ( NPC->enemy && NPC->client->ps.weapon )
@@ -609,11 +620,12 @@ void NPC_BSFollowLeader (void)
 	}
 
 	//leader visible?
-	leaderVis = NPC_CheckVisibility( NPC->client->leader, CHECK_PVS|CHECK_360|CHECK_FOV|CHECK_SHOOT );
+	leaderVis = NPC_CheckVisibility( NPC->client->leader, CHECK_PVS|CHECK_360|CHECK_SHOOT );//			ent->e_UseFunc = useF_NULL;
+
 
 	//Follow leader, stay within visibility and a certain distance, maintain a distance from.
 	curAnim = NPC->client->ps.legsAnim;
-	if(curAnim != BOTH_ATTACK1 && curAnim != BOTH_ATTACK2 && curAnim != BOTH_ATTACK3 && curAnim != BOTH_MELEE1 && curAnim != BOTH_MELEE2 )
+	if ( curAnim != BOTH_ATTACK1 && curAnim != BOTH_ATTACK2 && curAnim != BOTH_ATTACK3 && curAnim != BOTH_MELEE1 && curAnim != BOTH_MELEE2 )
 	{//Don't move toward leader if we're in a full-body attack anim
 		//FIXME, use IdealDistance to determine if we need to close distance
 		float	followDist = 96.0f;//FIXME:  If there are enmies, make this larger?
@@ -1601,7 +1613,9 @@ void NPC_BSEmplaced( void )
 		enemyLOS = qtrue;
 
 		int hit = NPC_ShotEntity( NPC->enemy, impactPos );
-		if ( hit == NPC->enemy->s.number || (&g_entities[hit] != NULL && g_entities[hit].takedamage ) )
+		gentity_t *hitEnt = &g_entities[hit];
+
+		if ( hit == NPC->enemy->s.number || ( hitEnt && hitEnt->takedamage ) )
 		{//can hit enemy or will hit glass or other minor breakable (or in emplaced gun), so shoot anyway
 			enemyCS = qtrue;
 			NPC_AimAdjust( 2 );//adjust aim better longer we have clear shot at enemy

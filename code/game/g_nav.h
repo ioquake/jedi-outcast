@@ -37,7 +37,7 @@ void NAV_CalculateSquadPaths( const char *filename, int checksum );
 void NAV_ShowDebugInfo( void );
 
 int NAV_GetNearestNode( gentity_t *self, int lastNode );
-int NAV_TestBestNode( vec3_t position, int startID, int endID );
+extern int NAV_TestBestNode( gentity_t *self, int startID, int endID, qboolean failEdge );
 
 qboolean NPC_GetMoveDirection( vec3_t out, float *distance );
 void NPC_MoveToGoalExt( vec3_t point );

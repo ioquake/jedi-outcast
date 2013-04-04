@@ -133,6 +133,10 @@ void SV_Player_EndOfLevelSave(void)
 
 		Cvar_Set( "playerfpknown",	va( "%i", pState->forcePowersKnown));
 		Cvar_Set( "playerfp",		va( "%i", pState->forcePower));
+		Cvar_Set( "plsa",			va( "%i", pState->saberActive));
+		Cvar_Set( "plcs",			va( "%i", pState->saberAnimLevel));
+		Cvar_Set( "plle",			va( "%i", pState->saberLockEnemy));
+		Cvar_Set( "pllt",			va( "%i", pState->saberLockTime));
 	}
 }
 

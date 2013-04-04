@@ -173,6 +173,8 @@ void SP_misc_model_shield_power_converter( gentity_t *ent );
 void SP_misc_model_ammo_power_converter( gentity_t *ent );
 void SP_misc_model_health_power_converter( gentity_t *ent );
 
+void SP_fx_runner( gentity_t *ent );
+
 void SP_misc_holocron(gentity_t *ent);
 
 void SP_shooter_blaster( gentity_t *ent );
@@ -258,6 +260,8 @@ spawn_t	spawns[] = {
 	{"misc_model_shield_power_converter", SP_misc_model_shield_power_converter},
 	{"misc_model_ammo_power_converter", SP_misc_model_ammo_power_converter},
 	{"misc_model_health_power_converter", SP_misc_model_health_power_converter},
+
+	{"fx_runner", SP_fx_runner},
 
 	{"misc_holocron", SP_misc_holocron},
 
@@ -721,6 +725,7 @@ static	char *defaultStyles[32][3] =
 	}
 };
 
+void *precachedKyle = 0;
 
 /*QUAKED worldspawn (0 0 0) ?
 
@@ -738,6 +743,31 @@ void SP_worldspawn( void )
 	G_SpawnString( "classname", "", &text );
 	if ( Q_stricmp( text, "worldspawn" ) ) {
 		G_Error( "SP_worldspawn: The first entity isn't 'worldspawn'" );
+	}
+
+	//The server will precache the standard model and animations, so that there is no hit
+	//when the first client connnects.
+	if (!BGPAFtextLoaded)
+	{
+		BG_ParseAnimationFile("models/players/_humanoid/animation.cfg");
+	}
+
+	if (!precachedKyle)
+	{
+		trap_G2API_InitGhoul2Model(&precachedKyle, "models/players/kyle/model.glm", 0, 0, -20, 0, 0);
+	}
+
+	if (!g2SaberInstance)
+	{
+		trap_G2API_InitGhoul2Model(&g2SaberInstance, "models/weapons2/saber/saber_w.glm", 0, 0, -20, 0, 0);
+
+		if (g2SaberInstance)
+		{
+			// indicate we will be bolted to model 0 (ie the player) on bolt 0 (always the right hand) when we get copied
+			trap_G2API_SetBoltInfo(g2SaberInstance, 0, 0);
+			// now set up the gun bolt on it
+			trap_G2API_AddBolt(g2SaberInstance, 0, "*flash");
+		}
 	}
 
 	// make some data visible to connecting client

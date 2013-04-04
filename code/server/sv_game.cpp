@@ -154,10 +154,11 @@ qboolean SV_inPVS (const vec3_t p1, const vec3_t p2)
 	int		cluster;
 	int		area1, area2;
 	byte	*mask;
-	int		start, end;
+	int		start=0;
 
-	start = Sys_Milliseconds ();
-
+	if ( com_speeds->integer ) {
+		start = Sys_Milliseconds ();
+	}
 	leafnum = CM_PointLeafnum (p1);
 	cluster = CM_LeafCluster (leafnum);
 	area1 = CM_LeafArea (leafnum);
@@ -168,20 +169,21 @@ qboolean SV_inPVS (const vec3_t p1, const vec3_t p2)
 	area2 = CM_LeafArea (leafnum);
 	if ( mask && (!(mask[cluster>>3] & (1<<(cluster&7)) ) ) )
 	{
-		end = Sys_Milliseconds ();
-		timeInPVSCheck += end - start;
+		if ( com_speeds->integer ) {
+			timeInPVSCheck += Sys_Milliseconds () - start;
+		}
 		return qfalse;
 	}
 	
 	if (!CM_AreasConnected (area1, area2))
 	{
-		end = Sys_Milliseconds ();
-		timeInPVSCheck += end - start;
+		timeInPVSCheck += Sys_Milliseconds() - start;
 		return qfalse;		// a door blocks sight
 	}
 	
-	end = Sys_Milliseconds ();
-	timeInPVSCheck += end - start;
+	if ( com_speeds->integer ) {
+		timeInPVSCheck += Sys_Milliseconds() - start;
+	}
 	return qtrue;
 }
 
@@ -199,10 +201,12 @@ qboolean SV_inPVSIgnorePortals( const vec3_t p1, const vec3_t p2)
 	int		cluster;
 	int		area1, area2;
 	byte	*mask;
-	int		start, end;
+	int		start=0;
 
-	start = Sys_Milliseconds ();
-
+	if ( com_speeds->integer ) {
+		start = Sys_Milliseconds ();
+	}
+	
 	leafnum = CM_PointLeafnum (p1);
 	cluster = CM_LeafCluster (leafnum);
 	area1 = CM_LeafArea (leafnum);
@@ -214,13 +218,15 @@ qboolean SV_inPVSIgnorePortals( const vec3_t p1, const vec3_t p2)
 
 	if ( mask && (!(mask[cluster>>3] & (1<<(cluster&7)) ) ) )
 	{
-		end = Sys_Milliseconds ();
-		timeInPVSCheck += end - start;
+		if ( com_speeds->integer ) {
+			timeInPVSCheck += Sys_Milliseconds() - start;
+		}
 		return qfalse;
 	}
 
-	end = Sys_Milliseconds ();
-	timeInPVSCheck += end - start;
+	if ( com_speeds->integer ) {
+		timeInPVSCheck += Sys_Milliseconds() - start;
+	}
 	return qtrue;
 }
 
@@ -405,7 +411,6 @@ Ghoul2 Insert Start
 	import.G2API_GetBoneAnim = G2API_GetBoneAnim;
 	import.G2API_GetBoneAnimIndex = G2API_GetBoneAnimIndex;
 	import.G2API_AddSurface = G2API_AddSurface;
-	import.G2API_GetSurfaceOnOff = G2API_GetSurfaceOnOff;
 	import.G2API_HaveWeGhoul2Models =G2API_HaveWeGhoul2Models;
 	import.G2API_InitGhoul2Model = G2API_InitGhoul2Model;
 	import.G2API_IsPaused = G2API_IsPaused;
@@ -456,6 +461,7 @@ Ghoul2 Insert Start
 	import.G2API_GetSurfaceRenderStatus = G2API_GetSurfaceRenderStatus;
 
 	import.RE_RegisterSkin = RE_RegisterSkin;
+	import.RE_GetAnimationCFG = RE_GetAnimationCFG;
 
 /*
 Ghoul2 Insert End

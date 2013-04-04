@@ -10,35 +10,45 @@ int G_FindConfigstringIndex( const char *name, int start, int max, qboolean crea
 
 //----------------------------------------------------------
 
-/*QUAKED fx_runner (0 0 1) (-8 -8 -8) (8 8 8) STARTOFF ONESHOT
+/*QUAKED fx_runner (0 0 1) (-8 -8 -8) (8 8 8) STARTOFF ONESHOT DAMAGE
 Runs the specified effect, can also be targeted at an info_notnull to orient the effect
 
 	STARTOFF - effect starts off, toggles on/off when used
 	ONESHOT - effect fires only when used
+	DAMAGE - does radius damage around effect every "delay" milliseonds
 
 	"fxFile" - name of the effect file to play
 	"target" - direction to aim the effect in, otherwise defaults to up
 	"target2" - uses its target2 when the fx gets triggered
 	"delay"  - how often to call the effect, don't over-do this ( default 200 )
 	"random" - random amount of time to add to delay, ( default 0, 200 = 0ms to 200ms )
+	"splashRadius" - only works when damage is checked ( default 16 )
+	"splashDamage" - only works when damage is checked ( default 5 )
+
 */
 #define FX_RUNNER_RESERVED 0x800000
 
 //----------------------------------------------------------
 void fx_runner_think( gentity_t *ent )
 {
-	vec3_t	temp;
-	
+	vec3_t temp;
+
 	EvaluateTrajectory( &ent->s.pos, level.time, ent->currentOrigin );
-//	EvaluateTrajectory( &ent->s.apos, level.time, ent->currentAngles );
+	EvaluateTrajectory( &ent->s.apos, level.time, ent->currentAngles );
 
 	// call the effect with the desired position and orientation
 	G_AddEvent( ent, EV_PLAY_EFFECT, ent->fxID );
 
 	// Assume angles, we'll do a cross product on the other end to finish up
-	MakeNormalVectors( ent->s.angles, ent->s.angles2, temp ); // temp value gets chucked
+	AngleVectors( ent->currentAngles, ent->pos3, NULL, NULL );
+	MakeNormalVectors( ent->pos3, ent->pos4, temp ); // there IS a reason this is done...it's so that it doesn't break every effect in the game...
 
 	ent->nextthink = level.time + ent->delay + random() * ent->random;
+
+	if ( ent->spawnflags & 4 ) // damage
+	{
+		G_RadiusDamage( ent->currentOrigin, ent, ent->splashDamage, ent->splashRadius, ent, MOD_UNKNOWN );
+	}
 
 	if ( ent->target2 )
 	{
@@ -54,7 +64,7 @@ void fx_runner_use( gentity_t *self, gentity_t *other, gentity_t *activator )
 	{
 		// call the effect with the desired position and orientation, as a safety thing,
 		//	make sure we aren't thinking at all.
-		G_PlayEffect( self->fxID, self->s.origin, self->s.angles );
+		fx_runner_think( self );
 		self->nextthink = -1;
 
 		if ( self->target2 )
@@ -88,9 +98,6 @@ void fx_runner_link( gentity_t *ent )
 {
 	vec3_t	dir;
 
-	// Default effect orientation
-	VectorSet( dir, 0.0f, 0.0f, 1.0f );
-
 	if ( ent->target )
 	{
 		// try to use the target to override the orientation
@@ -109,12 +116,8 @@ void fx_runner_link( gentity_t *ent )
 			// Our target is valid so let's override the default UP vector
 			VectorSubtract( target->s.origin, ent->s.origin, dir );
 			VectorNormalize( dir );
+			vectoangles( dir, ent->s.angles );
 		}
-	}
-	else if ( ent->spawnflags & FX_RUNNER_RESERVED ) // can't try spawning from the spawn strings at this point because it's too late, use this instead
-	{
-		// already have angles, so use those
-		AngleVectors( ent->s.angles, dir, NULL, NULL );
 	}
 
 	// don't really do anything with this right now other than do a check to warn the designers if the target2 is bogus
@@ -131,8 +134,7 @@ void fx_runner_link( gentity_t *ent )
 		}
 	}
 
-	// NOTE: this really isn't an angle, but rather an orientation vector
-	G_SetAngles( ent, dir );
+	G_SetAngles( ent, ent->s.angles );
 
 	if ( ent->spawnflags & 1 || ent->spawnflags & 2 ) // STARTOFF || ONESHOT
 	{
@@ -153,9 +155,16 @@ void SP_fx_runner( gentity_t *ent )
 	// Get our defaults
 	G_SpawnInt( "delay", "200", &ent->delay );
 	G_SpawnFloat( "random", "0", &ent->random );
-	ent->spawnflags |= ( G_SpawnAngleHack( "angle", "0", ent->s.angles ) ? FX_RUNNER_RESERVED : 0 );
+	G_SpawnInt( "splashRadius", "16", &ent->splashRadius );
+	G_SpawnInt( "splashDamage", "5", &ent->splashDamage );
 
-	// make us useable if we can be targeted```
+	if ( !G_SpawnAngleHack( "angle", "0", ent->s.angles ))
+	{
+		// didn't have angles, so give us the default of up
+		VectorSet( ent->s.angles, -90, 0, 0 );
+	}
+
+	// make us useable if we can be targeted
 	if ( ent->targetname )
 	{
 		ent->e_UseFunc = useF_fx_runner_use;

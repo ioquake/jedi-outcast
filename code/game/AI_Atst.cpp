@@ -30,6 +30,7 @@ void NPC_ATST_Precache(void)
 	G_EffectIndex( "mouseexplosion1" );
 	G_EffectIndex( "smaller_chunks" );
 	G_EffectIndex( "blaster/smoke_bolton" );
+	G_EffectIndex( "droidexplosion1" );
 }
 /*
 -------------------------
@@ -112,9 +113,9 @@ ATST_Ranged
 void ATST_Ranged( qboolean visible, qboolean advance, qboolean altAttack )
 {
 
-	if ( TIMER_Done( NPC, "attackDelay" ) )	// Attack?
+	if ( TIMER_Done( NPC, "atkDelay" ) )	// Attack?
 	{
-		TIMER_Set( NPC, "attackDelay", Q_irand( 500, 3000 ) );
+		TIMER_Set( NPC, "atkDelay", Q_irand( 500, 3000 ) );
 
 		if (altAttack)
 		{
@@ -262,7 +263,10 @@ void NPC_BSATST_Default( void )
 {
 	if ( NPC->enemy )
 	{
-		NPCInfo->goalEntity = NPC->enemy;
+		if( (NPCInfo->scriptFlags & SCF_CHASE_ENEMIES) )
+		{
+			NPCInfo->goalEntity = NPC->enemy;
+		}
 		ATST_Attack();
 	}
 	else if ( NPCInfo->scriptFlags & SCF_LOOK_FOR_ENEMIES )

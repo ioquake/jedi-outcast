@@ -21,7 +21,7 @@ extern "C"
 
 void MC_Compress(const float mat[3][4],unsigned char * comp);
 void MC_UnCompress(float mat[3][4],const unsigned char * comp);
-void MC_UnCompressQuat(float mat[3][4],const unsigned short * pwIn);
+void MC_UnCompressQuat(float mat[3][4],const unsigned char * comp);
 
 
 #ifdef __cplusplus

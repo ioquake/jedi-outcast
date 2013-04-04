@@ -23,6 +23,7 @@ extern void Jedi_Cloak( gentity_t *self );
 
 //extern void FX_BorgTeleport( vec3_t org );
 
+extern void G_MatchPlayerWeapon( gentity_t *ent );
 extern void Q3_SetParm (int entID, int parmNum, const char *parmValue);
 extern team_t TranslateTeamName( const char *name );
 extern char	*TeamNames[TEAM_NUM_TEAMS];
@@ -52,6 +53,7 @@ extern void NPC_Howler_Precache( void );
 extern void NPC_ATST_Precache(void);
 extern void NPC_Sentry_Precache(void);
 extern void NPC_Mark1_Precache(void);
+extern void NPC_Mark2_Precache(void);
 extern void NPC_GalakMech_Precache( void );
 extern void NPC_GalakMech_Init( gentity_t *ent );
 
@@ -366,7 +368,7 @@ void NPC_SetMiscDefaultData( gentity_t *ent )
 	}
 
 
-	if ( ent->client->NPC_class == CLASS_ATST)
+	if ( ent->client->NPC_class == CLASS_ATST || ent->client->NPC_class == CLASS_MARK1 ) // chris/steve/kevin requested that the mark1 be shielded also
 	{
 		ent->flags |= (FL_SHIELDED|FL_NO_KNOCKBACK);
 	}
@@ -457,7 +459,7 @@ int NPC_WeaponsForTeam( team_t team, int spawnflags, const char *NPC_type )
 		{
 			return WP_NONE;
 		}
-		if ( Q_stricmp( "gran", NPC_type ) == 0 )
+		if ( Q_strncmp( "gran", NPC_type, 4 ) == 0 )
 		{
 			return (( 1 << WP_THERMAL)|( 1 << WP_MELEE));
 		}
@@ -820,6 +822,15 @@ void NPC_Begin (gentity_t *ent)
 	}
 	else if ( ent->NPC->stats.health )	// Was health supplied in NPC.cfg?
 	{
+		/*
+		if ( ent->client->NPC_class == CLASS_REBORN
+			|| ent->client->NPC_class == CLASS_SHADOWTROOPER 
+			|| ent->client->NPC_class == CLASS_TAVION
+			|| ent->client->NPC_class == CLASS_DESANN )
+		{//hmm, up Jedi
+			ent->NPC->stats.health += ent->NPC->stats.health/2 * g_spskill->integer;
+		}
+		*/
 		ent->max_health = client->pers.maxHealth = client->ps.stats[STAT_MAX_HEALTH] = ent->NPC->stats.health;
 	}
 	else
@@ -827,10 +838,27 @@ void NPC_Begin (gentity_t *ent)
 		ent->max_health = client->pers.maxHealth = client->ps.stats[STAT_MAX_HEALTH] = 100;
 	}
 
+	if ( ent->client->NPC_class == CLASS_STORMTROOPER
+		|| ent->client->NPC_class == CLASS_SWAMPTROOPER
+		|| ent->client->NPC_class == CLASS_IMPWORKER
+		|| !Q_stricmp( "rodian2", ent->NPC_type ) )
+	{//tweak yawspeed for these NPCs based on difficulty
+		switch ( g_spskill->integer )
+		{
+		case 0:
+			ent->NPC->stats.yawSpeed *= 0.75f;
+			break;
+		case 2:
+			ent->NPC->stats.yawSpeed *= 1.5f;
+			break;
+		}
+	}
+
 	ent->s.groundEntityNum = ENTITYNUM_NONE;
 	ent->mass = 10;
 	ent->takedamage = qtrue;
 	ent->inuse = qtrue;
+	SetInUse(ent);
 	ent->classname = "NPC";
 //	if ( ent->client->race == RACE_HOLOGRAM )
 //	{//can shoot through holograms, but not walk through them
@@ -974,6 +1002,12 @@ void NPC_Begin (gentity_t *ent)
 	_VectorCopy( client->pers.cmd_angles, ucmd.angles );
 	
 	ent->client->ps.groundEntityNum = ENTITYNUM_NONE;
+
+	if ( ent->NPC->aiFlags & NPCAI_MATCHPLAYERWEAPON )
+	{
+		G_MatchPlayerWeapon( ent );
+	}
+
 	ClientThink( ent->s.number, &ucmd );
 
 	gi.linkentity( ent );
@@ -1182,7 +1216,7 @@ void NPC_Spawn_Go( gentity_t *ent )
 
 	if ( ent->NPC_type )
 	{
-		if ( strstr( ent->NPC_type, "Kyle" ) != NULL || strstr( ent->NPC_type, "alexa" ) != NULL )
+		if ( !Q_stricmp( ent->NPC_type, "kyle" ) )
 		{
 			newent->NPC->aiFlags |= NPCAI_MATCHPLAYERWEAPON;
 		}
@@ -1825,7 +1859,7 @@ void SP_NPC_Prisoner( gentity_t *self)
 		}
 		else
 		{
-			self->NPC_type = "Prisoner";
+			self->NPC_type = "Prisoner2";
 		}
 	}
 
@@ -1843,7 +1877,14 @@ void SP_NPC_Rebel( gentity_t *self)
 {
 	if(!self->NPC_type)
 	{
-		self->NPC_type = "Rebel";
+		if ( Q_irand( 0, 1 ) )
+		{
+			self->NPC_type = "Rebel";
+		}
+		else
+		{
+			self->NPC_type = "Rebel2";
+		}
 	}
 
 	SP_NPC_spawner( self );
@@ -1962,7 +2003,14 @@ void SP_NPC_Gran( gentity_t *self)
 		}
 		else
 		{
-			self->NPC_type = "gran";
+			if ( Q_irand( 0, 1 ) )
+			{
+				self->NPC_type = "gran";
+			}
+			else
+			{
+				self->NPC_type = "gran2";
+			}
 		}
 	}
 
@@ -2106,7 +2154,18 @@ void SP_NPC_ImpWorker( gentity_t *self)
 {
 	if ( !self->NPC_type )
 	{
-		self->NPC_type = "ImpWorker";
+		if ( !Q_irand( 0, 2 ) )
+		{
+			self->NPC_type = "ImpWorker";
+		}
+		else if ( Q_irand( 0, 1 ) )
+		{
+			self->NPC_type = "ImpWorker2";
+		}
+		else
+		{
+			self->NPC_type = "ImpWorker3";
+		}
 	}
 
 	SP_NPC_spawner( self );
@@ -2123,7 +2182,14 @@ void SP_NPC_BespinCop( gentity_t *self)
 {
 	if ( !self->NPC_type )
 	{
-		self->NPC_type = "BespinCop";
+		if ( !Q_irand( 0, 1 ) )
+		{
+			self->NPC_type = "BespinCop";
+		}
+		else
+		{
+			self->NPC_type = "BespinCop2";
+		}
 	}
 
 	SP_NPC_spawner( self );
@@ -2407,6 +2473,7 @@ void SP_NPC_Droid_Mark2( gentity_t *self)
 
 	SP_NPC_spawner( self );
 
+	NPC_Mark2_Precache();
 	RegisterItem( FindItemForAmmo( AMMO_BLASTER ));
 	RegisterItem( FindItemForAmmo( 	AMMO_METAL_BOLTS));
 }
@@ -2684,6 +2751,10 @@ static void NPC_Spawn_f(void)
 	{
 		NPC_Mark1_Precache();
 	}
+	else if ( !Q_stricmp( "mark2", NPCspawner->NPC_type))
+	{
+		NPC_Mark2_Precache();
+	}
 	else if ( !Q_stricmp( "interrogator", NPCspawner->NPC_type))
 	{
 		NPC_Interrogator_Precache(NULL);
@@ -2712,6 +2783,11 @@ static void NPC_Spawn_f(void)
 	{
 		NPC_Howler_Precache();
 	}
+	else if ( !Q_stricmp( "sentry", NPCspawner->NPC_type ))
+	{
+		NPC_Sentry_Precache();
+	}
+
 
 	NPC_Spawn (NPCspawner, NPCspawner, NPCspawner);
 }

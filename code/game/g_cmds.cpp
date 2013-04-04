@@ -615,11 +615,14 @@ void Cmd_Where_f( gentity_t *ent ) {
 		gi.Printf("usage: where classname\n");
 		return;
 	}
-	for (int i = 0; i < globals.num_entities; i++) {
-		check = &g_entities[i];
-		if(!check || !check->inuse) {
+	for (int i = 0; i < globals.num_entities; i++)
+	{
+		if(!PInUse(i))
 			continue;
-		}
+//		if(!check || !check->inuse) {
+//			continue;
+//		}
+		check = &g_entities[i];
 		if (!Q_stricmpn(s, check->classname, len) ) {
 			gi.SendServerCommand( ent-g_entities, "print \"%s %s\n\"", check->classname, vtos( check->s.pos.trBase ) );
 		}
@@ -973,9 +976,17 @@ void ClientCommand( int clientNum ) {
 	else if (Q_stricmp (cmd, "notarget") == 0)
 		Cmd_Notarget_f (ent);
 	else if (Q_stricmp (cmd, "noclip") == 0)
+	{
 		Cmd_Noclip_f (ent);
+	}
 	else if (Q_stricmp (cmd, "kill") == 0)
+	{
+		if ( !CheatsOk( ent ) )
+		{
+			return;
+		}
 		Cmd_Kill_f (ent);
+	}
 	else if (Q_stricmp (cmd, "levelshot") == 0)
 		Cmd_LevelShot_f (ent);
 	else if (Q_stricmp (cmd, "where") == 0)
@@ -1007,7 +1018,12 @@ void ClientCommand( int clientNum ) {
 	else if (Q_stricmp (cmd, "fly_xwing") == 0)
 		G_PilotXWing( ent );
 	else if (Q_stricmp (cmd, "drive_atst") == 0)
-		G_DriveATST( ent, NULL );
+	{
+		if ( CheatsOk( ent ) )
+		{
+			G_DriveATST( ent, NULL );
+		}
+	}
 	else if (Q_stricmp (cmd, "thereisnospoon") == 0)
 		G_StartMatrixEffect( ent );
 	else if (Q_stricmp (cmd, "use_electrobinoculars") == 0)

@@ -515,8 +515,6 @@ typedef struct {
 	
 	qhandle_t		modelIcon;
 
-	animation_t		animations[MAX_TOTALANIMATIONS];
-
 	qhandle_t		bolt_rhand;
 	qhandle_t		bolt_lhand;
 
@@ -530,6 +528,9 @@ typedef struct {
 	int				saberHitWallSoundDebounceTime;
 
 	sfxHandle_t		sounds[MAX_CUSTOM_SOUNDS];
+
+	int				legsAnim;
+	int				torsoAnim;
 } clientInfo_t;
 
 
@@ -648,6 +649,8 @@ typedef struct {
 //	snapshot_t	activeSnapshots[2];
 
 	float		frameInterpolation;	// (float)( cg.time - cg.frame->serverTime ) / (cg.nextFrame->serverTime - cg.frame->serverTime)
+
+	qboolean	mMapChange;
 
 	qboolean	thisFrameTeleport;
 	qboolean	nextFrameTeleport;
@@ -839,6 +842,8 @@ typedef struct {
 	float			iconSelectTime;
 	float			invenSelectTime;
 	float			forceSelectTime;
+
+	vec3_t			lastFPFlashPoint;
 
 /*
 Ghoul2 Insert Start
@@ -1159,6 +1164,10 @@ typedef struct {
 	qhandle_t HUDLeftStatic;
 	qhandle_t HUDLeft;
 
+	qhandle_t	HUDSaberStyle1;
+	qhandle_t	HUDSaberStyle2;
+	qhandle_t	HUDSaberStyle3;
+
 	qhandle_t	HUDRightFrame;
 	qhandle_t	HUDInnerRight;
 
@@ -1301,6 +1310,7 @@ typedef struct {
 	int				levelStartTime;
 
 	int				scores1, scores2;		// from configstrings
+	int				jediMaster;
 	int				redflag, blueflag;		// flag status from configstrings
 	int				flagStatus;
 
@@ -1311,6 +1321,7 @@ typedef struct {
 	//
 	qhandle_t		gameModels[MAX_MODELS];
 	sfxHandle_t		gameSounds[MAX_SOUNDS];
+	fxHandle_t		gameEffects[MAX_FX];
 /*
 Ghoul2 Insert Start
 */
@@ -1383,6 +1394,7 @@ extern	vmCvar_t		cg_drawIcons;
 extern	vmCvar_t		cg_drawAmmoWarning;
 extern	vmCvar_t		cg_drawCrosshair;
 extern	vmCvar_t		cg_drawCrosshairNames;
+extern	vmCvar_t		cg_drawScores;
 extern	vmCvar_t		cg_dynamicCrosshair;
 extern	vmCvar_t		cg_drawRewards;
 extern	vmCvar_t		cg_drawTeamOverlay;
@@ -1441,7 +1453,7 @@ extern	vmCvar_t		cg_thirdPersonHorzOffset;
 
 extern	vmCvar_t		cg_stereoSeparation;
 extern	vmCvar_t		cg_lagometer;
-extern	vmCvar_t		cg_drawAttacker;
+extern	vmCvar_t		cg_drawEnemyInfo;
 extern	vmCvar_t		cg_synchronousClients;
 extern	vmCvar_t		cg_teamChatTime;
 extern	vmCvar_t		cg_teamChatHeight;
@@ -1685,6 +1697,8 @@ void TurretClientRun(centity_t *ent);
 //
 // cg_weapons.c
 //
+void CG_GetClientWeaponMuzzleBoltPoint(int clIndex, vec3_t to);
+
 void CG_NextWeapon_f( void );
 void CG_PrevWeapon_f( void );
 void CG_Weapon_f( void );
@@ -2175,10 +2189,3 @@ extern void *g2WeaponInstances[MAX_WEAPONS];
 /*
 Ghoul2 Insert End
 */
-
-enum {
-	FONT_NONE,
-	FONT_SMALL=1,
-	FONT_MEDIUM,
-	FONT_LARGE
-};

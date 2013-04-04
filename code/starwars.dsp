@@ -226,21 +226,17 @@ SOURCE=.\client\OpenAL\alut.h
 # PROP Default_Filter ""
 # Begin Source File
 
-SOURCE=.\smartheap\HA312W32.DLL
+SOURCE=.\SHDebug\HA312W32.DLL
 
 !IF  "$(CFG)" == "starwars - Win32 Release"
 
-# PROP Exclude_From_Build 1
-
 !ELSEIF  "$(CFG)" == "starwars - Win32 Debug"
-
-# PROP Exclude_From_Build 1
 
 !ELSEIF  "$(CFG)" == "starwars - Win32 FinalBuild"
 
-# PROP Exclude_From_Build 1
-
 !ELSEIF  "$(CFG)" == "starwars - Win32 SHDebug"
+
+# PROP Exclude_From_Build 1
 
 !ENDIF 
 
@@ -268,24 +264,7 @@ SOURCE=.\smartheap\HEAPAGNT.H
 # End Source File
 # Begin Source File
 
-SOURCE=.\smartheap\SHW32.DLL
-
-!IF  "$(CFG)" == "starwars - Win32 Release"
-
-# PROP Exclude_From_Build 1
-
-!ELSEIF  "$(CFG)" == "starwars - Win32 Debug"
-
-# PROP Exclude_From_Build 1
-
-!ELSEIF  "$(CFG)" == "starwars - Win32 FinalBuild"
-
-# PROP Exclude_From_Build 1
-
-!ELSEIF  "$(CFG)" == "starwars - Win32 SHDebug"
-
-!ENDIF 
-
+SOURCE=.\SHDebug\SHW32.DLL
 # End Source File
 # Begin Source File
 

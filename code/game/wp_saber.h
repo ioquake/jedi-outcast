@@ -52,7 +52,7 @@ extern void ForceSpeed( gentity_t *self, int duration = 0 );
 extern float forceSpeedValue[];
 extern float forceSpeedRangeMod[];
 extern float forceSpeedFOVMod[];
-#define FORCE_SPEED_DURATION 15000.0f
+#define FORCE_SPEED_DURATION 10000.0f
 
 typedef enum
 {
@@ -78,6 +78,21 @@ typedef enum
 
 extern void WP_InitForcePowers( gentity_t *ent );
 extern int WP_GetVelocityForForceJump( gentity_t *self, vec3_t jumpVel, usercmd_t *ucmd );
+
+typedef enum
+{
+	EVASION_NONE = 0,
+	EVASION_PARRY,
+	EVASION_DUCK_PARRY,
+	EVASION_JUMP_PARRY,
+	EVASION_DODGE,
+	EVASION_JUMP,
+	EVASION_DUCK,
+	EVASION_FJUMP,
+	EVASION_CARTWHEEL,
+	EVASION_OTHER,
+	NUM_EVASION_TYPES
+} evasionType_t;
 
 // Okay, here lies the much-dreaded Pat-created FSM movement chart...  Heretic II strikes again!
 // Why am I inflicting this on you?  Well, it's better than hardcoded states.

@@ -18,6 +18,76 @@ int PM_irand_timesync(int val1, int val2)
 
 	return i;
 }
+
+void BG_ForcePowerDrain( playerState_t *ps, forcePowers_t forcePower, int overrideAmt )
+{
+	//take away the power
+	int	drain = overrideAmt;
+
+	if (ps->powerups[PW_FORCE_BOON])
+	{
+		return;
+	}
+
+	if ( !drain )
+	{
+		drain = forcePowerNeeded[ps->fd.forcePowerLevel[forcePower]][forcePower];
+	}
+	if ( !drain )
+	{
+		return;
+	}
+
+	if (forcePower == FP_LEVITATION)
+	{ //special case
+		int jumpDrain = 0;
+
+		if (ps->velocity[2] > 250)
+		{
+			jumpDrain = 20;
+		}
+		else if (ps->velocity[2] > 200)
+		{
+			jumpDrain = 16;
+		}
+		else if (ps->velocity[2] > 150)
+		{
+			jumpDrain = 12;
+		}
+		else if (ps->velocity[2] > 100)
+		{
+			jumpDrain = 8;
+		}
+		else if (ps->velocity[2] > 50)
+		{
+			jumpDrain = 6;
+		}
+		else if (ps->velocity[2] > 0)
+		{
+			jumpDrain = 4;
+		}
+
+		if (jumpDrain)
+		{
+			jumpDrain /= ps->fd.forcePowerLevel[FP_LEVITATION];
+		}
+
+		ps->fd.forcePower -= jumpDrain;
+		if ( ps->fd.forcePower < 0 )
+		{
+			ps->fd.forcePower = 0;
+		}
+
+		return;
+	}
+
+	ps->fd.forcePower -= drain;
+	if ( ps->fd.forcePower < 0 )
+	{
+		ps->fd.forcePower = 0;
+	}
+}
+
 // Silly, but I'm replacing these macros so they are shorter!
 #define AFLAG_IDLE	(SETANIM_FLAG_NORMAL)
 #define AFLAG_ACTIVE (/*SETANIM_FLAG_OVERRIDE | */SETANIM_FLAG_HOLD | SETANIM_FLAG_HOLDLESS)
@@ -783,16 +853,20 @@ int PM_BrokenParryForParry( int move )
 	return LS_NONE;
 }
 
-#define BACK_STAB_DISTANCE 64
+#define BACK_STAB_DISTANCE 128//64
 
 qboolean PM_CanBackstab(void)
 {
 	trace_t tr;
+	vec3_t flatAng;
 	vec3_t fwd, back;
 	vec3_t trmins = {-15, -15, -8};
 	vec3_t trmaxs = {15, 15, 8};
 
-	AngleVectors(pm->ps->viewangles, fwd, 0, 0);
+	VectorCopy(pm->ps->viewangles, flatAng);
+	flatAng[PITCH] = 0;
+
+	AngleVectors(flatAng, fwd, 0, 0);
 
 	back[0] = pm->ps->origin[0] - fwd[0]*BACK_STAB_DISTANCE;
 	back[1] = pm->ps->origin[1] - fwd[1]*BACK_STAB_DISTANCE;
@@ -866,15 +940,19 @@ saberMoveName_t PM_SaberFlipOverAttackMove(trace_t *tr)
 	}
 }
 
-#define FLIPHACK_DISTANCE 128
+#define FLIPHACK_DISTANCE 200
 
 qboolean PM_SomeoneInFront(trace_t *tr)
 { //Also a very simplified version of the sp counterpart
+	vec3_t flatAng;
 	vec3_t fwd, back;
 	vec3_t trmins = {-15, -15, -8};
 	vec3_t trmaxs = {15, 15, 8};
 
-	AngleVectors(pm->ps->viewangles, fwd, 0, 0);
+	VectorCopy(pm->ps->viewangles, flatAng);
+	flatAng[PITCH] = 0;
+
+	AngleVectors(flatAng, fwd, 0, 0);
 
 	back[0] = pm->ps->origin[0] + fwd[0]*FLIPHACK_DISTANCE;
 	back[1] = pm->ps->origin[1] + fwd[1]*FLIPHACK_DISTANCE;
@@ -1184,7 +1262,7 @@ void PM_WeaponLightsaber(void)
 	if (pm->ps->weaponstate == WEAPON_READY ||
 		pm->ps->weaponstate == WEAPON_IDLE)
 	{
-		if (pm->ps->saberMove != LS_READY)
+		if (pm->ps->saberMove != LS_READY && pm->ps->weaponTime <= 0 && !pm->ps->saberBlocked)
 		{
 			PM_SetSaberMove( LS_READY );
 		}

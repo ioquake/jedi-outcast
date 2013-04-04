@@ -1792,7 +1792,7 @@ CRainSystem::CRainSystem(int maxRain) :
 	mMaxRain(maxRain),
 	mNextWindGust(0),
 	mRainHeight(5),
-	mAlpha(0.1f),
+	mAlpha(0.15f),
 	mWindAngle(1.0f),
 
 	mFadeAlpha(0.0f),
@@ -1865,7 +1865,6 @@ void CRainSystem::Init(void)
 	{
 		item->pos[0] = ri.flrand(0.0, mSpread[0]);
 		item->pos[1] = ri.flrand(0.0, mSpread[1]);
-		item->pos[2] = ri.flrand(-mSpread[2], mSpread[2]);
 		item->pos[2] = ri.flrand(-mSpread[2], 40);
 		item->velocity[0] = ri.flrand(mMinVelocity[0], mMaxVelocity[0]);
 		item->velocity[1] = ri.flrand(mMinVelocity[1], mMaxVelocity[1]);
@@ -1978,6 +1977,12 @@ void CRainSystem::Update(float elapseTime)
 	SParticle	*item;
 	vec3_t		windDifference;
 
+	if ( elapseTime < 0.0f )
+	{
+		// sanity check
+		elapseTime = 0.0f;
+	}
+
 	mWindChange--;
 
 	if (mWindChange < 0)
@@ -2030,11 +2035,10 @@ void CRainSystem::Update(float elapseTime)
 	{
 		VectorMA(item->pos, elapseTime, item->velocity);
 
-		if (item->pos[2] < -mSpread[2])
+		if (item->pos[2] < -mSpread[2] )
 		{
 			item->pos[0] = ri.flrand(0.0, mSpread[0]);
 			item->pos[1] = ri.flrand(0.0, mSpread[1]);
-			item->pos[2] = mSpread[2];
 			item->pos[2] = 40;
 
 			item->velocity[0] = ri.flrand(mMinVelocity[0], mMaxVelocity[0]);

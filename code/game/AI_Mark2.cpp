@@ -27,6 +27,17 @@ enum
 
 gentity_t *CreateMissile( vec3_t org, vec3_t dir, float vel, int life, gentity_t *owner, qboolean altFire = qfalse );
 
+void NPC_Mark2_Precache( void )
+{
+	G_EffectIndex( "small_chunks" );
+	G_EffectIndex( "droidexplosion1" );
+	G_EffectIndex( "mouseexplosion1" );
+	G_EffectIndex( "blaster/smoke_bolton" );
+	G_EffectIndex( "bryar/muzzle_flash" );
+	G_SoundIndex( "sound/chars/mark1/misc/shoot1.wav" );
+
+}
+
 /*
 -------------------------
 NPC_Mark2_Part_Explode
@@ -116,8 +127,6 @@ void Mark2_FireBlaster(qboolean advance)
 
 	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, muzzle1 );
 
-	G_PlayEffect( "blaster/muzzle_flash", muzzle1 );
-
 	if (NPC->health)
 	{
 		CalcEntitySpot( NPC->enemy, SPOT_HEAD, enemy_org1 );
@@ -129,6 +138,8 @@ void Mark2_FireBlaster(qboolean advance)
 	{
 		AngleVectors (NPC->currentAngles, forward, vright, up);
 	}
+
+	G_PlayEffect( "bryar/muzzle_flash", muzzle1, forward );
 
 	G_Sound( NPC, G_SoundIndex("sound/chars/mark1/misc/shoot1.wav"));
 

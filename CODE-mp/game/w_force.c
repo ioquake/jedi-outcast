@@ -441,9 +441,12 @@ validitycheck:
 			{
 				if (ent->client->ps.fd.forcePowersKnown & (1 << i))
 				{
-					ent->client->ps.fd.forcePowersKnown &= ~(1 << i);
-					ent->client->ps.fd.forcePowerLevel[i] = 0;
-					warnClientLimit = qtrue;
+					if (i != FP_SABERATTACK && i != FP_LEVITATION && i != FP_SABERDEFEND)
+					{
+						ent->client->ps.fd.forcePowersKnown &= ~(1 << i);
+						ent->client->ps.fd.forcePowerLevel[i] = 0;
+						warnClientLimit = qtrue;
+					}
 				}
 			}
 			i++;
@@ -499,12 +502,15 @@ validitycheck:
 
 			if (!(ent->r.svFlags & SVF_BOT) && g_gametype.integer != GT_TOURNAMENT)
 			{
-				//Make them a spectator so they can set their powerups up without being bothered.
-				ent->client->sess.sessionTeam = TEAM_SPECTATOR;
-				ent->client->sess.spectatorState = SPECTATOR_FREE;
-				ent->client->sess.spectatorClient = 0;
+				if (g_gametype.integer < GT_TEAM || !g_teamAutoJoin.integer)
+				{
+					//Make them a spectator so they can set their powerups up without being bothered.
+					ent->client->sess.sessionTeam = TEAM_SPECTATOR;
+					ent->client->sess.spectatorState = SPECTATOR_FREE;
+					ent->client->sess.spectatorClient = 0;
 
-				ent->client->pers.teamState.state = TEAM_BEGIN;
+					ent->client->pers.teamState.state = TEAM_BEGIN;
+				}
 			}
 		}
 		ent->client->sess.setForce = qtrue;
@@ -848,75 +854,6 @@ void WP_ForcePowerRegenerate( gentity_t *self, int overrideAmt )
 	}
 }
 
-void WP_ForcePowerDrain( gentity_t *self, forcePowers_t forcePower, int overrideAmt )
-{
-	//take away the power
-	int	drain = overrideAmt;
-
-	if (self->client->ps.powerups[PW_FORCE_BOON])
-	{
-		return;
-	}
-
-	if ( !drain )
-	{
-		drain = forcePowerNeeded[self->client->ps.fd.forcePowerLevel[forcePower]][forcePower];
-	}
-	if ( !drain )
-	{
-		return;
-	}
-
-	if (forcePower == FP_LEVITATION)
-	{ //special case
-		int jumpDrain = 0;
-
-		if (self->client->ps.velocity[2] > 250)
-		{
-			jumpDrain = 20;
-		}
-		else if (self->client->ps.velocity[2] > 200)
-		{
-			jumpDrain = 16;
-		}
-		else if (self->client->ps.velocity[2] > 150)
-		{
-			jumpDrain = 12;
-		}
-		else if (self->client->ps.velocity[2] > 100)
-		{
-			jumpDrain = 8;
-		}
-		else if (self->client->ps.velocity[2] > 50)
-		{
-			jumpDrain = 6;
-		}
-		else if (self->client->ps.velocity[2] > 0)
-		{
-			jumpDrain = 4;
-		}
-
-		if (jumpDrain)
-		{
-			jumpDrain /= self->client->ps.fd.forcePowerLevel[FP_LEVITATION];
-		}
-
-		self->client->ps.fd.forcePower -= jumpDrain;
-		if ( self->client->ps.fd.forcePower < 0 )
-		{
-			self->client->ps.fd.forcePower = 0;
-		}
-
-		return;
-	}
-
-	self->client->ps.fd.forcePower -= drain;
-	if ( self->client->ps.fd.forcePower < 0 )
-	{
-		self->client->ps.fd.forcePower = 0;
-	}
-}
-
 void WP_ForcePowerStart( gentity_t *self, forcePowers_t forcePower, int overrideAmt )
 {
 	int	duration = 0;
@@ -1021,15 +958,15 @@ void WP_ForcePowerStart( gentity_t *self, forcePowers_t forcePower, int override
 		hearDist = 256;
 		if (self->client->ps.fd.forcePowerLevel[FP_RAGE] == FORCE_LEVEL_1)
 		{
-			duration = 10000;
+			duration = 8000;
 		}
 		else if (self->client->ps.fd.forcePowerLevel[FP_RAGE] == FORCE_LEVEL_2)
 		{
-			duration = 16000;
+			duration = 14000;
 		}
 		else if (self->client->ps.fd.forcePowerLevel[FP_RAGE] == FORCE_LEVEL_3)
 		{
-			duration = 23000;
+			duration = 20000;
 		}
 		else //shouldn't get here
 		{
@@ -1118,11 +1055,11 @@ void WP_ForcePowerStart( gentity_t *self, forcePowers_t forcePower, int override
 
 	if ((int)forcePower == FP_SPEED && overrideAmt)
 	{
-		WP_ForcePowerDrain( self, forcePower, overrideAmt*0.025 );
+		BG_ForcePowerDrain( &self->client->ps, forcePower, overrideAmt*0.025 );
 	}
 	else if ((int)forcePower != FP_GRIP && (int)forcePower != FP_DRAIN)
 	{ //grip and drain drain as damage is done
-		WP_ForcePowerDrain( self, forcePower, overrideAmt );
+		BG_ForcePowerDrain( &self->client->ps, forcePower, overrideAmt );
 	}
 }
 
@@ -1157,12 +1094,36 @@ void ForceHeal( gentity_t *self )
 		{
 			self->health = self->client->ps.stats[STAT_MAX_HEALTH];
 		}
-		WP_ForcePowerDrain( self, FP_HEAL, 0 );
+		BG_ForcePowerDrain( &self->client->ps, FP_HEAL, 0 );
 	}
+	else if (self->client->ps.fd.forcePowerLevel[FP_HEAL] == FORCE_LEVEL_2)
+	{
+		self->health += 25;
+		
+		if (self->health > self->client->ps.stats[STAT_MAX_HEALTH])
+		{
+			self->health = self->client->ps.stats[STAT_MAX_HEALTH];
+		}
+		BG_ForcePowerDrain( &self->client->ps, FP_HEAL, 0 );
+	}
+	else
+	{
+		self->health += 10;
+		
+		if (self->health > self->client->ps.stats[STAT_MAX_HEALTH])
+		{
+			self->health = self->client->ps.stats[STAT_MAX_HEALTH];
+		}
+		BG_ForcePowerDrain( &self->client->ps, FP_HEAL, 0 );
+	}
+	/*
 	else
 	{
 		WP_ForcePowerStart( self, FP_HEAL, 0 );
 	}
+	*/
+	//NOTE: Decided to make all levels instant.
+
 	G_Sound( self, CHAN_ITEM, G_SoundIndex("sound/weapons/force/heal.wav") );
 	// No character heal voices
 //	G_Sound( self, CHAN_VOICE, G_SoundIndex(va( "sound/weapons/force/heal%d.mp3", Q_irand( 1, 4 ) )) );
@@ -1233,7 +1194,7 @@ void ForceTeamHeal( gentity_t *self )
 		healthadd = 25;
 	}
 
-	WP_ForcePowerDrain( self, FP_TEAM_HEAL, forcePowerNeeded[self->client->ps.fd.forcePowerLevel[FP_TEAM_HEAL]][FP_TEAM_HEAL] );
+	BG_ForcePowerDrain( &self->client->ps, FP_TEAM_HEAL, forcePowerNeeded[self->client->ps.fd.forcePowerLevel[FP_TEAM_HEAL]][FP_TEAM_HEAL] );
 
 	i = 0;
 
@@ -1321,7 +1282,7 @@ void ForceTeamForceReplenish( gentity_t *self )
 		poweradd = 25;
 	}
 
-	WP_ForcePowerDrain( self, FP_TEAM_FORCE, forcePowerNeeded[self->client->ps.fd.forcePowerLevel[FP_TEAM_FORCE]][FP_TEAM_FORCE] );
+	BG_ForcePowerDrain( &self->client->ps, FP_TEAM_FORCE, forcePowerNeeded[self->client->ps.fd.forcePowerLevel[FP_TEAM_FORCE]][FP_TEAM_FORCE] );
 
 	i = 0;
 
@@ -1911,11 +1872,11 @@ void ForceDrainDamage( gentity_t *self, gentity_t *traceEnt, vec3_t dir, vec3_t 
 				/*
 				if (self->client->ps.fd.forcePowerLevel[FP_DRAIN] == FORCE_LEVEL_1)
 				{
-					WP_ForcePowerDrain( self, FP_DRAIN, 0 );
+					BG_ForcePowerDrain( &self->client->ps, FP_DRAIN, 0 );
 				}
 				else
 				{
-					WP_ForcePowerDrain( self, FP_DRAIN, forcePowerNeeded[self->client->ps.fd.forcePowerLevel[FP_DRAIN]][FP_DRAIN]/5 );
+					BG_ForcePowerDrain( &self->client->ps, FP_DRAIN, forcePowerNeeded[self->client->ps.fd.forcePowerLevel[FP_DRAIN]][FP_DRAIN]/5 );
 				}
 
 				if (self->client->ps.fd.forcePowerLevel[FP_DRAIN] == FORCE_LEVEL_1)
@@ -2077,11 +2038,11 @@ int ForceShootDrain( gentity_t *self )
 
 /*	if (self->client->ps.fd.forcePowerLevel[FP_DRAIN] == FORCE_LEVEL_1)
 	{
-		WP_ForcePowerDrain( self, FP_DRAIN, 0 );
+		BG_ForcePowerDrain( &self->client->ps, FP_DRAIN, 0 );
 	}
 	else*/
 	{
-		WP_ForcePowerDrain( self, FP_DRAIN, 1 );
+		BG_ForcePowerDrain( &self->client->ps, FP_DRAIN, 1 );
 	}
 
 	self->client->ps.fd.forcePowerRegenDebounceTime = level.time + 500;
@@ -3720,7 +3681,7 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 		self->client->ps.fd.forceHealTime = level.time + 1000;
 		self->health++;
 		self->client->ps.fd.forceHealAmount++;
-		//WP_ForcePowerDrain( self, forcePower, 0 );
+		//BG_ForcePowerDrain( &self->client->ps, forcePower, 0 );
 		if ( self->health > self->client->ps.stats[STAT_MAX_HEALTH])	// Past max health
 		{
 			self->health = self->client->ps.stats[STAT_MAX_HEALTH];
@@ -3751,9 +3712,10 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 		}
 		else
 		{
+			/*
 			if (self->client->ps.fd.forcePowerDebounce[FP_LEVITATION] < level.time)
 			{
-				WP_ForcePowerDrain( self, forcePower, 5 );
+				BG_ForcePowerDrain( &self->client->ps, forcePower, 5 );
 				if (self->client->ps.fd.forcePowerLevel[FP_LEVITATION] >= FORCE_LEVEL_2)
 				{
 					self->client->ps.fd.forcePowerDebounce[FP_LEVITATION] = level.time + 300;
@@ -3763,6 +3725,8 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 					self->client->ps.fd.forcePowerDebounce[FP_LEVITATION] = level.time + 200;
 				}
 			}
+			*/
+			//NOTE: Now handled in bg code for prediction
 		}
 		break;
 	case FP_RAGE:
@@ -3779,15 +3743,15 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 
 			if (self->client->ps.fd.forcePowerLevel[FP_RAGE] == FORCE_LEVEL_1)
 			{
-				addTime = 100;
+				addTime = 150;
 			}
 			else if (self->client->ps.fd.forcePowerLevel[FP_RAGE] == FORCE_LEVEL_2)
 			{
-				addTime = 250;
+				addTime = 300;
 			}
 			else if (self->client->ps.fd.forcePowerLevel[FP_RAGE] == FORCE_LEVEL_3)
 			{
-				addTime = 400;
+				addTime = 450;
 			}
 			self->client->ps.forceRageDrainTime = level.time + addTime;
 		}
@@ -3847,7 +3811,7 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 		else
 		{
 			ForceShootLightning( self );
-			WP_ForcePowerDrain( self, forcePower, 0 );
+			BG_ForcePowerDrain( &self->client->ps, forcePower, 0 );
 		}
 		break;
 	case FP_TELEPATHY:
@@ -3863,7 +3827,7 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 	case FP_ABSORB:
 		if (self->client->ps.fd.forcePowerDebounce[forcePower] < level.time)
 		{
-			WP_ForcePowerDrain( self, forcePower, 1 );
+			BG_ForcePowerDrain( &self->client->ps, forcePower, 1 );
 			if (self->client->ps.fd.forcePower < 1)
 			{
 				WP_ForcePowerStop(self, forcePower);
@@ -3933,7 +3897,7 @@ int WP_DoSpecificPower( gentity_t *self, usercmd_t *ucmd, forcePowers_t forcepow
 			if (!(self->client->ps.fd.forcePowersActive & (1 << FP_GRIP)))
 			{
 				WP_ForcePowerStart( self, FP_GRIP, 0 );
-				WP_ForcePowerDrain( self, FP_GRIP, GRIP_DRAIN_AMOUNT );
+				BG_ForcePowerDrain( &self->client->ps, FP_GRIP, GRIP_DRAIN_AMOUNT );
 			}
 		}
 		else
@@ -4548,14 +4512,11 @@ void WP_ForcePowersUpdate( gentity_t *self, usercmd_t *ucmd )
 			{
 				self->client->ps.fd.forcePowerBaseLevel[i] = self->client->ps.fd.forcePowerLevel[i];
 
-				if (self->client->ps.fd.forcePowerLevel[i] >= FORCE_LEVEL_1 &&
-					self->client->ps.fd.forcePowerLevel[i] < FORCE_LEVEL_3)
+				if (!forcePowerDarkLight[i] ||
+					self->client->ps.fd.forceSide == forcePowerDarkLight[i])
 				{
-					if (!forcePowerDarkLight[i] ||
-						self->client->ps.fd.forceSide == forcePowerDarkLight[i])
-					{
-						self->client->ps.fd.forcePowerLevel[i]++;
-					}
+					self->client->ps.fd.forcePowerLevel[i] = FORCE_LEVEL_3;
+					self->client->ps.fd.forcePowersKnown |= (1 << i);
 				}
 
 				i++;
@@ -4571,6 +4532,14 @@ void WP_ForcePowersUpdate( gentity_t *self, usercmd_t *ucmd )
 		while (i < NUM_FORCE_POWERS)
 		{
 			self->client->ps.fd.forcePowerLevel[i] = self->client->ps.fd.forcePowerBaseLevel[i];
+			if (!self->client->ps.fd.forcePowerLevel[i])
+			{
+				if (self->client->ps.fd.forcePowersActive & (1 << i))
+				{
+					WP_ForcePowerStop(self, i);
+				}
+				self->client->ps.fd.forcePowersKnown &= ~(1 << i);
+			}
 
 			i++;
 		}

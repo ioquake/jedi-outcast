@@ -200,13 +200,13 @@ int			s_UseOpenAL	= true;		// Determines if using Open AL or the default softwar
 ALfloat		listener_pos[3];		// Listener Position
 ALfloat		listener_ori[6];		// Listener Orientation
 int			s_numChannels;			// Number of AL Sources == Num of Channels
-short		s_rawdata[MAX_RAW_SAMPLES*4];	// Used for Raw Samples (Music etc...)
+short		s_rawdata[MAX_RAW_SAMPLES*2];	// Used for Raw Samples (Music etc...)
 
 channel_t *S_OpenALPickChannel(int entnum, int entchannel);
 int  S_MP3PreProcessLipSync(channel_t *ch, short *data);
 void UpdateSingleShotSounds();
 void UpdateLoopingSounds();
-void UpdateRawSamples();
+void AL_UpdateRawSamples();
 void S_SetLipSyncs();
 
 // EAX Related
@@ -356,7 +356,7 @@ void S_Init( void ) {
 	s_volumeVoice= Cvar_Get ("s_volumeVoice", "1.0", CVAR_ARCHIVE);
 	s_musicVolume = Cvar_Get ("s_musicvolume", "0.5", CVAR_ARCHIVE);
 	s_separation = Cvar_Get ("s_separation", "0.5", CVAR_ARCHIVE);
-	s_khz = Cvar_Get ("s_khz", "22", CVAR_ARCHIVE);
+	s_khz = Cvar_Get ("s_khz", "22", CVAR_ARCHIVE|CVAR_LATCH);
 	s_mixahead = Cvar_Get ("s_mixahead", "0.2", CVAR_ARCHIVE);
 
 	s_mixPreStep = Cvar_Get ("s_mixPreStep", "0.05", CVAR_ARCHIVE);
@@ -493,6 +493,22 @@ void S_Init( void ) {
 		dma.samples = 0;
 		dma.submission_chunk = 0;
 		dma.buffer = NULL;			 
+	
+		// Clamp sound volumes between 0.0f and 1.0f
+		if (s_volume->value < 0.f)
+			s_volume->value = 0.f;
+		if (s_volume->value > 1.f)
+			s_volume->value = 1.f;
+
+		if (s_volumeVoice->value < 0.f)
+			s_volumeVoice->value = 0.f;
+		if (s_volumeVoice->value > 1.f)
+			s_volumeVoice->value = 1.f;
+
+		if (s_musicVolume->value < 0.f)
+			s_musicVolume->value = 0.f;
+		if (s_musicVolume->value > 1.f)
+			s_musicVolume->value = 1.f;
 	}
 	else
 	{
@@ -519,6 +535,21 @@ void S_Init( void ) {
 	AS_Init();
 }
 
+// only called from snd_restart. QA request...
+//
+void S_ReloadAllUsedSounds(void)
+{
+	// new bit, reload all soundsthat are used on the current level...
+	//
+	for (int i=1 ; i < s_numSfx ; i++)	// start @ 1 to skip freeing default sound
+	{
+		sfx_t *sfx = &s_knownSfx[i];
+
+		if (!sfx->bInMemory && !sfx->bDefaultSound && sfx->iLastLevelUsedOn == RE_RegisterMedia_GetLevel()){
+			S_memoryLoad(sfx);
+		}
+	}
+}
 
 // =======================================================================
 // Shutdown sound engine
@@ -956,11 +987,11 @@ channel_t *S_PickChannel(int entnum, int entchannel)
 
     firstToDie = &s_channels[0];
 
-	for ( int pass = 0; (pass < ((entchannel == CHAN_AUTO)?1:2)) && !foundChan; pass++ )
+	for ( int pass = 0; (pass < ((entchannel == CHAN_AUTO || entchannel == CHAN_LESS_ATTEN)?1:2)) && !foundChan; pass++ )
 	{
 		for (ch_idx = 0, ch = &s_channels[0]; ch_idx < MAX_CHANNELS ; ch_idx++, ch++ ) 
 		{
-			if ( entchannel == CHAN_AUTO || pass > 0 )
+			if ( entchannel == CHAN_AUTO || entchannel == CHAN_LESS_ATTEN || pass > 0 )
 			{//if we're on the second pass, just find the first open chan
 				if ( !ch->thesfx )
 				{//grab the first open channel
@@ -1148,6 +1179,10 @@ void S_SpatializeOrigin (const vec3_t origin, float master_vol, int *left_vol, i
 	if ( channel == CHAN_VOICE )
 	{
 		dist -= SOUND_FULLVOLUME * 3.0f;
+	}
+	else if ( channel == CHAN_LESS_ATTEN )
+	{
+		dist -= SOUND_FULLVOLUME * 8.0f; // maybe is too large
 	}
 	else if ( channel == CHAN_VOICE_ATTEN )
 	{
@@ -1399,6 +1434,28 @@ void S_StartLocalLoopingSound( sfxHandle_t sfxHandle) {
 
 }
 
+// returns length in milliseconds of supplied sound effect...  (else 0 for bad handle now)
+//
+float S_GetSampleLengthInMilliSeconds( sfxHandle_t sfxHandle)
+{
+	sfx_t *sfx;
+
+	if (!s_soundStarted)
+	{	//we have no sound, so let's just make a reasonable guess
+		return 512 * 1000;
+	}
+
+	if ( sfxHandle < 0 || sfxHandle >= s_numSfx )
+		return 0.0f;
+
+	sfx = &s_knownSfx[ sfxHandle ];
+
+	float f = (float)sfx->iSoundLengthInSamples / (float)dma.speed;
+
+	return (f * 1000);
+}
+
+
 /*
 ==================
 S_ClearSoundBuffer
@@ -1434,6 +1491,11 @@ void S_ClearSoundBuffer( void ) {
 			memset(dma.buffer, clear, dma.samples * dma.samplebits/8);
 		SNDDMA_Submit ();
 	}
+	else
+	{
+		s_paintedtime = 0;
+		s_soundtime = 0;
+	}
 }
 
 
@@ -1453,13 +1515,13 @@ void S_CIN_StopSound(sfxHandle_t sfxHandle)
 		if (ch->thesfx == sfx)
 		{
 			alSourceStop(s_channels[i].alSource);
+			SND_FreeSFXMem(ch->thesfx);	// heh, may as well...
 			ch->thesfx = NULL;
 			memset(&ch->MP3StreamHeader, 0, sizeof(MP3STREAM));
 			ch->bLooping = false;
 			ch->bProcessed = false;
 			ch->bPlaying = false;
 			ch->bStreaming = false;
-			SND_FreeSFXMem(ch->thesfx);	// heh, may as well...
 			break;
 		}
 	}
@@ -1607,6 +1669,12 @@ void S_AddAmbientLoopingSound( const vec3_t origin, unsigned char volume, sfxHan
 	}
 	if ( numLoopSounds >= MAX_LOOP_SOUNDS ) {
 		return;
+	}
+
+	if (s_UseOpenAL)
+	{
+		if (volume == 0)
+			return;
 	}
 
 	if ( sfxHandle < 0 || sfxHandle >= s_numSfx ) {
@@ -2471,7 +2539,11 @@ void S_Update_(void) {
 //#endif
 
 			alSourcei(s_channels[source].alSource, AL_LOOPING, AL_FALSE);
-			alSourcef(s_channels[source].alSource, AL_GAIN, (float)(ch->master_vol) / 255.0f);
+
+			if ( ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL )
+				alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volumeVoice->value) / 255.0f);
+			else
+				alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.f);
 
 			if (s_bEALFileLoaded)
 				UpdateEAXBuffer(ch);
@@ -2594,7 +2666,7 @@ void S_Update_(void) {
 
 		UpdateLoopingSounds();
 
-		UpdateRawSamples();
+		AL_UpdateRawSamples();
 
 		EAXMorph();
 	}
@@ -2812,7 +2884,6 @@ void UpdateLoopingSounds()
 	channel_t *ch;
 	loopSound_t	*loop;
 	float pos[3];
-	char szString[256];
 
 	// First check to see if any of the looping sounds are already playing at the correct positions
 	ch = s_channels + 1;
@@ -2846,24 +2917,30 @@ void UpdateLoopingSounds()
 						}
 
 						// Make sure Gain is set correctly
-						ch->master_vol = loop->volume;
-						alSourcef(s_channels[i].alSource, AL_GAIN, (float)(ch->master_vol) / 255.f);
+						if (ch->master_vol != loop->volume)
+						{
+							ch->master_vol = loop->volume;
+							alSourcef(s_channels[i].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.f);
+						}
 
 						ch->bProcessed = true;
 						loop->bProcessed = true;
 					}	
-				}
-				else if ((loop->bProcessed == false) && (ch->thesfx == loop->sfx) && (!memcmp(ch->origin, loop->origin, sizeof(ch->origin))))
-				{
-					// Match !
-					ch->bProcessed = true;
-					loop->bProcessed = true;
+					else if ((loop->bProcessed == false) && (ch->thesfx == loop->sfx) && (!memcmp(ch->origin, loop->origin, sizeof(ch->origin))))
+					{
+						// Match !
+						ch->bProcessed = true;
+						loop->bProcessed = true;
 
-					// Make sure Gain is set correctly
-					ch->master_vol = loop->volume;
-					alSourcef(s_channels[i].alSource, AL_GAIN, (float)(ch->master_vol) / 255.f);
+						// Make sure Gain is set correctly
+						if (ch->master_vol != loop->volume)
+						{
+							ch->master_vol = loop->volume;
+							alSourcef(s_channels[i].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.f);
+						}
 
-					break;
+						break;
+					}
 				}
 			}
 		}
@@ -2881,13 +2958,17 @@ void UpdateLoopingSounds()
 				if ((loop->bProcessed == false) && (ch->thesfx == loop->sfx))
 				{
 					// Same sound - wrong position
+					ch->origin[0] = loop->origin[0];
+					ch->origin[1] = loop->origin[1];
+					ch->origin[2] = loop->origin[2];
+
 					pos[0] = loop->origin[0];
 					pos[1] = loop->origin[2];
 					pos[2] = -loop->origin[1];
 					alSourcefv(s_channels[i].alSource, AL_POSITION, pos);
 
 					ch->master_vol = loop->volume;
-					alSourcef(s_channels[i].alSource, AL_GAIN, (float)(ch->master_vol) / 255.f);
+					alSourcef(s_channels[i].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.f);
 
 					if (s_bEALFileLoaded)
 						UpdateEAXBuffer(ch);
@@ -2909,12 +2990,6 @@ void UpdateLoopingSounds()
 		{
 			// Sound no longer needed
 			alSourceStop(s_channels[i].alSource);
-			if (alGetError() != AL_NO_ERROR)
-			{
-				sprintf(szString, "OAL Error - S_Update - failed to stop looping sound on Source %d\n", i);
-				OutputDebugString(szString);
-			}
-
 			ch->thesfx = NULL;
 			ch->bPlaying = false;
 		}
@@ -2964,7 +3039,7 @@ void UpdateLoopingSounds()
 			alSourcei(s_channels[source].alSource, AL_BUFFER, ch->thesfx->Buffer);
 			alSourcefv(s_channels[source].alSource, AL_POSITION, pos);
 			alSourcei(s_channels[source].alSource, AL_LOOPING, AL_TRUE);
-			alSourcef(s_channels[source].alSource, AL_GAIN, (float)(ch->master_vol) / 255.0f);
+			alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.0f);
 			alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, ch->fixed_origin ? AL_TRUE : AL_FALSE);
 			
 			if (s_bEALFileLoaded)
@@ -2981,7 +3056,8 @@ void UpdateLoopingSounds()
 
 
 
-void UpdateRawSamples()
+
+void AL_UpdateRawSamples()
 {
 	ALuint buffer;
 	ALint size;
@@ -2993,6 +3069,8 @@ void UpdateRawSamples()
 	// Clear Open AL Error
 	alGetError();
 #endif
+
+	S_UpdateBackgroundTrack();
 
 	// Find out how many buffers have been processed (played) by the Source
 	alGetSourcei(s_channels[0].alSource, AL_BUFFERS_PROCESSED, &processed);
@@ -3010,8 +3088,6 @@ void UpdateRawSamples()
 		processed--;
 	}
 
-	S_UpdateBackgroundTrack();
-
 	// Add new data to a new Buffer and queue it on the Source
 	if (s_rawend > s_paintedtime)
 	{
@@ -3019,8 +3095,8 @@ void UpdateRawSamples()
 		if (size > (MAX_RAW_SAMPLES<<2))
 		{
 			OutputDebugString("UpdateRawSamples :- Raw Sample buffer has overflowed !!!\n");
-			s_rawend = s_paintedtime + MAX_RAW_SAMPLES;
 			size = MAX_RAW_SAMPLES<<2;
+			s_paintedtime = s_rawend - MAX_RAW_SAMPLES;
 		}
 
 		// Copy samples from RawSamples to audio buffer (sg.rawdata)
@@ -3090,7 +3166,6 @@ void UpdateRawSamples()
 #ifdef _DEBUG
 			OutputDebugString("Restarting / Starting playback of Raw Samples\n");
 #endif
-
 			alSourcePlay(s_channels[0].alSource);
 		}
 	}
@@ -4048,6 +4123,11 @@ void S_RestartMusic( void )
 void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCalledByCGameStart )
 {
 	bMusic_IsDynamic = qfalse;
+
+	if (!s_soundStarted)
+	{	//we have no sound, so don't even bother trying
+		return;
+	}
 
 	if ( !intro ) {
 		intro = "";

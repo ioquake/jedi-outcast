@@ -493,6 +493,7 @@ static void SV_UserMove( client_t *cl, msg_t *msg ) {
 			if ( eSavedGameJustLoaded == eNO )
 			{
 				SG_WriteSavegame("auto",qtrue);
+				SG_WriteSavegame(va("auto_%s",sv_mapname->string),qtrue);
 			}
 			else if ( qbLoadTransition == qtrue )
 			{

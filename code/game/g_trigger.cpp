@@ -51,6 +51,10 @@ void multi_trigger_run( gentity_t *ent )
 	}
 
 	G_UseTargets (ent, ent->activator);
+	if ( ent->noise_index ) 
+	{
+		G_Sound( ent->activator, ent->noise_index );
+	}
 
 	if ( ent->target2 && ent->target2[0] && ent->wait >= 0 )
 	{
@@ -307,6 +311,11 @@ void trigger_cleared_fire (gentity_t *self)
 {
 	G_UseTargets2( self, self->activator, self->target2 );
 	self->e_ThinkFunc = thinkF_NULL;
+	// should start the wait timer now, because the trigger's just been cleared, so we must "wait" from this point
+	if ( self->wait > 0 ) 
+	{
+		self->nextthink = level.time + ( self->wait + self->random * crandom() ) * 1000;
+	}
 }
 
 qboolean G_TriggerActive( gentity_t *self )
@@ -363,6 +372,7 @@ MULTIPLE - multiple entities can touch this trigger in a single frame *and* if n
 "hiderange" As long as NPC's head is in this trigger, NPCs out of this hiderange cannot see him.  If you set an angle on the trigger, they're only hidden from enemies looking in that direction.  the player's crouch viewheight is 36, his standing viewheight is 54.  So a trigger thast should hide you when crouched but not standing should be 48 tall.
 "target2"	The trigger will fire this only when the trigger has been activated and subsequently 'cleared'( once any of the conditions on the trigger have not been satisfied).  This will not fire the "target" more than once until the "target2" is fired (trigger field is 'cleared')
 "speed"		How many seconds to wait to fire the target2, default is 1
+"noise"		Sound to play when the trigger fires (plays at activator's origin)
 
 Variable sized repeatable trigger.  Must be targeted at one or more entities.
 so, the basic time between firing is a random time between
@@ -379,6 +389,14 @@ so, the basic time between firing is a random time between
 team_t TranslateTeamName( const char *name );
 void SP_trigger_multiple( gentity_t *ent ) 
 {
+	char	buffer[MAX_QPATH];
+	char	*s;
+	if ( G_SpawnString( "noise", "*NOSOUND*", &s ) ) 
+	{
+		Q_strncpyz( buffer, s, sizeof(buffer) );
+		COM_DefaultExtension( buffer, sizeof(buffer), ".wav");
+		ent->noise_index = G_SoundIndex(buffer);
+	}
 	
 	G_SpawnFloat( "wait", "0", &ent->wait );//was 0.5 ... but that means wait can never be zero... we should probably put it back to 0.5, though...
 	G_SpawnFloat( "random", "0", &ent->random );
@@ -426,6 +444,7 @@ MULTIPLE - multiple entities can touch this trigger in a single frame *and* if n
 Variable sized repeatable trigger.  Must be targeted at one or more entities.
 so, the basic time between firing is a random time between
 (wait - random) and (wait + random)
+"noise"		Sound to play when the trigger fires (plays at activator's origin)
 
 "NPC_targetname" - If set, only an NPC with a matching NPC_targetname will trip this trigger
 "team" - If set, only this team can trip this trigger
@@ -437,6 +456,15 @@ so, the basic time between firing is a random time between
 */
 void SP_trigger_once( gentity_t *ent ) 
 {
+	char	buffer[MAX_QPATH];
+	char	*s;
+	if ( G_SpawnString( "noise", "*NOSOUND*", &s ) ) 
+	{
+		Q_strncpyz( buffer, s, sizeof(buffer) );
+		COM_DefaultExtension( buffer, sizeof(buffer), ".wav");
+		ent->noise_index = G_SoundIndex(buffer);
+	}
+
 	ent->wait = -1;
 
 	ent->e_TouchFunc = touchF_Touch_Multi;
@@ -1011,13 +1039,14 @@ trigger_hurt
 ==============================================================================
 */
 
-/*QUAKED trigger_hurt (.1 .5 .1) ? START_OFF PLAYERONLY SILENT NO_PROTECTION x FALLING ELECTRICAL INACTIVE MULTIPLE
+/*QUAKED trigger_hurt (.1 .5 .1) ? START_OFF PLAYERONLY SILENT NO_PROTECTION LOCKCAM FALLING ELECTRICAL INACTIVE MULTIPLE
 Any entity that touches this will be hurt.
 It does dmg points of damage each server frame
 
 PLAYERONLY		only the player is hurt by it
 SILENT			supresses playing the sound
 NO_PROTECTION	*nothing* stops the damage
+LOCKCAM			Falling death results in camera locking in place
 FALLING			Forces a falling scream and anim
 ELECTRICAL		does electrical damage
 MULTIPLE        multiple entities can touch this trigger in a single frame *and* if needed, the trigger can have a wait of > 0
@@ -1025,6 +1054,7 @@ MULTIPLE        multiple entities can touch this trigger in a single frame *and*
 "dmg"			default 5 (whole numbers only)
 "delay"			How many seconds it takes to get from 0 to "dmg" (default is 0)
 "wait"			Use in instead of "SLOW" - determines how often the player gets hurt, 0.1 is every frame, 1.0 is once per second.  -1 will stop after one use
+"count"			If set, FALLING death causes a fade to black in this many milliseconds (default is 10000 = 10 seconds)
 */
 void hurt_use( gentity_t *self, gentity_t *other, gentity_t *activator ) {
 
@@ -1125,14 +1155,27 @@ void hurt_touch( gentity_t *self, gentity_t *other, trace_t *trace )
 			other->client->ps.powerups[PW_SHOCKED] = level.time + 1000;
 		}
 
-		if(self->spawnflags & 32)
+		if ( self->spawnflags & 32 )
 		{//falling death
-			G_Damage (other, self, self, NULL, NULL, actualDmg, dflags, MOD_FALLING);
-			if ( !other->s.number && other->health <= 0 && 1 )
+			G_Damage (other, self, self, NULL, NULL, actualDmg, dflags|DAMAGE_NO_ARMOR, MOD_FALLING);
+			if ( !other->s.number && other->health <= 0 )
 			{
-				extern void CGCam_Fade( vec4_t source, vec4_t dest, float duration );
-				float	src[4] = {0,0,0,0},dst[4]={0,0,0,1};
-				CGCam_Fade( src, dst, 10000 );
+				if ( self->count )
+				{
+					extern void CGCam_Fade( vec4_t source, vec4_t dest, float duration );
+					float	src[4] = {0,0,0,0},dst[4]={0,0,0,1};
+					CGCam_Fade( src, dst, self->count );
+				}
+				if ( self->spawnflags & 16 )
+				{//lock cam
+					cg.overrides.active |= CG_OVERRIDE_3RD_PERSON_CDP;
+					cg.overrides.thirdPersonCameraDamp = 0;
+				}
+				if ( other->client )
+				{
+					other->client->ps.pm_flags |= PMF_SLOW_MO_FALL;
+				}
+				//G_SoundOnEnt( other, CHAN_VOICE, "*falling1.wav" );//CHAN_VOICE_ATTEN?
 			}
 		}
 		else

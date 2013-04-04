@@ -104,8 +104,8 @@ qboolean PM_AdjustAngleForWallRun( gentity_t *ent, usercmd_t *ucmd, qboolean doM
 		}
 		VectorMA( ent->currentOrigin, dist, rt, traceTo );
 		gi.trace( &trace, ent->currentOrigin, mins, maxs, traceTo, ent->s.number, ent->clipmask );
-		if ( trace.fraction < 1.0f )
-		{//still a wall there
+		if ( trace.fraction < 1.0f && trace.plane.normal[2] == 0.0f )
+		{//still a vertical wall there
 			//FIXME: don't pull around 90 turns
 			//FIXME: simulate stepping up steps here, somehow?
 			if ( ent->client->ps.legsAnim == BOTH_WALL_RUN_RIGHT )
@@ -146,8 +146,9 @@ qboolean PM_AdjustAngleForWallRun( gentity_t *ent, usercmd_t *ucmd, qboolean doM
 					VectorScale( fwd, speed, ent->client->ps.velocity );
 				}
 				ent->client->ps.velocity[2] = zVel;//preserve z velocity
+				VectorMA( ent->client->ps.velocity, -128, trace.plane.normal, ent->client->ps.velocity );
 				//pull me toward the wall, too
-				VectorMA( ent->client->ps.velocity, dist, rt, ent->client->ps.velocity );
+				//VectorMA( ent->client->ps.velocity, dist, rt, ent->client->ps.velocity );
 			}
 			ucmd->forwardmove = 0;
 			return qtrue;
@@ -194,7 +195,8 @@ qboolean PM_AdjustAnglesForSpinningFlip( gentity_t *ent, usercmd_t *ucmd, qboole
 		{
 			if ( !ent->s.number )
 			{
-				cg.overrides.thirdPersonVertOffset = cg_thirdPersonVertOffset.value;
+				cg.overrides.active &= ~CG_OVERRIDE_3RD_PERSON_VOF;
+				cg.overrides.thirdPersonVertOffset = 0;
 			}
 		}
 		return qfalse;
@@ -241,6 +243,7 @@ qboolean PM_AdjustAnglesForSpinningFlip( gentity_t *ent, usercmd_t *ucmd, qboole
 		{//ending anim
 			viewDip = ((animLength-elapsedTime)/animLength)*-120.0f;
 		}
+		cg.overrides.active |= CG_OVERRIDE_3RD_PERSON_VOF;
 		cg.overrides.thirdPersonVertOffset = cg_thirdPersonVertOffset.value+viewDip;
 		//pm->ps->viewheight = standheight + viewDip;
 	}
@@ -361,8 +364,8 @@ void PM_UpdateViewAngles( playerState_t *ps, usercmd_t *cmd, gentity_t *gent )
 		}
 		else
 		{
-			pitchMin = -gent->client->renderInfo.headPitchRangeUp;
-			pitchMax = gent->client->renderInfo.headPitchRangeDown;
+			pitchMin = -gent->client->renderInfo.headPitchRangeUp-gent->client->renderInfo.torsoPitchRangeUp;
+			pitchMax = gent->client->renderInfo.headPitchRangeDown+gent->client->renderInfo.torsoPitchRangeDown;
 		}
 	}
 
@@ -399,12 +402,12 @@ void PM_UpdateViewAngles( playerState_t *ps, usercmd_t *cmd, gentity_t *gent )
 		{
 			if ( temp > pitchClampMax ) 
 			{
-				ps->delta_angles[i] = pitchClampMax - cmd->angles[i];
+				ps->delta_angles[i] = (pitchClampMax - cmd->angles[i]) & 0xffff;
 				temp = pitchClampMax;
 			} 
 			else if ( temp < pitchClampMin ) 
 			{
-				ps->delta_angles[i] = pitchClampMin - cmd->angles[i];
+				ps->delta_angles[i] = (pitchClampMin - cmd->angles[i]) & 0xffff;
 				temp = pitchClampMin;
 			}
 		}
@@ -425,7 +428,7 @@ void PM_UpdateViewAngles( playerState_t *ps, usercmd_t *cmd, gentity_t *gent )
 		}
 	}
 
-	if ( (cmd->buttons & BUTTON_USE) && cmd->rightmove != 0 && !cmd->forwardmove && cmd->upmove <= 0 )
+	if ( (!cg.renderingThirdPerson||cg.zoomMode) && (cmd->buttons & BUTTON_USE) && cmd->rightmove != 0 && !cmd->forwardmove && cmd->upmove <= 0 )
 	{//Only lean if holding use button, strafing and not moving forward or back and not jumping
 		if ( gent )
 		{
@@ -434,11 +437,13 @@ void PM_UpdateViewAngles( playerState_t *ps, usercmd_t *cmd, gentity_t *gent )
 
 			if ( cmd->rightmove > 0 )
 			{
+				/*
 				if( pm->ps->legsAnim != LEGS_LEAN_RIGHT1)
 				{
 					PM_SetAnim(pm, SETANIM_LEGS, LEGS_LEAN_RIGHT1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
 				}
 				pm->ps->legsAnimTimer = 500;//Force it to hold the anim for at least half a sec
+				*/
 
 				if ( ps->leanofs <= 28 )
 				{
@@ -451,11 +456,13 @@ void PM_UpdateViewAngles( playerState_t *ps, usercmd_t *cmd, gentity_t *gent )
 			}
 			else
 			{
+				/*
 				if ( pm->ps->legsAnim != LEGS_LEAN_LEFT1 )
 				{
 					PM_SetAnim(pm, SETANIM_LEGS, LEGS_LEAN_LEFT1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
 				}
 				pm->ps->legsAnimTimer = 500;//Force it to hold the anim for at least half a sec
+				*/
 
 				if ( ps->leanofs >= -28 )
 				{

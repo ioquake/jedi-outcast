@@ -643,6 +643,8 @@ void MSG_WriteDeltaUsercmd( msg_t *msg, usercmd_t *from, usercmd_t *to ) {
 
 	MSG_WriteDelta( msg, from->forcesel, to->forcesel, 8 );
 	MSG_WriteDelta( msg, from->invensel, to->invensel, 8 );
+
+	MSG_WriteDelta( msg, from->generic_cmd, to->generic_cmd, 8 );
 }
 
 
@@ -668,6 +670,8 @@ void MSG_ReadDeltaUsercmd( msg_t *msg, usercmd_t *from, usercmd_t *to ) {
 
 	to->forcesel = MSG_ReadDelta( msg, from->forcesel, 8);
 	to->invensel = MSG_ReadDelta( msg, from->invensel, 8);
+
+	to->generic_cmd = MSG_ReadDelta( msg, from->generic_cmd, 8);
 }
 
 /*
@@ -692,7 +696,8 @@ void MSG_WriteDeltaUsercmdKey( msg_t *msg, int key, usercmd_t *from, usercmd_t *
 		from->buttons == to->buttons &&
 		from->weapon == to->weapon &&
 		from->forcesel == to->forcesel &&
-		from->invensel == to->invensel) {
+		from->invensel == to->invensel &&
+		from->generic_cmd == to->generic_cmd) {
 			MSG_WriteBits( msg, 0, 1 );				// no change
 			oldsize += 7;
 			return;
@@ -710,6 +715,8 @@ void MSG_WriteDeltaUsercmdKey( msg_t *msg, int key, usercmd_t *from, usercmd_t *
 
 	MSG_WriteDeltaKey( msg, key, from->forcesel, to->forcesel, 8 );
 	MSG_WriteDeltaKey( msg, key, from->invensel, to->invensel, 8 );
+
+	MSG_WriteDeltaKey( msg, key, from->generic_cmd, to->generic_cmd, 8 );
 }
 
 
@@ -737,6 +744,8 @@ void MSG_ReadDeltaUsercmdKey( msg_t *msg, int key, usercmd_t *from, usercmd_t *t
 
 		to->forcesel = MSG_ReadDeltaKey( msg, key, from->forcesel, 8);
 		to->invensel = MSG_ReadDeltaKey( msg, key, from->invensel, 8);
+
+		to->generic_cmd = MSG_ReadDeltaKey( msg, key, from->generic_cmd, 8);
 	} else {
 		to->angles[0] = from->angles[0];
 		to->angles[1] = from->angles[1];
@@ -749,6 +758,8 @@ void MSG_ReadDeltaUsercmdKey( msg_t *msg, int key, usercmd_t *from, usercmd_t *t
 
 		to->forcesel = from->forcesel;
 		to->invensel = from->invensel;
+
+		to->generic_cmd = from->generic_cmd;
 	}
 }
 
@@ -1204,6 +1215,8 @@ netField_t	playerStateFields[] =
 { PSF(fallingToDeath), 32 },
 { PSF(electrifyTime), 32 },
 
+{ PSF(fd.forcePowerDebounce[FP_LEVITATION]), 32 },
+
 { PSF(saberMove), 32 }, //This value sometimes exceeds the max LS_ value and gets set to a crazy amount, so it needs 32 bits
 { PSF(saberActive), 1 },
 { PSF(saberInFlight), 1 },
@@ -1213,6 +1226,7 @@ netField_t	playerStateFields[] =
 { PSF(forceHandExtend), 8 },
 { PSF(forceDodgeAnim), 16 },
 { PSF(fd.saberAnimLevel), 4 },
+{ PSF(fd.saberDrawAnimLevel), 4 },
 { PSF(saberAttackChainCount), 32 },
 { PSF(saberHolstered), 1 },
 { PSF(usingATST), 1 },

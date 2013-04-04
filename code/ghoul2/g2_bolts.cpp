@@ -16,6 +16,7 @@
 	#include "G2.h"
 #endif
 
+#define G2_MODEL_OK(g) ((g)&&(g)->mValid&&(g)->aHeader&&(g)->currentModel&&(g)->animModel)
 
 //=====================================================================================================================
 // Bolt List handling routines - so entities can attach themselves to any part of the model in question
@@ -28,12 +29,6 @@ int G2_Find_Bolt_Bone_Num(boltInfo_v &bltlist, const int boneNum)
 	// look through entire list
 	for(i=0; i<bltlist.size(); i++)
 	{
-		// if this bone entry has no info in it, bounce over it
-		if (bltlist[i].boneNumber == -1)
-		{
-			continue;
-		}
-
 		if (bltlist[i].boneNumber == boneNum)
 		{
 			return i;
@@ -52,12 +47,6 @@ int G2_Find_Bolt_Surface_Num(boltInfo_v &bltlist, const int surfaceNum, const in
 	// look through entire list
 	for(i=0; i<bltlist.size(); i++)
 	{
-		// if this bone entry has no info in it, bounce over it
-		if (bltlist[i].surfaceNumber == -1)
-		{
-			continue;
-		}
-
 		if ((bltlist[i].surfaceNumber == surfaceNum) && ((bltlist[i].surfaceType & flags) == flags))
 		{
 			return i;
@@ -70,11 +59,13 @@ int G2_Find_Bolt_Surface_Num(boltInfo_v &bltlist, const int surfaceNum, const in
 			
 //=========================================================================================
 //// Public Bolt Routines
-int G2_Add_Bolt_Surf_Num(const char *fileName, boltInfo_v &bltlist, surfaceInfo_v &slist, const int surfNum)
+int G2_Add_Bolt_Surf_Num(CGhoul2Info *ghlInfo, boltInfo_v &bltlist, surfaceInfo_v &slist, const int surfNum)
 {
+	assert(ghlInfo&&ghlInfo->mValid);
 	boltInfo_t			tempBolt;
 	int					i;
 
+	assert(surfNum>=0&&surfNum<slist.size());
 	// ensure surface num is valid
 	if (surfNum >= slist.size())
 	{
@@ -119,20 +110,21 @@ int G2_Add_Bolt_Surf_Num(const char *fileName, boltInfo_v &bltlist, surfaceInfo_
 }
 
 void G2_Bolt_Not_Found(const char *boneName,const char *modName);
-int G2_Add_Bolt(const char *fileName, boltInfo_v &bltlist, surfaceInfo_v &slist, const char *boneName)
+int G2_Add_Bolt(CGhoul2Info *ghlInfo, boltInfo_v &bltlist, surfaceInfo_v &slist, const char *boneName)
 {
-	model_t		*mod_m = R_GetModelByHandle(RE_RegisterModel(fileName)); 
-	model_t		*mod_a = R_GetModelByHandle(mod_m->mdxm->animIndex); 
+	assert(ghlInfo&&ghlInfo->mValid);
 	int					i, x, surfNum = -1;
 	mdxaSkel_t			*skel;
 	mdxaSkelOffsets_t	*offsets;
 	mdxmHierarchyOffsets_t	*surfOffsets;
 	boltInfo_t			tempBolt;
 	int					flags;
+
+	assert(G2_MODEL_OK(ghlInfo));
   
-	surfOffsets = (mdxmHierarchyOffsets_t *)((byte*)mod_m->mdxm + sizeof(mdxmHeader_t));
+	surfOffsets = (mdxmHierarchyOffsets_t *)((byte*)ghlInfo->currentModel->mdxm + sizeof(mdxmHeader_t));
 	// first up, we'll search for that which this bolt names in all the surfaces
-	surfNum = G2_IsSurfaceLegal((void*)mod_m, boneName, &flags);
+	surfNum = G2_IsSurfaceLegal(ghlInfo->currentModel, boneName, &flags);
 
 	// did we find it as a surface?
 	if (surfNum != -1)
@@ -174,12 +166,12 @@ int G2_Add_Bolt(const char *fileName, boltInfo_v &bltlist, surfaceInfo_v &slist,
 
 	// no, check to see if it's a bone then
 
-   	offsets = (mdxaSkelOffsets_t *)((byte *)mod_a->mdxa + sizeof(mdxaHeader_t));
+   	offsets = (mdxaSkelOffsets_t *)((byte *)ghlInfo->aHeader + sizeof(mdxaHeader_t));
 
  	// walk the entire list of bones in the gla file for this model and see if any match the name of the bone we want to find
- 	for (x=0; x< mod_a->mdxa->numBones; x++)
+ 	for (x=0; x< ghlInfo->aHeader->numBones; x++)
  	{
- 		skel = (mdxaSkel_t *)((byte *)mod_a->mdxa + sizeof(mdxaHeader_t) + offsets->offsets[x]);
+ 		skel = (mdxaSkel_t *)((byte *)ghlInfo->aHeader + sizeof(mdxaHeader_t) + offsets->offsets[x]);
  		// if name is the same, we found it
  		if (!stricmp(skel->name, boneName))
 		{
@@ -188,12 +180,12 @@ int G2_Add_Bolt(const char *fileName, boltInfo_v &bltlist, surfaceInfo_v &slist,
 	}
 
 	// check to see we did actually make a match with a bone in the model
-	if (x == mod_a->mdxa->numBones)
+	if (x == ghlInfo->aHeader->numBones)
 	{
 		// didn't find it? Error
 		//assert(0&&x == mod_a->mdxa->numBones);
 #if _DEBUG
-		G2_Bolt_Not_Found(boneName,fileName);
+		G2_Bolt_Not_Found(boneName,ghlInfo->mFileName);
 #endif
 		return -1;
 	}
@@ -237,6 +229,7 @@ int G2_Add_Bolt(const char *fileName, boltInfo_v &bltlist, surfaceInfo_v &slist,
 // Given a model handle, and a bone name, we want to remove this bone from the bone override list
 qboolean G2_Remove_Bolt (boltInfo_v &bltlist, int index)
 {
+	assert(index>=0&&index<bltlist.size());
 	// did we find it?
 	if (index != -1)
 	{
@@ -246,35 +239,9 @@ qboolean G2_Remove_Bolt (boltInfo_v &bltlist, int index)
 			// set this bone to not used
 			bltlist[index].boneNumber = -1;
 			bltlist[index].surfaceNumber = -1;
-
-			int newSize = bltlist.size();
-			// now look through the list from the back and see if there is a block of -1's we can resize off the end of the list
-			for (int i=bltlist.size()-1; i>-1; i--)
-			{
-				if ((bltlist[i].surfaceNumber == -1) && (bltlist[i].boneNumber == -1))
-				{
-					newSize = i;
-				}
-				// once we hit one that isn't a -1, we are done.
-				else
-				{
-					break;
-				}
-			}
-			// do we need to resize?
-			if (newSize != bltlist.size())
-			{
-				// yes, so lets do it
-				bltlist.resize(newSize);
-			}
-
 		}
 		return qtrue;
 	}
-
-	assert(0);
-
-	// no
 	return qfalse;
 }
 
@@ -284,51 +251,3 @@ void G2_Init_Bolt_List(boltInfo_v &bltlist)
 	bltlist.clear();
 }
 
-// remove any bolts that reference original surfaces, generated surfaces, or bones that aren't active anymore 
-void G2_RemoveRedundantBolts(boltInfo_v &bltlist, surfaceInfo_v &slist, int *activeSurfaces, int *activeBones)
-{
-	G2_FindOverrideSurface(-1, slist); //reset the quick surface override lookup;
-	// walk the bolt list
-	for (int i=0; i<bltlist.size(); i++)
-	{
-		// are we using this bolt?
-		if ((bltlist[i].surfaceNumber != -1) || (bltlist[i].boneNumber != -1))
-		{
-			// is this referenceing a surface?
-			if (bltlist[i].surfaceNumber != -1)
-			{
-				// is this bolt looking at a generated surface?
-				if (bltlist[i].surfaceType)
-				{
-					// yes, so look for it in the surface list
-					if (!G2_FindOverrideSurface(bltlist[i].surfaceNumber, slist))
-					{
-						// no - we want to remove this bolt, regardless of how many people are using it
-						bltlist[i].boltUsed = 1;
-						G2_Remove_Bolt(bltlist, i);
-					}
-				}
-				// no, it's an original, so look for it in the active surfaces list
-				{
-					if (!activeSurfaces[bltlist[i].surfaceNumber])
-					{
-						// no - we want to remove this bolt, regardless of how many people are using it
-						bltlist[i].boltUsed = 1;
-						G2_Remove_Bolt(bltlist, i);
-					}
-				}
-			}
-			// no, must be looking at a bone then
-			else
-			{
-				// is that bone active then?
-				if (!activeBones[bltlist[i].boneNumber])
-				{
-					// no - we want to remove this bolt, regardless of how many people are using it
-					bltlist[i].boltUsed = 1;
-					G2_Remove_Bolt(bltlist, i);
-				}
-			}
-		}
-	}
-}

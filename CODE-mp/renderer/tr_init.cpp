@@ -148,7 +148,6 @@ cvar_t	*r_directedScale;
 cvar_t	*r_debugLight;
 cvar_t	*r_debugSort;
 cvar_t	*r_printShaders;
-cvar_t	*r_saveFontData;
 
 cvar_t	*r_maxpolys;
 int		max_polys;
@@ -849,10 +848,11 @@ void R_Register( void )
 	r_subdivisions = ri.Cvar_Get ("r_subdivisions", "4", CVAR_ARCHIVE | CVAR_LATCH);
 #ifdef MACOS_X
         // Default to using SMP on Mac OS X if we have multiple processors
-	r_smp = ri.Cvar_Get( "r_smp", Sys_ProcessorCount() > 1 ? "1" : "0", CVAR_ARCHIVE | CVAR_LATCH);
+//	r_smp = ri.Cvar_Get( "r_smp", Sys_ProcessorCount() > 1 ? "1" : "0", CVAR_ARCHIVE | CVAR_LATCH);
 #else        
-	r_smp = ri.Cvar_Get( "r_smp", "0", CVAR_ARCHIVE | CVAR_LATCH);
+//	r_smp = ri.Cvar_Get( "r_smp", "0", CVAR_ARCHIVE | CVAR_LATCH);
 #endif
+	r_smp = ri.Cvar_Get( "r_smp", "0", CVAR_ROM);
 	r_ignoreFastPath = ri.Cvar_Get( "r_ignoreFastPath", "1", CVAR_ARCHIVE | CVAR_LATCH );
 
 	//
@@ -897,12 +897,11 @@ void R_Register( void )
 	//
 	// temporary variables that can change at any time
 	//
-	r_showImages = ri.Cvar_Get( "r_showImages", "0", CVAR_TEMP );
+	r_showImages = ri.Cvar_Get( "r_showImages", "0", CVAR_CHEAT );
 
 	r_debugLight = ri.Cvar_Get( "r_debuglight", "0", CVAR_TEMP );
 	r_debugSort = ri.Cvar_Get( "r_debugSort", "0", CVAR_CHEAT );
 	r_printShaders = ri.Cvar_Get( "r_printShaders", "0", 0 );
-	r_saveFontData = ri.Cvar_Get( "r_saveFontData", "0", 0 );
 
 	r_surfaceSprites = ri.Cvar_Get ("r_surfaceSprites", "1", CVAR_CHEAT);
 	r_surfaceWeather = ri.Cvar_Get ("r_surfaceWeather", "0", 0);
@@ -955,8 +954,8 @@ void R_Register( void )
 /*
 Ghoul2 Insert Start
 */
-	r_noServerGhoul2 = ri.Cvar_Get( "r_noserverghoul2", "0", 0);
-	r_noGhoul2 = ri.Cvar_Get( "r_noghoul2", "0", 0);
+	r_noServerGhoul2 = ri.Cvar_Get( "r_noserverghoul2", "0", CVAR_CHEAT);
+	r_noGhoul2 = ri.Cvar_Get( "r_noghoul2", "0", CVAR_CHEAT);
 /*
 Ghoul2 Insert End
 */
@@ -997,9 +996,12 @@ void R_Init( void ) {
 
 //	Swap_Init();
 
+#ifndef FINAL_BUILD
 	if ( (int)tess.xyz & 15 ) {
-		Com_Printf( "WARNING: tess.xyz not 16 byte aligned\n" );
+		Com_Printf( "WARNING: tess.xyz not 16 byte aligned (%x)\n",(int)tess.xyz & 15 );
 	}
+#endif
+
 	Com_Memset( tess.constantColor255, 255, sizeof( tess.constantColor255 ) );
 
 	//

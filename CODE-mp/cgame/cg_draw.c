@@ -443,42 +443,17 @@ CG_DrawHead
 Used for both the status bar and the scoreboard
 ================
 */
-void CG_DrawHead( float x, float y, float w, float h, int clientNum, vec3_t headAngles ) {
-	clipHandle_t	cm;
+void CG_DrawHead( float x, float y, float w, float h, int clientNum, vec3_t headAngles ) 
+{
 	clientInfo_t	*ci;
-	float			len;
-	vec3_t			origin;
-	vec3_t			mins, maxs;
 
 	ci = &cgs.clientinfo[ clientNum ];
 
-	if ( cg_draw3dIcons.integer ) {
-		cm = ci->headModel;
-		if ( !cm ) {
-			return;
-		}
-
-		// offset the origin y and z to center the head
-		trap_R_ModelBounds( cm, mins, maxs );
-
-		origin[2] = -0.5 * ( mins[2] + maxs[2] );
-		origin[1] = 0.5 * ( mins[1] + maxs[1] );
-
-		// calculate distance so the head nearly fills the box
-		// assume heads are taller than wide
-		len = 0.7 * ( maxs[2] - mins[2] );		
-		origin[0] = len / 0.268;	// len / tan( fov/2 )
-
-		// allow per-model tweaking
-		VectorAdd( origin, ci->headOffset, origin );
-
-		CG_Draw3DModel( x, y, w, h, ci->headModel, ci->headSkin, origin, headAngles );
-	} else if ( cg_drawIcons.integer ) {
-		CG_DrawPic( x, y, w, h, ci->modelIcon );
-	}
+	CG_DrawPic( x, y, w, h, ci->modelIcon );
 
 	// if they are deferred, draw a cross out
-	if ( ci->deferred ) {
+	if ( ci->deferred ) 
+	{
 		CG_DrawPic( x, y, w, h, cgs.media.deferShader );
 	}
 }
@@ -917,7 +892,20 @@ static void CG_DrawAmmo(centity_t	*cent,int x,int y)
 
 	if ( cent->currentState.weapon == WP_SABER )
 	{
-//		value = cent->gent->client->ps.forcePower;
+		trap_R_SetColor( colorTable[CT_WHITE] );
+		// don't need to draw ammo, but we will draw the current saber style in this window
+		switch ( cg.predictedPlayerState.fd.saberDrawAnimLevel )
+		{
+		case 1://FORCE_LEVEL_1:
+			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyle1 );
+			break;
+		case 2://FORCE_LEVEL_2:
+			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyle2 );
+			break;
+		case 3://FORCE_LEVEL_3:
+			CG_DrawPic( x, y, 80, 40, cgs.media.HUDSaberStyle3 );
+			break;
+		}
 		return;
 	}
 	else
@@ -1551,48 +1539,109 @@ void CG_DrawTeamBackground( int x, int y, int w, int h, float alpha, int team )
 
 /*
 ================
-CG_DrawAttacker
-
+CG_DrawMiniScoreboard
 ================
 */
-static float CG_DrawAttacker( float y ) {
-	int			t;
+static float CG_DrawMiniScoreboard ( float y ) 
+{
+	char temp[MAX_QPATH];
+
+	if ( !cg_drawScores.integer )
+	{
+		return y;
+	}
+
+	if ( cgs.gametype >= GT_TEAM )
+	{
+		strcpy ( temp, "Red: " );
+		Q_strcat ( temp, MAX_QPATH, cgs.scores1==SCORE_NOT_PRESENT?"-":(va("%i",cgs.scores1)) );
+		Q_strcat ( temp, MAX_QPATH, " Blue: " );
+		Q_strcat ( temp, MAX_QPATH, cgs.scores2==SCORE_NOT_PRESENT?"-":(va("%i",cgs.scores2)) );
+
+		CG_Text_Paint( 630 - CG_Text_Width ( temp, 0.75f, FONT_SMALL ), y, 0.75f, colorWhite, temp, 0, 0, 0, FONT_SMALL );
+		y += 15;
+	}
+	else
+	{
+		strcpy ( temp, "1st: " );
+		Q_strcat ( temp, MAX_QPATH, cgs.scores1==SCORE_NOT_PRESENT?"-":(va("%i",cgs.scores1)) );
+		Q_strcat ( temp, MAX_QPATH, " 2nd: " );
+		Q_strcat ( temp, MAX_QPATH, cgs.scores2==SCORE_NOT_PRESENT?"-":(va("%i",cgs.scores2)) );
+		CG_Text_Paint( 630 - CG_Text_Width ( temp, 0.75f, FONT_SMALL ), y, 0.75f, colorWhite, temp, 0, 0, 0, FONT_SMALL );
+		y += 15;
+	}		
+	
+
+	return y;
+}
+
+/*
+================
+CG_DrawEnemyInfo
+================
+*/
+static float CG_DrawEnemyInfo ( float y ) 
+{
 	float		size;
-	vec3_t		angles;
-	const char	*info;
-	const char	*name;
 	int			clientNum;
+	const char	*title;
+	clientInfo_t	*ci;
 
-	if ( cg.predictedPlayerState.stats[STAT_HEALTH] <= 0 ) {
+	if ( !cg_drawEnemyInfo.integer ) 
+	{
 		return y;
 	}
 
-	if ( !cg.attackerTime ) {
+	if ( cg.predictedPlayerState.stats[STAT_HEALTH] <= 0 ) 
+	{
 		return y;
+	}
+	
+	if ( cgs.gametype == GT_JEDIMASTER )
+	{
+		title = "Jedi Master";
+		clientNum = cgs.jediMaster;
+
+		if ( clientNum < 0 )
+		{
+			return y;
+		}
+	}
+	else if ( cg.snap->ps.duelInProgress )
+	{
+		title = "Dueling";
+		clientNum = cg.snap->ps.duelIndex;
+	}
+	else
+	{
+		title = "Attacker";
+		clientNum = cg.predictedPlayerState.persistant[PERS_ATTACKER];
+
+		if ( clientNum < 0 || clientNum >= MAX_CLIENTS || clientNum == cg.snap->ps.clientNum ) 
+		{
+			return y;
+		}
+
+		if ( cg.time - cg.attackerTime > ATTACKER_HEAD_TIME ) 
+		{
+			cg.attackerTime = 0;
+			return y;
+		}
 	}
 
-	clientNum = cg.predictedPlayerState.persistant[PERS_ATTACKER];
-	if ( clientNum < 0 || clientNum >= MAX_CLIENTS || clientNum == cg.snap->ps.clientNum ) {
-		return y;
-	}
-
-	t = cg.time - cg.attackerTime;
-	if ( t > ATTACKER_HEAD_TIME ) {
-		cg.attackerTime = 0;
-		return y;
-	}
+	ci = &cgs.clientinfo[ clientNum ];
 
 	size = ICON_SIZE * 1.25;
+	y += 5;
 
-	angles[PITCH] = 0;
-	angles[YAW] = 180;
-	angles[ROLL] = 0;
-	CG_DrawHead( 640 - size, y, size, size, clientNum, angles );
+	CG_DrawPic( 640 - size - 5, y, size, size, ci->modelIcon );
 
-	info = CG_ConfigString( CS_PLAYERS + clientNum );
-	name = Info_ValueForKey(  info, "n" );
 	y += size;
-	CG_DrawBigString( 640 - ( Q_PrintStrlen( name ) * BIGCHAR_WIDTH), y, name, 0.5 );
+
+	CG_Text_Paint( 630 - CG_Text_Width ( ci->name, 0.75f, FONT_SMALL ), y, 0.75f, colorWhite, ci->name, 0, 0, 0, FONT_SMALL );
+
+	y += 15;
+	CG_Text_Paint( 630 - CG_Text_Width ( title, 0.75f, FONT_SMALL ), y, 0.75f, colorWhite, title, 0, 0, 0, FONT_SMALL );
 
 	return y + BIGCHAR_HEIGHT + 2;
 }
@@ -1884,10 +1933,10 @@ static void CG_DrawUpperRight( void ) {
 	if ( cg_drawTimer.integer ) {
 		y = CG_DrawTimer( y );
 	}
-	if ( cg_drawAttacker.integer ) {
-		y = CG_DrawAttacker( y );
-	}
+	
+	y = CG_DrawEnemyInfo ( y );
 
+	y = CG_DrawMiniScoreboard ( y );
 }
 
 /*
@@ -2036,6 +2085,18 @@ static void CG_DrawDisconnect( void ) {
 	usercmd_t	cmd;
 	const char		*s;
 	int			w;  // bk010215 - FIXME char message[1024];
+
+	if (cg.mMapChange)
+	{
+		s = "Server Changing Maps";
+		w = CG_DrawStrlen( s ) * BIGCHAR_WIDTH;
+		CG_DrawBigString( 320 - w/2, 100, s, 1.0F);
+
+		s = "Please wait...";
+		w = CG_DrawStrlen( s ) * BIGCHAR_WIDTH;
+		CG_DrawBigString( 320 - w/2, 200, s, 1.0F);
+		return;
+	}
 
 	// draw the phone jack if we are completely past our buffers
 	cmdNum = trap_GetCurrentCmdNumber() - CMD_BACKUP + 1;
@@ -2634,6 +2695,17 @@ static void CG_DrawRocketLocking( int lockEntNum, int lockTime )
 		return;
 	}
 
+	//We can't check to see in pmove if players are on the same team, so we resort
+	//to just not drawing the lock if a teammate is the locked on ent
+	if (cg.snap->ps.rocketLockIndex >= 0 &&
+		cg.snap->ps.rocketLockIndex < MAX_CLIENTS)
+	{
+		if (cgs.clientinfo[cg.snap->ps.rocketLockIndex].team == cgs.clientinfo[cg.snap->ps.clientNum].team)
+		{
+			return;
+		}
+	}
+
 	if (cg.snap->ps.rocketLockTime != -1)
 	{
 		lastvalidlockdif = dif;
@@ -2865,12 +2937,14 @@ static void CG_DrawCrosshairNames( void ) {
 	if ( !cg_drawCrosshair.integer ) {
 		return;
 	}
-	if ( !cg_drawCrosshairNames.integer ) {
-		return;
-	}
 
 	// scan the known entities to see if the crosshair is sighted on one
 	CG_ScanForCrosshairEntity();
+
+	if ( !cg_drawCrosshairNames.integer ) {
+		return;
+	}
+	//rww - still do the trace, our dynamic crosshair depends on it
 
 	if (cg.crosshairClientNum >= MAX_CLIENTS)
 	{
@@ -3015,11 +3089,48 @@ static void CG_DrawTeamVote(void) {
 	if ( sec < 0 ) {
 		sec = 0;
 	}
-	s = va("TEAMVOTE(%i):%s yes:%i no:%i", sec, cgs.teamVoteString[cs_offset],
-							cgs.teamVoteYes[cs_offset], cgs.teamVoteNo[cs_offset] );
+	if (strstr(cgs.teamVoteString[cs_offset], "leader"))
+	{
+		int i = 0;
+
+		while (cgs.teamVoteString[cs_offset][i] && cgs.teamVoteString[cs_offset][i] != ' ')
+		{
+			i++;
+		}
+
+		if (cgs.teamVoteString[cs_offset][i] == ' ')
+		{
+			int voteIndex = 0;
+			char voteIndexStr[256];
+
+			i++;
+
+			while (cgs.teamVoteString[cs_offset][i])
+			{
+				voteIndexStr[voteIndex] = cgs.teamVoteString[cs_offset][i];
+				voteIndex++;
+				i++;
+			}
+			voteIndexStr[voteIndex] = 0;
+
+			voteIndex = atoi(voteIndexStr);
+
+			s = va("TEAMVOTE(%i):(Make %s the new team leader) yes:%i no:%i", sec, cgs.clientinfo[voteIndex].name,
+									cgs.teamVoteYes[cs_offset], cgs.teamVoteNo[cs_offset] );
+		}
+		else
+		{
+			s = va("TEAMVOTE(%i):%s yes:%i no:%i", sec, cgs.teamVoteString[cs_offset],
+									cgs.teamVoteYes[cs_offset], cgs.teamVoteNo[cs_offset] );
+		}
+	}
+	else
+	{
+		s = va("TEAMVOTE(%i):%s yes:%i no:%i", sec, cgs.teamVoteString[cs_offset],
+								cgs.teamVoteYes[cs_offset], cgs.teamVoteNo[cs_offset] );
+	}
 	CG_DrawSmallString( 0, 90, s, 1.0F );
 }
-
 
 static qboolean CG_DrawScoreboard() {
 	return CG_DrawOldScoreboard();

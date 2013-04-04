@@ -222,7 +222,10 @@ void CG_RegisterWeapon( int weaponNum ) {
 		{
 			cgi_S_RegisterSound( va( "sound/weapons/saber/saberbounce%d.wav", i ) );
 		}
-		cgi_S_RegisterSound( "sound/weapons/saber/saberhit.wav" );
+		for ( i = 1; i < 4; i++ )
+		{
+			cgi_S_RegisterSound( va( "sound/weapons/saber/saberhit%d.wav", i ) );
+		}
 		for ( i = 1; i < 4; i++ )
 		{
 			cgi_S_RegisterSound( va( "sound/weapons/saber/saberhitwall%d.wav", i ) );
@@ -235,11 +238,15 @@ void CG_RegisterWeapon( int weaponNum ) {
 		{
 			cgi_S_RegisterSound( va( "sound/weapons/saber/saberhum%d.wav", i ) );
 		}
-		for ( i = 1; i < 9; i++ )
+		for ( i = 1; i < 10; i++ )
 		{
 			cgi_S_RegisterSound( va( "sound/weapons/saber/saberhup%d.wav", i ) );
 		}
-		cgi_S_RegisterSound( "sound/weapons/saber/saberspin.wav" );
+		for ( i = 1; i < 4; i++ )
+		{
+			cgi_S_RegisterSound( va( "sound/weapons/saber/saberspin%d.wav", i ) );
+		}
+		cgi_S_RegisterSound( "sound/weapons/saber/saber_catch.wav" );
 		for ( i = 1; i < 4; i++ )
 		{
 			cgi_S_RegisterSound( va( "sound/weapons/saber/bounce%d.wav", i ) );
@@ -349,6 +356,7 @@ void CG_RegisterWeapon( int weaponNum ) {
 		cgs.effects.bowcasterShotEffect		= theFxScheduler.RegisterEffect( "bowcaster/shot" );
 		cgs.effects.bowcasterBounceEffect	= theFxScheduler.RegisterEffect( "bowcaster/bounce" );
 		cgs.effects.bowcasterImpactEffect	= theFxScheduler.RegisterEffect( "bowcaster/explosion" );
+		theFxScheduler.RegisterEffect( "bowcaster/deflect" );
 		break;
 
 	case WP_REPEATER:
@@ -518,9 +526,28 @@ void CG_RegisterItemVisuals( int itemNum ) {
 
 //	itemInfo->icon = cgi_R_RegisterShaderNoMip( item->icon );
 
-	if ( item->giType == IT_WEAPON ) {
+	if ( item->giType == IT_WEAPON ) 
+	{
 		CG_RegisterWeapon( item->giTag );
 	}
+
+	// some ammo types are actually the weapon, like in the case of explosives
+	if ( item->giType == IT_AMMO ) 
+	{
+		switch( item->giTag )
+		{
+		case AMMO_THERMAL:
+			CG_RegisterWeapon( WP_THERMAL );
+			break;
+		case AMMO_TRIPMINE:
+			CG_RegisterWeapon( WP_TRIP_MINE );
+			break;
+		case AMMO_DETPACK:
+			CG_RegisterWeapon( WP_DET_PACK );
+			break;
+		}
+	}
+
 
 	if ( item->giType == IT_HOLDABLE )
 	{
@@ -557,6 +584,13 @@ void CG_RegisterItemVisuals( int itemNum ) {
 			cgs.media.laGogglesBracket		= cgi_R_RegisterShader( "gfx/2d/bracket" );
 			cgs.media.laGogglesArrow		= cgi_R_RegisterShader( "gfx/2d/bracket2" );
 			break;
+
+		case INV_BACTA_CANISTER:
+			for ( int i = 1; i < 5; i++ )
+			{
+				cgi_S_RegisterSound( va( "sound/weapons/force/heal%d.mp3", i ));
+			}
+			break;
 		}
 	}
 }
@@ -574,6 +608,13 @@ VIEW WEAPON
 =================
 CG_MapTorsoToWeaponFrame
 
+animations MUST match the defined pattern!
+the weapon hand animation has 3 anims, 
+	6 frames of attack
+	4 frames of drop
+	5 frames of raise
+
+  if the torso anim does not match these lengths, it will not animate correctly!
 =================
 */
 extern qboolean ValidAnimFileIndex ( int index );
@@ -585,36 +626,55 @@ int CG_MapTorsoToWeaponFrame( const clientInfo_t *ci, int frame, int animNum, in
 		return 0;
 	}
 	animation_t *animations = level.knownAnimFileSets[ci->animFileIndex].animations;
+	int ret=0;
 
 	switch( animNum )
 	{
+	case TORSO_WEAPONREADY3:
+		ret = 0;
+		break;
+
 	case TORSO_DROPWEAP1:
 		if ( frame >= animations[animNum].firstFrame && frame < animations[animNum].firstFrame + 5 ) 
 		{
-			return frame - animations[animNum].firstFrame + 6;
+			ret = frame - animations[animNum].firstFrame + 6;
+		}
+		else
+		{
+//			assert(0);
 		}
 		break;
 
 	case TORSO_RAISEWEAP1:
 		if ( frame >= animations[animNum].firstFrame && frame < animations[animNum].firstFrame + 4 ) 
 		{
-			return frame - animations[animNum].firstFrame + 6 + 4;
+			ret = frame - animations[animNum].firstFrame + 6 + 5;
+		}
+		else
+		{
+//			assert(0);
 		}
 		break;
 
 	case BOTH_ATTACK1:
 	case BOTH_ATTACK2:
 	case BOTH_ATTACK3:
+	case BOTH_ATTACK4:
 		if ( frame >= animations[animNum].firstFrame && frame < animations[animNum].firstFrame + 6 ) 
 		{
-			return 1 + ( frame - animations[animNum].firstFrame );
+			ret = 1 + ( frame - animations[animNum].firstFrame );
 		}
-
+		else
+		{
+//			assert(0);
+		}
+		break;
+	default:
 		break;
 	}	
-	return 0;
-}
 
+	return ret;
+}
 
 /*
 ==============
@@ -780,6 +840,7 @@ Add the weapon, and flash for the player's view
 ==============
 */
 extern int PM_TorsoAnimForFrame( gentity_t *ent, int torsoFrame );
+extern float CG_ForceSpeedFOV( void );
 
 void CG_AddViewWeapon( playerState_t *ps ) 
 {
@@ -859,7 +920,16 @@ void CG_AddViewWeapon( playerState_t *ps )
 	}
 
 	// drop gun lower at higher fov
-	float actualFOV = (cg.overrides.active&CG_OVERRIDE_FOV) ? cg.overrides.fov : cg_fov.value;
+	float actualFOV;
+	if ( (cg.snap->ps.forcePowersActive&(1<<FP_SPEED)) && player->client->ps.forcePowerDuration[FP_SPEED] )//cg.renderingThirdPerson && 
+	{
+		actualFOV = CG_ForceSpeedFOV();
+	}
+	else
+	{
+		actualFOV = (cg.overrides.active&CG_OVERRIDE_FOV) ? cg.overrides.fov : cg_fov.value;
+	}
+
 	if ( actualFOV > 80 ) 
 	{
 		fovOffset = -0.1 * ( actualFOV - 80 );
@@ -895,15 +965,27 @@ void CG_AddViewWeapon( playerState_t *ps )
 	{
 		// get clientinfo for animation map
 		const clientInfo_t	*ci = &cent->gent->client->clientInfo;
-		int torsoAnim = PM_TorsoAnimForFrame( cent->gent, cent->pe.torso.frame );
-		hand.frame = CG_MapTorsoToWeaponFrame( ci, cent->pe.torso.frame, torsoAnim, cent->currentState.weapon, ( cent->currentState.eFlags & EF_FIRING ) );
-		hand.oldframe = CG_MapTorsoToWeaponFrame( ci, cent->pe.torso.oldFrame, torsoAnim, cent->currentState.weapon, ( cent->currentState.eFlags & EF_FIRING ) );
-		hand.backlerp = cent->pe.torso.backlerp;
-		if ( hand.frame && cg_debugAnim.integer == 1 && cent->currentState.clientNum == 0 )
+		int torsoAnim = cent->pe.torso.animationNumber;
+		float currentFrame;
+		int startFrame,endFrame,flags;
+		float animSpeed;
+		if (cent->gent->lowerLumbarBone>=0&& gi.G2API_GetBoneAnimIndex(&cent->gent->ghoul2[cent->gent->playerModel], cent->gent->lowerLumbarBone, cg.time, &currentFrame, &startFrame, &endFrame, &flags, &animSpeed,0) )
 		{
-			Com_Printf( "Torso frame %d to %d makes Weapon frame %d to %d\n", cent->pe.torso.oldFrame,  cent->pe.torso.frame, hand.oldframe, hand.frame );
+			hand.oldframe = CG_MapTorsoToWeaponFrame( ci,floor(currentFrame), torsoAnim, cent->currentState.weapon, ( cent->currentState.eFlags & EF_FIRING ) );
+			hand.frame = CG_MapTorsoToWeaponFrame( ci,ceil(currentFrame), torsoAnim, cent->currentState.weapon, ( cent->currentState.eFlags & EF_FIRING ) );
+			hand.backlerp=1.0f-(currentFrame-floor(currentFrame));
+//			if ( cg_debugAnim.integer == 1 && cent->currentState.clientNum == 0 )
+//			{
+//				Com_Printf( "Torso frame %d to %d makes Weapon frame %d to %d\n", cent->pe.torso.oldFrame,  cent->pe.torso.frame, hand.oldframe, hand.frame );
+//			}
 		}
-
+		else
+		{
+//			assert(0); // no idea what to do here
+			hand.oldframe=0;
+			hand.frame=0;
+			hand.backlerp=0.0f;
+		}
 	}
 
 	// add the weapon
@@ -990,7 +1072,7 @@ void CG_AddViewWeapon( playerState_t *ps )
 
 	CG_DoMuzzleFlash( cent, flash.origin, flash.axis[0], wData );
 
-	if (cent->gent && cent->gent->client)
+	if ( cent->gent && cent->gent->client )
 	{
 		VectorCopy(flash.origin, cent->gent->client->renderInfo.muzzlePoint);
 		VectorCopy(flash.axis[0], cent->gent->client->renderInfo.muzzleDir);
@@ -1046,8 +1128,7 @@ void CG_AddViewWeapon( playerState_t *ps )
 
 		val += random() * 0.5f;
 
-		// FIXME!  This shader should technically be registered....but it's ugly and it should be registered properly just in case
-		FX_AddSprite( flash.origin, NULL, NULL, 3.0f * val * scale, 0.0f, 0.7f, 0.7f, WHITE, WHITE, random() * 360, 0.0f, 1.0f, shader, FX_USE_ALPHA );
+		FX_AddSprite( flash.origin, NULL, NULL, 3.0f * val * scale, 0.0f, 0.7f, 0.7f, WHITE, WHITE, random() * 360, 0.0f, 1.0f, shader, FX_USE_ALPHA | FX_DEPTH_HACK );
 	}
 
 	// Check if the heavy repeater is finishing up a sustained burst
@@ -1624,17 +1705,16 @@ CG_DrawWeaponSelect
 */
 void CG_DrawWeaponSelect( void ) 
 {
-	int				i;
-	int				bits;
-	int				count;
-	char			*name;
-	int				smallIconSize,bigIconSize;
-	int				holdX,x,y,x2,y2,pad;
-	int				sideLeftIconCnt,sideRightIconCnt;
-	int				sideMax,holdCount,iconCnt;
-	int				height;
-	vec4_t			calcColor;
-	vec4_t			textColor = { .875f, .718f, .121f, 1.0f };
+	int		i;
+	int		bits;
+	int		count;
+	int		smallIconSize,bigIconSize;
+	int		holdX,x,y,x2,y2,pad;
+	int		sideLeftIconCnt,sideRightIconCnt;
+	int		sideMax,holdCount,iconCnt;
+	int		height;
+	vec4_t	calcColor;
+	vec4_t	textColor = { .875f, .718f, .121f, 1.0f };
 
 	if (!cgi_UI_GetMenuInfo("weaponselecthud",&x2,&y2))
 	{
@@ -1815,17 +1895,22 @@ void CG_DrawWeaponSelect( void )
 		}
 	}
 
+	gitem_t *item = cg_weapons[ cg.weaponSelect ].item;
+
 	// draw the selected name
-	if ( cg_weapons[ cg.weaponSelect ].item ) 
+	if ( item && item->classname && item->classname[0] ) 
 	{
-		name = cg_weapons[ cg.weaponSelect ].item->pickup_name;
-		if ( name ) 
+		char itemName[256], data[1024];
+
+		sprintf( itemName, "INGAME_%s",	item->classname );
+		
+		if ( cgi_SP_GetStringTextString( itemName, data, sizeof( data )))
 		{
 // Just doing this for now......
 //#ifdef _DEBUG
-			int w = cgi_R_Font_StrLenPixels(name, cgs.media.qhFontSmall, 1.0f);	
+			int w = cgi_R_Font_StrLenPixels(data, cgs.media.qhFontSmall, 1.0f);	
 			int x = ( SCREEN_WIDTH - w ) / 2;
-			cgi_R_Font_DrawString(x, (SCREEN_HEIGHT - 24), name, textColor, cgs.media.qhFontSmall, -1, 1.0f);
+			cgi_R_Font_DrawString(x, (SCREEN_HEIGHT - 24), data, textColor, cgs.media.qhFontSmall, -1, 1.0f);
 //#endif
 		}
 	}
@@ -1839,7 +1924,7 @@ void CG_DrawWeaponSelect( void )
 CG_WeaponSelectable
 ===============
 */
-qboolean CG_WeaponSelectable( int i, int original ) 
+qboolean CG_WeaponSelectable( int i, int original, qboolean dpMode ) 
 {
 	int	usage_for_weap;
 
@@ -1862,7 +1947,7 @@ qboolean CG_WeaponSelectable( int i, int original )
 		return qfalse;
 	}
 
-	if ( weaponData[i].ammoIndex != AMMO_NONE )
+	if (( weaponData[i].ammoIndex != AMMO_NONE ) && !dpMode )
 	{//weapon uses ammo, see if we have any
 		usage_for_weap = weaponData[i].energyPerShot < weaponData[i].altEnergyPerShot 
 									? weaponData[i].energyPerShot 
@@ -1989,7 +2074,7 @@ void CG_NextWeapon_f( void ) {
 			cg.weaponSelect = FIRST_WEAPON; 
 		}
 		
-		if ( CG_WeaponSelectable( cg.weaponSelect, original ) ) 
+		if ( CG_WeaponSelectable( cg.weaponSelect, original, qfalse ) ) 
 		{	
 //			cg.weaponSelectTime = cg.time;
 			SetWeaponSelectTime();
@@ -2028,7 +2113,7 @@ void CG_DPNextWeapon_f( void ) {
 			cg.DataPadWeaponSelect = FIRST_WEAPON; 
 		}
 		
-		if ( CG_WeaponSelectable( cg.DataPadWeaponSelect, original ) ) 
+		if ( CG_WeaponSelectable( cg.DataPadWeaponSelect, original, qtrue ) ) 
 		{	
 			return;
 		}
@@ -2069,7 +2154,7 @@ void CG_DPPrevWeapon_f( void )
 			cg.DataPadWeaponSelect = MAX_PLAYER_WEAPONS;
 		}
 		
-		if ( CG_WeaponSelectable( cg.DataPadWeaponSelect, original ) ) 
+		if ( CG_WeaponSelectable( cg.DataPadWeaponSelect, original, qtrue ) ) 
 		{
 			return;
 		}
@@ -2134,7 +2219,7 @@ void CG_PrevWeapon_f( void ) {
 			cg.weaponSelect = MAX_PLAYER_WEAPONS;
 		}
 		
-		if ( CG_WeaponSelectable( cg.weaponSelect, original ) ) 
+		if ( CG_WeaponSelectable( cg.weaponSelect, original, qfalse ) ) 
 		{
 			SetWeaponSelectTime();
 //			cg.weaponSelectTime = cg.time;
@@ -2274,7 +2359,7 @@ void CG_Weapon_f( void ) {
 					weap = WP_THERMAL;
 				}
 
-				if ( CG_WeaponSelectable( weap, cg.snap->ps.weapon ) ) 
+				if ( CG_WeaponSelectable( weap, cg.snap->ps.weapon, qfalse ) ) 
 				{	
 					num = weap;
 					break;
@@ -2336,7 +2421,7 @@ void CG_OutOfAmmoChange( void ) {
 	original = cg.weaponSelect;
 
 	for ( i = WP_DET_PACK; i > 0 ; i-- ) {	//We don't want the emplaced, or melee here
-		if ( original != i && CG_WeaponSelectable( i, original ) )
+		if ( original != i && CG_WeaponSelectable( i, original, qfalse ) )
 		{
 			if ( 1 == cg_autoswitch.integer && 
 				( i == WP_TRIP_MINE || i == WP_DET_PACK || i == WP_THERMAL || i == WP_ROCKET_LAUNCHER) ) // safe weapon switch
@@ -2454,7 +2539,7 @@ void CG_FireWeapon( centity_t *cent, qboolean alt_fire )
 	}	
 
 	// Do overcharge sound that get's added to the top
-	if (( ent->powerups & ( 1<<PW_WEAPON_OVERCHARGE )))
+/*	if (( ent->powerups & ( 1<<PW_WEAPON_OVERCHARGE )))
 	{
 		if ( alt_fire )
 		{
@@ -2497,7 +2582,7 @@ void CG_FireWeapon( centity_t *cent, qboolean alt_fire )
 				break;
 			}
 		}
-	}
+	}*/
 }
 
 /*

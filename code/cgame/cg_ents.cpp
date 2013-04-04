@@ -153,76 +153,35 @@ static void CG_EntityEffects( centity_t *cent ) {
 
 void CG_AddRefEntWithTransportEffect ( centity_t *cent, refEntity_t *ent )
 {
-	//NOTE: This WILL NOT work on BMODELS!!!  BMODELS cannot take custom shaders
-	if ( cent->currentState.solid != SOLID_BMODEL && ((cent->gent->s.eFlags & EF_BEAM_IN) || (cent->gent->s.eFlags & EF_BEAM_OUT) || (cent->gent->s.eFlags & EF_DISINTEGRATION)) )
+	// We are a normal thing....
+	cgi_R_AddRefEntityToScene (ent);
+
+	if ( ent->renderfx & RF_PULSATE && cent->gent->owner && cent->gent->owner->health &&
+		!cent->gent->owner->s.number && cent->gent->owner->client && //only for player
+			cent->gent->owner->client->ps.saberEntityState == SES_RETURNING && 
+			cent->currentState.saberActive == qfalse )
 	{
-		//----------
-		// FIXME: I think this whole section can just go away?....since beaming things in or out isn't very Star Warzy
-		//----------
-		if ( cent->gent->s.eFlags & EF_BEAM_OUT && cent->gent->delay > cg.time + 2000 )
-		{
-			cgi_R_AddRefEntityToScene (ent);
-		}
-		else if ( cent->gent->s.eFlags & EF_BEAM_IN && cent->gent->delay > 0 && cent->gent->delay < cg.time + 2000 )
-		{
-			cgi_R_AddRefEntityToScene (ent);
-		}
+		// if we are the saber and we have been dropped, do a glow so it can be spotted easier
+		float	wv;
+		vec3_t	org;
 
-		// Clear the flags if necessary
-		if ( cent->gent->s.eFlags & EF_BEAM_IN && cent->gent->delay < cg.time )
-		{
-			cent->gent->s.eFlags &= ~EF_BEAM_IN;
-		}
-
-		if ( cent->gent->s.eFlags & EF_BEAM_OUT && cent->gent->delay < cg.time )
-		{
-			cent->gent->s.eFlags &= ~EF_BEAM_OUT;
-		}
-
-		// We are beaming in or out, so it's ok to add in the beaming effect
-		if ( cent->gent->s.eFlags & EF_DISINTEGRATION )
-		{
-			ent->customShader = cgs.media.disruptorShader;
-		}
-		else
-		{
-//			ent->customShader = cgs.media.transportShader;
-		}
-		ent->shaderTime = cent->gent->fx_time / 1000.0f;
-		cgi_R_AddRefEntityToScene( ent );
-	}
-	else
-	{
-		// We are a normal thing....
+		ent->customShader = cgi_R_RegisterShader( "gfx/effects/solidWhite_cull" );
+		ent->renderfx = RF_RGB_TINT;
+		wv = sin( cg.time * 0.003f ) * 0.08f + 0.1f;
+		ent->shaderRGBA[0] = wv * 255;
+		ent->shaderRGBA[1] = wv * 255;
+		ent->shaderRGBA[2] = wv * 0;
 		cgi_R_AddRefEntityToScene (ent);
 
-		if ( ent->renderfx & RF_PULSATE && cent->gent->owner && cent->gent->owner->health &&
-			!cent->gent->owner->s.number && cent->gent->owner->client && //only for player
-				cent->gent->owner->client->ps.saberEntityState == SES_RETURNING && 
-				cent->currentState.saberActive == qfalse )
+		for ( int i = -4; i < 10; i += 1 )
 		{
-			// if we are the saber and we have been dropped, do a glow so it can be spotted easier
-			float	wv;
-			vec3_t	org;
+			VectorMA( ent->origin, -i, ent->axis[2], org );
 
-			ent->customShader = cgi_R_RegisterShader( "gfx/effects/solidWhite_cull" );
-			ent->renderfx = RF_RGB_TINT;
-			wv = sin( cg.time * 0.003f ) * 0.08f + 0.1f;
-			ent->shaderRGBA[0] = wv * 255;
-			ent->shaderRGBA[1] = wv * 255;
-			ent->shaderRGBA[2] = wv * 0;
-			cgi_R_AddRefEntityToScene (ent);
-
-			for ( int i = -4; i < 10; i += 1 )
-			{
-				VectorMA( ent->origin, -i, ent->axis[2], org );
-
-				FX_AddSprite( org, NULL, NULL, 5.5f, 5.5f, wv, wv, 0.0f, 0.0f, 1.0f, cgs.media.yellowDroppedSaberShader, 0x08000000 );
-			}
-			if ( cent->gent->owner->s.weapon == WP_SABER )
-			{//he's still controlling me
-				FX_AddSprite( cent->gent->owner->client->renderInfo.handRPoint, NULL, NULL, 8.0f, 8.0f, wv, wv, 0.0f, 0.0f, 1.0f, cgs.media.yellowDroppedSaberShader, 0x08000000 );
-			}
+			FX_AddSprite( org, NULL, NULL, 5.5f, 5.5f, wv, wv, 0.0f, 0.0f, 1.0f, cgs.media.yellowDroppedSaberShader, 0x08000000 );
+		}
+		if ( cent->gent->owner->s.weapon == WP_SABER )
+		{//he's still controlling me
+			FX_AddSprite( cent->gent->owner->client->renderInfo.handRPoint, NULL, NULL, 8.0f, 8.0f, wv, wv, 0.0f, 0.0f, 1.0f, cgs.media.yellowDroppedSaberShader, 0x08000000 );
 		}
 	}
 }
@@ -510,8 +469,10 @@ const weaponData_t  *wData = NULL;
 			if ( !( cc->currentState.eFlags & EF_FIRING ) && !( cc->currentState.eFlags & EF_ALT_FIRING ))
 			{
 				// not animating..pausing was leaving the barrels in a bad state
-				gi.G2API_SetBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->rootBone, 
-						0, 0, BONE_ANIM_OVERRIDE, 1.0f, cg.time );
+				gi.G2API_PauseBoneAnim( &cent->gent->ghoul2[cent->gent->playerModel], "model_root", cg.time );
+
+//				gi.G2API_SetBoneAnimIndex( &cent->gent->ghoul2[cent->gent->playerModel], cent->gent->rootBone, 
+//						0, 0, BONE_ANIM_OVERRIDE, 1.0f, cg.time );
 			}
 
 			// get alternating muzzle end bolts
@@ -589,11 +550,15 @@ const weaponData_t  *wData = NULL;
 				{
 					if ( cent->gent->owner->client->ps.saberLength > 0 )
 					{
-						CG_AddSaberBlade( &cg_entities[cent->gent->owner->s.number], &cg_entities[cent->gent->s.number], NULL, ent.renderfx, cent->gent->weaponModel, cent->lerpOrigin, cent->lerpAngles );
+						CG_AddSaberBlade( &cg_entities[cent->gent->owner->s.number], 
+							&cg_entities[cent->gent->s.number], NULL, ent.renderfx, 
+							cent->gent->weaponModel, cent->lerpOrigin, cent->lerpAngles );
 					}
 					else if ( cent->gent->owner->client->ps.saberEventFlags & SEF_INWATER )
 					{
-						CG_CheckSaberInWater( &cg_entities[cent->gent->owner->s.number], &cg_entities[cent->gent->s.number], cent->gent->weaponModel, cent->lerpOrigin, cent->lerpAngles );
+						CG_CheckSaberInWater( &cg_entities[cent->gent->owner->s.number], 
+							&cg_entities[cent->gent->s.number], cent->gent->weaponModel, 
+							cent->lerpOrigin, cent->lerpAngles );
 					}
 				}
 			}
@@ -610,7 +575,22 @@ const weaponData_t  *wData = NULL;
 					}
 					else
 					{
-						cgi_S_AddLoopingSound( cent->currentState.number, cent->lerpOrigin, vec3_origin, cgi_S_RegisterSound("sound/weapons/saber/saberspin.wav") );
+						int spinSound;
+						switch ( cent->gent->owner->client->ps.forcePowerLevel[FP_SABERTHROW] )
+						{
+						case FORCE_LEVEL_1:
+							spinSound = cgi_S_RegisterSound( "sound/weapons/saber/saberspin3.wav" );
+							break;
+						case FORCE_LEVEL_2:
+							spinSound = cgi_S_RegisterSound( "sound/weapons/saber/saberspin2.wav" );
+							break;
+						default:
+						case FORCE_LEVEL_3:
+							spinSound = cgi_S_RegisterSound( "sound/weapons/saber/saberspin1.wav" );
+							break;
+						}
+						cgi_S_AddLoopingSound( cent->currentState.number, cent->lerpOrigin, 
+							vec3_origin, spinSound );
 						/*
 						if ( cg_weapons[WP_SABER].missileSound )
 						{
@@ -623,11 +603,15 @@ const weaponData_t  *wData = NULL;
 				{
 					if ( cent->gent->owner->client->ps.saberLength > 0 )
 					{//only add the blade if it's on
-						CG_AddSaberBlade( &cg_entities[cent->gent->owner->s.number], &cg_entities[cent->gent->s.number], NULL, ent.renderfx, 0, cent->lerpOrigin, cent->lerpAngles);
+						CG_AddSaberBlade( &cg_entities[cent->gent->owner->s.number], 
+							&cg_entities[cent->gent->s.number], NULL, ent.renderfx, 
+							0, cent->lerpOrigin, cent->lerpAngles );
 					}
 					else if ( cent->gent->owner->client->ps.saberEventFlags & SEF_INWATER )
 					{
-						CG_CheckSaberInWater( &cg_entities[cent->gent->owner->s.number], &cg_entities[cent->gent->s.number], 0, cent->lerpOrigin, cent->lerpAngles );
+						CG_CheckSaberInWater( &cg_entities[cent->gent->owner->s.number], 
+							&cg_entities[cent->gent->s.number], 0, cent->lerpOrigin, 
+							cent->lerpAngles );
 					}
 				}
 				if ( cent->gent->owner->health )
@@ -649,12 +633,28 @@ const weaponData_t  *wData = NULL;
 				{
 					if ( cg_weapons[WP_SABER].firingSound )
 					{
-						cgi_S_AddLoopingSound( cent->currentState.number, cent->lerpOrigin, vec3_origin, cg_weapons[WP_SABER].firingSound );
+						cgi_S_AddLoopingSound( cent->currentState.number, 
+							cent->lerpOrigin, vec3_origin, cg_weapons[WP_SABER].firingSound );
 					}
 				}
 				else
 				{
-					cgi_S_AddLoopingSound( cent->currentState.number, cent->lerpOrigin, vec3_origin, cgi_S_RegisterSound("sound/weapons/saber/saberspin.wav") );
+					int spinSound;
+					switch ( cent->gent->owner->client->ps.forcePowerLevel[FP_SABERTHROW] )
+					{
+					case FORCE_LEVEL_1:
+						spinSound = cgi_S_RegisterSound( "sound/weapons/saber/saberspin3.wav" );
+						break;
+					case FORCE_LEVEL_2:
+						spinSound = cgi_S_RegisterSound( "sound/weapons/saber/saberspin2.wav" );
+						break;
+					default:
+					case FORCE_LEVEL_3:
+						spinSound = cgi_S_RegisterSound( "sound/weapons/saber/saberspin1.wav" );
+						break;
+					}
+					cgi_S_AddLoopingSound( cent->currentState.number, cent->lerpOrigin, 
+						vec3_origin, spinSound );
 					/*
 					if ( cg_weapons[WP_SABER].missileSound )
 					{
@@ -663,7 +663,8 @@ const weaponData_t  *wData = NULL;
 					*/
 				}
 			}
-			CG_AddSaberBlade( &cg_entities[cent->gent->owner->s.number], NULL, &ent, ent.renderfx, 0, NULL, NULL );
+			CG_AddSaberBlade( &cg_entities[cent->gent->owner->s.number], 
+				NULL, &ent, ent.renderfx, 0, NULL, NULL );
 
 			if ( cent->gent->owner->health )
 			{
@@ -1488,59 +1489,13 @@ void CG_AdjustPositionForMover( const vec3_t in, int moverNum, int atTime, vec3_
 }
 
 /*
-Ghoul2 Insert Start
-*/
-/*
-static void LerpBoneAngleOverrides( centity_t *cent)
-{
-	// loop each model
-	for (int i=0; i< cent->gent->ghoul2.size(); i++)
-	{
-		if (cent->gent->ghoul2[i].mModelindex != -1)
-		{
-			// now walk the bone list
-			for (int x = 0; x < cent->gent->ghoul2[i].mBlist.size(); x++)
-			{
-				boneInfo_t	&bone = cent->gent->ghoul2[i].mBlist[x];
-				// sure we have one to lerp to?
-				if ((cent->nextState.ghoul2.size() > i) &&
-					(cent->nextState.ghoul2[i].mModelindex != -1) &&
-					(cent->nextState.ghoul2[i].mBlist.size() > x) &&
-					(cent->nextState.ghoul2[i].mBlist[x].boneNumber != -1))
-				{
-					boneInfo_t	&nextBone = cent->nextState.ghoul2[i].mBlist[x];
-					// does this bone override actually have anything in it, and if it does, is it a bone angles override?
-					if ((bone.boneNumber != -1) && ((bone.flags) & (BONE_ANGLES_TOTAL)))
-					{
-						float *nowMatrix = (float*) &bone.matrix;
-						float *nextMatrix = (float*) &nextBone.matrix;
-						float *newMatrix = (float*) &bone.newMatrix;
-						// now interpolate the matrix
-						for (int z=0; z < 12; z++)
-						{
-							newMatrix[z] = nowMatrix[z] + cg.frameInterpolation * ( nextMatrix[z] - nowMatrix[z] );
-						}
-					}
-				}
-				else
-				{
-					memcpy(&cent->gent->ghoul2[i].mBlist[x].newMatrix, &cent->gent->ghoul2[i].mBlist[x].matrix, sizeof(mdxaBone_t));
-				}
-			}
-		}
-	}
-}
-*/
-/*
-Ghoul2 Insert End
-*/
-/*
 ===============
 CG_CalcEntityLerpPositions
 
 ===============
 */
 extern char	*vtos( const vec3_t v );
+#if 1
 void CG_CalcEntityLerpPositions( centity_t *cent ) {
 	if ( cent->currentState.number == cg.snap->ps.clientNum)
 	{
@@ -1689,7 +1644,107 @@ Ghoul2 Insert End
 */
 	// FIXME: perform general error decay?
 }
+#else
+void CG_CalcEntityLerpPositions( centity_t *cent ) 
+{
+	if ( cent->currentState.number == cg.snap->ps.clientNum)
+	{
+		// if the player, take position from prediction
+		VectorCopy( cg.predicted_player_state.origin, cent->lerpOrigin );
+		VectorCopy( cg.predicted_player_state.viewangles, cent->lerpAngles );
+OutputDebugString(va("b=(%6.2f,%6.2f,%6.2f)\n",cent->lerpOrigin[0],cent->lerpOrigin[1],cent->lerpOrigin[2]));
+		return;
+	}
 
+
+if (cent->currentState.number != cg.snap->ps.clientNum&&cent->interpolate && cent->currentState.pos.trType == TR_INTERPOLATE)
+{
+	if (cent->interpolate)
+	{
+OutputDebugString(va("[%3d] interp %4.2f t=%6d  st = %6d  nst = %6d     b=%6.2f   nb=%6.2f\n",
+		cent->currentState.number,
+		cg.frameInterpolation,
+		cg.time,
+		cg.snap->serverTime,
+		cg.nextSnap->serverTime,
+		cent->currentState.pos.trBase[0],
+		cent->nextState.pos.trBase[0]));
+	}
+	else
+	{
+OutputDebugString(va("[%3d] nonext %4.2f t=%6d  st = %6d  nst = %6d     b=%6.2f   nb=%6.2f\n",
+		cent->currentState.number,
+		cg.frameInterpolation,
+		cg.time,
+		cg.snap->serverTime,
+		0,
+		cent->currentState.pos.trBase[0],
+		0.0f));
+	}
+}
+
+	//FIXME: prediction on clients in timescale results in jerky positional translation
+	if (cent->interpolate && 
+		(cent->currentState.number == cg.snap->ps.clientNum ||
+		cent->interpolate && cent->currentState.pos.trType == TR_INTERPOLATE ) )
+	{
+		vec3_t		current, next;
+		float		f;
+
+		// it would be an internal error to find an entity that interpolates without
+		// a snapshot ahead of the current one
+		if ( cg.nextSnap == NULL ) 
+		{
+			CG_Error( "CG_AddCEntity: cg.nextSnap == NULL" );
+		}
+
+		f = cg.frameInterpolation;
+
+		EvaluateTrajectory( &cent->currentState.apos, cg.snap->serverTime, current );
+		EvaluateTrajectory( &cent->nextState.apos, cg.nextSnap->serverTime, next );
+
+		cent->lerpAngles[0] = LerpAngle( current[0], next[0], f );
+		cent->lerpAngles[1] = LerpAngle( current[1], next[1], f );
+		cent->lerpAngles[2] = LerpAngle( current[2], next[2], f );
+
+		EvaluateTrajectory( &cent->currentState.pos, cg.snap->serverTime, current );
+		EvaluateTrajectory( &cent->nextState.pos, cg.nextSnap->serverTime, next );
+
+		cent->lerpOrigin[0] = current[0] + f * ( next[0] - current[0] );
+		cent->lerpOrigin[1] = current[1] + f * ( next[1] - current[1] );
+		cent->lerpOrigin[2] = current[2] + f * ( next[2] - current[2] );
+		return;
+	}
+	// just use the current frame and evaluate as best we can
+	trajectory_t *posData = &cent->currentState.pos;
+	{
+		gentity_t *ent = &g_entities[cent->currentState.number];
+
+		if ( ent && ent->inuse)
+		{
+			if ( ent->s.eFlags & EF_BLOCKED_MOVER || ent->s.pos.trType == TR_STATIONARY )
+			{//this mover has stopped moving and is going to wig out if we predict it
+				//based on last frame's info- cut across the network and use the currentOrigin
+				VectorCopy( ent->currentOrigin, cent->lerpOrigin );
+				posData = NULL;
+			}
+			else
+			{
+				posData = &ent->s.pos;
+				EvaluateTrajectory(&ent->s.pos,cg.time, cent->lerpOrigin );
+			}
+		}
+		else
+		{
+			EvaluateTrajectory( &cent->currentState.pos, cg.snap->serverTime, cent->lerpOrigin );
+		}
+	}
+	EvaluateTrajectory( &cent->currentState.apos, cg.time, cent->lerpAngles );
+
+	// adjust for riding a mover
+	CG_AdjustPositionForMover( cent->lerpOrigin, cent->currentState.groundEntityNum, cg.time, cent->lerpOrigin );
+}
+#endif
 /*
 ===============
 CG_AddLocalSet
@@ -1823,6 +1878,63 @@ void CG_DLightThink ( centity_t *cent )
 
 		cgi_R_AddLightToScene(org, currentRGBA[3]*10, currentRGBA[0], currentRGBA[1], currentRGBA[2] );
 	}
+}
+
+void CG_Limb ( centity_t *cent )
+{//first time we're drawn, remove us from the owner ent
+	if ( cent->gent && cent->gent->owner && cent->gent->owner->ghoul2.size() )
+	{
+		gentity_t	*owner = cent->gent->owner;
+		if ( cent->gent->aimDebounceTime )
+		{//done with dismemberment, just waiting to mark owner dismemberable again
+			if ( cent->gent->aimDebounceTime > cg.time )
+			{//still waiting
+				return;
+			}
+			//done!
+			owner->client->dismembered = qfalse;
+		}
+		else
+		{
+extern cvar_t	*g_dismemberment;
+extern cvar_t	*g_realisticSaberDamage;
+			//3) turn off w/descendants that surf in original model
+			if ( cent->gent->target )//stubTagName )
+			{//add smoke to cap surf, spawn effect
+				int newBolt = gi.G2API_AddBolt( &owner->ghoul2[owner->playerModel], cent->gent->target );
+				if ( newBolt != -1 )
+				{
+					G_PlayEffect( "blaster/smoke_bolton", owner->playerModel, newBolt, owner->s.number );
+				}
+			}
+			if ( cent->gent->target2 )//limbName
+			{//turn the limb off
+				gi.G2API_SetSurfaceOnOff( &owner->ghoul2[owner->playerModel], cent->gent->target2, 0x00000100 );//G2SURFACEFLAG_NODESCENDANTS
+			}
+			if ( cent->gent->target3 )//stubCapName )
+			{//turn on caps
+				gi.G2API_SetSurfaceOnOff( &owner->ghoul2[owner->playerModel], cent->gent->target3, 0 );
+			}
+			if ( owner->weaponModel != -1 )
+			{//the corpse hasn't dropped their weapon
+				if ( cent->gent->count == BOTH_DISMEMBER_RARM || cent->gent->count == BOTH_DISMEMBER_TORSO1 )//&& ent->s.weapon == WP_SABER && ent->weaponModel != -1 )
+				{//FIXME: is this first check needed with this lower one?
+					gi.G2API_RemoveGhoul2Model( owner->ghoul2, owner->weaponModel );
+					owner->weaponModel = -1;
+				}
+			}
+			if ( owner->client->NPC_class == CLASS_PROTOCOL 
+				|| g_dismemberment->integer > 3
+				|| g_realisticSaberDamage->integer )
+			{
+				//wait 100ms before allowing owner to be dismembered again
+				cent->gent->aimDebounceTime = cg.time + 100;
+				return;
+			}
+		}
+	}
+	//done!
+	cent->gent->e_clThinkFunc = clThinkF_NULL;
 }
 
 qboolean	MatrixMode = qfalse;
@@ -2070,19 +2182,18 @@ void CG_AddPacketEntities( void ) {
 		if ( delta == 0 ) 
 		{
 			cg.frameInterpolation = 0;
-//			Com_Printf("identical frames\n");
 		} 
 		else 
 		{
 			cg.frameInterpolation = (float)( cg.time - cg.snap->serverTime ) / delta;
-//			Com_Printf("interp %6.4f\n",cg.frameInterpolation);
 		}
+//OutputDebugString(va("interp %4.2f ct=%6d nt=%6d st=%6d\n",cg.frameInterpolation,cg.time,cg.nextSnap->serverTime,cg.snap->serverTime));
 	} 
 	else 
 	{
 		cg.frameInterpolation = 0;	// actually, it should never be used, because 
 									// no entities should be marked as interpolating
-//		Com_Printf("no next snap!\n");   
+//OutputDebugString(va("noterp %4.2f ct=%6d nt=%6d st=%6d\n",cg.frameInterpolation,cg.time,0,cg.snap->serverTime));
 	}
 
 	// the auto-rotating items will all have the same axis

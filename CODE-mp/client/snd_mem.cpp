@@ -215,6 +215,81 @@ void S_LoadSound_Finalize(wavinfo_t	*info, sfx_t *sfx, byte *data)
 
 
 
+// adjust filename for foreign languages and WAV/MP3 issues. 
+//
+// returns qfalse if failed to load, else fills in *pData
+//
+static qboolean S_LoadSound_FileLoadAndNameAdjuster(char *psFilename, byte **pData, int *piSize, int iNameStrlen)
+{
+	char *psVoice = strstr(psFilename,"chars");
+	if (psVoice)
+	{
+		// account for foreign voices...
+		//		
+		extern cvar_t* s_language;
+		if (s_language && stricmp("DEUTSCH",s_language->string)==0)
+		{				
+			strncpy(psVoice,"chr_d",5);	// same number of letters as "chars"
+		}
+		else
+		if (s_language && stricmp("FRANCAIS",s_language->string)==0)
+		{				
+			strncpy(psVoice,"chr_f",5);	// same number of letters as "chars"
+		}
+		else
+		{
+			psVoice = NULL;	// use this ptr as a flag as to whether or not we substituted with a foreign version
+		}
+	}
+
+	*piSize = FS_ReadFile( psFilename, (void **)pData );	// try WAV
+	if ( !*pData ) {
+		psFilename[iNameStrlen-3] = 'm';
+		psFilename[iNameStrlen-2] = 'p';
+		psFilename[iNameStrlen-1] = '3';
+		*piSize = FS_ReadFile( psFilename, (void **)pData );	// try MP3
+
+		if ( !*pData ) 
+		{
+			//hmmm, not found, ok, maybe we were trying a foreign noise ("arghhhhh.mp3" that doesn't matter?) but it
+			// was missing?   Can't tell really, since both types are now in sound/chars. Oh well, fall back to English for now...
+			
+			if (psVoice)	// were we trying to load foreign?
+			{
+				// yep, so fallback to re-try the english...
+				//
+#ifndef FINAL_BUILD
+				Com_Printf(S_COLOR_YELLOW "Foreign file missing: \"%s\"! (using English...)\n",psFilename);
+#endif
+
+				strncpy(psVoice,"chars",5);
+
+				psFilename[iNameStrlen-3] = 'w';
+				psFilename[iNameStrlen-2] = 'a';
+				psFilename[iNameStrlen-1] = 'v';
+				*piSize = FS_ReadFile( psFilename, (void **)pData );	// try English WAV
+				if ( !*pData ) 
+				{						
+					psFilename[iNameStrlen-3] = 'm';
+					psFilename[iNameStrlen-2] = 'p';
+					psFilename[iNameStrlen-1] = '3';
+					*piSize = FS_ReadFile( psFilename, (void **)pData );	// try English MP3
+				}
+			}
+
+			if (!*pData)
+			{
+				return qfalse;	// sod it, give up...
+			}
+		}
+	}
+
+	return qtrue;
+}
+
+
+
+
 //=============================================================================
 
 /*
@@ -243,34 +318,22 @@ static qboolean S_LoadSound_Actual( sfx_t *sfx )
 	//
 	char sRootName[MAX_QPATH];
 	char sLoadName[MAX_QPATH];
-	bool isMp3 = false;
 
 	COM_StripExtension(sfx->sSoundName, sRootName);
 	Com_sprintf(sLoadName, MAX_QPATH, "%s.wav", sRootName);
 
-	//
-	// 1st attempt, try whichever wav or mp3 is specified...
-	//
-	size = FS_ReadFile( sLoadName, (void **)&data );
-	if ( !data )
-	{
-		// 2nd attempt, try wav instead of mp3 or vice versa...
-		//		
-		Com_sprintf(sLoadName, MAX_QPATH, "%s.mp3", sRootName);
+	const char *psExt = &sLoadName[strlen(sLoadName)-4];
 
-		size = FS_ReadFile( sLoadName, (void **)&data );
-		if ( !data )
-		{
-			return qfalse;
-		}
-		isMp3 = true;
+	if (!S_LoadSound_FileLoadAndNameAdjuster(sLoadName, &data, &size, strlen(sLoadName)))
+	{
+		return qfalse;
 	}
 
 	SND_TouchSFX(sfx);
 	sfx->iLastTimeUsed = Com_Milliseconds()+1;	// why +1? Hmmm, leave it for now I guess	
 
 //=========
-	if (isMp3)
+	if (strnicmp(psExt,".mp3",4)==0)
 	{
 		// load MP3 file instead...
 		//		

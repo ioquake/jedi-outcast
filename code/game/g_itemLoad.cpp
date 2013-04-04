@@ -30,7 +30,6 @@ static void IT_Icon (const char **holdBuf);
 static void IT_Min (const char **holdBuf);
 static void IT_Max (const char **holdBuf);
 static void IT_Name (const char **holdBuf);
-static void IT_PickupName (const char **holdBuf);
 static void IT_PickupSound (const char **holdBuf);
 static void IT_Tag (const char **holdBuf);
 static void IT_Type (const char **holdBuf);
@@ -54,7 +53,6 @@ itemParms_t ItemParms[IT_PARM_MAX] =
 	"icon",				IT_Icon,
 	"min",				IT_Min,
 	"max",				IT_Max,
-	"pickupname",		IT_PickupName,
 	"pickupsound",		IT_PickupSound,
 	"tag",				IT_Tag,
 	"type",				IT_Type,
@@ -227,27 +225,6 @@ static void IT_Name(const char **holdBuf)
 //	++bg_numItems;
 
 	IT_SetDefaults();
-}
-
-static void IT_PickupName(const char **holdBuf)
-{
-	int len;
-	const char	*tokenStr;
-
-	if (COM_ParseString(holdBuf,&tokenStr)) 
-	{
-		return;
-	}
-
-	len = strlen(tokenStr);
-	len++;
-	if (len > 32)
-	{
-		len = 32;
-		gi.Printf("WARNING: weaponclass too long in external ITEMS.DAT '%s'\n", tokenStr);
-	}
-
-	bg_itemlist[itemParms.itemNum].pickup_name = G_NewString(tokenStr);
 }
 
 static void IT_ClassName(const char **holdBuf)

@@ -6,7 +6,7 @@
 // q_shared.h -- included first by ALL program modules.
 // A user mod should never modify this file
 
-#define	Q3_VERSION		"JK2MP: v0.55"
+#define	Q3_VERSION		"JK2MP: v0.56"
 
 
 #define MAX_TEAMNAME 32
@@ -1397,6 +1397,7 @@ typedef struct forcedata_s {
 	qboolean	sentryDeployed;
 
 	int			saberAnimLevel;
+	int			saberDrawAnimLevel;
 
 	int			suicides;
 
@@ -1680,6 +1681,29 @@ typedef struct playerState_s {
 #define	MOVE_RUN			120			// if forwardmove or rightmove are >= MOVE_RUN,
 										// then BUTTON_WALKING should be set
 
+typedef enum
+{
+	GENCMD_SABERSWITCH = 1,
+	GENCMD_ENGAGE_DUEL,
+	GENCMD_FORCE_HEAL,
+	GENCMD_FORCE_SPEED,
+	GENCMD_FORCE_THROW,
+	GENCMD_FORCE_PULL,
+	GENCMD_FORCE_DISTRACT,
+	GENCMD_FORCE_RAGE,
+	GENCMD_FORCE_PROTECT,
+	GENCMD_FORCE_ABSORB,
+	GENCMD_FORCE_HEALOTHER,
+	GENCMD_FORCE_FORCEPOWEROTHER,
+	GENCMD_FORCE_SEEING,
+	GENCMD_USE_SEEKER,
+	GENCMD_USE_FIELD,
+	GENCMD_USE_BACTA,
+	GENCMD_USE_ELECTROBINOCULARS,
+	GENCMD_ZOOM,
+	GENCMD_USE_SENTRY,
+	GENCMD_SABERATTACKCYCLE
+} genCmds_t;
 
 // usercmd_t is sent to the server each client frame
 typedef struct usercmd_s {
@@ -1689,6 +1713,7 @@ typedef struct usercmd_s {
 	byte			weapon;           // weapon 
 	byte			forcesel;
 	byte			invensel;
+	byte			generic_cmd;
 	signed char	forwardmove, rightmove, upmove;
 } usercmd_t;
 
@@ -2038,5 +2063,14 @@ typedef enum
 	eForceReload_ALL
 
 } ForceReload_e;
+
+
+enum {
+	FONT_NONE,
+	FONT_SMALL=1,
+	FONT_MEDIUM,
+	FONT_LARGE
+};
+
 
 #endif	// __Q_SHARED_H

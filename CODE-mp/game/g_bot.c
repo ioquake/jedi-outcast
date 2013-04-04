@@ -158,8 +158,52 @@ int G_GetMapTypeBits(char *type)
 	return typeBits;
 }
 
+qboolean G_DoesMapSupportGametype(const char *mapname, int gametype)
+{
+	int			typeBits = 0;
+	int			thisLevel = -1;
+	int			n = 0;
+	char		*type = NULL;
+
+	if (!g_arenaInfos[0])
+	{
+		return qfalse;
+	}
+
+	if (!mapname || !mapname[0])
+	{
+		return qfalse;
+	}
+
+	for( n = 0; n < g_numArenas; n++ )
+	{
+		type = Info_ValueForKey( g_arenaInfos[n], "map" );
+
+		if (Q_stricmp(mapname, type) == 0)
+		{
+			thisLevel = n;
+			break;
+		}
+	}
+
+	if (thisLevel == -1)
+	{
+		return qfalse;
+	}
+
+	type = Info_ValueForKey(g_arenaInfos[thisLevel], "type");
+
+	typeBits = G_GetMapTypeBits(type);
+	if (typeBits & (1 << gametype))
+	{ //the map in question supports the gametype in question, so..
+		return qtrue;
+	}
+
+	return qfalse;
+}
+
 //rww - auto-obtain nextmap. I could've sworn Q3 had something like this, but I guess not.
-void G_RefreshNextMap(int gametype)
+const char *G_RefreshNextMap(int gametype, qboolean forced)
 {
 	int			typeBits = 0;
 	int			thisLevel = 0;
@@ -169,14 +213,14 @@ void G_RefreshNextMap(int gametype)
 	qboolean	loopingUp = qfalse;
 	vmCvar_t	mapname;
 
-	if (!g_autoMapCycle.integer)
+	if (!g_autoMapCycle.integer && !forced)
 	{
-		return;
+		return NULL;
 	}
 
 	if (!g_arenaInfos[0])
 	{
-		return;
+		return NULL;
 	}
 
 	trap_Cvar_Register( &mapname, "mapname", "", CVAR_SERVERINFO | CVAR_ROM );
@@ -229,6 +273,8 @@ void G_RefreshNextMap(int gametype)
 		type = Info_ValueForKey( g_arenaInfos[desiredMap], "map" );
 		trap_Cvar_Set( "nextmap", va("map %s", type));
 	}
+
+	return Info_ValueForKey( g_arenaInfos[desiredMap], "map" );
 }
 
 /*
@@ -270,7 +316,7 @@ static void G_LoadArenas( void ) {
 		Info_SetValueForKey( g_arenaInfos[n], "num", va( "%i", n ) );
 	}
 
-	G_RefreshNextMap(g_gametype.integer);
+	G_RefreshNextMap(g_gametype.integer, qfalse);
 }
 
 

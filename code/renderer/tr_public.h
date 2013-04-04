@@ -26,6 +26,7 @@ typedef struct {
 	void	(*BeginRegistration)( glconfig_t *config );
 	qhandle_t (*RegisterModel)( const char *name );
 	qhandle_t (*RegisterSkin)( const char *name );
+	int		  (*GetAnimationCFG)(const char *psCFGFilename, char *psDest, int iDestSize);
 	qhandle_t (*RegisterShader)( const char *name );
 	qhandle_t (*RegisterShaderNoMip)( const char *name );
 	void	(*LoadWorld)( const char *name );

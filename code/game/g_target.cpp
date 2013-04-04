@@ -462,7 +462,7 @@ void SP_target_relay (gentity_t *self)
 
 //==========================================================
 
-/*QUAKED target_kill (.5 .5 .5) (-8 -8 -8) (8 8 8) FALLING
+/*QUAKED target_kill (.5 .5 .5) (-8 -8 -8) (8 8 8) FALLING ELECTRICAL
 Kills the activator.
 */
 void target_kill_use( gentity_t *self, gentity_t *other, gentity_t *activator ) {
@@ -477,6 +477,16 @@ void target_kill_use( gentity_t *self, gentity_t *other, gentity_t *activator ) 
 			extern void CGCam_Fade( vec4_t source, vec4_t dest, float duration );
 			float	src[4] = {0,0,0,0},dst[4]={0,0,0,1};
 			CGCam_Fade( src, dst, 10000 );
+		}
+	}
+	else if ( self->spawnflags & 2 ) // electrical
+	{
+		G_Damage ( activator, NULL, NULL, NULL, NULL, 100000, DAMAGE_NO_PROTECTION, MOD_ELECTROCUTE );
+		
+		if ( activator->client )
+		{
+			activator->s.powerups |= ( 1 << PW_SHOCKED );
+			activator->client->ps.powerups[PW_SHOCKED] = level.time + 4000;
 		}
 	}
 	else
@@ -994,9 +1004,18 @@ void SP_target_play_music( gentity_t *self )
 	self->message = G_NewString (s);
 	self->e_UseFunc = useF_target_play_music_use;
 extern	cvar_t	*com_buildScript;
-	//FIXME: Precache!
+	//Precache!
 	if (com_buildScript->integer) {//copy this puppy over
-		gi.SendConsoleCommand(va("touchFile %s\n",s));
+		char buffer[MAX_QPATH];
+		fileHandle_t	hFile;
+
+		Q_strncpyz( buffer, s, sizeof(buffer) );
+		COM_DefaultExtension( buffer, sizeof(buffer), ".mp3");
+		
+		gi.FS_FOpenFile(buffer, &hFile, FS_READ);
+		if (hFile) {
+			gi.FS_FCloseFile( hFile );
+		}
 	}
 }
 
@@ -1023,6 +1042,7 @@ void target_secret_use(gentity_t *self, gentity_t *other, gentity_t *activator)
 	gclient_t* const client = &level.clients[0];
 	client->sess.missionStats.secretsFound++;
 	G_Sound( self, self->noise_index );
+	gi.SendServerCommand( NULL, "cp \"Secret Area!\"" );
 }
 
 /*QUAKED target_secret (1 0 1) (-4 -4 -4) (4 4 4)

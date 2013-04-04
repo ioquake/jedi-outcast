@@ -112,6 +112,20 @@ int Add_Ammo2 (gentity_t *ent, int ammoType, int count)
 	{
 		ent->client->ps.ammo[ammoType] += count;
 
+		// since the ammo is the weapon in this case, picking up ammo should actually give you the weapon
+		switch( ammoType )
+		{
+		case AMMO_THERMAL:
+			ent->client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_THERMAL );
+			break;
+		case AMMO_DETPACK:
+			ent->client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_DET_PACK );
+			break;
+		case AMMO_TRIPMINE:
+			ent->client->ps.stats[STAT_WEAPONS] |= ( 1 << WP_TRIP_MINE );
+			break;
+		}
+
 		if ( ent->client->ps.ammo[ammoType] > ammoData[ammoType].max ) 
 		{
 			ent->client->ps.ammo[ammoType] = ammoData[ammoType].max;
@@ -582,8 +596,12 @@ gentity_t *LaunchItem( gitem_t *item, vec3_t origin, vec3_t velocity, char *targ
 	else
 	{
 		// if not targeting something, auto-remove after 30 seconds
-		dropped->e_ThinkFunc = thinkF_G_FreeEntity;
-		dropped->nextthink = level.time + 30000;
+		// only if it's NOT a security or goodie key
+		if( (dropped->item->giTag < INV_SECURITY_KEY1 && dropped->item->giTag > INV_SECURITY_KEY5) )
+		{
+			dropped->e_ThinkFunc = thinkF_G_FreeEntity;
+			dropped->nextthink = level.time + 30000;
+		}
 	}
 
 	dropped->e_TouchFunc = touchF_Touch_Item;

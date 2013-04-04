@@ -30,6 +30,10 @@ Ghoul2 Insert End
 #define SV_TRACE_PROFILE (0)
 #endif
 
+#if 0 //G2_SUPERSIZEDBBOX is not being used
+static const float superSizedAdd=64.0f;
+#endif
+
 /*
 ================
 SV_ClipHandleForEntity
@@ -639,28 +643,39 @@ void SV_ClipMoveToEntities( moveclip_t *clip ) {
 			angles = vec3_origin;	// boxes don't rotate
 		}
 
-#ifdef __MACOS__
-		// compiler bug with const
-		CM_TransformedBoxTrace ( &trace, (float *)clip->start, (float *)clip->end,
-			(float *)clip->mins, (float *)clip->maxs, clipHandle,  clip->contentmask,
-			origin, angles);
-#else
-		CM_TransformedBoxTrace ( &trace, clip->start, clip->end,
-			clip->mins, clip->maxs, clipHandle,  clip->contentmask,
-			origin, angles);
-#endif
-		//FIXME: when startsolid in another ent, doesn't return correct entityNum 
-		//ALSO: 2 players can be standing next to each other and this function will
-		//think they're in each other!!!
-/*
-Ghoul2 Insert Start
-*/
+#if 0 //G2_SUPERSIZEDBBOX is not being used
+		bool shrinkBox=true;
 
-		// keep these older variables around for a bit, incase we need to replace them in the Ghoul2 Collision check
+		if (clip->eG2TraceType != G2_SUPERSIZEDBBOX)
+		{
+			shrinkBox=false;
+		}
+		else if (trace.entityNum == touch->s.number&&touch->ghoul2.size()&&!(touch->contents & CONTENTS_LIGHTSABER))
+		{
+			shrinkBox=false;
+		}
+		if (shrinkBox)
+		{
+			vec3_t sh_mins;
+			vec3_t sh_maxs;
+			int j;
+			for ( j=0 ; j<3 ; j++ ) 
+			{
+					sh_mins[j]=clip->mins[j]+superSizedAdd;
+					sh_maxs[j]=clip->maxs[j]-superSizedAdd;
+			}
+			CM_TransformedBoxTrace ( &trace, clip->start, clip->end,
+				sh_mins, sh_maxs, clipHandle,  clip->contentmask,
+				origin, angles);
+		}
+		else
+#endif
+		{
+			CM_TransformedBoxTrace ( &trace, clip->start, clip->end,
+				clip->mins, clip->maxs, clipHandle,  clip->contentmask,
+				origin, angles);
+		}
 		oldTrace = clip->trace;
-/*
-Ghoul2 Insert End
-*/
 
 		if ( trace.allsolid ) 
 		{
@@ -720,6 +735,17 @@ Ghoul2 Insert Start
 				}
 
 				// if we are looking at an entity then use the player state to get it's angles and origin from
+				float radius;
+#if 0 //G2_SUPERSIZEDBBOX is not being used
+				if (clip->eG2TraceType == G2_SUPERSIZEDBBOX)
+				{
+					radius=(clip->maxs[0]-clip->mins[0]-2.0f*superSizedAdd)/2.0f;
+				}
+				else
+#endif
+				{
+					radius=(clip->maxs[0]-clip->mins[0])/2.0f;
+				}
 				if (touch->client)
 				{
 					vec3_t world_angles;
@@ -731,14 +757,14 @@ Ghoul2 Insert Start
 					world_angles[ROLL] =  0;
 
 					G2API_CollisionDetect(clip->trace.G2CollisionMap, touch->ghoul2,
-							world_angles, touch->client->origin, sv.time, touch->s.number, clip->start, clip->end, touch->s.modelScale, G2VertSpaceServer, clip->eG2TraceType, clip->useLod, (clip->maxs[0]-clip->mins[0])/2);
+							world_angles, touch->client->origin, sv.time, touch->s.number, clip->start, clip->end, touch->s.modelScale, G2VertSpaceServer, clip->eG2TraceType, clip->useLod,radius);
 				}
 				// no, so use the normal entity state
 				else
 				{
 					//use the correct origin and angles!  is this right now?
 					G2API_CollisionDetect(clip->trace.G2CollisionMap, touch->ghoul2,
-						touch->currentAngles, touch->currentOrigin, sv.time, touch->s.number, clip->start, clip->end, touch->s.modelScale, G2VertSpaceServer, clip->eG2TraceType, clip->useLod, (clip->maxs[0]-clip->mins[0])/2);
+						touch->currentAngles, touch->currentOrigin, sv.time, touch->s.number, clip->start, clip->end, touch->s.modelScale, G2VertSpaceServer, clip->eG2TraceType, clip->useLod,radius);
 				}
 
 				// set our new trace record size
@@ -758,9 +784,18 @@ Ghoul2 Insert Start
 				}
 				else//this trace was valid, so copy the best collision into quake trace place info
 				{
-					clip->trace.plane.normal[0] = clip->trace.G2CollisionMap[0].mCollisionNormal[0];
-					clip->trace.plane.normal[1] = clip->trace.G2CollisionMap[0].mCollisionNormal[1];
-					clip->trace.plane.normal[2] = clip->trace.G2CollisionMap[0].mCollisionNormal[2];
+					for (z=0;z<MAX_G2_COLLISIONS;z++)
+					{
+						if (clip->trace.G2CollisionMap[z].mEntityNum==touch->s.number)
+						{
+							clip->trace.plane.normal[0] = clip->trace.G2CollisionMap[z].mCollisionNormal[0];
+							clip->trace.plane.normal[1] = clip->trace.G2CollisionMap[z].mCollisionNormal[1];
+							clip->trace.plane.normal[2] = clip->trace.G2CollisionMap[z].mCollisionNormal[2];
+							break;
+						}
+					}
+					assert(z<MAX_G2_COLLISIONS); // hmm well ah, weird
+					assert(VectorLength(clip->trace.plane.normal)>0.1f);
 				}
 			}
 		}
@@ -851,14 +886,33 @@ Ghoul2 Insert End
 	clip.trace.fraction = 1.0f;
 	
 	//VectorCopy( end, clip.end );
-	clip.mins = mins;
-	clip.maxs = maxs;
-	clip.passEntityNum = passEntityNum;
-
 	// create the bounding box of the entire move
 	// we can limit it to the part of the move not
 	// already clipped off by the world, which can be
 	// a significant savings for line of sight and shot traces
+	clip.passEntityNum = passEntityNum;
+
+#if 0 //G2_SUPERSIZEDBBOX is not being used
+	vec3_t superMin;
+	vec3_t superMax;  // prison, in boscobel
+
+	if (eG2TraceType==G2_SUPERSIZEDBBOX)
+	{
+		for ( i=0 ; i<3 ; i++ ) 
+		{
+				superMin[i]=mins[i]-superSizedAdd;
+				superMax[i]=maxs[i]+superSizedAdd;
+		}
+		clip.mins = superMin;
+		clip.maxs = superMax;
+	}
+	else
+#endif
+	{
+		clip.mins = mins;
+		clip.maxs = maxs;
+	}
+
 	for ( i=0 ; i<3 ; i++ ) {
 		if ( end[i] > start[i] ) {
 			clip.boxmins[i] = clip.start[i] + clip.mins[i] - 1;

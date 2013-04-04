@@ -9,6 +9,8 @@
 //Global navigator
 CNavigator		navigator;
 
+extern qboolean G_EntIsUnlockedDoor( int entityNum );
+extern qboolean G_EntIsDoor( int entityNum );
 extern qboolean G_FindClosestPointOnLineSegment( const vec3_t start, const vec3_t end, const vec3_t from, vec3_t result );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
 //For debug graphics
@@ -77,7 +79,14 @@ void NPC_SetMoveGoal( gentity_t *ent, vec3_t point, int radius, qboolean isNavGo
 {
 	//Must be an NPC
 	if ( ent->NPC == NULL )
+	{
 		return;
+	}
+
+	if ( ent->NPC->tempGoal == NULL )
+	{//must still have a goal
+		return;
+	}
 
 	//Copy the origin
 	//VectorCopy( point, ent->NPC->goalPoint );	//FIXME: Make it use this, and this alone!
@@ -94,7 +103,10 @@ void NPC_SetMoveGoal( gentity_t *ent, vec3_t point, int radius, qboolean isNavGo
 	ent->NPC->tempGoal->noWaypointTime = 0;
 
 	if ( isNavGoal )
+	{
+		assert(ent->NPC->tempGoal->owner);
 		ent->NPC->tempGoal->svFlags |= SVF_NAVGOAL;
+	}
 
 	ent->NPC->tempGoal->combatPoint = combatPoint;
 	ent->NPC->tempGoal->enemy = targetEnt;
@@ -171,7 +183,7 @@ qboolean NAV_ClearPathToPoint( gentity_t *self, vec3_t pmins, vec3_t pmaxs, vec3
 		if ( !self->owner )
 		{
 			//SHOULD NEVER HAPPEN!!!
-			assert(0);
+			assert(self->owner);
 			return qfalse;
 		}
 		VectorCopy( self->owner->mins, mins );
@@ -462,7 +474,8 @@ qboolean NAV_CheckAhead( gentity_t *self, vec3_t end, trace_t &trace, int clipma
 		
 		if VALIDSTRING( blocker->classname )
 		{
-			if ( Q_stricmp( blocker->classname, "func_door" ) == 0 )
+			if ( G_EntIsUnlockedDoor( blocker->s.number ) )
+			//if ( Q_stricmp( blocker->classname, "func_door" ) == 0 )
 			{
 				//We're too close, try and avoid the door (most likely stuck on a lip)
 				if ( DistanceSquared( self->currentOrigin, trace.endpos ) < MIN_DOOR_BLOCK_DIST_SQR )
@@ -756,7 +769,8 @@ qboolean NAV_ResolveEntityCollision( gentity_t *self, gentity_t *blocker, vec3_t
 	vec3_t	blocked_dir;
 
 	//Doors are ignored
-	if ( Q_stricmp( blocker->classname, "func_door" ) == 0 )
+	if ( G_EntIsUnlockedDoor( blocker->s.number ) )
+	//if ( Q_stricmp( blocker->classname, "func_door" ) == 0 )
 	{
 		if ( DistanceSquared( self->currentOrigin, blocker->currentOrigin ) > MIN_DOOR_BLOCK_DIST_SQR )
 			return qtrue;
@@ -892,36 +906,79 @@ NAV_TestBestNode
 -------------------------
 */
 
-int NAV_TestBestNode( vec3_t position, int startID, int endID )
-{
-	int bestNode = startID;
-	int	testNode = navigator.GetBestNode( bestNode, endID );
+int NAV_TestBestNode( gentity_t *self, int startID, int endID, qboolean failEdge )
+{//check only against architectrure
+	vec3_t	end;
+	trace_t	trace;
+	vec3_t	mins;
+	int		clipmask = (NPC->clipmask&~CONTENTS_BODY)|CONTENTS_BOTCLIP;
 
-	vec3_t	p1, p2, dir1, dir2;
+	//get the position for the test choice
+	navigator.GetNodePosition( endID, end );
 
-	navigator.GetNodePosition( bestNode, p1 );
-	navigator.GetNodePosition( testNode, p2 );
-
-	/*
-	if ( DistanceSquared( p1, p2 ) < DistanceSquared( position, p1 ) )
-		return testNode;
-	*/
+	//Offset the step height
+	VectorSet( mins, self->mins[0], self->mins[1], self->mins[2] + STEPSIZE );
 	
-	VectorSubtract( p2, p1, dir1 );
-	//VectorNormalize( dir1 );
+	gi.trace( &trace, self->currentOrigin, mins, self->maxs, end, self->s.number, clipmask );
 
-	VectorSubtract( position, p1, dir2 );
-	//VectorNormalize( dir2 );
-
-	if ( DotProduct( dir1, dir2 ) > 0 )
-	{
-		trace_t	trace;
-
-		if ( NAV_CheckAhead( NPC, p2, trace, (NPC->clipmask&~CONTENTS_BODY)|CONTENTS_BOTCLIP ) )
-			bestNode = testNode;
+	if ( trace.startsolid&&(trace.contents&CONTENTS_BOTCLIP) )
+	{//started inside do not enter, so ignore them
+		clipmask &= ~CONTENTS_BOTCLIP;
+		gi.trace( &trace, self->currentOrigin, mins, self->maxs, end, self->s.number, clipmask );
 	}
-	
-	return bestNode;
+	//Do a simple check
+	if ( ( trace.allsolid == qfalse ) && ( trace.startsolid == qfalse ) && ( trace.fraction == 1.0f ) )
+	{//it's clear
+		return endID;
+	}
+
+	//See if we're too far above
+	if ( fabs( self->currentOrigin[2] - end[2] ) > 48 )
+	{
+		return startID;
+	}
+
+	//This is a work around
+	float	radius = ( self->maxs[0] > self->maxs[1] ) ? self->maxs[0] : self->maxs[1];
+	float	dist = Distance( self->currentOrigin, end );
+	float	tFrac = 1.0f - ( radius / dist );
+
+	if ( trace.fraction >= tFrac )
+	{//it's clear
+		return endID;
+	}
+
+	//Do a special check for doors
+	if ( trace.entityNum < ENTITYNUM_WORLD )
+	{
+		gentity_t	*blocker = &g_entities[trace.entityNum];
+		
+		if VALIDSTRING( blocker->classname )
+		{//special case: doors are architecture, but are dynamic, like entitites
+			if ( G_EntIsUnlockedDoor( blocker->s.number ) )
+			//if ( Q_stricmp( blocker->classname, "func_door" ) == 0 )
+			{//it's unlocked, go for it
+				//We're too close, try and avoid the door (most likely stuck on a lip)
+				if ( DistanceSquared( self->currentOrigin, trace.endpos ) < MIN_DOOR_BLOCK_DIST_SQR )
+				{
+					return startID;
+				}
+				//we can keep heading to the door, it should open
+				return endID;
+			}
+			else if ( G_EntIsDoor( blocker->s.number ) )
+			{//a locked door!
+				//path is blocked by a locked door, mark it as such if instructed to do so
+				if ( failEdge )
+				{
+				//	navigator.AddFailedEdge( self->s.number, startID, endID );
+				}
+			}
+		}
+	}
+	//path is blocked 
+	//use the fallback choice
+	return startID;
 }
 
 /*
@@ -1006,7 +1063,7 @@ int	NAV_MoveToGoal( gentity_t *self, navInfo_t &info )
 	}
 
 	//Check this node
-	bestNode = NAV_TestBestNode( self->currentOrigin, bestNode, self->NPC->goalEntity->waypoint );
+	bestNode = NAV_TestBestNode( self, bestNode, self->NPC->goalEntity->waypoint, qfalse );
 
 	vec3_t	origin, end;
 	//trace_t	trace;
@@ -1727,7 +1784,7 @@ void NAV_ShowDebugInfo( void )
 		int	nearestNode = navigator.GetNearestNode( &g_entities[0], g_entities[0].waypoint, NF_ANY, WAYPOINT_NONE );
 		int	testNode = navigator.GetBestNode( nearestNode, NAVDEBUG_curGoal );
 		
-		nearestNode = NAV_TestBestNode( g_entities[0].currentOrigin, nearestNode, testNode );
+		nearestNode = NAV_TestBestNode( &g_entities[0], nearestNode, testNode, qfalse );
 
 		//Show the connection
 		vec3_t	dest, start;

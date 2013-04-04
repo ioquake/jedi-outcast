@@ -10,6 +10,7 @@
 
 
 extern int NAVNEW_ClearPathBetweenPoints(vec3_t start, vec3_t end, vec3_t mins, vec3_t maxs, int ignore, int clipmask);
+extern qboolean NAV_CheckNodeFailedForEnt( gentity_t *ent, int nodeNum );
 extern qboolean G_EntIsUnlockedDoor( int entityNum );
 extern qboolean G_EntIsDoor( int entityNum );
 extern qboolean G_EntIsBreakable( int entityNum );
@@ -25,6 +26,23 @@ static vec3_t	wpMins = { -16, -16, -24+STEPSIZE };//WTF:  was 16??!!!
 static byte CHECKED_NO = 0;
 static byte CHECKED_FAILED = 1;
 static byte CHECKED_PASSED = 2;
+
+
+int GetTime ( int lastTime )
+{
+	int			curtime;
+	static int	timeBase = 0;
+	static qboolean	initialized = qfalse;
+
+	if (!initialized) {
+		timeBase = timeGetTime();
+		initialized = qtrue;
+	}
+	curtime = timeGetTime() - timeBase - lastTime;
+
+	return curtime;
+}
+
 /*
 -------------------------
 CEdge
@@ -106,6 +124,21 @@ AddEdge
 
 void CNode::AddEdge( int ID, int cost, int flags )
 {
+	if ( m_numEdges )
+	{//already have at least 1
+		//see if it exists already
+		edge_v::iterator	ei;
+		STL_ITERATE( ei, m_edges )
+		{
+			if ( (*ei).ID == ID )
+			{//found it
+				(*ei).cost	= cost;
+				(*ei).flags	= flags;
+				return;
+			}
+		}
+	}
+	
 	edge_t	edge;
 
 	edge.ID		= ID;
@@ -115,6 +148,8 @@ void CNode::AddEdge( int ID, int cost, int flags )
 	STL_INSERT( m_edges, edge );
 
 	m_numEdges++;
+
+	assert( m_numEdges < 9 );//8 is the max
 }
 
 /*
@@ -569,6 +604,11 @@ bool CNavigator::Load( const char *filename, int checksum )
 
 	//read in the failed edges
 	gi.FS_Read( &failedEdges, sizeof( failedEdges ), file );
+	for ( int j = 0; j < MAX_FAILED_EDGES; j++ )
+	{
+		m_edgeLookupMap.insert(pair<int, int>(failedEdges[j].startID, j));		
+	}
+		
 
 	gi.FS_FCloseFile( file );
 
@@ -673,47 +713,29 @@ int	CNavigator::GetEdgeCost( CNode *first, CNode *second )
 	return Distance( start, end );
 }
 
-/*
--------------------------
-ConnectNodes
--------------------------
-*/
-
-void CNavigator::ConnectNodes( void )
+void CNavigator::SetEdgeCost( int ID1, int ID2, int cost )
 {
-	node_v::iterator	ni, ni2;
-	int					id = 0;
-	int					cost;
-
-	//Attempt to connect all nodes
-	STL_ITERATE( ni, m_nodes )
-	{
-		//Attempt connection against all nodes in the system
-		//TODO: Culling routines could speed this up
-		STL_ITERATE( ni2, m_nodes )
-		{
-			if ( (*ni) == (*ni2 ) )
-				continue;
-
-			if ( EdgeFailed((*ni)->GetID(), (*ni2)->GetID()) )
-			{
-				continue;
-			}
-			cost = GetEdgeCost( (*ni), (*ni2) );
-
-			//No connection was made
-			if( cost >= Q3_INFINITE )	// GetEdgeCost used to return -1 as a fail, now it returns Q3_INFINITE
-				continue;
-		//	if ( cost < 0 )
-		//		continue;
-
-			//Connect the edges
-			(*ni)->AddEdge( (*ni2)->GetID(), cost );
-			(*ni2)->AddEdge( (*ni)->GetID(), cost );
-		}
-
-		id++;
+	if( (ID1 == -1) || (ID2 == -1) )
+	{//not valid nodes, must have come from the ClearAllFailedEdges initization-type calls
+		return;
 	}
+
+	CNode	*node1 = m_nodes[ID1];
+	CNode	*node2 = m_nodes[ID2];
+
+	if ( cost == -1 )
+	{//they want us to calc it
+		//FIXME: can we just remember this instead of recalcing every time?
+		vec3_t	pos1, pos2;
+		
+		node1->GetPosition( pos1 );
+		node2->GetPosition( pos2 );
+		cost = Distance( pos1, pos2 );
+	}
+
+	//set it
+	node1->AddEdge( ID2, cost );
+	node2->AddEdge( ID1, cost );
 }
 
 /*
@@ -817,21 +839,6 @@ void CNavigator::CalculatePath( CNode *node )
 CalculatePaths
 -------------------------
 */
-int GetTime ( int lastTime )
-{
-	int			curtime;
-	static int	timeBase = 0;
-	static qboolean	initialized = qfalse;
-
-	if (!initialized) {
-		timeBase = timeGetTime();
-		initialized = qtrue;
-	}
-	curtime = timeGetTime() - timeBase - lastTime;
-
-	return curtime;
-}
-
 extern void CP_FindCombatPointWaypoints( void );
 void CNavigator::CalculatePaths( bool	recalc )
 {
@@ -839,17 +846,9 @@ void CNavigator::CalculatePaths( bool	recalc )
 	int	startTime = GetTime(0);
 #endif
 #if _HARD_CONNECT
-
 #else
-
-	ConnectNodes();
-
 #endif	
 
-	if (recalc)
-	{
-		ConnectNodes();
-	}
 	for ( int i = 0; i < m_nodes.size(); i++ )
 	{
 		//Allocate the needed memory
@@ -878,28 +877,6 @@ void CNavigator::CalculatePaths( bool	recalc )
 
 /*
 -------------------------
-RecalculatePaths
--------------------------
-*/
-/*
-void CNavigator::RecalculatePaths( void )
-{//Basically just verify the edges, ranks and paths?
-	ConnectNodes();
-
-	for ( int i = 0; i < m_nodes.size(); i++ )
-	{
-		//Allocate the needed memory
-		m_nodes[i]->InitRanks( m_nodes.size() );
-	}
-
-	for ( i = 0; i < m_nodes.size(); i++ )
-	{
-		CalculatePath( m_nodes[i] );
-	}
-}
-*/
-/*
--------------------------
 ShowNodes
 -------------------------
 */
@@ -917,21 +894,27 @@ void CNavigator::ShowNodes( void )
 	{
 		(*ni)->GetPosition( position );
 
-		if ( gi.inPVS( g_entities[0].currentOrigin, position ) )
-		{
-			showRadius = qfalse;
-			if( NAVDEBUG_showRadius )
-			{	
-				
-				dist = DistanceSquared( g_entities[0].currentOrigin, position );
-				radius = (*ni)->GetRadius();
-				// if player within node radius or 256, draw radius (sometimes the radius is really small, so we check for 256 to catch everything)
-				if( (dist <= radius*radius) || dist <= 65536 ) 
-				{
-					showRadius = qtrue;
-				}
+		showRadius = qfalse;
+		if( NAVDEBUG_showRadius )
+		{	
+			dist = DistanceSquared( g_entities[0].currentOrigin, position );
+			radius = (*ni)->GetRadius();
+			// if player within node radius or 256, draw radius (sometimes the radius is really small, so we check for 256 to catch everything)
+			if( (dist <= radius*radius) || dist <= 65536 ) 
+			{
+				showRadius = qtrue;
 			}
-			(*ni)->Draw(showRadius);
+		}
+		else
+		{
+			dist = DistanceSquared( g_entities[0].currentOrigin, position );
+		}
+		if ( dist < 1048576 )
+		{
+			if ( gi.inPVS( g_entities[0].currentOrigin, position ) )
+			{
+				(*ni)->Draw(showRadius);
+			}
 		}
 	}
 }
@@ -955,6 +938,17 @@ void CNavigator::ShowEdges( void )
 
 	STL_ITERATE( ni, m_nodes )
 	{
+		(*ni)->GetPosition( start );
+		if ( DistanceSquared( g_entities[0].currentOrigin, start ) >= 1048576 )
+		{
+			continue;
+		}
+
+		if ( !gi.inPVSIgnorePortals( g_entities[0].currentOrigin, start ) )
+		{
+			continue;
+		}
+
 		//Attempt to draw each connection
 		for ( int i = 0; i < (*ni)->GetNumEdges(); i++ )
 		{
@@ -972,12 +966,16 @@ void CNavigator::ShowEdges( void )
 			CNode	*node = m_nodes[id];
 
 			node->GetPosition( end );
-			(*ni)->GetPosition( start );
 
 			//Set this as drawn
 			drawMap[id][(*ni)->GetID()] = true;
 
-			if ( ( gi.inPVS( g_entities[0].currentOrigin, start ) == false ) && ( gi.inPVS( g_entities[0].currentOrigin, end ) == false ) )
+			if ( DistanceSquared( g_entities[0].currentOrigin, end ) >= 1048576 )
+			{
+				continue;
+			}
+
+			if ( !gi.inPVSIgnorePortals( g_entities[0].currentOrigin, end ) )
 				continue;
 
 			if ( EdgeFailed( id, (*ni)->GetID() ) != -1 )//flags & EFLAG_FAILED )
@@ -1287,7 +1285,7 @@ int CNavigator::GetBestPathBetweenEnts( gentity_t *ent, gentity_t *goal, int fla
 {
 	//Must have nodes
 	if ( m_nodes.size() == 0 )
-		return qfalse;
+		return NODE_NONE;
 
 #define	MAX_Z_DELTA	18
 
@@ -1318,6 +1316,54 @@ int CNavigator::GetBestPathBetweenEnts( gentity_t *ent, gentity_t *goal, int fla
 	{
 		node = m_nodes[(*nci).nodeID];
 		nodeNum = (*nci).nodeID;
+
+		node->GetPosition( position );
+
+		if ( CheckedNode(nodeNum,ent->s.number) == CHECKED_FAILED )
+		{//already checked this node against ent and it failed
+			continue;
+		}
+		if ( CheckedNode(nodeNum,ent->s.number) == CHECKED_PASSED )
+		{//already checked this node against ent and it passed
+		}
+		else
+		{//haven't checked this node against ent yet
+			if ( NodeFailed( ent, nodeNum ) )
+			{
+				SetCheckedNode( nodeNum, ent->s.number, CHECKED_FAILED );
+				continue;
+			}
+			//okay, since we only have to do this once, let's check to see if this node is even usable (could help us short-circuit a whole loop of the dest nodes)
+			radius	= node->GetRadius();
+			
+			//If we're not within the known clear radius of this node OR out of Z height range...
+			if ( (*nci).distance >= (radius*radius) || ( fabs( position[2] - ent->currentOrigin[2] ) >= MAX_Z_DELTA ) )
+			{
+				//We're not *within* this node, so check clear path, etc.
+
+				//FIXME: any way to call G_FindClosestPointOnLineSegment and see if I can at least get to the waypoint's path
+				if ( flags & NF_CLEAR_PATH )//|| flags & NF_CLEAR_LOS )
+				{//need a clear path or LOS
+					if ( !gi.inPVS( ent->currentOrigin, position ) )
+					{//not even potentially clear
+						SetCheckedNode( nodeNum, ent->s.number, CHECKED_FAILED );
+						continue;
+					}
+				}
+
+				//Do we need a clear path?
+				if ( flags & NF_CLEAR_PATH )
+				{
+					if ( TestNodePath( ent, goal->s.number, position, qtrue ) == false )
+					{
+						SetCheckedNode( nodeNum, ent->s.number, CHECKED_FAILED );
+						continue;
+					}
+				}
+			}//otherwise, inside the node so it must be clear (?)
+			SetCheckedNode( nodeNum, ent->s.number, CHECKED_PASSED );
+		}
+
 		if ( d_altRoutes->integer )
 		{
 			//calc the paths for this node if they're out of date
@@ -1344,7 +1390,6 @@ int CNavigator::GetBestPathBetweenEnts( gentity_t *ent, gentity_t *goal, int fla
 				}
 			}
 
-			node->GetPosition( position );
 			node2->GetPosition( position2 );
 			//Okay, first get the entire path cost, including distance to first node from ents' positions
 			cost = floor(Distance( ent->currentOrigin, position ) + Distance( goal->currentOrigin, position2 ));
@@ -1363,70 +1408,22 @@ int CNavigator::GetBestPathBetweenEnts( gentity_t *ent, gentity_t *goal, int fla
 			{
 				continue;
 			}
+
 			//okay, this is the shortest path we've found yet, check clear path, etc.
-
-			if ( CheckedNode(nodeNum,ent->s.number) == CHECKED_FAILED )
+			if ( CheckedNode( nodeNum2, goal->s.number ) == CHECKED_FAILED )
 			{//already checked this node against goal and it failed
-//				recalc = true;
 				continue;
 			}
-			if ( CheckedNode(nodeNum,ent->s.number) == CHECKED_PASSED )
+			if ( CheckedNode( nodeNum2, goal->s.number ) == CHECKED_PASSED )
 			{//already checked this node against goal and it passed
 			}
 			else
 			{//haven't checked this node against goal yet
-				radius	= node->GetRadius();
-				
-				//If we're not within the known clear radius of this node OR out of Z height range...
-				if ( (*nci).distance >= (radius*radius) || ( fabs( position[2] - ent->currentOrigin[2] ) >= MAX_Z_DELTA ) )
+				if ( NodeFailed( goal, nodeNum2 ) )
 				{
-					//We're not *within* this node, so check clear path, etc.
-
-					//FIXME: any way to call G_FindClosestPointOnLineSegment and see if I can at least get to the waypoint's path
-					if ( flags & NF_CLEAR_PATH )//|| flags & NF_CLEAR_LOS )
-					{//need a clear path or LOS
-						if ( !gi.inPVS( ent->currentOrigin, position ) )
-						{//not even potentially clear
-							SetCheckedNode(nodeNum,ent->s.number,CHECKED_FAILED);
-							continue;
-						}
-					}
-
-					//Do we need a clear path?
-					if ( flags & NF_CLEAR_PATH )
-					{
-						if ( TestNodePath( ent, goal->s.number, position, qtrue ) == false )
-						{
-							SetCheckedNode(nodeNum,ent->s.number,CHECKED_FAILED);
-							continue;
-						}
-					}
-
-					//Do we need a clear line of sight?
-					/*
-					if ( flags & NF_CLEAR_LOS )
-					{
-						if ( TestNodeLOS( ent, position ) == false )
-						{
-							nodeChecked[nodeNum][ent->s.number] = CHECKED_FAILED;
-							continue;
-						}
-					}
-					*/
-				}//otherwise, inside the node so it must be clear (?)
-				SetCheckedNode(nodeNum,ent->s.number,CHECKED_PASSED);
-			}
-
-			if ( CheckedNode(nodeNum2,goal->s.number) == CHECKED_FAILED )
-			{//already checked this node against goal and it failed
-//				recalc = true;
-				continue;
-			}
-			if ( CheckedNode(nodeNum2,goal->s.number) == CHECKED_PASSED )
-			{//already checked this node against goal and it passed
-			}
-			else
-			{//haven't checked this node against goal yet
+					SetCheckedNode( nodeNum2, goal->s.number, CHECKED_FAILED );
+					continue;
+				}
 				radius	= node2->GetRadius();
 				
 				//If we're not within the known clear radius of this node OR out of Z height range...
@@ -1438,7 +1435,7 @@ int CNavigator::GetBestPathBetweenEnts( gentity_t *ent, gentity_t *goal, int fla
 					{//need a clear path or LOS
 						if ( !gi.inPVS( goal->currentOrigin, position2 ) )
 						{//not even potentially clear
-							SetCheckedNode(nodeNum2,goal->s.number,CHECKED_FAILED);
+							SetCheckedNode( nodeNum2, goal->s.number, CHECKED_FAILED );
 							continue;
 						}
 					}
@@ -1447,24 +1444,12 @@ int CNavigator::GetBestPathBetweenEnts( gentity_t *ent, gentity_t *goal, int fla
 					{
 						if ( TestNodePath( goal, ent->s.number, position2, qfalse ) == false )//qtrue?
 						{
-							SetCheckedNode(nodeNum2,goal->s.number,CHECKED_FAILED);
+							SetCheckedNode( nodeNum2, goal->s.number, CHECKED_FAILED );
 							continue;
 						}
 					}
-
-					//Do we need a clear line of sight?
-					/*
-					if ( flags & NF_CLEAR_LOS )
-					{
-						if ( TestNodeLOS( goal, position2 ) == false )
-						{
-							nodeChecked[nodeNum2][goal->s.number] = CHECKED_FAILED;
-							continue;
-						}
-					}
-					*/
 				}//otherwise, inside the node so it must be clear (?)
-				SetCheckedNode(nodeNum2,goal->s.number,CHECKED_PASSED);
+				SetCheckedNode( nodeNum2, goal->s.number, CHECKED_PASSED );
 			}
 
 			bestCost = cost;
@@ -1482,24 +1467,6 @@ int CNavigator::GetBestPathBetweenEnts( gentity_t *ent, gentity_t *goal, int fla
 		}
 	}
 	return bestNode;
-
-/*
-	if(recalc)
-	{
-
-		int	startTime = GetTime(0);
-		if ( m_nodes[ent->waypoint] && (ent->waypoint!=-1) )
-		{
-			CalculatePath(m_nodes[ent->waypoint]);
-		}
-		if ( m_nodes[goal->waypoint] && (goal->waypoint!=-1) )
-		{
-			CalculatePath(m_nodes[goal->waypoint]);
-		}	
-		gi.Printf( S_COLOR_CYAN"%s recalced two paths in %d ms\n", (NPC!=NULL?NPC->targetname:"NULL"), GetTime(startTime) );
-	}
-	return (ent->waypoint != NODE_NONE && goal->waypoint != NODE_NONE);
-*/
 }
 
 /*
@@ -1824,12 +1791,15 @@ void CNavigator::ClearFailedEdge( failedEdge_t *failedEdge )
 	}
 	*/
 	//clear failedEdge info
+	SetEdgeCost( failedEdge->startID, failedEdge->endID, -1 );
 	failedEdge->startID = failedEdge->endID = WAYPOINT_NONE;
+	failedEdge->entID = ENTITYNUM_NONE;
 	failedEdge->checkTime = 0;
 }
 
 void CNavigator::ClearAllFailedEdges( void )
 {
+	memset( &failedEdges, WAYPOINT_NONE, sizeof( failedEdges ) );
 	for ( int j = 0; j < MAX_FAILED_EDGES; j++ )
 	{
 		ClearFailedEdge( &failedEdges[j] );
@@ -1837,7 +1807,33 @@ void CNavigator::ClearAllFailedEdges( void )
 }
 
 int CNavigator::EdgeFailed( int startID, int endID )
-{
+{	
+	//OPTIMIZED WAY  (bjg 01/02)
+	//find in lookup map
+	pair <EdgeMultimapIt, EdgeMultimapIt> findValue;
+	findValue = m_edgeLookupMap.equal_range(startID);	
+	while ( findValue.first != findValue.second ) 
+	{
+		if( failedEdges[findValue.first->second].endID == endID)
+		{	
+			return findValue.first->second;		
+		}
+		++findValue.first;
+	}
+	findValue = m_edgeLookupMap.equal_range(endID);	
+	while ( findValue.first != findValue.second ) 
+	{
+		if( failedEdges[findValue.first->second].endID == startID)
+		{	
+			return findValue.first->second;		
+		}
+		++findValue.first;
+	}
+
+	return -1;
+
+	//Old way (linear search)
+	/*
 	for ( int j = 0; j < MAX_FAILED_EDGES; j++ )
 	{
 		if ( failedEdges[j].startID == startID )
@@ -1855,8 +1851,8 @@ int CNavigator::EdgeFailed( int startID, int endID )
 			}
 		}
 	}
-
 	return -1;
+	*/
 }
 
 void CNavigator::AddFailedEdge( int entID, int startID, int endID )
@@ -1915,6 +1911,8 @@ void CNavigator::AddFailedEdge( int entID, int startID, int endID )
 			//Check one second from now to see if it's clear
 			failedEdges[j].checkTime = level.time + CHECK_FAILED_EDGE_INTERVAL + Q_irand( 0, 1000 );
 
+			m_edgeLookupMap.insert(pair<int, int>(startID, j));
+
 			/*
 			//DISABLED this for now, makes people stand around too long when
 			//			collision avoidance just wasn't at it's best but path is clear
@@ -1962,14 +1960,15 @@ void CNavigator::AddFailedEdge( int entID, int startID, int endID )
 			}
 			*/
 
+			//stuff the index to this one in our lookup map
+
 			//now recalc all the paths!
 			if ( pathsCalculated )
 			{
 				//reconnect the nodes and mark every node's flag NF_RECALC
 				//gi.Printf( S_COLOR_CYAN"%d marking all nodes for recalc\n", level.time );
-				ConnectNodes();
+				SetEdgeCost( startID, endID, Q3_INFINITE );
 				FlagAllNodes( NF_RECALC );
-				//CalculatePaths(true);
 			}
 			return;
 		}
@@ -2046,6 +2045,10 @@ qboolean CNavigator::CheckFailedEdge( failedEdge_t *failedEdge )
 			{
 				hitEntNum = ENTITYNUM_NONE;
 			}
+			else if ( hitEntNum == failedEdge->entID )
+			{//don't hit the person who initially marked the edge failed
+				hitEntNum = ENTITYNUM_NONE;
+			}
 			if ( hitEntNum == ENTITYNUM_NONE )
 			{
 				//If so, clear it
@@ -2083,9 +2086,7 @@ void CNavigator::CheckAllFailedEdges( void )
 		{
 			//reconnect the nodes and mark every node's flag NF_RECALC
 			//gi.Printf( S_COLOR_CYAN"%d marking all nodes for recalc\n", level.time );
-			ConnectNodes();
 			FlagAllNodes( NF_RECALC );
-			//CalculatePaths(true);
 		}
 	}
 }
@@ -2098,6 +2099,7 @@ qboolean CNavigator::RouteBlocked( int startID, int testEdgeID, int endID, int r
 	qboolean	allEdgesFailed;
 	CNode	*end;
 	CNode	*next;
+
 
 	if ( EdgeFailed( startID, testEdgeID ) != -1 )
 	{
@@ -2214,7 +2216,7 @@ int CNavigator::GetBestNodeAltRoute( int startID, int endID, int *pathCost, int 
 	int		testRank, rejectRank = Q3_INFINITE;
 	int		bestCost = Q3_INFINITE;
 
-	*pathCost = Q3_INFINITE;
+	*pathCost = 0;
 
 	//Find the minimum rank of the edge(s) we want to reject as paths
 	if ( rejectID != WAYPOINT_NONE )
@@ -2504,7 +2506,9 @@ unsigned int CNavigator::GetPathCost( int startID, int endID )
 
 			//No possible connection
 			if ( testRank == NODE_NONE )
+			{
 				return Q3_INFINITE; // return 0;
+			}
 
 			//Found a better one
 			if ( testRank < bestRank )

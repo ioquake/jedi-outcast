@@ -24,7 +24,7 @@
 #define	SVF_KILLED_SELF			0x00001000	// ent killed itself in a script, so don't do ICARUS_FreeEnt on it... or else!
 #define	SVF_NAVGOAL				0x00002000	// Navgoal
 #define	SVF_NOPUSH				0x00004000	// Can't be pushed around
-#define	SVF_MUST_HEAL			0x00008000	// Medic has to heal this guy
+#define	SVF_ICARUS_FREEZE		0x00008000	// NPCs are frozen, ents don't execute ICARUS commands
 #define SVF_PLAT				0x00010000	// A func_plat or door acting like one
 #define	SVF_BBRUSH				0x00020000	// breakable brush
 #define	SVF_LOCKEDENEMY			0x00040000	// keep current enemy until dead
@@ -232,7 +232,6 @@ qboolean	(*G2API_SetSkin)(CGhoul2Info *ghlInfo, qhandle_t customSkin);
 qboolean	(*G2API_SetShader)(CGhoul2Info *ghlInfo, qhandle_t customShader);
 qboolean	(*G2API_RemoveGhoul2Model)(CGhoul2Info_v &ghlInfo, const int modelIndex);
 qboolean	(*G2API_SetSurfaceOnOff)(CGhoul2Info *ghlInfo, const char *surfaceName, const int flags);
-int			(*G2API_GetSurfaceOnOff)(CGhoul2Info *ghlInfo, const char *surfaceName);
 qboolean	(*G2API_SetRootSurface)(CGhoul2Info_v &ghlInfo, const int modelIndex, const char *surfaceName);
 qboolean	(*G2API_RemoveSurface)(CGhoul2Info *ghlInfo, const int index);
 int			(*G2API_AddSurface)(CGhoul2Info *ghlInfo, int surfaceNumber, int polyNumber, float BarycentricI, float BarycentricJ, int lod );
@@ -303,6 +302,7 @@ char		*(*G2API_GetAnimFileNameIndex)(qhandle_t modelIndex);
 int			(*G2API_GetSurfaceRenderStatus)(CGhoul2Info *ghlInfo, const char *surfaceName);
 
 int			(*RE_RegisterSkin)(const char *name);
+int			(*RE_GetAnimationCFG)(const char *psCFGFilename, char *psDest, int iDestSize);
 
 /*
 Ghoul2 Insert End

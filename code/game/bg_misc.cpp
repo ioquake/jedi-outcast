@@ -257,11 +257,11 @@ FindItem
 
 ===============
 */
-gitem_t	*FindItem( const char *pickupName ) {
+gitem_t	*FindItem( const char *className ) {
 	int		i;
 
 	for ( i = 1 ; i < bg_numItems ; i++ ) {
-		if ( !Q_stricmp( bg_itemlist[i].pickup_name, pickupName ) )
+		if ( !Q_stricmp( bg_itemlist[i].classname, className ) )
 			return &bg_itemlist[i];
 	}
 

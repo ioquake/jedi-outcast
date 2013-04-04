@@ -35,7 +35,6 @@ int		infoStringCount;
 //===============================================================
 
 
-
 /*
 ================
 CG_Draw3DModel
@@ -326,6 +325,8 @@ static void CG_DrawAmmo(centity_t	*cent,int x,int y)
 
 	if ( cent->currentState.weapon == WP_SABER && cent->gent )
 	{
+		cgi_R_SetColor( colorTable[CT_WHITE] );
+
 		// don't need to draw ammo, but we will draw the current saber style in this window
 		switch ( cg.saberAnimLevelPending )
 		{
@@ -368,11 +369,6 @@ static void CG_DrawAmmo(centity_t	*cent,int x,int y)
 	{
 		numColor_i = CT_LTGREY;
 	} 
-	// Overcharged?
-	else if ( cent->gent->s.powerups & ( 1 << PW_WEAPON_OVERCHARGE ) )
-	{
-		numColor_i = CT_WHITE;
-	}
 	else 
 	{
 		if ( value > 0 ) 
@@ -758,6 +754,32 @@ void CG_DrawDataPadHUD( centity_t *cent )
 
 	x = 526;
 
+	if ((cg_updatedDataPadForcePower.integer) || (cg_updatedDataPadObjective.integer))
+	{
+		// Stop flashing light
+		cg.missionInfoFlashTime = 0;
+		missionInfo_Updated = qfalse;
+
+		// Set which force power to show.
+		// cg_updatedDataPadForcePower is set from Q3_Interface, because force powers would only be given 
+		// from a script.
+		cg.DataPadforcepowerSelect = cg_updatedDataPadForcePower.integer - 1; // Not pretty, I know
+		if (cg.DataPadforcepowerSelect > MAX_SHOWPOWERS)
+		{	//duh
+			cg.DataPadforcepowerSelect = MAX_SHOWPOWERS;
+		}
+		else if (cg.DataPadforcepowerSelect<0)
+		{
+			cg.DataPadforcepowerSelect=0;
+		}
+
+		cgi_Cvar_Set( "cg_updatedDataPadForcePower", "0" );
+		cg_updatedDataPadForcePower.integer = 0; //don't wait for the cvar-refresh.
+
+		cgi_Cvar_Set( "cg_updatedDataPadObjective", "0" );
+		cg_updatedDataPadObjective.integer = 0; //don't wait for the cvar-refresh.
+	}
+
 	CG_DrawHUDRightFrame1(x,y);
 	CG_DrawForcePower(cent,x,y);
 	CG_DrawAmmo(cent,x,y);
@@ -1065,7 +1087,7 @@ static void CG_DrawZoomMask( void )
 
 		// Black out the area behind the battery display
 		cgi_R_SetColor( colorTable[CT_DKGREY]);
-		CG_DrawPic( 236, 373, 163, 16, cgs.media.whiteShader );
+		CG_DrawPic( 236, 357, 163, 16, cgs.media.whiteShader );
 
 		if ( power )
 		{
@@ -1076,7 +1098,7 @@ static void CG_DrawZoomMask( void )
 			color1[3] = 0.4f;
 
 			cgi_R_SetColor( color1 );
-			CG_DrawPic( 247.0f, 378.5f, charge * 143.0f, 6, cgs.media.whiteShader );
+			CG_DrawPic( 247.0f, 362.5f, charge * 143.0f, 6, cgs.media.whiteShader );
 
 			// pulsing dot bit
 			color1[0] = sin( cg.time * 0.01f ) * 0.5f + 0.5f;
@@ -1245,8 +1267,8 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 		if ( cg_crosshairForceHint.integer == 1 )
 		{
 			// force-affectable targets are blue..do subtle for level 1 hint
-			ecolor[0] = 0.55f;
-			ecolor[1] = 0.8f;
+			ecolor[0] = 0.4f;
+			ecolor[1] = 0.7f;
 			ecolor[2] = 1.0f;
 		}
 		else
@@ -1258,7 +1280,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 		}
 		corona = qtrue;
 	}
-	else
+	else if ( cg_crosshairIdentifyTarget.integer )
 	{
 		gentity_t *crossEnt = &g_entities[g_crosshairEntNum];
 
@@ -1288,8 +1310,8 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 			{
 				//Enemies are red
 				ecolor[0] = 1.0f;//R
-				ecolor[1] = 0.0f;//G
-				ecolor[2] = 0.0f;//B
+				ecolor[1] = 0.1f;//G
+				ecolor[2] = 0.1f;//B
 			}
 		}
 		else if ( crossEnt->s.weapon == WP_TURRET && (crossEnt->svFlags&SVF_NONNPC_ENEMY) )
@@ -1329,6 +1351,10 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 				ecolor[2] = 1.0f;//B
 			}
 		}
+	}
+	else // cg_crosshairIdentifyTarget is not on, so make it white
+	{
+		ecolor[0] = ecolor[1] = ecolor[2] = 1.0f;
 	}
 
 	ecolor[3] = 1.0;
@@ -1418,15 +1444,18 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 		y = cg_crosshairY.integer;
 	}
 
-	if ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD && 
-				!Q_stricmp( "misc_panel_turret", g_entities[cg.snap->ps.viewEntity].classname ))
+	if ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )
 	{
-		// draws a custom crosshair that is twice as large as normal
-		cgi_R_DrawStretchPic( x + cg.refdef.x + 320 - w, 
-			y + cg.refdef.y + 240 - h, 
-			w * 2, h * 2, 0, 0, 1, 1, cgs.media.turretCrossHairShader );	
+		if ( !Q_stricmp( "misc_panel_turret", g_entities[cg.snap->ps.viewEntity].classname ))
+		{
+			// draws a custom crosshair that is twice as large as normal
+			cgi_R_DrawStretchPic( x + cg.refdef.x + 320 - w, 
+				y + cg.refdef.y + 240 - h, 
+				w * 2, h * 2, 0, 0, 1, 1, cgs.media.turretCrossHairShader );	
+
+		}
 	}
-	else
+	else 
 	{
 		hShader = cgs.media.crosshairShader[ cg_drawCrosshair.integer % NUM_CROSSHAIRS ];
 
@@ -1438,13 +1467,17 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 	if ( cg.forceCrosshairStartTime && cg_crosshairForceHint.integer > 1 ) // drawing extra bits
 	{
 		ecolor[0] = ecolor[1] = ecolor[2] = 1.0f;
-		ecolor[3] = (1 - ecolor[3]) * 0.25f;
-		float sc = 1.0f + sin( cg.time * 0.0005f ) * 0.4f;
+		ecolor[3] = (1 - ecolor[3]) * ( sin( cg.time * 0.001f ) * 0.05f + 0.2f );
 
 		cgi_R_SetColor( ecolor );
 
-		cgi_R_DrawStretchPic( x + cg.refdef.x + 0.5 * (640 - w * 2.5f * (sc+1)), 
-			y + cg.refdef.y + 0.5 * (480 - h * 2), w * 2.5f * (sc+1), h * 2, 0, 0, 1, 1, cgs.media.forceCoronaShader ); 
+		w *= 2.5f;
+		h *= 1.6f;
+
+		cgi_R_DrawStretchPic( x + cg.refdef.x + 0.5f * ( 640 - w ), y + cg.refdef.y + 0.5f * ( 480 - h ), 
+								w, h, 
+								0, 0, 1, 1, 
+								cgs.media.forceCoronaShader ); 
 	}
 }
 
@@ -2268,6 +2301,18 @@ static void CG_Draw2D( void )
 	{	
 		if (cg.predicted_player_state.pm_type != PM_DEAD)
 		{
+			// Was a objective given?
+			if ((cg_updatedDataPadForcePower.integer) || (cg_updatedDataPadObjective.integer))
+			{
+				// How long has the game been running? If within 15 seconds of starting, throw up the datapad.
+				if (cg.dataPadLevelStartTime>cg.time)
+				{
+					// Make it pop up
+					cgi_SendConsoleCommand( "datapad" );
+					cg.dataPadLevelStartTime=cg.time;	//and don't do it again this level!
+				}
+			}
+
 			if (!cg.missionInfoFlashTime)
 			{
 				cg.missionInfoFlashTime	= cg.time + cg_missionInfoFlashTime.integer;

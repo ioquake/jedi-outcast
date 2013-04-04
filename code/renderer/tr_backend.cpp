@@ -1110,8 +1110,6 @@ const void	*RB_SwapBuffers( const void *data ) {
 		RB_ShowImages();
 	}
 
-	RB_RenderWorldEffects();
-
 	cmd = (const swapBuffersCommand_t *)data;
 
 	// we measure overdraw by reading back the stencil buffer and
@@ -1142,6 +1140,27 @@ const void	*RB_SwapBuffers( const void *data ) {
     GLimp_EndFrame();
 
 	backEnd.projection2D = qfalse;
+
+	return (const void *)(cmd + 1);
+}
+
+const void	*RB_WorldEffects( const void *data ) 
+{
+	const setModeCommand_t	*cmd;
+
+	cmd = (const setModeCommand_t *)data;
+
+	// Always flush the tess buffer
+	if ( tess.shader && tess.numIndexes ) 
+	{
+		RB_EndSurface();
+	}
+	RB_RenderWorldEffects();
+
+	if(tess.shader)
+	{
+		RB_BeginSurface( tess.shader, tess.fogNum );
+	}
 
 	return (const void *)(cmd + 1);
 }
@@ -1191,7 +1210,9 @@ void RB_ExecuteRenderCommands( const void *data ) {
 		case RC_SWAP_BUFFERS:
 			data = RB_SwapBuffers( data );
 			break;
-
+		case RC_WORLD_EFFECTS:
+			data = RB_WorldEffects( data );
+			break;
 		case RC_END_OF_LIST:
 		default:
 			// stop rendering on this thread

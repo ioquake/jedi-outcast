@@ -495,6 +495,63 @@ void cStringsSingle::SetText(const char *newText)
 }
 	
 
+// fix problems caused by fucking morons entering clever "rich" chars in to new text files *after* the auto-stripper
+//	removed them all in the first place...
+//
+// ONLY DO THIS FOR ENGLISH, OR IT BREAKS ASIAN STRINGS!!!!!!!!!!!!!!!!!!!!!
+//
+static void FixIllegalChars(char *psText)
+{
+	char *p;
+
+//	strXLS_Speech.Replace(va("%c",0x92),va("%c",0x27));	// "'"
+	while ((p=strchr(psText,0x92))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = 0x27;
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x93),"\"");			// smart quotes -> '"'
+	while ((p=strchr(psText,0x93))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = '"';
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x94),"\"");			// smart quotes -> '"'
+	while ((p=strchr(psText,0x94))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = '"';
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x0B),".");			// full stop
+	while ((p=strchr(psText,0x0B))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = '.';
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x85),"...");			// "..."-char ->  3-char "..."
+	while ((p=strchr(psText,0x85))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = '.';	// can't do in-string replace of "." with "...", so just forget it
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x91),va("%c",0x27));	// "'"
+	while ((p=strchr(psText,0x91))!=NULL)  // "rich" (and illegal) apostrophe
+	{
+		*p = 0x27;
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x96),va("%c",0x2D));	// "-"
+	while ((p=strchr(psText,0x96))!=NULL)
+	{
+		*p = 0x2D;
+	}
+
+//	strXLS_Speech.Replace(va("%c",0x97),va("%c",0x2D));	// "-"
+	while ((p=strchr(psText,0x97))!=NULL)
+	{
+		*p = 0x2D;
+	}
+}
 
 bool cStringsSingle::UnderstandToken(int token, char *data )
 {
@@ -507,11 +564,19 @@ bool cStringsSingle::UnderstandToken(int token, char *data )
 			{
 				if (LanguagePair->Name == TK_TEXT_LANGUAGE1 && token == TK_TEXT_LANGUAGE1 && !Text)
 				{	// default to english in case there is no foreign
+					if (LanguagePair->Name == TK_TEXT_LANGUAGE1)
+					{
+						FixIllegalChars(data);
+					}
 					SetText(data);
 					return true;
 				}
 				else if (LanguagePair->Name == token && LanguagePair->Value == sp_language->integer)
 				{
+					if (LanguagePair->Name == TK_TEXT_LANGUAGE1)
+					{
+						FixIllegalChars(data);
+					}
 					SetText(data);
 					return true;
 				}
@@ -828,10 +893,13 @@ void SP_Unload(unsigned char Registration)
 
 // Direct string functions
 
-int SP_GetStringID(const char *Reference)
+int SP_GetStringID(const char *inReference)
 {
 	map<unsigned char,cStringPackageSingle *>::iterator	i;
 	int													ID;
+	char Reference[MAX_QPATH];
+	Q_strncpyz(Reference, inReference, MAX_QPATH);
+	strupr(Reference);
 
 	for(i = SP_ListByID.begin(); i != SP_ListByID.end(); i++)
 	{
@@ -946,7 +1014,7 @@ static void SP_UpdateLanguage(void)
 void SP_Init(void)
 {
 	sp_language = Cvar_Get("sp_language", va("%d", SP_LANGUAGE_ENGLISH), CVAR_ARCHIVE | CVAR_NORESTART);
-	sp_show_strip = Cvar_Get ("sv_show_strip", "0", 0);
+	sp_show_strip = Cvar_Get ("sv_show_strip", "0", 0);		// don't switch this on!!!!!!, test only (apparently)
 
 //	Cvar_Set("sp_language", va("%d", SP_LANGUAGE_JAPANESE));	// stetest, do NOT leave in
 

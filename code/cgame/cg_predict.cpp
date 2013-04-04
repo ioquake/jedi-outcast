@@ -292,11 +292,13 @@ void CG_InterpolatePlayerState( qboolean grabAngles ) {
 	playerState_t	*out;
 	snapshot_t		*prev, *next;
 	qboolean		skip = qfalse;
+	vec3_t			oldOrg;
 
 	out = &cg.predicted_player_state;
 	prev = cg.snap;
 	next = cg.nextSnap;
 
+	VectorCopy(out->origin,oldOrg);
 	*out = cg.snap->ps;
 
 	// if we are still allowing local input, short circuit the view angles
@@ -317,32 +319,43 @@ void CG_InterpolatePlayerState( qboolean grabAngles ) {
 	}
 
 	// if the next frame is a teleport, we can't lerp to it
-	if ( cg.nextFrameTeleport ) {
+	if ( cg.nextFrameTeleport ) 
+	{
 		return;
 	}
 
-	if ( !next || next->serverTime <= prev->serverTime ) {
-		return;
-	}
+	if (!( !next || next->serverTime <= prev->serverTime ) )
+	{
 
-	f = (float)( cg.time - prev->serverTime ) / ( next->serverTime - prev->serverTime );
-	
-	i = next->ps.bobCycle;
-	if ( i < prev->ps.bobCycle ) {
-		i += 256;		// handle wraparound
-	}
-	out->bobCycle = prev->ps.bobCycle + f * ( i - prev->ps.bobCycle );
-
-	for ( i = 0 ; i < 3 ; i++ ) {
-		out->origin[i] = prev->ps.origin[i] + f * (next->ps.origin[i] - prev->ps.origin[i] );
-		if ( !grabAngles ) {
-			out->viewangles[i] = LerpAngle( 
-				prev->ps.viewangles[i], next->ps.viewangles[i], f );
+		f = (float)( cg.time - prev->serverTime ) / ( next->serverTime - prev->serverTime );
+		
+		i = next->ps.bobCycle;
+		if ( i < prev->ps.bobCycle ) 
+		{
+			i += 256;		// handle wraparound
 		}
-		out->velocity[i] = prev->ps.velocity[i] + 
-			f * (next->ps.velocity[i] - prev->ps.velocity[i] );
-	}
+		out->bobCycle = prev->ps.bobCycle + f * ( i - prev->ps.bobCycle );
 
+		for ( i = 0 ; i < 3 ; i++ ) 
+		{
+			out->origin[i] = prev->ps.origin[i] + f * (next->ps.origin[i] - prev->ps.origin[i] );
+			if ( !grabAngles ) 
+			{
+				out->viewangles[i] = LerpAngle( 
+					prev->ps.viewangles[i], next->ps.viewangles[i], f );
+			}
+			out->velocity[i] = prev->ps.velocity[i] + 
+				f * (next->ps.velocity[i] - prev->ps.velocity[i] );
+		}
+	}
+	if (cg.validPPS && cg_smoothPlayerPos.value>0.0f && cg_smoothPlayerPos.value<1.0f)
+	{
+		// 0 = no smoothing, 1 = no movement
+		for (i=0;i<3;i++)
+		{
+			out->origin[i]=cg_smoothPlayerPos.value*(oldOrg[i]-out->origin[i])+out->origin[i];
+		}
+	}
 }
 
 /*
@@ -496,7 +509,7 @@ void CG_PredictPlayerState( void ) {
 	}
 
 
-	if ( cg_timescale.value >= 1.0f )
+	if ( 1 )//cg_timescale.value >= 1.0f )
 	{
 		// demo playback just copies the moves
 		/*

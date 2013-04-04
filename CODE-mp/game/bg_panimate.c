@@ -544,7 +544,7 @@ char		BGPAFtext[40000];
 qboolean	BGPAFtextLoaded = qfalse;
 animation_t	bgGlobalAnimations[MAX_TOTALANIMATIONS];
 
-qboolean BG_ParseAnimationFile( const char *filename, animation_t *animations) 
+qboolean BG_ParseAnimationFile(const char *filename) 
 {
 	char		*text_p;
 	int			len;
@@ -554,7 +554,7 @@ qboolean BG_ParseAnimationFile( const char *filename, animation_t *animations)
 	int			skip;
 
 	fileHandle_t	f;
-	int			animNum;
+	int				animNum;
 
 
 	// load the file
@@ -567,7 +567,7 @@ qboolean BG_ParseAnimationFile( const char *filename, animation_t *animations)
 		}
 		if ( len >= sizeof( BGPAFtext ) - 1 ) 
 		{
-	//		gi.Printf( "File %s too long\n", filename );
+			//Com_Printf( "File %s too long\n", filename );
 			return qfalse;
 		}
 
@@ -577,17 +577,6 @@ qboolean BG_ParseAnimationFile( const char *filename, animation_t *animations)
 	}
 	else
 	{
-		for(i = 0; i < MAX_ANIMATIONS; i++)
-		{
-			animations[i].firstFrame = bgGlobalAnimations[i].firstFrame;
-			animations[i].flipflop = bgGlobalAnimations[i].flipflop;
-			animations[i].frameLerp = bgGlobalAnimations[i].frameLerp;
-			animations[i].initialLerp = bgGlobalAnimations[i].initialLerp;
-			animations[i].loopFrames = bgGlobalAnimations[i].loopFrames;
-			animations[i].numFrames = bgGlobalAnimations[i].numFrames;
-			animations[i].reversed = bgGlobalAnimations[i].reversed;
-		}
-
 		return qtrue;
 	}
 
@@ -600,11 +589,11 @@ qboolean BG_ParseAnimationFile( const char *filename, animation_t *animations)
 	//initialize anim array so that from 0 to MAX_ANIMATIONS, set default values of 0 1 0 100
 	for(i = 0; i < MAX_ANIMATIONS; i++)
 	{
-		animations[i].firstFrame = 0;
-		animations[i].numFrames = 0;
-		animations[i].loopFrames = -1;
-		animations[i].frameLerp = 100;
-		animations[i].initialLerp = 100;
+		bgGlobalAnimations[i].firstFrame = 0;
+		bgGlobalAnimations[i].numFrames = 0;
+		bgGlobalAnimations[i].loopFrames = -1;
+		bgGlobalAnimations[i].frameLerp = 100;
+		bgGlobalAnimations[i].initialLerp = 100;
 	}
 
 	// read information for each frame
@@ -632,21 +621,21 @@ qboolean BG_ParseAnimationFile( const char *filename, animation_t *animations)
 		{
 			break;
 		}
-		animations[animNum].firstFrame = atoi( token );
+		bgGlobalAnimations[animNum].firstFrame = atoi( token );
 
 		token = COM_Parse( (const char **)(&text_p) );
 		if ( !token ) 
 		{
 			break;
 		}
-		animations[animNum].numFrames = atoi( token );
+		bgGlobalAnimations[animNum].numFrames = atoi( token );
 
 		token = COM_Parse( (const char **)(&text_p) );
 		if ( !token ) 
 		{
 			break;
 		}
-		animations[animNum].loopFrames = atoi( token );
+		bgGlobalAnimations[animNum].loopFrames = atoi( token );
 
 		token = COM_Parse( (const char **)(&text_p) );
 		if ( !token ) 
@@ -660,25 +649,14 @@ qboolean BG_ParseAnimationFile( const char *filename, animation_t *animations)
 		}
 		if ( fps < 0 )
 		{//backwards
-			animations[animNum].frameLerp = floor(1000.0f / fps);
+			bgGlobalAnimations[animNum].frameLerp = floor(1000.0f / fps);
 		}
 		else
 		{
-			animations[animNum].frameLerp = ceil(1000.0f / fps);
+			bgGlobalAnimations[animNum].frameLerp = ceil(1000.0f / fps);
 		}
 
-		animations[animNum].initialLerp = ceil(1000.0f / fabs(fps));
-	}
-
-	for(i = 0; i < MAX_ANIMATIONS; i++)
-	{
-		bgGlobalAnimations[i].firstFrame = animations[i].firstFrame;
-		bgGlobalAnimations[i].flipflop = animations[i].flipflop;
-		bgGlobalAnimations[i].frameLerp = animations[i].frameLerp;
-		bgGlobalAnimations[i].initialLerp = animations[i].initialLerp;
-		bgGlobalAnimations[i].loopFrames = animations[i].loopFrames;
-		bgGlobalAnimations[i].numFrames = animations[i].numFrames;
-		bgGlobalAnimations[i].reversed = animations[i].reversed;
+		bgGlobalAnimations[animNum].initialLerp = ceil(1000.0f / fabs(fps));
 	}
 
 	BGPAFtextLoaded = qtrue;

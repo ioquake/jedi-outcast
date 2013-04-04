@@ -62,19 +62,19 @@ void G_WriteClientSessionData( gclient_t *client ) {
 	gi.cvar_set( var, s2 );
 
 
+	s2 = "";
 	for (i=0;i< NUM_FORCE_POWERS; i++)
 	{
-		s2 = va("%s %i ",
-		s2, client->sess.missionStats.forceUsed[i]);
+		s2 = va("%s %i",s2, client->sess.missionStats.forceUsed[i]);
 	}
 	var = va( "sessionpowers%i", client - level.clients );
 	gi.cvar_set( var, s2 );
 
 
+	s2 = "";
 	for (i=0;i< WP_NUM_WEAPONS; i++)
 	{
-		s2 = va("%s %i ",
-		s2, client->sess.missionStats.weaponUsed[i]);
+		s2 = va("%s %i",s2, client->sess.missionStats.weaponUsed[i]);
 	}
 	var = va( "sessionweapons%i", client - level.clients );
 	gi.cvar_set( var, s2 );
@@ -135,8 +135,7 @@ void G_ReadSessionData( gclient_t *client ) {
 	var++;
 	for (i=0;i< NUM_FORCE_POWERS; i++)
 	{
-		sscanf( var, "%i", 
-			&client->sess.missionStats.forceUsed[i]);
+		sscanf( var, "%i", &client->sess.missionStats.forceUsed[i]);
 		var+=2;
 	}
 
@@ -148,8 +147,7 @@ void G_ReadSessionData( gclient_t *client ) {
 	var++;
 	for (i=0;i< WP_NUM_WEAPONS; i++)
 	{
-		sscanf( var, "%i", 
-			&client->sess.missionStats.weaponUsed[i]);
+		sscanf( var, "%i", &client->sess.missionStats.weaponUsed[i]);
 		var+=2;
 	}
 

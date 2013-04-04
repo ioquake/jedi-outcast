@@ -13,7 +13,7 @@ extern byte *Compress_JPG(int *pOutputSize, int quality, int image_width, int im
 
 
 //#define USE_LAST_SAVE_FROM_THIS_MAP	// enable this if you want to use the last explicity-loaded savegame from this map
-										//	when respawning after dying, else it'll just load "auto" regardless 
+				 						//	when respawning after dying, else it'll just load "auto" regardless 
 										//	(EF1 behaviour). I should maybe time/date check them though?
 
 #include "server.h"
@@ -131,15 +131,17 @@ static qboolean SG_Copy( LPCSTR psPathlessBaseName_Src, LPCSTR psPathlessBaseNam
 
 	if (!qbCopyWentOk)
 	{
-		Com_Printf(S_COLOR_RED "Error during savegame-rename. Check \"%s\" for write-protect or disk full!\n", psLocalFilename_Dst );		
+		Com_Printf(S_COLOR_RED "Error during savegame-rename. Check \"%s\" for write-protect or disk full!\n", psLocalFilename_Dst );
 		return qfalse;
 	}
 
 	return qtrue;
 }
 
+qboolean gbSGWriteFailed = qfalse;
 static qboolean SG_Create( LPCSTR psPathlessBaseName )
 {
+	gbSGWriteFailed = qfalse;
 	SG_WipeSavegame( psPathlessBaseName );
 
 	LPCSTR psLocalFilename = SG_AddSavePath( psPathlessBaseName );		
@@ -148,7 +150,7 @@ static qboolean SG_Create( LPCSTR psPathlessBaseName )
 
 	if(!fhSaveGame)
 	{
-		Com_Printf(S_COLOR_RED "Failed to create new savegame file \"%s\"\n", psLocalFilename );		
+		Com_Printf(S_COLOR_RED "Failed to create new savegame file \"%s\"\n", psLocalFilename );
 		return qfalse;
 	}
 
@@ -206,6 +208,7 @@ qboolean SG_Close()
 	CompressMem_FreeScratchBuffer();
 	return qtrue;
 }
+
 
 qboolean SG_Open( LPCSTR psPathlessBaseName )
 {	
@@ -433,9 +436,9 @@ extern void	SCR_PrecacheScreenshot();  //scr_scrn.cpp
 		return;
 	}
 
-	//Com_Printf (S_COLOR_CYAN "Saving game \"%s\"...\n", psFilename);
+	Com_Printf (S_COLOR_CYAN "Saving game \"%s\"...\n", psFilename);
 	SG_WriteSavegame(psFilename, qfalse);
-	//Com_Printf (S_COLOR_CYAN "Done.\n");	
+	Com_Printf (S_COLOR_CYAN "Done.\n");	
 }
 
 
@@ -492,6 +495,18 @@ static void WriteGame(qboolean autosave)
 
 		Cvar_VariableStringBuffer( "playerfp", s, sizeof(s) );
 		SG_Append('PLFP', &s, sizeof(s));
+
+		Cvar_VariableStringBuffer( "plsa", s, sizeof(s) );
+		SG_Append('PLSA', &s, sizeof(s));
+
+		Cvar_VariableStringBuffer( "plcs", s, sizeof(s) );
+		SG_Append('PLCS', &s, sizeof(s));
+
+		Cvar_VariableStringBuffer( "plle", s, sizeof(s) );
+		SG_Append('PLLE', &s, sizeof(s));
+
+		Cvar_VariableStringBuffer( "pllt", s, sizeof(s) );
+		SG_Append('PLLT', &s, sizeof(s));
 	}
 }
 
@@ -540,6 +555,18 @@ static qboolean ReadGame (void)
 		
 		SG_Read('PLFP', (void *)&s, sizeof(s));
 		Cvar_Set( "playerfp", s );
+
+		SG_Read('PLSA', (void *)&s, sizeof(s));
+		Cvar_Set( "plsa", s );
+
+		SG_Read('PLCS', (void *)&s, sizeof(s));
+		Cvar_Set( "plcs", s );
+
+		SG_Read('PLLE', (void *)&s, sizeof(s));
+		Cvar_Set( "plle", s );
+
+		SG_Read('PLLT', (void *)&s, sizeof(s));
+		Cvar_Set( "pllt", s );
 	}
 
 	return qbAutoSave;
@@ -691,7 +718,7 @@ static void SG_WriteComment(qboolean qbAutosave, LPCSTR psMapName)
 	{
 		if (!*saveGameComment)
 		{
-			Com_sprintf( sComment, sizeof(sComment), "-------> %s", psMapName );
+			Com_sprintf( sComment, sizeof(sComment), "---> %s", psMapName );
 		}
 		else
 		{
@@ -700,7 +727,7 @@ static void SG_WriteComment(qboolean qbAutosave, LPCSTR psMapName)
 	}
 	else
 	{	
-		Com_sprintf( sComment, sizeof(sComment), "-------> %s", psMapName );
+		Com_sprintf( sComment, sizeof(sComment), "---> %s", psMapName );
 	}
 
 	SG_Append('COMM', sComment, sizeof(sComment));
@@ -944,18 +971,16 @@ void SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
 	}
 	ge->WriteLevel(qbAutosave);	// always done now, but ent saver only does player if auto
 
-	if(!SG_Close())
+	SG_Close();
+	if (gbSGWriteFailed)
 	{
-		Com_Printf (S_COLOR_RED "Failed to close savegame\n");
+		Com_Printf (S_COLOR_RED "Failed to write savegame!\n");
 		SG_WipeSavegame( "current" );
 		sv_testsave->value = fPrevTestSave;
 		return;
 	}
-	
-	if (SG_Copy( "current", psPathlessBaseName ))
-	{
-		SG_WipeSavegame( "current" );	// may as well leave it there if failed to overwrite 'auto'
-	}
+
+	SG_Copy( "current", psPathlessBaseName );
 
 	sv_testsave->value = fPrevTestSave;
 }
@@ -1197,11 +1222,11 @@ qboolean SG_Append(unsigned long chid, void *pvData, int iLength)
 	{
 		if(*pTest == 0xcdcdcdcd)
 		{
-			assert(0);
+			assert(*pTest != 0xcdcdcdcd);
 		}
 		if(*pTest == 0xdddddddd)
 		{
-			assert(0);
+			assert(*pTest != 0xdddddddd);
 		}
 	}
 #endif
@@ -1245,6 +1270,7 @@ qboolean SG_Append(unsigned long chid, void *pvData, int iLength)
 			if (uiSaved != sizeof(chid) + sizeof(iLength) + sizeof(uiCksum) + sizeof(iCompressedLength) + iCompressedLength + sizeof(uiMagic))
 			{
 				Com_Printf(S_COLOR_RED "Failed to write %s chunk\n", SG_GetChidText(chid));
+				gbSGWriteFailed = qtrue;
 				return qfalse;
 			}
 		}
@@ -1269,6 +1295,7 @@ qboolean SG_Append(unsigned long chid, void *pvData, int iLength)
 			if (uiSaved != sizeof(chid) + sizeof(iLength) + sizeof(uiCksum) + iLength + sizeof(uiMagic))
 			{
 				Com_Printf(S_COLOR_RED "Failed to write %s chunk\n", SG_GetChidText(chid));
+				gbSGWriteFailed = qtrue;
 				return qfalse;
 			}
 		}
