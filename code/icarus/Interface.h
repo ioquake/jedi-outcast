@@ -59,9 +59,9 @@ typedef struct interface_export_s
 
 	//Save / Load functions
 
-	int				(*I_WriteSaveData)( unsigned long chid, void *data, int length );
-	int				(*_I_ReadSaveData)( unsigned long chid, void *address, int length, void **addressptr );
-	int				I_ReadSaveData( unsigned long chid, void *address, int length, void **addressptr = NULL )
+	int				(*I_WriteSaveData)( unsigned int chid, void *data, int length );
+	int				(*_I_ReadSaveData)( unsigned int chid, void *address, int length, void **addressptr );
+	int				I_ReadSaveData( unsigned int chid, void *address, int length, void **addressptr = NULL )
 	{
 		return (*_I_ReadSaveData)(chid, address, length, addressptr);
 	}

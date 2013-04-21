@@ -87,15 +87,15 @@ public:
 	}
 };
 
-typedef map<unsigned long, CChid> CChidInfo_t;
+typedef map<unsigned int, CChid> CChidInfo_t;
 CChidInfo_t	save_info;
 #endif
 
-LPCSTR SG_GetChidText(unsigned long chid)
+LPCSTR SG_GetChidText(unsigned int chid)
 {
 	static char	chidtext[5];
 
-	*(unsigned long *)chidtext = BigLong(chid);
+	*(unsigned int *)chidtext = BigLong(chid);
 	chidtext[4] = 0;
 
 	return chidtext;
@@ -1203,7 +1203,7 @@ int CompressMem(byte *pbData, int iLength, byte *&pbOut)
 }
 
 
-qboolean SG_Append(unsigned long chid, void *pvData, int iLength)
+qboolean SG_Append(unsigned int chid, void *pvData, int iLength)
 {
 	unsigned int	uiCksum;
 	unsigned int	uiMagic = SG_MAGIC;
@@ -1211,9 +1211,9 @@ qboolean SG_Append(unsigned long chid, void *pvData, int iLength)
 
 #ifdef _DEBUG
 	int				i;
-	unsigned long	*pTest;
+	unsigned int *pTest;
 
-	pTest = (unsigned long *) pvData;
+	pTest = (unsigned int *) pvData;
 	for (i=0; i<iLength/4; i++, pTest++)
 	{
 		if(*pTest == 0xcdcdcdcd)
@@ -1313,12 +1313,12 @@ qboolean SG_Append(unsigned long chid, void *pvData, int iLength)
 //
 // function doesn't return if error (uses ERR_DROP), unless "qbSGReadIsTestOnly == qtrue", then NZ return = success
 //
-static int SG_Read_Actual(unsigned long chid, void *pvAddress, int iLength, void **ppvAddressPtr, qboolean bChunkIsOptional)
+static int SG_Read_Actual(unsigned int chid, void *pvAddress, int iLength, void **ppvAddressPtr, qboolean bChunkIsOptional)
 {
 	unsigned int	uiLoadedCksum, uiCksum;
 	unsigned int	uiLoadedMagic;
 	unsigned int	uiLoadedLength;
-	unsigned long	ulLoadedChid;
+	unsigned int	ulLoadedChid;
 	int	uiLoaded;
 	char			sChidText1[MAX_QPATH];
 	char			sChidText2[MAX_QPATH];
@@ -1490,12 +1490,12 @@ static int SG_Read_Actual(unsigned long chid, void *pvAddress, int iLength, void
 	return iLength;
 }
 
-int SG_Read(unsigned long chid, void *pvAddress, int iLength, void **ppvAddressPtr /* = NULL */)
+int SG_Read(unsigned int chid, void *pvAddress, int iLength, void **ppvAddressPtr /* = NULL */)
 {
 	return SG_Read_Actual(chid, pvAddress, iLength, ppvAddressPtr, qfalse );	// qboolean bChunkIsOptional
 }
 
-int SG_ReadOptional(unsigned long chid, void *pvAddress, int iLength, void **ppvAddressPtr /* = NULL */)
+int SG_ReadOptional(unsigned int chid, void *pvAddress, int iLength, void **ppvAddressPtr /* = NULL */)
 {
 	return SG_Read_Actual(chid, pvAddress, iLength, ppvAddressPtr, qtrue);		// qboolean bChunkIsOptional
 }

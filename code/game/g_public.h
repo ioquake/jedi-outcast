@@ -150,14 +150,14 @@ typedef struct {
 
 	// Savegame handling
 	//
-	qboolean	(*AppendToSaveGame)(unsigned long chid, void *data, int length);
-	int			(*_ReadFromSaveGame)(unsigned long chid, void *pvAddress, int iLength, void **ppvAddressPtr);
-	int			ReadFromSaveGame(unsigned long chid, void *pvAddress, int iLength, void **ppvAddressPtr = NULL)
+	qboolean	(*AppendToSaveGame)(unsigned int chid, void *data, int length);
+	int			(*_ReadFromSaveGame)(unsigned int chid, void *pvAddress, int iLength, void **ppvAddressPtr);
+	int			ReadFromSaveGame(unsigned int chid, void *pvAddress, int iLength, void **ppvAddressPtr = NULL)
 	{
 		return (*_ReadFromSaveGame)(chid, pvAddress, iLength, ppvAddressPtr);
 	}
-	int			(*_ReadFromSaveGameOptional)(unsigned long chid, void *pvAddress, int iLength, void **ppvAddressPtr);
-	int			ReadFromSaveGameOptional(unsigned long chid, void *pvAddress, int iLength, void **ppvAddressPtr = NULL)
+	int			(*_ReadFromSaveGameOptional)(unsigned int chid, void *pvAddress, int iLength, void **ppvAddressPtr);
+	int			ReadFromSaveGameOptional(unsigned int chid, void *pvAddress, int iLength, void **ppvAddressPtr = NULL)
 	{
 		return (*_ReadFromSaveGameOptional)(chid, pvAddress, iLength, ppvAddressPtr);
 	}

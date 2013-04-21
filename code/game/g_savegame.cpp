@@ -424,7 +424,7 @@ void EnumerateField(field_t *pField, byte *pbBase)
 	}
 }
 
-void EnumerateFields(field_t *pFields, byte *pbData, unsigned long ulChid, int iLen)
+void EnumerateFields(field_t *pFields, byte *pbData, unsigned int ulChid, int iLen)
 {
 	assert(strList.empty());
 
@@ -544,17 +544,17 @@ void EvaluateField(field_t *pField, byte *pbBase, byte *pbOriginalRefData/* may 
 
 
 // copy of function in sv_savegame
-static LPCSTR SG_GetChidText(unsigned long chid)
+static LPCSTR SG_GetChidText(unsigned int chid)
 {
 	static char	chidtext[5];
 
-	*(unsigned long *)chidtext = BigLong(chid);
+	*(unsigned int *)chidtext = BigLong(chid);
 	chidtext[4] = 0;
 
 	return chidtext;
 }
 
-void EvaluateFields(field_t *pFields, byte *pbData, byte *pbOriginalRefData, unsigned long ulChid, int iSize, qboolean bOkToSizeMisMatch)
+void EvaluateFields(field_t *pFields, byte *pbData, byte *pbOriginalRefData, unsigned int ulChid, int iSize, qboolean bOkToSizeMisMatch)
 {	
 	int iReadSize = gi.ReadFromSaveGame(ulChid, pbData, bOkToSizeMisMatch?0:iSize);
 
