@@ -370,14 +370,15 @@ public:
 			mFreeIndecies.push_back(i);
 		}
 	}
-#if G2API_DEBUG
 	~Ghoul2InfoArray()
 	{
-		char mess[1000];
 		if (mFreeIndecies.size()<MAX_G2_MODELS)
 		{
+#if G2API_DEBUG
+		char mess[1000];
 			sprintf(mess,"************************\nLeaked %d ghoul2info slots\n", MAX_G2_MODELS - mFreeIndecies.size());
 			OutputDebugString(mess);
+#endif
 			int i;
 			for (i=0;i<MAX_G2_MODELS;i++)
 			{
@@ -389,6 +390,7 @@ public:
 				}
 				if (j==mFreeIndecies.end())
 				{
+#if G2API_DEBUG
 					sprintf(mess,"Leaked Info idx=%d id=%d sz=%d\n", i, mIds[i], mInfos[i].size());
 					OutputDebugString(mess);
 					if (mInfos[i].size())
@@ -396,15 +398,18 @@ public:
 						sprintf(mess,"%s\n", mInfos[i][0].mFileName);
 						OutputDebugString(mess);
 					}
+#endif
+					DeleteLow(i);
 				}
 			}
 		}
+#if G2API_DEBUG
 		else
 		{
 			OutputDebugString("No ghoul2 info slots leaked\n");
 		}
-	}
 #endif
+	}
 	int New()
 	{
 		if (mFreeIndecies.empty())
