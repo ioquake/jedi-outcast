@@ -197,7 +197,7 @@ int			s_entityWavVol_back[MAX_GENTITIES];
 *
 \**************************************************************************************************/
 
-int			s_UseOpenAL	= false;	// Determines if using Open AL or the default software mixer
+int			s_UseOpenAL	= true;	// Determines if using Open AL or the default software mixer
 
 ALfloat		listener_pos[3];		// Listener Position
 ALfloat		listener_ori[6];		// Listener Orientation
@@ -211,6 +211,7 @@ void UpdateLoopingSounds();
 void AL_UpdateRawSamples();
 void S_SetLipSyncs();
 
+#ifdef HAVE_EAX
 // EAX Related
 ALboolean				s_bEAX;				// Is EAX 3.0 support is available
 bool					s_bEALFileLoaded;	// Has an .eal file been loaded for the current level
@@ -249,6 +250,7 @@ const GUID DSPROPSETID_EAX30_ListenerProperties
 
 const GUID DSPROPSETID_EAX30_BufferProperties
 				= { 0xa8fa6881, 0xb476,	0x11d3, { 0xbd, 0xb9, 0x0, 0xc0, 0xf0, 0x2d, 0xdf, 0x87} };
+#endif
 
 /**************************************************************************************************\
 *
@@ -382,7 +384,7 @@ void S_Init( void ) {
 
 	s_CPUType = Cvar_Get("sys_cpuid","",0);
 
-#if !(defined __linux__ && defined __i386__)
+#ifdef _MSC_VER
 #if	!id386
 #else
 	extern unsigned int uiMMXAvailable;
@@ -406,13 +408,9 @@ void S_Init( void ) {
 	Cmd_AddCommand("mp3_calcvols", S_MP3_CalcVols_f);
 	Cmd_AddCommand("s_dynamic", S_SetDynamicMusic_f);
 
-	cv = Cvar_Get("s_UseOpenAL" , "0",CVAR_ARCHIVE|CVAR_LATCH);
-	s_UseOpenAL = !!(cv->integer);
-
-
 	if (s_UseOpenAL)
 	{
-		ALCDevice = alcOpenDevice((ALubyte*)"DirectSound3D");
+		ALCDevice = alcOpenDevice(NULL);
 		if (!ALCDevice)
 			return;
 
@@ -441,7 +439,9 @@ void S_Init( void ) {
 		alListenerfv(AL_VELOCITY,listenerVel);
 		alListenerfv(AL_ORIENTATION,listenerOri);
 
+#ifdef HAVE_EAX
 		InitEAXManager();
+#endif
 
 		memset(s_channels, 0, sizeof(s_channels));
 
@@ -609,7 +609,9 @@ void S_Shutdown( void )
 		// Close device
 		alcCloseDevice(ALCDevice);
 
+#ifdef HAVE_EAX
 		ReleaseEAXManager();
+#endif
 
 		s_numChannels = 0;
 
@@ -820,7 +822,9 @@ void S_BeginRegistration( void )
 	if (s_UseOpenAL)
 	{
 		mapname = Cvar_VariableString( "mapname" );
+#ifdef HAVE_EAX
 		EALFileInit(mapname);
+#endif
 	}
 
 	if (s_numSfx == 0) {
@@ -839,7 +843,7 @@ void S_BeginRegistration( void )
 	}
 }
 
-
+#ifdef HAVE_EAX
 void EALFileInit(char *level)
 {
 	long		lRoom;
@@ -875,6 +879,7 @@ void EALFileInit(char *level)
 		}
 	}
 }
+#endif // HAVE_EAX
 
 
 
@@ -2118,10 +2123,12 @@ void S_UpdateEntityPosition( int entityNum, const vec3_t origin )
 				pos[2] = -origin[1];
 				alSourcefv(s_channels[i].alSource, AL_POSITION, pos);
 	
+#ifdef HAVE_EAX
 				if ((s_bEALFileLoaded) && !( ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL ) )
 				{
 					UpdateEAXBuffer(ch);
 				}
+#endif
 			}
 		}
 	}
@@ -2263,7 +2270,9 @@ Change the volumes of all the playing sounds for changes in their positions
 */
 void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], qboolean inwater )
 {
+#ifdef HAVE_EAX
 	EAXOCCLUSIONPROPERTIES eaxOCProp;
+#endif
 	unsigned int ulEnvironment;
 	int			i;
 	channel_t	*ch;
@@ -2288,6 +2297,7 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], qboolean 
 		listener_ori[5] = -axis[2][1];
 		alListenerfv(AL_ORIENTATION, listener_ori);
 
+#ifdef HAVE_EAX
 		// Update EAX effects here
 		if (s_bEALFileLoaded)
 		{
@@ -2340,6 +2350,7 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], qboolean 
 				}
 			}
 		}
+#endif // HAVE_EAX
 	}
 	else
 	{
@@ -2571,8 +2582,10 @@ void S_Update_(void) {
 	int i,j;
 	int			source;
 	float		pos[3];
+#ifdef HAVE_EAX
 	EAXOBSTRUCTIONPROPERTIES eaxOBProp;
 	EAXOCCLUSIONPROPERTIES eaxOCProp;
+#endif
 #ifdef _DEBUG
 	char szString[256];
 #endif
@@ -2637,6 +2650,7 @@ void S_Update_(void) {
 				alSourcef(s_channels[source].alSource, AL_REFERENCE_DISTANCE, 1500.0f);
 				alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volumeVoice->value) / 255.0f);
 
+#ifdef HAVE_EAX
 				if (s_bEAX)
 				{
 					// Switch-off Occlusion + Obstruction
@@ -2654,14 +2668,17 @@ void S_Update_(void) {
 					s_eaxSet(&DSPROPSETID_EAX_BufferProperties, DSPROPERTY_EAXBUFFER_OCCLUSIONPARAMETERS,
 						ch->alSource, &eaxOCProp, sizeof(EAXOCCLUSIONPROPERTIES));
 				}
+#endif
 			}
 			else
 			{
 				alSourcef(s_channels[source].alSource, AL_REFERENCE_DISTANCE, 400.f);
 				alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.f);
 
+#ifdef HAVE_EAX
 				if (s_bEALFileLoaded)
 					UpdateEAXBuffer(ch);
+#endif
 			}
 
 
@@ -2785,7 +2802,9 @@ void S_Update_(void) {
 
 		AL_UpdateRawSamples();
 
+#ifdef HAVE_EAX
 		EAXMorph();
+#endif
 	}
 	else
 	{
@@ -3088,8 +3107,10 @@ void UpdateLoopingSounds()
 					ch->master_vol = loop->volume;
 					alSourcef(s_channels[i].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.f);
 
+#ifdef HAVE_EAX
 					if (s_bEALFileLoaded)
 						UpdateEAXBuffer(ch);
+#endif
 
 					ch->bProcessed = true;
 					loop->bProcessed = true;
@@ -3162,8 +3183,10 @@ void UpdateLoopingSounds()
 			alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.0f);
 			alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, ch->fixed_origin ? AL_TRUE : AL_FALSE);
 
+#ifdef HAVE_EAX
 			if (s_bEALFileLoaded)
 				UpdateEAXBuffer(ch);
+#endif
 
 			alGetError();
 			alSourcePlay(s_channels[source].alSource);
@@ -3214,7 +3237,9 @@ void AL_UpdateRawSamples()
 		size = (s_rawend - s_paintedtime)<<2;
 		if (size > (MAX_RAW_SAMPLES<<2))
 		{
+#ifdef _DEBUG
 			OutputDebugString("UpdateRawSamples :- Raw Sample buffer has overflowed !!!\n");
+#endif
 			size = MAX_RAW_SAMPLES<<2;
 			s_paintedtime = s_rawend - MAX_RAW_SAMPLES;
 		}
@@ -5017,6 +5042,7 @@ qboolean SND_RegisterAudio_LevelLoadEnd(qboolean bDeleteEverythingNotUsedThisLev
 }
 
 
+#ifdef HAVE_EAX
 /****************************************************************************************************\
 *
 *	EAX Related
@@ -5655,4 +5681,4 @@ void Clamp(EAXVECTOR *eaxVector)
 	eaxVector->y *= flInvMagnitude;
 	eaxVector->z *= flInvMagnitude;
 }
-
+#endif // HAVE_EAX
