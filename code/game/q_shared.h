@@ -461,6 +461,8 @@ extern	const vec3_t	axisDefault[3];
 
 #define	IS_NAN(x) (((*(int *)&x)&nanmask)==nanmask)
 
+#define Q_isnan(x) (isnan(x))
+
 float Q_fabs( float f );
 float Q_rsqrt( float f );		// reciprocal square root
 
