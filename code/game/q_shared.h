@@ -146,6 +146,7 @@ typedef unsigned long		ulong;
 typedef unsigned short		word;
 
 typedef unsigned char 		byte;
+typedef unsigned char		BYTE;
 
 typedef const char *LPCSTR;
 
