@@ -787,7 +787,7 @@ void R_Images_DeleteLightMaps(void)
 		{
 			R_Images_DeleteImageContents(pImage);
 
-			itImage = AllocatedImages.erase(itImage);
+			AllocatedImages.erase(itImage++);
 			bEraseOccured = qtrue;
 		}
 	}
@@ -885,7 +885,7 @@ qboolean RE_RegisterImages_LevelLoadEnd(void)
 
 				R_Images_DeleteImageContents(pImage);
 
-				itImage = AllocatedImages.erase(itImage);
+				AllocatedImages.erase(itImage++);
 				bEraseOccured = qtrue;
 			}
 		}
