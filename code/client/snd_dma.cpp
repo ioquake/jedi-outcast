@@ -1414,7 +1414,7 @@ void S_StartSound(const vec3_t origin, int entityNum, int entchannel, sfxHandle_
 			ch = s_channels + 1;
 			for (i = 1; i < s_numChannels; i++, ch++)
 			{
-				if ((ch->entnum == entityNum) && (ch->entchannel == CHAN_WEAPON) && (ch->thesfx) && (strstr(strlwr(ch->thesfx->sSoundName), "altcharge") != NULL))
+				if ((ch->entnum == entityNum) && (ch->entchannel == CHAN_WEAPON) && (ch->thesfx) && (strstr(Q_strlwr(ch->thesfx->sSoundName), "altcharge") != NULL))
 				{
 					// Stop this sound
 					alSourceStop(ch->alSource);
@@ -1430,7 +1430,7 @@ void S_StartSound(const vec3_t origin, int entityNum, int entchannel, sfxHandle_
 			ch = s_channels + 1;
 			for (i = 1; i < s_numChannels; i++, ch++)
 			{
-				if ((ch->entnum == entityNum) && (ch->thesfx) && (strstr(strlwr(ch->thesfx->sSoundName), "falling") != NULL))
+				if ((ch->entnum == entityNum) && (ch->thesfx) && (strstr(Q_strlwr(ch->thesfx->sSoundName), "falling") != NULL))
 				{
 					// Stop this sound
 					alSourceStop(ch->alSource);
@@ -3539,28 +3539,28 @@ void S_SoundList_f( void ) {
 
 	if ( Cmd_Argc() == 2 ) 
 	{
-		if (!stricmp(Cmd_Argv(1), "shouldbeMP3"))
+		if (!Q_stricmp(Cmd_Argv(1), "shouldbeMP3"))
 		{
 			bShouldBeMP3 = qtrue;
 		}
 		else
-		if (!stricmp(Cmd_Argv(1), "wavonly"))
+		if (!Q_stricmp(Cmd_Argv(1), "wavonly"))
 		{
 			bWavOnly = qtrue;
 		}
 		else
 		{
-			if (!stricmp(Cmd_Argv(1), "1"))
+			if (!Q_stricmp(Cmd_Argv(1), "1"))
 			{
 				iVariantCap = 1;
 			}
 			else
-			if (!stricmp(Cmd_Argv(1), "2"))
+			if (!Q_stricmp(Cmd_Argv(1), "2"))
 			{
 				iVariantCap = 2;
 			}
 			else
-			if (!stricmp(Cmd_Argv(1), "3"))
+			if (!Q_stricmp(Cmd_Argv(1), "3"))
 			{
 				iVariantCap = 3;
 			}
@@ -3611,7 +3611,7 @@ void S_SoundList_f( void ) {
 						sfx_t *sfx2;
 						for (sfx2 = s_knownSfx, i2=0 ; i2<s_numSfx ; i2++, sfx2++) 
 						{
-							if (!stricmp(sFindName,sfx2->sSoundName))
+							if (!Q_stricmp(sFindName,sfx2->sSoundName))
 							{
 								bDumpThisOne = qfalse;	// found a %1-variant of this, so use variant capping and ignore this sfx_t
 								break;
@@ -4733,7 +4733,7 @@ static void S_UpdateBackgroundTrack( void )
 		// standard / non-dynamic one-track music...
 		//
 		LPCSTR psCommand = S_Music_GetRequestedState();	// special check just for "silence" case...
-		qboolean bShouldBeSilent = (psCommand && !stricmp(psCommand,"silence"));
+		qboolean bShouldBeSilent = (psCommand && !Q_stricmp(psCommand,"silence"));
 		float fDesiredVolume = bShouldBeSilent ? 0.0f : s_musicVolume->value;
 		//
 		// internal to this code is a volume-smoother...
