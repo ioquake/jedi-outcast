@@ -1,7 +1,7 @@
 // cl_parse.c  -- parse a message received from the server
 
 #include "client.h"
-#include "..\qcommon\strip.h"
+#include "../qcommon/strip.h"
 #include "../ghoul2/g2_local.h"
 #ifdef _DONETPROFILE_
 #include "../qcommon/INetProfile.h"

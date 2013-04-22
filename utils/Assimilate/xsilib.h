@@ -1,6 +1,6 @@
-#include "..\common\cmdlib.h"
-#include "..\common\mathlib.h"
-#include "..\common\polyset.h"
+#include "../common/cmdlib.h"
+#include "../common/mathlib.h"
+#include "../common/polyset.h"
 
 typedef enum
 {

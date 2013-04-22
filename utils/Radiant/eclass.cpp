@@ -3,7 +3,7 @@
 #include "io.h"
 #include "inc.h"
 #include "oddbits.h"
-#include "..\libs\pakstuff.h"
+#include "../libs/pakstuff.h"
 
 eclass_t	*eclass = NULL;
 eclass_t	*eclass_bad = NULL;

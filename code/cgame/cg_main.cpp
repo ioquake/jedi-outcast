@@ -6,8 +6,8 @@
 #include "cg_media.h"
 #include "FxScheduler.h"
 
-#include "..\client\vmachine.h"
-#include "..\game\characters.h"
+#include "../client/vmachine.h"
+#include "../game/characters.h"
 #include "cg_lights.h"
 
 #ifdef _IMMERSION

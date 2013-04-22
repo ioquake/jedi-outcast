@@ -5,7 +5,7 @@
 #include "lbmlib.h"
 #include "bmp.h"
 #include "jpgfile.h"
-#include "..\libs\pakstuff.h"
+#include "../libs/pakstuff.h"
 
 
 /*

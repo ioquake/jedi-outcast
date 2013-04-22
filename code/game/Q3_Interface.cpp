@@ -20,10 +20,10 @@
 #include "b_local.h"
 #include "events.h"
 #include "g_nav.h"
-#include "..\cgame\cg_camera.h"
-#include "..\game\objectives.h"
+#include "../cgame/cg_camera.h"
+#include "../game/objectives.h"
 #include "g_roff.h"
-#include "..\cgame\cg_local.h"
+#include "../cgame/cg_local.h"
 #include "g_icarus.h"
 #include "wp_saber.h"
 

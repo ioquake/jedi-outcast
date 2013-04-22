@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "..\qe3.h"
+#include "../qe3.h"
 
 #define	CBLOCK_SUBDIVISIONS		4
 
