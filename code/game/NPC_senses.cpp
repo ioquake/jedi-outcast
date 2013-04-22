@@ -10,6 +10,7 @@
 #ifdef _DEBUG
 	#include <float.h>
 #endif
+#include "../cgame/cg_local.h"
 
 extern int eventClearTime;
 /*

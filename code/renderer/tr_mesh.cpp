@@ -8,7 +8,7 @@
 
 
 #include "tr_local.h"
-#include "MatComp.h"
+#include "matcomp.h"
 
 float ProjectRadius( float r, vec3_t location )
 {

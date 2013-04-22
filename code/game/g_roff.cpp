@@ -5,6 +5,8 @@
 #include "g_local.h"
 #include "g_roff.h"
 #include "g_icarus.h"
+#include "../cgame/cg_local.h"
+
 // The list of precached ROFFs
 roff_list_t	roffs[MAX_ROFFS];
 int			num_roffs = 0;

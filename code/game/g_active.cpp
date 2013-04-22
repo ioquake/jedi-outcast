@@ -3,6 +3,7 @@
 
 
 #include "g_local.h"
+#include "b_local.h"
 #include "g_functions.h"
 #include "../cgame/cg_local.h"
 #include "Q3_Interface.h"

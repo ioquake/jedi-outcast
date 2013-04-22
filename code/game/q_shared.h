@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <ctype.h>
+#include <stdint.h>
 
 
 // this is the define for determining if we have an asm version of a C function

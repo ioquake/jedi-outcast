@@ -16,7 +16,17 @@
 
 using namespace std;
 
+#ifdef WIN32
 #include <windows.h>
+#else
+#include <stdint.h>
+typedef uint32_t	UINT;
+typedef int		HANDLE;
+typedef int32_t		COLORREF;
+typedef const char	*LPCTSTR;
+#endif
+
+#include "Interface.h" // for DWORD...
 
 typedef unsigned char byte;
 typedef unsigned short word;

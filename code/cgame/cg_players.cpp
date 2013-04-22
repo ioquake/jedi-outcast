@@ -9,6 +9,8 @@
 #include "../game/ghoul2_shared.h"
 #include "../game/anims.h"
 #include "../game/wp_saber.h"
+#include "../game/g_local.h"
+#include "../game/b_local.h"
 
 #define	LOOK_SWING_SCALE	0.5
 

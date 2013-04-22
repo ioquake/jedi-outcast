@@ -4,6 +4,8 @@
 
 
 // this include must remain at the top of every Icarus CPP file
+#include "../game/g_local.h"
+#include "../game/q_shared.h"
 #include "icarus.h"
 
 

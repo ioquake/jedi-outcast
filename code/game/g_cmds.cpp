@@ -5,6 +5,8 @@
 #include "g_local.h"
 #include "objectives.h"
 #include "wp_saber.h"
+#include "g_functions.h"
+#include "../cgame/cg_local.h"
 
 extern	bool		in_camera;
 

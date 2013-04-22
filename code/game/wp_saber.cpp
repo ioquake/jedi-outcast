@@ -9,6 +9,7 @@
 #include "bg_local.h"			   
 #include "g_functions.h"
 #include "wp_saber.h"
+#include "../cgame/cg_local.h"
 
 #define MAX_SABER_VICTIMS 16
 static int		victimEntityNum[MAX_SABER_VICTIMS];

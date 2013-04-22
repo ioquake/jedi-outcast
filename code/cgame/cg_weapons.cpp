@@ -7,6 +7,7 @@
 #include "../game/wp_saber.h"
 
 #include "../game/anims.h"
+#include "../game/g_local.h"
 
 #ifdef _IMMERSION
 #include "../ff/ff.h"

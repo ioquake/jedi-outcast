@@ -9,7 +9,10 @@ we need it...
 // leave this line at the top for all NPC_xxxx.cpp files...
 #include "g_headers.h"
 #include "g_navigator.h"
+#include "g_nav.h"
+#include "g_functions.h"
 #include "Q3_Interface.h"
+#include "b_local.h"
 
 extern cvar_t	*g_AIsurrender;
 extern CNavigator	navigator;

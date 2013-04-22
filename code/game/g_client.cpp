@@ -3,10 +3,12 @@
 
 
 #include "g_local.h"
+#include "b_local.h"
 #include "g_functions.h"
 #include "anims.h"
 #include "g_icarus.h"
 #include "wp_saber.h"
+#include "../cgame/cg_local.h"
 
 extern void Q3_DebugPrint( int level, const char *format, ... );
 extern void WP_SaberInitBladeData( gentity_t *ent );

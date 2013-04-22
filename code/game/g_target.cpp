@@ -6,6 +6,7 @@
 #include "g_local.h"
 #include "g_functions.h"
 #include "g_icarus.h"
+#include "../cgame/cg_local.h"
 //#include "Q3_Interface.h"
 extern void Q3_DebugPrint( int level, const char *format, ... );
 extern void G_SetEnemy( gentity_t *self, gentity_t *enemy );

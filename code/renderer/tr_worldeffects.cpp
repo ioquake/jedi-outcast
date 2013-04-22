@@ -8,7 +8,7 @@
 //#include "q_math.h"
 //#include "QSupport.h"
 #include "tr_local.h"
-#include "tr_WorldEffects.h"
+#include "tr_worldeffects.h"
 
 #pragma warning( disable : 4512 )
 

@@ -9,6 +9,8 @@
 #include "FxScheduler.h"
 #include "cg_lights.h"
 #include "../game/wp_saber.h"
+#include "../game/g_local.h"
+#include "../game/g_functions.h"
 
 #define MASK_CAMERACLIP (MASK_SOLID)
 #define CAMERA_SIZE	4

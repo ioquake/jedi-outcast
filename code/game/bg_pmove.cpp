@@ -11,6 +11,7 @@
 #include "q_shared.h"
 #include "g_shared.h"
 #include "bg_local.h"			   
+#include "b_local.h"
 #include "g_local.h"			   
 #include "g_functions.h"
 #include "anims.h"

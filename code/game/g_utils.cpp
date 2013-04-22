@@ -12,6 +12,7 @@
 #include "b_local.h"
 #include "anims.h"
 #include "../renderer/mdx_format.h"
+#include "../cgame/cg_local.h"
 
 #define ACT_ACTIVE		qtrue
 #define ACT_INACTIVE	qfalse

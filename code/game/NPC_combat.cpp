@@ -8,6 +8,7 @@
 #include "b_local.h"
 #include "g_nav.h"
 #include "g_navigator.h"
+#include "g_functions.h"
 
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
 extern void G_SetEnemy( gentity_t *self, gentity_t *enemy );

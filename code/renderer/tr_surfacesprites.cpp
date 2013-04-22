@@ -5,7 +5,7 @@
 #include "../server/exe_headers.h"
 
 
-#include "tr_QuickSprite.h"
+#include "tr_quicksprite.h"
 #include "tr_worldeffects.h"
 
 
