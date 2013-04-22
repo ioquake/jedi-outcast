@@ -102,10 +102,22 @@ typedef struct {
 
 
 	int		(*RegisterFont)(const char *name);
-	int		(*Font_HeightPixels)(const int index, const float scale = 1.0f);
-	int		(*Font_StrLenPixels)(const char *s, const int index, const float scale = 1.0f);
+	int		(*_Font_HeightPixels)(const int index, const float scale);
+	int		Font_HeightPixels(const int index, const float scale = 1.0f)
+	{
+		return (*_Font_HeightPixels)(index, scale);
+	}
+	int		(*_Font_StrLenPixels)(const char *s, const int index, const float scale);
+	int		Font_StrLenPixels(const char *s, const int index, const float scale = 1.0f)
+	{
+		return (*_Font_StrLenPixels)(s, index, scale);
+	}
 	int		(*Font_StrLenChars) (const char *s);
-	void	(*Font_DrawString)(int x, int y, const char *s, const float *rgba, const int iFontHandle, int iMaxPixelWidth, const float scale = 1.0f);
+	void	(*_Font_DrawString)(int x, int y, const char *s, const float *rgba, const int iFontHandle, int iMaxPixelWidth, const float scale);
+	void	Font_DrawString(int x, int y, const char *s, const float *rgba, const int iFontHandle, int iMaxPixelWidth, const float scale = 1.0f)
+	{
+		return (*_Font_DrawString)(x, y, s, rgba, iFontHandle, iMaxPixelWidth, scale);
+	}
 	qboolean (*Language_IsAsian) (void);
 	qboolean (*Language_UsesSpaces) (void);
 	unsigned int (*AnyLanguage_ReadCharFromString)( const char **ppsText, qboolean *pbIsTrailingPunctuation /* = NULL */);

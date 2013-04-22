@@ -236,10 +236,10 @@ void CL_InitUI( void ) {
 	uii.R_RegisterShader		= re.RegisterShader;
 	uii.R_RegisterShaderNoMip	= re.RegisterShaderNoMip;
 	uii.R_RegisterFont			= re.RegisterFont;
-	uii.R_Font_StrLenPixels		= re.Font_StrLenPixels;
+	uii._R_Font_StrLenPixels		= re._Font_StrLenPixels;
 	uii.R_Font_StrLenChars		= re.Font_StrLenChars;
-	uii.R_Font_HeightPixels		= re.Font_HeightPixels;
-	uii.R_Font_DrawString		= re.Font_DrawString;
+	uii._R_Font_HeightPixels		= re._Font_HeightPixels;
+	uii._R_Font_DrawString		= re._Font_DrawString;
 	uii.Language_IsAsian		= re.Language_IsAsian;
 	uii.Language_UsesSpaces		= re.Language_UsesSpaces;
 	uii.AnyLanguage_ReadCharFromString = re.AnyLanguage_ReadCharFromString;

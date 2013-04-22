@@ -632,7 +632,7 @@ void CG_PredictPlayerState( void ) {
 	//FIXME: is this bad???
 	cg_pmove.gent = NULL;
 	cg_pmove.ps = &cg.predicted_player_state;
-	cg_pmove.trace = CG_Trace;
+	cg_pmove._trace = CG_Trace;
 	cg_pmove.pointcontents = CG_PointContents;
 	cg_pmove.tracemask = MASK_PLAYERSOLID;
 	cg_pmove.noFootsteps = 0;//( cgs.dmflags & DF_NO_FOOTSTEPS ) > 0;

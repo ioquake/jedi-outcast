@@ -9234,7 +9234,7 @@ void Interface_Init( interface_export_t *pe )
 
 	//Save / Load functions
 	pe->I_WriteSaveData			=	gi.AppendToSaveGame;
-	pe->I_ReadSaveData			=	gi.ReadFromSaveGame;
+	pe->_I_ReadSaveData			=	gi._ReadFromSaveGame;
 	pe->I_LinkEntity			=	ICARUS_LinkEntity;
 
 	gclient_t	*client;

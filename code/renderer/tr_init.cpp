@@ -1388,10 +1388,10 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.GetBModelVerts = RE_GetBModelVerts;
 
 	re.RegisterFont = RE_RegisterFont;
-	re.Font_StrLenPixels = RE_Font_StrLenPixels;
+	re._Font_StrLenPixels = RE_Font_StrLenPixels;
 	re.Font_StrLenChars = RE_Font_StrLenChars;
-	re.Font_HeightPixels = RE_Font_HeightPixels;	
-	re.Font_DrawString = RE_Font_DrawString;
+	re._Font_HeightPixels = RE_Font_HeightPixels;	
+	re._Font_DrawString = RE_Font_DrawString;
 	re.Language_IsAsian = Language_IsAsian;
 	re.Language_UsesSpaces = Language_UsesSpaces;
 	re.AnyLanguage_ReadCharFromString = AnyLanguage_ReadCharFromString;

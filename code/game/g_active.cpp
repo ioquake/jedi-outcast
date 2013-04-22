@@ -2774,7 +2774,7 @@ extern cvar_t	*g_skippingcin;
 	pm.cmd = *ucmd;
 //	pm.tracemask = MASK_PLAYERSOLID;	// used differently for navgen
 	pm.tracemask = ent->clipmask;
-	pm.trace = gi.trace;
+	pm._trace = gi._trace;
 	pm.pointcontents = gi.pointcontents;
 	pm.debugLevel = g_debugMove->integer;
 	pm.noFootsteps = 0;//( g_dmflags->integer & DF_NO_FOOTSTEPS ) > 0;
