@@ -15,10 +15,12 @@
 
 int (*qsyscall)( int arg, ... ) = (int (*)( int, ...))-1;
 
+extern "C" {
 void dllEntry( int (*syscallptr)( int arg,... ) ) {
 	qsyscall = syscallptr;
 //	CG_PreInit();
 }
+} // extern "C"
 
 
 int CL_UISystemCalls( int *args );
