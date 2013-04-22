@@ -16,7 +16,7 @@ typedef unsigned int glIndex_t;
 #define NUM_SKIN_EXTENSIONS 9
 
 // fast float to int conversion
-#if id386 && !(defined __linux__ && defined __i386__)
+#if (defined(_MSC_VER) && defined(__i386__))
 long myftol( float f );
 #else
 #define	myftol(x) ((int)(x))
