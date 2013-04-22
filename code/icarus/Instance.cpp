@@ -44,7 +44,9 @@ ICARUS_Instance *ICARUS_Instance::Create( interface_export_t *ie )
 	ICARUS_Instance *instance = new ICARUS_Instance;
 	instance->m_interface = ie;
 
+#ifdef _DEBUG
 	OutputDebugString( "ICARUS Instance successfully created\n" );
+#endif
 
 	return instance;
 }
