@@ -663,14 +663,6 @@ void InitGame(  const char *mapname, const char *spawntarget, int checkSum, cons
 
 	gi.Printf ("-----------------------------------\n");
 
-	//randomize the rand functions
-	byte num_calls = (byte)timeGetTime();
-
-	for(i = 0; i < (int)num_calls; i++)
-	{
-		rand();
-	}
-
 	if ( navCalculatePaths )
 	{//not loaded - need to calc paths
 		navCalcPathTime = level.time + START_TIME_NAV_CALC;//make sure all ents are in and linked
