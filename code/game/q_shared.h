@@ -147,6 +147,8 @@ typedef unsigned short		word;
 
 typedef unsigned char 		byte;
 
+typedef const char *LPCSTR;
+
 typedef enum {qfalse, qtrue}	qboolean;
 #define	qboolean	int		//don't want strict type checking on the qboolean
 
