@@ -12,6 +12,8 @@
 
 //===============================================================================
 
+int glob_match(char *pattern, char *text);
+
 // Used to determine CD Path
 static char programpath[MAX_OSPATH];
 
@@ -279,7 +281,7 @@ char **Sys_ListFiles( const char *directory, const char *extension, int *numfile
 		return NULL;
 	}
 
-	listCopy = Z_Malloc( ( nfiles + 1 ) * sizeof( *listCopy ) );
+	listCopy = (char **) Z_Malloc( ( nfiles + 1 ) * sizeof( *listCopy ), TAG_LISTFILES, qfalse );
 	for ( i = 0 ; i < nfiles ; i++ ) {
 		listCopy[i] = list[i];
 	}
@@ -300,6 +302,11 @@ void	Sys_FreeFileList( char **list ) {
 	}
 
 	Z_Free( list );
+}
+
+qboolean Sys_CheckCD( void )
+{
+	return qtrue;
 }
 
 char *Sys_Cwd( void ) 
@@ -337,7 +344,7 @@ char *Sys_DefaultBasePath(void)
 
 	if ((p = getenv("HOME")) != NULL) {
 		Q_strncpyz(basepath, p, sizeof(basepath));
-		Q_strcat(basepath, sizeof(basepath), "/.q3a");
+		Q_strcat(basepath, sizeof(basepath), "/.jk2sp");
 		if (mkdir(basepath, 0777)) {
 			if (errno != EEXIST) 
 				Sys_Error("Unable to create directory \"%s\", error is %s(%d)\n", basepath, strerror(errno), errno);

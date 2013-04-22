@@ -32,14 +32,20 @@
 #include "../client/client.h"
 
 #include "unix_glw.h"
+#include "unix_local.h"
 
 #include <GL/glx.h>
 
 #include <X11/keysym.h>
 #include <X11/cursorfont.h>
 
-#include <X11/extensions/xf86dga.h>
+#include <X11/extensions/Xxf86dga.h>
 #include <X11/extensions/xf86vmode.h>
+
+void	QGL_Shutdown( void );
+int	GLW_SetMode( const char *drivername, int mode, qboolean fullscreen );
+qboolean QGL_Init( const char *dllname );
+void	QGL_EnableLogging( qboolean enable );
 
 typedef enum {
 	RSERR_OK,
@@ -109,99 +115,101 @@ static char *XLateKey(XKeyEvent *ev, int *key)
 	switch(keysym)
 	{
 		case XK_KP_Page_Up:	
-		case XK_KP_9:	 *key = K_KP_PGUP; break;
-		case XK_Page_Up:	 *key = K_PGUP; break;
+		case XK_KP_9:	 *key = A_KP_9; break;
+		case XK_Page_Up:	 *key = A_PAGE_UP; break;
 
 		case XK_KP_Page_Down: 
-		case XK_KP_3: *key = K_KP_PGDN; break;
-		case XK_Page_Down:	 *key = K_PGDN; break;
+		case XK_KP_3: *key = A_KP_3; break;
+		case XK_Page_Down:	 *key = A_PAGE_DOWN; break;
 
-		case XK_KP_Home: *key = K_KP_HOME; break;
-		case XK_KP_7: *key = K_KP_HOME; break;
-		case XK_Home:	 *key = K_HOME; break;
+		case XK_KP_Home:
+		case XK_KP_7: *key = A_KP_7; break;
+		case XK_Home:	 *key = A_HOME; break;
 
 		case XK_KP_End:
-		case XK_KP_1:	  *key = K_KP_END; break;
-		case XK_End:	 *key = K_END; break;
+		case XK_KP_1:	  *key = A_KP_1; break;
+		case XK_End:	 *key = A_END; break;
 
-		case XK_KP_Left: *key = K_KP_LEFTARROW; break;
-		case XK_KP_4: *key = K_KP_LEFTARROW; break;
-		case XK_Left:	 *key = K_LEFTARROW; break;
+		case XK_KP_Left:
+		case XK_KP_4: *key = A_KP_4; break;
+		case XK_Left:	 *key = A_CURSOR_LEFT; break;
 
-		case XK_KP_Right: *key = K_KP_RIGHTARROW; break;
-		case XK_KP_6: *key = K_KP_RIGHTARROW; break;
-		case XK_Right:	*key = K_RIGHTARROW;		break;
+		case XK_KP_Right:
+		case XK_KP_6: *key = A_KP_6; break;
+		case XK_Right:	*key = A_CURSOR_RIGHT;		break;
 
 		case XK_KP_Down:
-		case XK_KP_2: 	 *key = K_KP_DOWNARROW; break;
-		case XK_Down:	 *key = K_DOWNARROW; break;
+		case XK_KP_2: 	 *key = A_KP_2; break;
+		case XK_Down:	 *key = A_CURSOR_DOWN; break;
 
 		case XK_KP_Up:   
-		case XK_KP_8:    *key = K_KP_UPARROW; break;
-		case XK_Up:		 *key = K_UPARROW;	 break;
+		case XK_KP_8:    *key = A_KP_8; break;
+		case XK_Up:		 *key = A_CURSOR_UP;	 break;
 
-		case XK_Escape: *key = K_ESCAPE;		break;
+		case XK_Escape: *key = A_ESCAPE;		break;
 
-		case XK_KP_Enter: *key = K_KP_ENTER;	break;
-		case XK_Return: *key = K_ENTER;		 break;
+		case XK_KP_Enter: *key = A_KP_ENTER;	break;
+		case XK_Return: *key = A_ENTER;		 break;
 
-		case XK_Tab:		*key = K_TAB;			 break;
+		case XK_Tab:		*key = A_TAB;			 break;
 
-		case XK_F1:		 *key = K_F1;				break;
+		case XK_F1:		 *key = A_F1;				break;
 
-		case XK_F2:		 *key = K_F2;				break;
+		case XK_F2:		 *key = A_F2;				break;
 
-		case XK_F3:		 *key = K_F3;				break;
+		case XK_F3:		 *key = A_F3;				break;
 
-		case XK_F4:		 *key = K_F4;				break;
+		case XK_F4:		 *key = A_F4;				break;
 
-		case XK_F5:		 *key = K_F5;				break;
+		case XK_F5:		 *key = A_F5;				break;
 
-		case XK_F6:		 *key = K_F6;				break;
+		case XK_F6:		 *key = A_F6;				break;
 
-		case XK_F7:		 *key = K_F7;				break;
+		case XK_F7:		 *key = A_F7;				break;
 
-		case XK_F8:		 *key = K_F8;				break;
+		case XK_F8:		 *key = A_F8;				break;
 
-		case XK_F9:		 *key = K_F9;				break;
+		case XK_F9:		 *key = A_F9;				break;
 
-		case XK_F10:		*key = K_F10;			 break;
+		case XK_F10:		*key = A_F10;			 break;
 
-		case XK_F11:		*key = K_F11;			 break;
+		case XK_F11:		*key = A_F11;			 break;
 
-		case XK_F12:		*key = K_F12;			 break;
+		case XK_F12:		*key = A_F12;			 break;
 
-//		case XK_BackSpace: *key = K_BACKSPACE; break;
+//		case XK_BackSpace: *key = A_BACKSPACE; break;
 		case XK_BackSpace: *key = 8; break; // ctrl-h
 
 		case XK_KP_Delete:
-		case XK_KP_Decimal: *key = K_KP_DEL; break;
-		case XK_Delete: *key = K_DEL; break;
+		case XK_KP_Decimal: *key = A_KP_PERIOD; break;
+		case XK_Delete: *key = A_DELETE; break;
 
-		case XK_Pause:	*key = K_PAUSE;		 break;
+		case XK_Pause:	*key = A_PAUSE;		 break;
 
 		case XK_Shift_L:
-		case XK_Shift_R:	*key = K_SHIFT;		break;
+		case XK_Shift_R:	*key = A_SHIFT;		break;
 
 		case XK_Execute: 
 		case XK_Control_L: 
-		case XK_Control_R:	*key = K_CTRL;		 break;
+		case XK_Control_R:	*key = A_CTRL;		 break;
 
 		case XK_Alt_L:	
 		case XK_Meta_L: 
 		case XK_Alt_R:	
-		case XK_Meta_R: *key = K_ALT;			break;
+		case XK_Meta_R: *key = A_ALT;			break;
 
-		case XK_KP_Begin: *key = K_KP_5;	break;
+		case XK_KP_Begin: *key = A_KP_5;	break;
 
-		case XK_Insert:		*key = K_INS; break;
+		case XK_Insert:		*key = A_INSERT; break;
 		case XK_KP_Insert:
-		case XK_KP_0: *key = K_KP_INS; break;
+		case XK_KP_0: *key = A_KP_0; break;
 
 		case XK_KP_Multiply: *key = '*'; break;
-		case XK_KP_Add:  *key = K_KP_PLUS; break;
-		case XK_KP_Subtract: *key = K_KP_MINUS; break;
-		case XK_KP_Divide: *key = K_KP_SLASH; break;
+		case XK_KP_Add:  *key = A_KP_PLUS; break;
+		case XK_KP_Subtract: *key = A_KP_MINUS; break;
+#if 0
+		case XK_KP_Divide: *key = A_KP_SLASH; break;
+#endif
 
 		default:
 			*key = *(unsigned char *)buf;
@@ -339,7 +347,7 @@ static void HandleEvents(void)
 			key = XLateKey(&event.xkey);
 			
 			Sys_QueEvent( 0, SE_KEY, key, event.type == KeyPress, 0, NULL );
-			if (key == K_SHIFT)
+			if (key == A_SHIFT)
 				shift_down = (event.type == KeyPress);
 			if (key < 128 && (event.type == KeyPress)) {
 				if (shift_down)
@@ -384,7 +392,7 @@ static void HandleEvents(void)
 				b = 2;
 			else if (event.xbutton.button == 3)
 				b = 1;
-			Sys_QueEvent( 0, SE_KEY, K_MOUSE1 + b, qtrue, 0, NULL );
+			Sys_QueEvent( 0, SE_KEY, A_MOUSE1 + b, qtrue, 0, NULL );
 			break;
 
 		case ButtonRelease:
@@ -395,7 +403,7 @@ static void HandleEvents(void)
 				b = 2;
 			else if (event.xbutton.button == 3)
 				b = 1;
-			Sys_QueEvent( 0, SE_KEY, K_MOUSE1 + b, qfalse, 0, NULL );
+			Sys_QueEvent( 0, SE_KEY, A_MOUSE1 + b, qfalse, 0, NULL );
 			break;
 
 		case CreateNotify :
@@ -550,7 +558,7 @@ static qboolean GLW_StartDriverAndSetMode( const char *drivername,
 	}
 #endif
 
-	err = GLW_SetMode( drivername, mode, fullscreen );
+	err = (rserr_t) GLW_SetMode( drivername, mode, fullscreen );
 
 	switch ( err )
 	{
@@ -675,9 +683,6 @@ int GLW_SetMode( const char *drivername, int mode, qboolean fullscreen )
 		colorbits = 24;
 	else
 		colorbits = r_colorbits->value;
-
-	if ( !Q_stricmp( r_glDriver->string, _3DFX_DRIVER_NAME ) )
-		colorbits = 16;
 
 	if (!r_depthbits->value)
 		depthbits = 24;
@@ -864,48 +869,24 @@ static void GLW_InitExtensions( void )
 		ri.Printf( PRINT_ALL, "...no texture compression found\n" );
 	}
 
-#if 0
-	// WGL_EXT_swap_control
-	if ( strstr( glConfig.extensions_string, "WGL_EXT_swap_control" ) )
+	// GL_EXT_texture_env_add
+	glConfig.textureEnvAddAvailable = qfalse;
+	if ( strstr( glConfig.extensions_string, "EXT_texture_env_add" ) )
 	{
-		qwglSwapIntervalEXT = ( BOOL (WINAPI *)(int)) qwglGetProcAddress( "wglSwapIntervalEXT" );
-		ri.Printf( PRINT_ALL, "...using WGL_EXT_swap_control\n" );
-	}
-	else
-	{
-		ri.Printf( PRINT_ALL, "...WGL_EXT_swap_control not found\n" );
-	}
-#endif
-
-	// GL_ARB_multitexture
-	qglMultiTexCoord2fARB = NULL;
-	qglActiveTextureARB = NULL;
-	qglClientActiveTextureARB = NULL;
-	if ( strstr( glConfig.extensions_string, "GL_ARB_multitexture" ) )
-	{
-		if ( r_ext_multitexture->value )
+		if ( r_ext_texture_env_add->integer )
 		{
-			qglMultiTexCoord2fARB = ( PFNGLMULTITEXCOORD2FARBPROC ) dlsym( glw_state.OpenGLLib, "glMultiTexCoord2fARB" );
-			qglActiveTextureARB = ( PFNGLACTIVETEXTUREARBPROC ) dlsym( glw_state.OpenGLLib, "glActiveTextureARB" );
-			qglClientActiveTextureARB = ( PFNGLCLIENTACTIVETEXTUREARBPROC ) dlsym( glw_state.OpenGLLib, "glClientActiveTextureARB" );
-
-			if ( qglActiveTextureARB )
-			{
-				ri.Printf( PRINT_ALL, "...using GL_ARB_multitexture\n" );
-			}
-			else
-			{
-				ri.Printf( PRINT_ALL, "...blind search for ARB_multitexture failed\n" );
-			}
+			glConfig.textureEnvAddAvailable = qtrue;
+			ri.Printf( PRINT_ALL, "...using GL_EXT_texture_env_add\n" );
 		}
 		else
 		{
-			ri.Printf( PRINT_ALL, "...ignoring GL_ARB_multitexture\n" );
+			glConfig.textureEnvAddAvailable = qfalse;
+			ri.Printf( PRINT_ALL, "...ignoring GL_EXT_texture_env_add\n" );
 		}
 	}
 	else
 	{
-		ri.Printf( PRINT_ALL, "...GL_ARB_multitexture not found\n" );
+		ri.Printf( PRINT_ALL, "...GL_EXT_texture_env_add not found\n" );
 	}
 
 	// GL_EXT_texture_filter_anisotropic
@@ -931,10 +912,73 @@ static void GLW_InitExtensions( void )
 		ri.Cvar_Set( "r_ext_texture_filter_anisotropic_avail", "0" );
 	}
 
+	// GL_EXT_clamp_to_edge
+	glConfig.clampToEdgeAvailable = qfalse;
+	if ( strstr( glConfig.extensions_string, "GL_EXT_texture_edge_clamp" ) )
+	{
+		glConfig.clampToEdgeAvailable = qtrue;
+		ri.Printf( PRINT_ALL, "...Using GL_EXT_texture_edge_clamp\n" );
+	}
+
+#if 0
+	// WGL_EXT_swap_control
+	qwglSwapIntervalEXT = ( BOOL (WINAPI *)(int)) qwglGetProcAddress( "wglSwapIntervalEXT" );
+	if ( qwglSwapIntervalEXT )
+	{
+		ri.Printf( PRINT_ALL, "...using WGL_EXT_swap_control\n" );
+		r_swapInterval->modified = qtrue;	// force a set next frame
+	}
+	else
+	{
+		ri.Printf( PRINT_ALL, "...WGL_EXT_swap_control not found\n" );
+	}
+#endif
+
+	// GL_ARB_multitexture
+	qglMultiTexCoord2fARB = NULL;
+	qglActiveTextureARB = NULL;
+	qglClientActiveTextureARB = NULL;
+	if ( strstr( glConfig.extensions_string, "GL_ARB_multitexture" )  )
+	{
+		if ( r_ext_multitexture->integer )
+		{
+			qglMultiTexCoord2fARB = ( PFNGLMULTITEXCOORD2FARBPROC ) dlsym( glw_state.OpenGLLib, "glMultiTexCoord2fARB" );
+			qglActiveTextureARB = ( PFNGLACTIVETEXTUREARBPROC ) dlsym( glw_state.OpenGLLib, "glActiveTextureARB" );
+			qglClientActiveTextureARB = ( PFNGLCLIENTACTIVETEXTUREARBPROC ) dlsym( glw_state.OpenGLLib, "glClientActiveTextureARB" );
+
+			if ( qglActiveTextureARB )
+			{
+				qglGetIntegerv( GL_MAX_ACTIVE_TEXTURES_ARB, &glConfig.maxActiveTextures );
+
+				if ( glConfig.maxActiveTextures > 1 )
+				{
+					ri.Printf( PRINT_ALL, "...using GL_ARB_multitexture\n" );
+				}
+				else
+				{
+					qglMultiTexCoord2fARB = NULL;
+					qglActiveTextureARB = NULL;
+					qglClientActiveTextureARB = NULL;
+					ri.Printf( PRINT_ALL, "...not using GL_ARB_multitexture, < 2 texture units\n" );
+				}
+			}
+		}
+		else
+		{
+			ri.Printf( PRINT_ALL, "...ignoring GL_ARB_multitexture\n" );
+		}
+	}
+	else
+	{
+		ri.Printf( PRINT_ALL, "...GL_ARB_multitexture not found\n" );
+	}
+
 	// GL_EXT_compiled_vertex_array
+	qglLockArraysEXT = NULL;
+	qglUnlockArraysEXT = NULL;
 	if ( strstr( glConfig.extensions_string, "GL_EXT_compiled_vertex_array" ) )
 	{
-		if ( r_ext_compiled_vertex_array->value )
+		if ( r_ext_compiled_vertex_array->integer )
 		{
 			ri.Printf( PRINT_ALL, "...using GL_EXT_compiled_vertex_array\n" );
 			qglLockArraysEXT = ( void ( APIENTRY * )( int, int ) ) dlsym( glw_state.OpenGLLib, "glLockArraysEXT" );
@@ -953,6 +997,30 @@ static void GLW_InitExtensions( void )
 		ri.Printf( PRINT_ALL, "...GL_EXT_compiled_vertex_array not found\n" );
 	}
 
+	qglPointParameterfEXT = NULL;
+	qglPointParameterfvEXT = NULL;
+	if ( strstr( glConfig.extensions_string, "GL_EXT_point_parameters" ) )
+	{
+		if ( r_ext_compiled_vertex_array->integer || 1)
+		{
+			ri.Printf( PRINT_ALL, "...using GL_EXT_point_parameters\n" );
+			qglPointParameterfEXT = ( void ( APIENTRY * )( GLenum, GLfloat) ) dlsym( glw_state.OpenGLLib, "glPointParameterfEXT" );
+			qglPointParameterfvEXT = ( void ( APIENTRY * )( GLenum, GLfloat *) ) dlsym( glw_state.OpenGLLib, "glPointParameterfvEXT" );
+			if (!qglPointParameterfEXT || !qglPointParameterfvEXT) 
+			{
+				ri.Error (ERR_FATAL, "bad getprocaddress");
+			}
+		}
+		else
+		{
+			ri.Printf( PRINT_ALL, "...ignoring GL_EXT_point_parameters\n" );
+		}
+	}
+	else
+	{
+		ri.Printf( PRINT_ALL, "...GL_EXT_point_parameters not found\n" );
+	}
+
 }
 
 /*
@@ -961,9 +1029,12 @@ static void GLW_InitExtensions( void )
 ** GLimp_win.c internal function that that attempts to load and use 
 ** a specific OpenGL DLL.
 */
-static qboolean GLW_LoadOpenGL( const char *name )
+static qboolean GLW_LoadOpenGL()
 {
+	char name[1024];
 	qboolean fullscreen;
+
+	strcpy( name, OPENGL_DRIVER_NAME );
 
 	ri.Printf( PRINT_ALL, "...loading %s: ", name );
 
@@ -1004,6 +1075,17 @@ fail:
 	return qfalse;
 }
 
+static void GLW_StartOpenGL( void )
+{
+	//
+	// load and initialize the specific OpenGL driver
+	//
+	if ( !GLW_LoadOpenGL() )
+	{
+		ri.Error( ERR_FATAL, "GLW_StartOpenGL() - could not load OpenGL subsystem\n" );
+	}
+}
+
 /*
 ** GLimp_Init
 **
@@ -1012,8 +1094,6 @@ fail:
 */
 void GLimp_Init( void )
 {
-	qboolean attemptedlibGL = qfalse;
-	qboolean attempted3Dfx = qfalse;
 	qboolean success = qfalse;
 	char	buf[1024];
 	cvar_t *lastValidRenderer = ri.Cvar_Get( "r_lastValidRenderer", "(uninitialized)", CVAR_ARCHIVE );
@@ -1026,52 +1106,15 @@ void GLimp_Init( void )
 	//
 	// load and initialize the specific OpenGL driver
 	//
-	if ( !GLW_LoadOpenGL( r_glDriver->string ) )
-	{
-		if ( !Q_stricmp( r_glDriver->string, OPENGL_DRIVER_NAME ) )
-		{
-			attemptedlibGL = qtrue;
-		}
-		else if ( !Q_stricmp( r_glDriver->string, _3DFX_DRIVER_NAME ) )
-		{
-			attempted3Dfx = qtrue;
-		}
-
-		if ( !attempted3Dfx && !success )
-		{
-			attempted3Dfx = qtrue;
-			if ( GLW_LoadOpenGL( _3DFX_DRIVER_NAME ) )
-			{
-				ri.Cvar_Set( "r_glDriver", _3DFX_DRIVER_NAME );
-				r_glDriver->modified = qfalse;
-				success = qtrue;
-			}
-		}
-
-		// try ICD before trying 3Dfx standalone driver
-		if ( !attemptedlibGL && !success )
-		{
-			attemptedlibGL = qtrue;
-			if ( GLW_LoadOpenGL( OPENGL_DRIVER_NAME ) )
-			{
-				ri.Cvar_Set( "r_glDriver", OPENGL_DRIVER_NAME );
-				r_glDriver->modified = qfalse;
-				success = qtrue;
-			}
-		} 
-		
-		if (!success)
-			ri.Error( ERR_FATAL, "GLimp_Init() - could not load OpenGL subsystem\n" );
-
-	}
+	GLW_StartOpenGL();
 
 	// get our config strings
-	Q_strncpyz( glConfig.vendor_string, qglGetString (GL_VENDOR), sizeof( glConfig.vendor_string ) );
-	Q_strncpyz( glConfig.renderer_string, qglGetString (GL_RENDERER), sizeof( glConfig.renderer_string ) );
-	if (*glConfig.renderer_string && glConfig.renderer_string[strlen(glConfig.renderer_string) - 1] == '\n')
-		glConfig.renderer_string[strlen(glConfig.renderer_string) - 1] = 0;
-	Q_strncpyz( glConfig.version_string, qglGetString (GL_VERSION), sizeof( glConfig.version_string ) );
-	Q_strncpyz( glConfig.extensions_string, qglGetString (GL_EXTENSIONS), sizeof( glConfig.extensions_string ) );
+	glConfig.vendor_string = (const char *) qglGetString (GL_VENDOR);
+	glConfig.renderer_string = (const char *) qglGetString (GL_RENDERER);
+	glConfig.version_string = (const char *) qglGetString (GL_VERSION);
+	glConfig.extensions_string = (const char *) qglGetString (GL_EXTENSIONS);
+
+	qglGetIntegerv( GL_MAX_TEXTURE_SIZE, &glConfig.maxTextureSize );
 
 	//
 	// chipset specific configuration
@@ -1200,7 +1243,7 @@ sem_t	renderActiveEvent;
 
 void (*glimpRenderThread)( void );
 
-void GLimp_RenderThreadWrapper( void *stub ) {
+void *GLimp_RenderThreadWrapper( void *stub ) {
 	glimpRenderThread();
 
 #if 0
@@ -1353,8 +1396,7 @@ void IN_Frame (void)
 		// temporarily deactivate if not in the game and
 		// running on the desktop
 		// voodoo always counts as full screen
-		if (Cvar_VariableValue ("r_fullscreen") == 0
-			&& strcmp( Cvar_VariableString("r_glDriver"), _3DFX_DRIVER_NAME ) )	{
+		if (Cvar_VariableValue ("r_fullscreen") == 0) {
 			IN_DeactivateMouse ();
 			return;
 		}
