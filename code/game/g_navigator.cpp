@@ -31,17 +31,7 @@ static byte CHECKED_PASSED = 2;
 
 int GetTime ( int lastTime )
 {
-	int			curtime;
-	static int	timeBase = 0;
-	static qboolean	initialized = qfalse;
-
-	if (!initialized) {
-		timeBase = timeGetTime();
-		initialized = qtrue;
-	}
-	curtime = timeGetTime() - timeBase - lastTime;
-
-	return curtime;
+	return (gi.Milliseconds() - lastTime);
 }
 
 /*
