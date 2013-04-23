@@ -1097,7 +1097,7 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name, qbo
 	if (md4->ofsFrames<0) // Compressed .
 	{
 		// swap all the frames
-		frameSize = (int)( &((md4CompFrame_t *)0)->bones[ md4->numBones ] );
+		frameSize = (size_t)( &((md4CompFrame_t *)0)->bones[ md4->numBones ] );
 		for ( i = 0 ; i < md4->numFrames ; i++) {
 			cframe = (md4CompFrame_t *) ( (byte *)md4 - md4->ofsFrames + i * frameSize );
     		cframe->radius = LittleFloat( cframe->radius );
@@ -1114,7 +1114,7 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name, qbo
 	else
 	{
 		// swap all the frames
-		frameSize = (int)( &((md4Frame_t *)0)->bones[ md4->numBones ] );
+		frameSize = (size_t)( &((md4Frame_t *)0)->bones[ md4->numBones ] );
 		for ( i = 0 ; i < md4->numFrames ; i++) {
 			frame = (md4Frame_t *) ( (byte *)md4 + md4->ofsFrames + i * frameSize );
     		frame->radius = LittleFloat( frame->radius );
@@ -1392,7 +1392,7 @@ static void R_GetAnimTag( md4Header_t *mod, int framenum, const char *tagName ,m
 		{
 			if (mod->ofsFrames<0)	//compressed model
 			{
-				frameSize = (int)( &((md4CompFrame_t *)0)->bones[ mod->numBones ] );
+				frameSize = (size_t)( &((md4CompFrame_t *)0)->bones[ mod->numBones ] );
 				cframe = (md4CompFrame_t *)((byte *)mod - mod->ofsFrames + framenum * frameSize );
 				MC_UnCompress(tbone.matrix,cframe->bones[tag->boneIndex].Comp);
 				{
@@ -1409,7 +1409,7 @@ static void R_GetAnimTag( md4Header_t *mod, int framenum, const char *tagName ,m
 			}
 			else
 			{
-				frameSize = (int)( &((md4Frame_t *)0)->bones[ mod->numBones ] );
+				frameSize = (size_t)( &((md4Frame_t *)0)->bones[ mod->numBones ] );
 				frame = (md4Frame_t *)((byte *)mod + mod->ofsFrames + framenum * frameSize );
 				{
 					int j,k;

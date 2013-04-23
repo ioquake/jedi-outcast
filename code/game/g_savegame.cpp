@@ -511,7 +511,7 @@ void EvaluateField(field_t *pField, byte *pbBase, byte *pbOriginalRefData/* may 
 
 			for (int i=0; i<MAX_ALERT_EVENTS; i++)
 			{
-				p[i].owner = GetGEntityPtr((int)(p[i].owner));
+				p[i].owner = GetGEntityPtr((intptr_t)(p[i].owner));
 			}
 		}
 		break;
@@ -522,8 +522,8 @@ void EvaluateField(field_t *pField, byte *pbBase, byte *pbOriginalRefData/* may 
 
 			for (int i=0; i<MAX_FRAME_GROUPS; i++)
 			{
-				p[i].enemy		= GetGEntityPtr((int)(p[i].enemy));
-				p[i].commander	= GetGEntityPtr((int)(p[i].commander));
+				p[i].enemy		= GetGEntityPtr((intptr_t)(p[i].enemy));
+				p[i].commander	= GetGEntityPtr((intptr_t)(p[i].commander));
 			}
 		}
 		break;

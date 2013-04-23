@@ -13,27 +13,27 @@
 // this file is only included when building a dll
 // syscalls.asm is included instead when building a qvm
 
-int (*qsyscall)( int arg, ... ) = (int (*)( int, ...))-1;
+intptr_t (*qsyscall)( intptr_t arg, ... ) = (intptr_t (*)( intptr_t, ...))-1;
 
 extern "C" {
-void dllEntry( int (*syscallptr)( int arg,... ) ) {
+void dllEntry( intptr_t (*syscallptr)( intptr_t arg,... ) ) {
 	qsyscall = syscallptr;
 //	CG_PreInit();
 }
 } // extern "C"
 
 
-int CL_UISystemCalls( int *args );
+intptr_t CL_UISystemCalls( intptr_t *args );
 
 
 int FloatAsInt( float f );
 
 float trap_Cvar_VariableValue( const char *var_name ) 
 {
-	int temp;
-//	temp = qsyscall( UI_CVAR_VARIABLEVALUE, var_name );
-	temp = FloatAsInt( Cvar_VariableValue(var_name) );
-	return (*(float*)&temp);
+	floatint_t fi;
+//	fi.i = qsyscall( UI_CVAR_VARIABLEVALUE, var_name );
+	fi.i = FloatAsInt( Cvar_VariableValue(var_name) );
+	return fi.f;
 }
 
 
@@ -167,7 +167,7 @@ int trap_CIN_StopCinematic(int handle)
  
 int PASSFLOAT( float x ) 
 {
-	float	floatTemp;
-	floatTemp = x;
-	return *(int *)&floatTemp;
+	floatint_t fi;
+	fi.f = x;
+	return fi.i;
 }

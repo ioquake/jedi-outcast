@@ -25,11 +25,11 @@
 //prototypes
 extern void CG_PreInit();
 
-int (*qsyscall)( int arg, ... ) = (int (*)( int, ...))-1;
+intptr_t (*qsyscall)( intptr_t arg, ... ) = (intptr_t (*)( intptr_t, ...))-1;
 
 
 extern "C" {
-void dllEntry( int (*syscallptr)( int arg,... ) ) {
+void dllEntry( intptr_t (*syscallptr)( intptr_t arg,... ) ) {
 	qsyscall = syscallptr;
 	CG_PreInit();
 }
@@ -37,9 +37,9 @@ void dllEntry( int (*syscallptr)( int arg,... ) ) {
 
 
 inline int PASSFLOAT( float x ) {
-	float	floatTemp;
-	floatTemp = x;
-	return *(int *)&floatTemp;
+	floatint_t fi;
+	fi.f = x;
+	return fi.i;
 }
 
 void	cgi_Printf( const char *fmt ) {

@@ -174,14 +174,14 @@ int R_ComputeLOD( trRefEntity_t *ent ) {
 		if (tr.currentModel->md4->ofsFrames<0) // Compressed
 		{
 			md4CompFrame_t	*frame;
-			frameSize = (int)( &((md4CompFrame_t *)0)->bones[ tr.currentModel->md4->numBones ] );		
+			frameSize = (size_t)( &((md4CompFrame_t *)0)->bones[ tr.currentModel->md4->numBones ] );		
 			frame = (md4CompFrame_t *)((byte *)tr.currentModel->md4 - tr.currentModel->md4->ofsFrames + ent->e.frame * frameSize );
 			radius = RadiusFromBounds( frame->bounds[0], frame->bounds[1] );
 		}
 		else
 		{
 			md4Frame_t	*frame;
-			frameSize = (int)( &((md4Frame_t *)0)->bones[ tr.currentModel->md4->numBones ] );		
+			frameSize = (size_t)( &((md4Frame_t *)0)->bones[ tr.currentModel->md4->numBones ] );		
 			frame = (md4Frame_t *)((byte *)tr.currentModel->md4 + tr.currentModel->md4->ofsFrames + ent->e.frame * frameSize );
 			radius = RadiusFromBounds( frame->bounds[0], frame->bounds[1] );
 		}

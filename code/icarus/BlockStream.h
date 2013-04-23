@@ -44,7 +44,7 @@ public:
 	void Free( void );
 
 	int WriteMember ( FILE * );				//Writes the member's data, in block format, to FILE *
-	int	ReadMember( char **, long * );		//Reads the member's data, in block format, from FILE *
+	int	ReadMember( char **, int * );		//Reads the member's data, in block format, from FILE *
 
 	void SetID( int id )		{	m_id = id;		}	//Set the ID member variable
 	void SetSize( int size )	{	m_size = size;	}	//Set the size member variable
@@ -181,7 +181,7 @@ protected:
 	char	m_fileName[MAX_FILENAME_LENGTH];	//Name of the current file
 
 	char	*m_stream;							//Stream of data to be parsed
-	long	m_streamPos;
+	int	m_streamPos;
 };
 
 #endif	//__INTERPRETED_BLOCK_STREAM__
