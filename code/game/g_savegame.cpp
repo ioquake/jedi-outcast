@@ -627,7 +627,8 @@ void WriteGEntities(qboolean qbAutosave)
 {
 	int iCount = 0;
 
-	for (int i=0; i<(qbAutosave?1:globals.num_entities); i++)
+	int i;
+	for (i=0; i<(qbAutosave?1:globals.num_entities); i++)
 	{
 		gentity_t* ent = &g_entities[i];
 
@@ -721,7 +722,8 @@ void ReadGEntities(qboolean qbAutosave)
 	gi.ReadFromSaveGame('NMED', (void *)&iCount, sizeof(iCount));
 
 	int iPreviousEntRead = -1;
-	for (int i=0; i<iCount; i++)
+	int i;
+	for (i=0; i<iCount; i++)
 	{
 		int iEntIndex;
 		gi.ReadFromSaveGame('EDNM', (void *)&iEntIndex, sizeof(iEntIndex));

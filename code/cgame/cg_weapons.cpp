@@ -1152,7 +1152,8 @@ void CG_AddViewWeapon( playerState_t *ps )
 	}
 */
 	// add the spinning barrel[s]
-	for (int i = 0; (i < wData->numBarrels); i++)	
+	int i;
+	for (i = 0; (i < wData->numBarrels); i++)	
 	{
 		refEntity_t	barrel;
 		memset( &barrel, 0, sizeof( barrel ) );

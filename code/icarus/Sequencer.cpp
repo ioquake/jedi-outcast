@@ -2400,7 +2400,8 @@ int	CSequencer::Load( void )
 	m_ie->I_ReadSaveData( 'SQR#', &numSequences, sizeof( numSequences ) );
 
 	//Read in all the sequences
-	for ( int i = 0; i < numSequences; i++ )
+	int i;
+	for ( i = 0; i < numSequences; i++ )
 	{
 		m_ie->I_ReadSaveData( 'SQRI', &seqID, sizeof( seqID ) );
 

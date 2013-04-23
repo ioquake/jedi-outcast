@@ -429,7 +429,8 @@ int CSequence::Load( void )
 	(m_owner->GetInterface())->I_ReadSaveData( 'SNCH', &m_numChildren, sizeof( m_numChildren ) );
 
 	//Reload all children
-	for ( int i = 0; i < m_numChildren; i++ )
+	int i;
+	for ( i = 0; i < m_numChildren; i++ )
 	{
 		//Get the child sequence ID
 		(m_owner->GetInterface())->I_ReadSaveData( 'SCHD', &id, sizeof( id ) );
