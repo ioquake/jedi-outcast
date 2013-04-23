@@ -6,6 +6,7 @@
 #include "g_functions.h"
 #include "b_local.h"
 #include "anims.h"
+#include "../cgame/cg_local.h"
 
 #define ENTDIST_PLAYER	1
 #define ENTDIST_NPC		2

@@ -280,7 +280,7 @@ typedef struct {
 	qhandle_t	background;					// background asset  
 } windowDef_t;
 
-typedef windowDef_t Window;
+typedef windowDef_t qWindow;
 
 typedef struct {
 	vec4_t		color;						//
@@ -308,7 +308,7 @@ typedef struct modelDef_s {
 } modelDef_t;
 
 typedef struct itemDef_s {
-	Window		window;						// common positional, border, style, layout info
+	qWindow		window;						// common positional, border, style, layout info
 	UIRectangle	textRect;					// rectangle the text ( if any ) consumes     
 	int			type;						// text, button, radiobutton, checkbox, textfield, listbox, combo
 	int			alignment;					// left center right
@@ -350,7 +350,7 @@ typedef struct itemDef_s {
 } itemDef_t;
 
 typedef struct {
-	Window window;
+	qWindow window;
 	const char  *font;						// font
 	qboolean	fullScreen;					// covers entire screen 
 	int			itemCount;					// number of items;

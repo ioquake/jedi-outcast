@@ -20,7 +20,7 @@ extern "C"
 
 
 
-//#include "..\renderer\tr_local.h"
+//#include "../renderer/tr_local.h"
 // stefix
 #ifndef boolean
 typedef unsigned char boolean;

@@ -5,6 +5,7 @@
 #include "g_local.h"
 #include "g_functions.h"
 #include "bg_public.h"
+#include "../cgame/cg_local.h"
 
 extern cvar_t *g_spskill;
 

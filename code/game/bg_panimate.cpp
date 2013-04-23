@@ -9,6 +9,7 @@
 #include "q_shared.h"
 #include "g_shared.h"
 #include "bg_local.h"
+#include "b_local.h"
 #include "../cgame/cg_local.h"
 #include "anims.h"
 #include "Q3_Interface.h"

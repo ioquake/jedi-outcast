@@ -3,6 +3,7 @@
 
 	    
 #include "b_local.h"
+#include "g_functions.h"
 
 //static void R5D2_LookAround( void );
 float NPC_GetPainChance( gentity_t *self, int damage );

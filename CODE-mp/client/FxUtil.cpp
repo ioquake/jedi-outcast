@@ -1,5 +1,5 @@
 #include "client.h"
-//#include "..\smartheap\smrtheap.h"
+//#include "../smartheap/smrtheap.h"
 #if !defined(FX_SCHEDULER_H_INC)
 	#include "FxScheduler.h"
 #endif

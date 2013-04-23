@@ -8,7 +8,7 @@
 
 
 #include "tr_local.h"
-#include "MatComp.h"
+#include "matcomp.h"
 
 float ProjectRadius( float r, vec3_t location )
 {
@@ -18,8 +18,8 @@ float ProjectRadius( float r, vec3_t location )
 	vec3_t	p;
 	float	projected[4];
 
-	c = DotProduct( tr.viewParms.or.axis[0], tr.viewParms.or.origin );
-	dist = DotProduct( tr.viewParms.or.axis[0], location ) - c;
+	c = DotProduct( tr.viewParms.ori.axis[0], tr.viewParms.ori.origin );
+	dist = DotProduct( tr.viewParms.ori.axis[0], location ) - c;
 
 	if ( dist <= 0 )
 		return 0;
@@ -174,14 +174,14 @@ int R_ComputeLOD( trRefEntity_t *ent ) {
 		if (tr.currentModel->md4->ofsFrames<0) // Compressed
 		{
 			md4CompFrame_t	*frame;
-			frameSize = (int)( &((md4CompFrame_t *)0)->bones[ tr.currentModel->md4->numBones ] );		
+			frameSize = (size_t)( &((md4CompFrame_t *)0)->bones[ tr.currentModel->md4->numBones ] );		
 			frame = (md4CompFrame_t *)((byte *)tr.currentModel->md4 - tr.currentModel->md4->ofsFrames + ent->e.frame * frameSize );
 			radius = RadiusFromBounds( frame->bounds[0], frame->bounds[1] );
 		}
 		else
 		{
 			md4Frame_t	*frame;
-			frameSize = (int)( &((md4Frame_t *)0)->bones[ tr.currentModel->md4->numBones ] );		
+			frameSize = (size_t)( &((md4Frame_t *)0)->bones[ tr.currentModel->md4->numBones ] );		
 			frame = (md4Frame_t *)((byte *)tr.currentModel->md4 + tr.currentModel->md4->ofsFrames + ent->e.frame * frameSize );
 			radius = RadiusFromBounds( frame->bounds[0], frame->bounds[1] );
 		}

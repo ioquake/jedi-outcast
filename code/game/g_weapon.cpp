@@ -8,8 +8,10 @@
 
 #include "g_local.h"
 #include "g_functions.h"
+#include "g_nav.h"
 #include "anims.h"
 #include "b_local.h"
+#include "../cgame/cg_local.h"
 
 static	vec3_t	forward, vright, up;
 static	vec3_t	muzzle;

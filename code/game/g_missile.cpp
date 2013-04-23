@@ -3,6 +3,7 @@
 
 
 #include "g_local.h"
+#include "b_local.h"
 #include "g_functions.h"
 #include "wp_saber.h"
 #include "bg_local.h"			   

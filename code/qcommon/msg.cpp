@@ -398,20 +398,22 @@ int	MSG_ReadDelta( msg_t *msg, int oldV, int bits ) {
 }
 
 void MSG_WriteDeltaFloat( msg_t *msg, float oldV, float newV ) {
+	floatint_t fi;
 	if ( oldV == newV ) {
 		MSG_WriteBits( msg, 0, 1 );
 		return;
 	}
+	fi.f = newV;
 	MSG_WriteBits( msg, 1, 1 );
-	MSG_WriteBits( msg, *(int *)&newV, 32 );
+	MSG_WriteBits( msg, fi.i, 32 );
 }
 
 float MSG_ReadDeltaFloat( msg_t *msg, float oldV ) {
 	if ( MSG_ReadBits( msg, 1 ) ) {
-		float	newV;
+		floatint_t fi;
 
-		*(int *)&newV = MSG_ReadBits( msg, 32 );
-		return newV;
+		fi.i = MSG_ReadBits(msg, 32);
+		return fi.f;
 	}
 	return oldV;
 }
@@ -485,7 +487,7 @@ typedef struct {
 } netField_t;
 
 // using the stringizing operator to save typing...
-#define	NETF(x) #x,(int)&((entityState_t*)0)->x
+#define	NETF(x) #x,(size_t)&((entityState_t*)0)->x
 
 const netField_t	entityStateFields[] = 
 {
@@ -887,7 +889,7 @@ plyer_state_t communication
 */
 
 // using the stringizing operator to save typing...
-#define	PSF(x) #x,(int)&((playerState_t*)0)->x
+#define	PSF(x) #x,(size_t)&((playerState_t*)0)->x
 
 static const netField_t	playerStateFields[] = 
 {

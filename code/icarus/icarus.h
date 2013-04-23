@@ -22,6 +22,9 @@ enum WL_e {
 #define STL_ITERATE( a, b )		for ( a = b.begin(); a != b.end(); a++ )
 #define STL_INSERT( a, b )		a.insert( a.end(), b );
 
+extern void *ICARUS_Malloc(int iSize);
+extern void  ICARUS_Free(void *pMem);
+
 #include "Tokenizer.h"
 #include "BlockStream.h"
 #include "Interpreter.h"
@@ -30,9 +33,5 @@ enum WL_e {
 #include "Instance.h"
 
 #pragma warning( pop )	//restore
-
-
-extern void *ICARUS_Malloc(int iSize);
-extern void  ICARUS_Free(void *pMem);
 
 #endif	//__ICARUS__

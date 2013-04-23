@@ -340,15 +340,15 @@ byte* RE_TempRawImage_ReadFromFile(const char *psLocalFilename, int *piWidth, in
 
 	if (pbReturn && qbVertFlip)
 	{			
-		unsigned long *pSrcLine = (unsigned long *) pbReturn;
-		unsigned long *pDstLine = (unsigned long *) pbReturn + (*piHeight * *piWidth );	// *4 done by compiler (longs)		
+		unsigned int *pSrcLine = (unsigned int *) pbReturn;
+		unsigned int *pDstLine = (unsigned int *) pbReturn + (*piHeight * *piWidth );	// *4 done by compiler (ints)
 					   pDstLine-= *piWidth;	// point at start of last line, not first after buffer
 
 		for (int iLineCount=0; iLineCount<*piHeight/2; iLineCount++)
 		{
 			for (int x=0; x<*piWidth; x++)
 			{
-				unsigned long l = pSrcLine[x];
+				unsigned int l = pSrcLine[x];
 				pSrcLine[x] = pDstLine[x];
 				pDstLine[x] = l;
 			}
@@ -815,7 +815,8 @@ qboolean RE_InitDissolve(qboolean bForceCircularExtroWipe)
 			//
 			// do it...
 			//
-			for (int y = 0; y < glConfig.vidHeight; y++)
+			int y;
+			for (y = 0; y < glConfig.vidHeight; y++)
 			{
 				pbDst -= iClearBytes;
 				memset(pbDst,0,iClearBytes);
@@ -845,7 +846,8 @@ qboolean RE_InitDissolve(qboolean bForceCircularExtroWipe)
 			// Now, in case of busted drivers, 3DFX cards, etc etc we stomp the alphas to 255...
 			//
 			byte *pPix = pBuffer;
-			for (int i=0; i<iBufferBytes/4; i++, pPix += 4)
+			int i;
+			for (i=0; i<iBufferBytes/4; i++, pPix += 4)
 			{
 				pPix[3] = 255;
 			}

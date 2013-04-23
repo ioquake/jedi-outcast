@@ -7,6 +7,7 @@
 
 //#include "cg_local.h"
 #include "cg_media.h"
+#include "../game/g_local.h"
 
 static	pmove_t		cg_pmove;
 
@@ -14,7 +15,7 @@ static	int			cg_numSolidEntities;
 static	centity_t	*cg_solidEntities[MAX_ENTITIES_IN_SNAPSHOT];
 
 #if MEM_DEBUG
-#include "..\smartheap\heapagnt.h"
+#include "../smartheap/heapagnt.h"
 #define CG_TRACE_PROFILE (0)
 #endif
 /*
@@ -631,7 +632,7 @@ void CG_PredictPlayerState( void ) {
 	//FIXME: is this bad???
 	cg_pmove.gent = NULL;
 	cg_pmove.ps = &cg.predicted_player_state;
-	cg_pmove.trace = CG_Trace;
+	cg_pmove._trace = CG_Trace;
 	cg_pmove.pointcontents = CG_PointContents;
 	cg_pmove.tracemask = MASK_PLAYERSOLID;
 	cg_pmove.noFootsteps = 0;//( cgs.dmflags & DF_NO_FOOTSTEPS ) > 0;

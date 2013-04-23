@@ -663,14 +663,6 @@ void InitGame(  const char *mapname, const char *spawntarget, int checkSum, cons
 
 	gi.Printf ("-----------------------------------\n");
 
-	//randomize the rand functions
-	byte num_calls = (byte)timeGetTime();
-
-	for(i = 0; i < (int)num_calls; i++)
-	{
-		rand();
-	}
-
 	if ( navCalculatePaths )
 	{//not loaded - need to calc paths
 		navCalcPathTime = level.time + START_TIME_NAV_CALC;//make sure all ents are in and linked
@@ -752,6 +744,7 @@ and global variables
 =================
 */
 extern int PM_ValidateAnimRange( int startFrame, int endFrame, float animSpeed );
+extern "C" {
 game_export_t *GetGameAPI( game_import_t *import ) {
 	gameinfo_import_t	gameinfo_import;
 
@@ -792,6 +785,7 @@ game_export_t *GetGameAPI( game_import_t *import ) {
 
 	return &globals;
 }
+} // extern "C"
 
 void QDECL G_Error( const char *fmt, ... ) {
 	va_list		argptr;

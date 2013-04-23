@@ -6,6 +6,7 @@
 #include "g_nav.h"
 #include "anims.h"
 #include "wp_saber.h"
+#include "g_functions.h"
 
 extern void CG_DrawAlert( vec3_t origin, float rating );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );

@@ -12,6 +12,7 @@
 #include "cl_mp3.h"
 //
 #include "snd_music.h"
+#include <string>
 
 extern qboolean S_FileExists( const char *psFilename );
 					
@@ -53,7 +54,7 @@ struct MusicExitTime_t	// need to declare this way for operator < below
 
 	// I'm defining this '<' operator so STL's sort algorithm will work
 	//
-	bool operator < (const MusicExitTime_t& _X) const {return (fTime < _X.fTime);}
+	bool operator < (const MusicExitTime_t& _x) const {return (fTime < _x.fTime);}
 };
 
 // it's possible for all 3 of these to be empty if it's boss or death music
@@ -613,7 +614,7 @@ static qboolean Music_ParseLeveldata(const char *psLevelName)
 
 			// kludge up an enum, only interested in boss or not at the moment, so...
 			//
-			MusicState_e eMusicState = !stricmp(psMusicStateType,"boss") ? eBGRNDTRACK_BOSS : !stricmp(psMusicStateType,"death") ? eBGRNDTRACK_DEATH : eBGRNDTRACK_EXPLORE;
+			MusicState_e eMusicState = !Q_stricmp(psMusicStateType,"boss") ? eBGRNDTRACK_BOSS : !Q_stricmp(psMusicStateType,"death") ? eBGRNDTRACK_DEATH : eBGRNDTRACK_EXPLORE;
 
 			if (!MusicFile.MusicExitTimes.empty())
 			{
@@ -753,7 +754,7 @@ qboolean Music_DynamicDataAvailable(const char *psDynamicMusicLabel)
 {		
 	char sLevelName[MAX_QPATH];
 	Q_strncpyz(sLevelName,COM_SkipPath( const_cast<char*>( (psDynamicMusicLabel&&psDynamicMusicLabel[0])?psDynamicMusicLabel:gsLevelNameFromServer.c_str() ) ),sizeof(sLevelName));
-	strlwr(sLevelName);
+	Q_strlwr(sLevelName);
 
 	if (strlen(sLevelName))	// avoid error messages when there's no music waiting to be played and we try and restart it...
 	{
@@ -926,7 +927,7 @@ qboolean Music_AllowedToTransition( float			fPlayingTimeElapsed,
 			itp.second++;	// increase range to one beyond, so we can do normal STL being/end looping below
 		for (MusicExitTimes_t::iterator it = itp.first; it != itp.second; ++it)
 		{
-			MusicExitTime_t *pExitTime = it;
+			MusicExitTime_t *pExitTime = &(*it);
 			
 			if ( fabs(pExitTime->fTime - fPlayingTimeElapsed) <= fTimeEpsilon )
 			{

@@ -1,8 +1,8 @@
 // console.c
 
 #include "client.h"
-#include "..\strings\con_text.h"
-#include "..\qcommon\strip.h"
+#include "../strings/con_text.h"
+#include "../qcommon/strip.h"
 #include "../qcommon/game_version.h"
 
 

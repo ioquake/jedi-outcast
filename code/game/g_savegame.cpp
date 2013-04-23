@@ -424,7 +424,7 @@ void EnumerateField(field_t *pField, byte *pbBase)
 	}
 }
 
-void EnumerateFields(field_t *pFields, byte *pbData, unsigned long ulChid, int iLen)
+void EnumerateFields(field_t *pFields, byte *pbData, unsigned int ulChid, int iLen)
 {
 	assert(strList.empty());
 
@@ -511,7 +511,7 @@ void EvaluateField(field_t *pField, byte *pbBase, byte *pbOriginalRefData/* may 
 
 			for (int i=0; i<MAX_ALERT_EVENTS; i++)
 			{
-				p[i].owner = GetGEntityPtr((int)(p[i].owner));
+				p[i].owner = GetGEntityPtr((intptr_t)(p[i].owner));
 			}
 		}
 		break;
@@ -522,8 +522,8 @@ void EvaluateField(field_t *pField, byte *pbBase, byte *pbOriginalRefData/* may 
 
 			for (int i=0; i<MAX_FRAME_GROUPS; i++)
 			{
-				p[i].enemy		= GetGEntityPtr((int)(p[i].enemy));
-				p[i].commander	= GetGEntityPtr((int)(p[i].commander));
+				p[i].enemy		= GetGEntityPtr((intptr_t)(p[i].enemy));
+				p[i].commander	= GetGEntityPtr((intptr_t)(p[i].commander));
 			}
 		}
 		break;
@@ -544,17 +544,17 @@ void EvaluateField(field_t *pField, byte *pbBase, byte *pbOriginalRefData/* may 
 
 
 // copy of function in sv_savegame
-static LPCSTR SG_GetChidText(unsigned long chid)
+static LPCSTR SG_GetChidText(unsigned int chid)
 {
 	static char	chidtext[5];
 
-	*(unsigned long *)chidtext = BigLong(chid);
+	*(unsigned int *)chidtext = BigLong(chid);
 	chidtext[4] = 0;
 
 	return chidtext;
 }
 
-void EvaluateFields(field_t *pFields, byte *pbData, byte *pbOriginalRefData, unsigned long ulChid, int iSize, qboolean bOkToSizeMisMatch)
+void EvaluateFields(field_t *pFields, byte *pbData, byte *pbOriginalRefData, unsigned int ulChid, int iSize, qboolean bOkToSizeMisMatch)
 {	
 	int iReadSize = gi.ReadFromSaveGame(ulChid, pbData, bOkToSizeMisMatch?0:iSize);
 
@@ -627,7 +627,8 @@ void WriteGEntities(qboolean qbAutosave)
 {
 	int iCount = 0;
 
-	for (int i=0; i<(qbAutosave?1:globals.num_entities); i++)
+	int i;
+	for (i=0; i<(qbAutosave?1:globals.num_entities); i++)
 	{
 		gentity_t* ent = &g_entities[i];
 
@@ -721,7 +722,8 @@ void ReadGEntities(qboolean qbAutosave)
 	gi.ReadFromSaveGame('NMED', (void *)&iCount, sizeof(iCount));
 
 	int iPreviousEntRead = -1;
-	for (int i=0; i<iCount; i++)
+	int i;
+	for (i=0; i<iCount; i++)
 	{
 		int iEntIndex;
 		gi.ReadFromSaveGame('EDNM', (void *)&iEntIndex, sizeof(iEntIndex));

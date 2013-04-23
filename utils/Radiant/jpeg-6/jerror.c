@@ -20,7 +20,7 @@
 #include "jerror.h"
 
 // stefix:
-#include "..\jpgfile.h"
+#include "../jpgfile.h"
 
 #ifndef EXIT_FAILURE		/* define exit() codes if not provided */
 #define EXIT_FAILURE  1

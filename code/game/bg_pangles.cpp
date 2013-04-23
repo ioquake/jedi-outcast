@@ -7,9 +7,12 @@
 #define GAME_INCLUDE
 #include "q_shared.h"
 #include "g_shared.h"
+#include "g_functions.h"
 #include "bg_local.h"
+#include "b_local.h"
 #include "anims.h"
 #include "wp_saber.h"
+#include "../cgame/cg_local.h"
 
 extern qboolean PM_InAnimForSaberMove( int anim, int saberMove );
 extern qboolean PM_InForceGetUp( playerState_t *ps );

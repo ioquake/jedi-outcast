@@ -6,6 +6,8 @@
 #include "g_nav.h"
 #include "anims.h"
 #include "wp_saber.h"
+#include "g_functions.h"
+#include "../cgame/cg_local.h"
 
 extern qboolean G_StandardHumanoid( const char *modelName );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );

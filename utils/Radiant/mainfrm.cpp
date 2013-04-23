@@ -32,7 +32,7 @@
 #include "groupnames.h"
 #include "entkeyfindreplace.h"
 #include <assert.h>
-#include "..\libs\pakstuff.h"
+#include "../libs/pakstuff.h"
 #include "autocaulk.h"
 
 #ifdef _DEBUG

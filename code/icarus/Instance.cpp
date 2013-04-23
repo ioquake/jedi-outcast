@@ -3,6 +3,8 @@
 //	-- jweier
 
 // this include must remain at the top of every Icarus CPP file
+#include "../game/g_local.h"
+#include "../game/q_shared.h"
 #include "icarus.h"
 
 #include <assert.h>
@@ -42,7 +44,9 @@ ICARUS_Instance *ICARUS_Instance::Create( interface_export_t *ie )
 	ICARUS_Instance *instance = new ICARUS_Instance;
 	instance->m_interface = ie;
 
+#ifdef _DEBUG
 	OutputDebugString( "ICARUS Instance successfully created\n" );
+#endif
 
 	return instance;
 }

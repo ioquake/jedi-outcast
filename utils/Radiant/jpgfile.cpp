@@ -3,9 +3,9 @@
 #include "stdafx.h"
 #include "oddbits.h"
 #include "jpgfile.h"
-#include "..\libs\pakstuff.h"
+#include "../libs/pakstuff.h"
 
-#include "jpeg-6\jpeglib.h"
+#include "jpeg-6/jpeglib.h"
 
 // bool return really, but needs an int to match header proto which is included by a C file, and MS C compiler 
 //	doesn't like bool types

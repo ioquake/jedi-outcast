@@ -3,6 +3,8 @@
 //	-- jweier
 
 // this include must remain at the top of every Icarus CPP file
+#include "../game/g_local.h"
+#include "../game/q_shared.h"
 #include "icarus.h"
 
 
@@ -96,23 +98,23 @@ ReadMember
 -------------------------
 */
 
-int CBlockMember::ReadMember( char **stream, long *streamPos )
+int CBlockMember::ReadMember( char **stream, int *streamPos )
 {
-	m_id = *(int *) (*stream + *streamPos);
+	m_id = *(int *) (*stream + *((int *)streamPos));
 	*streamPos += sizeof( int );
 
 	if ( m_id == ID_RANDOM )
 	{//special case, need to initialize this member's data to Q3_INFINITE so we can randomize the number only the first time random is checked when inside a wait
 		m_size = sizeof( float );
-		*streamPos += sizeof( long );
+		*streamPos += sizeof( int );
 		m_data = ICARUS_Malloc( m_size );
 		float infinite = Q3_INFINITE;
 		memcpy( m_data, &infinite, m_size );
 	}
 	else
 	{
-		m_size = *(long *) (*stream + *streamPos);
-		*streamPos += sizeof( long );
+		m_size = *(int *) (*stream + *streamPos);
+		*streamPos += sizeof( int );
 		m_data = ICARUS_Malloc( m_size );
 		memcpy( m_data, (*stream + *streamPos), m_size );
 	}
@@ -450,7 +452,7 @@ long CBlockStream::GetLong( void )
 {
 	long data;
 
-	data = *(long *) (m_stream + m_streamPos);
+	data = *(int *) (m_stream + m_streamPos);
 	m_streamPos += sizeof( data );
 
 	return data;

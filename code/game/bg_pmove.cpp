@@ -11,6 +11,7 @@
 #include "q_shared.h"
 #include "g_shared.h"
 #include "bg_local.h"			   
+#include "b_local.h"
 #include "g_local.h"			   
 #include "g_functions.h"
 #include "anims.h"
@@ -4310,8 +4311,8 @@ void PM_FootSlopeTrace( float *pDiff, float *pInterval )
 #if 1
 	for ( int i = 0; i < 3; i++ )
 	{
-		if ( _isnan( pm->gent->client->renderInfo.footLPoint[i] )
-			|| _isnan( pm->gent->client->renderInfo.footRPoint[i] ) )
+		if ( Q_isnan( pm->gent->client->renderInfo.footLPoint[i] )
+			|| Q_isnan( pm->gent->client->renderInfo.footRPoint[i] ) )
 		{
 			if ( pDiff != NULL )
 			{
