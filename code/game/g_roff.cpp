@@ -5,6 +5,8 @@
 #include "g_local.h"
 #include "g_roff.h"
 #include "g_icarus.h"
+#include "../cgame/cg_local.h"
+
 // The list of precached ROFFs
 roff_list_t	roffs[MAX_ROFFS];
 int			num_roffs = 0;
@@ -318,7 +320,8 @@ qboolean G_InitRoff( char *file, unsigned char *data )
 			roffs[num_roffs].type = 2; //rww - any reason this wasn't being set already?
 
 			// Copy all of the goods into our ROFF cache
-			for ( int i = 0; i < count; i++ )
+			int i;
+			for ( i = 0; i < count; i++ )
 			{
 				VectorCopy( roff_data[i].origin_delta, mem[i].origin_delta );
 				VectorCopy( roff_data[i].rotate_delta, mem[i].rotate_delta );
@@ -389,7 +392,7 @@ int G_LoadRoff( const char *fileName )
 	// See if I'm already precached
 	for ( i = 0; i < num_roffs; i++ )
 	{
-		if ( stricmp( file, roffs[i].fileName ) == 0 )
+		if ( Q_stricmp( file, roffs[i].fileName ) == 0 )
 		{
 			// Good, just return me...avoid zero index
 			return i + 1;

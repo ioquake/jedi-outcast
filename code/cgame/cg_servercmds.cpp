@@ -30,7 +30,7 @@ void CG_ParseServerinfo( void ) {
 	Com_sprintf( cgs.mapname, sizeof( cgs.mapname ), "maps/%s.bsp", mapname );
 	char *p = strrchr(mapname,'/');
 	strcpy( cgs.stripLevelName[0], p?p+1:mapname );
-	strupr( cgs.stripLevelName[0] );
+	Q_strupr( cgs.stripLevelName[0] );
 	for (int i=1; i<STRIPED_LEVELNAME_VARIATIONS; i++)	// clear retry-array
 	{
 		cgs.stripLevelName[i][0]='\0';
@@ -43,9 +43,9 @@ void CG_ParseServerinfo( void ) {
 	{
 		// failed to load SP file, maybe it's one of the ones they renamed?...
 		//
-		if (!stricmp(cgs.stripLevelName[0],"YAVIN_FINAL")
+		if (!Q_stricmp(cgs.stripLevelName[0],"YAVIN_FINAL")
 			||
-			!stricmp(cgs.stripLevelName[0],"YAVIN_SWAMP")
+			!Q_stricmp(cgs.stripLevelName[0],"YAVIN_SWAMP")
 			)
 		{
 			strcpy( cgs.stripLevelName[0], "YAVIN_CANYON" );
@@ -56,7 +56,7 @@ void CG_ParseServerinfo( void ) {
 			}
 		}
 		else
-		if (!stricmp(cgs.stripLevelName[0],"YAVIN_TRIAL"))
+		if (!Q_stricmp(cgs.stripLevelName[0],"YAVIN_TRIAL"))
 		{
 			strcpy( cgs.stripLevelName[0], "YAVIN_TEMPLE" );
 			if (!cgi_SP_Register(cgs.stripLevelName[0], qfalse))
@@ -66,7 +66,7 @@ void CG_ParseServerinfo( void ) {
 			}
 		}
 		else
-		if (!stricmp(cgs.stripLevelName[0],"VALLEY"))
+		if (!Q_stricmp(cgs.stripLevelName[0],"VALLEY"))
 		{
 			strcpy( cgs.stripLevelName[0], "ARTUS_TOPSIDE" );
 			if (!cgi_SP_Register(cgs.stripLevelName[0], qfalse))
@@ -80,8 +80,8 @@ void CG_ParseServerinfo( void ) {
 	{
 		// additional SP files needed for some levels...
 		//
-		if (!stricmp(cgs.stripLevelName[0],"KEJIM_BASE") ||
-			!stricmp(cgs.stripLevelName[0],"KEJIM_POST")
+		if (!Q_stricmp(cgs.stripLevelName[0],"KEJIM_BASE") ||
+			!Q_stricmp(cgs.stripLevelName[0],"KEJIM_POST")
 			)
 		{
 			strcpy( cgs.stripLevelName[1], "ARTUS_MINE" );
@@ -91,8 +91,8 @@ void CG_ParseServerinfo( void ) {
 				//
 			}
 		}
-		if (!stricmp(cgs.stripLevelName[0],"DOOM_DETENTION") ||
-			!stricmp(cgs.stripLevelName[0],"DOOM_SHIELDS")
+		if (!Q_stricmp(cgs.stripLevelName[0],"DOOM_DETENTION") ||
+			!Q_stricmp(cgs.stripLevelName[0],"DOOM_SHIELDS")
 			)
 		{
 			strcpy( cgs.stripLevelName[1], "DOOM_COMM" );
@@ -102,7 +102,7 @@ void CG_ParseServerinfo( void ) {
 				//
 			}
 		}
-		if (!stricmp(cgs.stripLevelName[0],"DOOM_COMM"))
+		if (!Q_stricmp(cgs.stripLevelName[0],"DOOM_COMM"))
 		{
 			strcpy( cgs.stripLevelName[1], "CAIRN_BAY" );
 			if (!cgi_SP_Register(cgs.stripLevelName[1], qfalse))
@@ -111,7 +111,7 @@ void CG_ParseServerinfo( void ) {
 				//
 			}
 		}
-		if (!stricmp(cgs.stripLevelName[0],"NS_STARPAD"))
+		if (!Q_stricmp(cgs.stripLevelName[0],"NS_STARPAD"))
 		{
 			strcpy( cgs.stripLevelName[1], "ARTUS_TOPSIDE" );	// for dream sequence...
 			if (!cgi_SP_Register(cgs.stripLevelName[1], qfalse))
@@ -127,7 +127,7 @@ void CG_ParseServerinfo( void ) {
 				//
 			} 
 		}
-		if (!stricmp(cgs.stripLevelName[0],"BESPIN_PLATFORM"))
+		if (!Q_stricmp(cgs.stripLevelName[0],"BESPIN_PLATFORM"))
 		{
 			strcpy( cgs.stripLevelName[1], "BESPIN_UNDERCITY" );
 			if (!cgi_SP_Register(cgs.stripLevelName[1], qfalse))

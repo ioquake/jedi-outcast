@@ -31,17 +31,7 @@ static byte CHECKED_PASSED = 2;
 
 int GetTime ( int lastTime )
 {
-	int			curtime;
-	static int	timeBase = 0;
-	static qboolean	initialized = qfalse;
-
-	if (!initialized) {
-		timeBase = timeGetTime();
-		initialized = qtrue;
-	}
-	curtime = timeGetTime() - timeBase - lastTime;
-
-	return curtime;
+	return (gi.Milliseconds() - lastTime);
 }
 
 /*
@@ -358,7 +348,8 @@ int	CNode::Save( int numNodes, fileHandle_t file )
 	gi.FS_Write( &header, sizeof( header ), file );
 
 	//Write out the basic information
-	for ( int i = 0; i < 3; i++ )
+	int i;
+	for ( i = 0; i < 3; i++ )
 		gi.FS_Write( &m_position[i], sizeof( float ), file );
 
 	gi.FS_Write( &m_flags, sizeof( m_flags ), file );
@@ -401,7 +392,8 @@ int CNode::Load( int numNodes, fileHandle_t file )
 		return false;
 
 	//Get the basic information
-	for ( int i = 0; i < 3; i++ )
+	int i;
+	for ( i = 0; i < 3; i++ )
 		gi.FS_Read( &m_position[i], sizeof( float ), file );
 
 	gi.FS_Read( &m_flags, sizeof( m_flags ), file );
@@ -787,7 +779,8 @@ void CNavigator::CalculatePath( CNode *node )
 	node->AddRank( node->GetID(), curRank++ );
 
 	//Add all initial nodes
-	for ( int i = 0; i < node->GetNumEdges(); i++ )
+	int i;
+	for ( i = 0; i < node->GetNumEdges(); i++ )
 	{
 		CNode	*nextNode = m_nodes[ node->GetEdge(i) ];
 		assert(nextNode);
@@ -850,7 +843,8 @@ void CNavigator::CalculatePaths( bool	recalc )
 #else
 #endif	
 
-	for ( int i = 0; i < m_nodes.size(); i++ )
+	int i;
+	for ( i = 0; i < m_nodes.size(); i++ )
 	{
 		//Allocate the needed memory
 		m_nodes[i]->InitRanks( m_nodes.size() );

@@ -213,7 +213,9 @@ This is the only way control passes into the module.
 This must be the very first function compiled into the .qvm file
 ================
 */
-int vmMain( int command, int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, int arg7, int arg8, int arg9, int arg10, int arg11  ) 
+intptr_t vmMain( intptr_t command, intptr_t arg0, intptr_t arg1, intptr_t arg2,
+    intptr_t arg3, intptr_t arg4, intptr_t arg5, intptr_t arg6, intptr_t arg7,
+    intptr_t arg8, intptr_t arg9, intptr_t arg10, intptr_t arg11  ) 
 {
 	return 0;
 }
@@ -287,8 +289,8 @@ void Text_PaintWithCursor(float x, float y, float scale, vec4_t color, const cha
 	// now print the cursor as well...
 	//
 	char sTemp[1024];
-	int iCopyCount = min(strlen(text), cursorPos);
-		iCopyCount = min(iCopyCount,sizeof(sTemp));
+	int iCopyCount = min((int)strlen(text), cursorPos);
+		iCopyCount = min(iCopyCount,(int)sizeof(sTemp));
 
 	// copy text into temp buffer for pixel measure...
 	//
@@ -746,7 +748,7 @@ static void UI_StopCinematic(int handle)
 		}
 	}
 }
-static UI_HandleLoadSelection()
+static void UI_HandleLoadSelection()
 {
 	Cvar_Set("ui_SelectionOK", va("%d",(s_savegame.currentLine < s_savegame.saveFileCnt)) );
 	Cvar_Set("ui_gameDesc", s_savedata[s_savegame.currentLine].currentSaveFileComments );	// set comment 
@@ -949,7 +951,7 @@ void _UI_Init( qboolean inGameLoad )
 	Menus_CloseAll();
 
 	// sets defaults for ui temp cvars
-	uiInfo.effectsColor = (int)trap_Cvar_VariableValue("color")-1;
+	uiInfo.effectsColor = gamecodetoui[(int)trap_Cvar_VariableValue("color")-1];
 	if (uiInfo.effectsColor < 0)
 	{
 		uiInfo.effectsColor = 0;

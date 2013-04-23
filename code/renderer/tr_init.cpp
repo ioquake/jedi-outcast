@@ -386,7 +386,7 @@ void R_TakeScreenshot( int x, int y, int width, int height, char *fileName ) {
 	byte		*buffer;
 	int			i, c, temp;
 
-	qboolean bSaveAsJPG = !strnicmp(&fileName[strlen(fileName)-4],".jpg",4);
+	qboolean bSaveAsJPG = !Q_strnicmp(&fileName[strlen(fileName)-4],".jpg",4);
 
 	if (bSaveAsJPG)
 	{
@@ -725,6 +725,27 @@ void GL_SetDefaultState( void )
 #endif // _NPATCH
 }
 
+/*
+================
+R_PrintLongString
+
+Workaround for ri.Printf's 4096 characters buffer limit.
+================
+*/
+void R_PrintLongString(const char *string) {
+	char buffer[4096];
+	const char *p;
+	int size = strlen(string);
+
+	p = string;
+	while(size > 0)
+	{
+		Q_strncpyz(buffer, p, sizeof (buffer) );
+		ri.Printf( PRINT_ALL, "%s", buffer );
+		p += 4095;
+		size -= 4095;
+	}
+}
 
 /*
 ================
@@ -755,7 +776,9 @@ void GfxInfo_f( void )
 	ri.Printf( PRINT_ALL, "\nGL_VENDOR: %s\n", glConfig.vendor_string );
 	ri.Printf( PRINT_ALL, "GL_RENDERER: %s\n", glConfig.renderer_string );
 	ri.Printf( PRINT_ALL, "GL_VERSION: %s\n", glConfig.version_string );
-	ri.Printf( PRINT_ALL, "GL_EXTENSIONS: %s\n", glConfig.extensions_string );
+	ri.Printf( PRINT_ALL, "GL_EXTENSIONS: " );
+	R_PrintLongString( glConfig.extensions_string );
+	ri.Printf( PRINT_ALL, "\n" );
 	ri.Printf( PRINT_ALL, "GL_MAX_TEXTURE_SIZE: %d\n", glConfig.maxTextureSize );
 	ri.Printf( PRINT_ALL, "GL_MAX_ACTIVE_TEXTURES_ARB: %d\n", glConfig.maxActiveTextures );
 	ri.Printf( PRINT_ALL, "\nPIXELFORMAT: color(%d-bits) Z(%d-bit) stencil(%d-bits)\n", glConfig.colorBits, glConfig.depthBits, glConfig.stencilBits );
@@ -1158,8 +1181,8 @@ void R_Init( void ) {
 	Swap_Init();
 
 #ifndef FINAL_BUILD
-	if ( (int)tess.xyz & 15 ) {
-		Com_Printf( "WARNING: tess.xyz not 16 byte aligned (%x)\n",(int)tess.xyz & 15 );
+	if ( (intptr_t)tess.xyz & 15 ) {
+		Com_Printf( "WARNING: tess.xyz not 16 byte aligned (%x)\n",(intptr_t)tess.xyz & 15 );
 	}
 #endif
 
@@ -1388,10 +1411,10 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.GetBModelVerts = RE_GetBModelVerts;
 
 	re.RegisterFont = RE_RegisterFont;
-	re.Font_StrLenPixels = RE_Font_StrLenPixels;
+	re._Font_StrLenPixels = RE_Font_StrLenPixels;
 	re.Font_StrLenChars = RE_Font_StrLenChars;
-	re.Font_HeightPixels = RE_Font_HeightPixels;	
-	re.Font_DrawString = RE_Font_DrawString;
+	re._Font_HeightPixels = RE_Font_HeightPixels;	
+	re._Font_DrawString = RE_Font_DrawString;
 	re.Language_IsAsian = Language_IsAsian;
 	re.Language_UsesSpaces = Language_UsesSpaces;
 	re.AnyLanguage_ReadCharFromString = AnyLanguage_ReadCharFromString;

@@ -4,6 +4,7 @@
 #include "g_local.h"
 #include "g_functions.h"
 #include "b_local.h"
+#include "../cgame/cg_local.h"
 
 extern team_t TranslateTeamName( const char *name );
 extern	cvar_t	*g_spskill;

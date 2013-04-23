@@ -134,14 +134,14 @@ int FindToken(char *token, bool whole)
 	{
 		if (whole)
 		{
-			if (strcmpi(token, Tokens[token_value]) == 0)
+			if (Q_strcmpi(token, Tokens[token_value]) == 0)
 			{
 				return token_value;
 			}
 		}
 		else
 		{
-			if (_strnicmp(token, Tokens[token_value], strlen(Tokens[token_value])) == 0)
+			if (Q_strnicmp(token, Tokens[token_value], strlen(Tokens[token_value])) == 0)
 			{
 				i = strlen(Tokens[token_value]);
 				while(token[i] == ' ')
@@ -326,7 +326,7 @@ void cStrings::Clear(void)
 
 	if (Reference)
 	{
-		delete Reference;
+		delete[] Reference;
 		Reference = NULL;
 	}
 }
@@ -349,7 +349,7 @@ void cStrings::SetReference(char *newReference)
 {
 	if (Reference)
 	{
-		delete Reference;
+		delete[] Reference;
 		Reference = NULL;
 	}
 
@@ -458,7 +458,7 @@ void cStringsSingle::Clear(void)
 
 	if (Text)
 	{
-		delete Text;
+		delete[] Text;
 		Text = NULL;
 	}
 }
@@ -470,7 +470,7 @@ void cStringsSingle::SetText(const char *newText)
 
 	if (Text)
 	{
-		delete Text;
+		delete[] Text;
 		Text = NULL;
 	}
 
@@ -640,7 +640,7 @@ cStringPackage::~cStringPackage(void)
 {
 	if (Reference)
 	{
-		delete Reference;
+		delete[] Reference;
 		Reference = NULL;
 	}
 }
@@ -649,7 +649,7 @@ void cStringPackage::SetReference(char *newReference)
 {
 	if (Reference)
 	{
-		delete Reference;
+		delete[] Reference;
 		Reference = NULL;
 	}
 
@@ -856,7 +856,7 @@ qboolean SP_Register(const char *inPackage, unsigned char Registration)
 	assert(SP_ListByName.size() == SP_ListByID.size());
 
 	Q_strncpyz(Package, inPackage, MAX_QPATH);
-	strupr(Package);
+	Q_strupr(Package);
 
 	i = SP_ListByName.find(Package);
 	if (i != SP_ListByName.end())
@@ -937,7 +937,7 @@ int SP_GetStringID(const char *inReference)
 	int													ID;
 	char Reference[MAX_QPATH];
 	Q_strncpyz(Reference, inReference, MAX_QPATH);
-	strupr(Reference);
+	Q_strupr(Reference);
 
 	for(i = SP_ListByID.begin(); i != SP_ListByID.end(); i++)
 	{

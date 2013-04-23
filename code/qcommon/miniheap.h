@@ -13,9 +13,9 @@ public:
 // reset the heap back to the start
 void ResetHeap()
 {
-	if ((int)mCurrentHeap - (int)mHeap>mMaxAlloc)
+	if ((size_t)mCurrentHeap - (size_t)mHeap>mMaxAlloc)
 	{
-		mMaxAlloc=(int)mCurrentHeap - (int)mHeap;
+		mMaxAlloc=(size_t)mCurrentHeap - (size_t)mHeap;
 	}
 	mCurrentHeap = mHeap;
 }
@@ -49,7 +49,7 @@ CMiniHeap(int size)
 // give me some space from the heap please
 char *MiniHeapAlloc(int size)
 {
-	if (size < (mSize - ((int)mCurrentHeap - (int)mHeap)))
+	if (size < (mSize - ((size_t)mCurrentHeap - (size_t)mHeap)))
 	{
 		char *tempAddress =  mCurrentHeap;
 		mCurrentHeap += size;

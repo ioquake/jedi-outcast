@@ -8,7 +8,9 @@
 #include "cg_media.h"
 #include "FxScheduler.h"
 #include "cg_lights.h"
-#include "..\game\wp_saber.h"
+#include "../game/wp_saber.h"
+#include "../game/g_local.h"
+#include "../game/g_functions.h"
 
 #define MASK_CAMERACLIP (MASK_SOLID)
 #define CAMERA_SIZE	4
@@ -1388,7 +1390,7 @@ static qboolean	CG_CalcFov( void ) {
 				}
 				else
 				{//still zooming
-					static zoomSoundTime = 0;
+					static int zoomSoundTime = 0;
 
 					if ( zoomSoundTime < cg.time )
 					{

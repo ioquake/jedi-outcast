@@ -6,6 +6,7 @@
 #include "g_local.h"
 #include "g_functions.h"
 #include "objectives.h"
+#include "../cgame/cg_local.h"
 
 #define MOVER_START_ON		1
 #define MOVER_FORCE_ACTIVATE	2

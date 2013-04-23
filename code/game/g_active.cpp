@@ -3,8 +3,9 @@
 
 
 #include "g_local.h"
+#include "b_local.h"
 #include "g_functions.h"
-#include "..\cgame\cg_local.h"
+#include "../cgame/cg_local.h"
 #include "Q3_Interface.h"
 #include "wp_saber.h"
 #include "g_icarus.h"
@@ -824,8 +825,8 @@ void	G_TouchTriggersLerped( gentity_t *ent ) {
 #ifdef _DEBUG
 	for ( int j = 0; j < 3; j++ )
 	{
-		assert( !_isnan(ent->currentOrigin[j]));
-		assert( !_isnan(ent->lastOrigin[j]));
+		assert( !Q_isnan(ent->currentOrigin[j]));
+		assert( !Q_isnan(ent->lastOrigin[j]));
 	}
 #endif// _DEBUG
 	VectorSubtract( ent->currentOrigin, ent->lastOrigin, diff );
@@ -2773,7 +2774,7 @@ extern cvar_t	*g_skippingcin;
 	pm.cmd = *ucmd;
 //	pm.tracemask = MASK_PLAYERSOLID;	// used differently for navgen
 	pm.tracemask = ent->clipmask;
-	pm.trace = gi.trace;
+	pm._trace = gi._trace;
 	pm.pointcontents = gi.pointcontents;
 	pm.debugLevel = g_debugMove->integer;
 	pm.noFootsteps = 0;//( g_dmflags->integer & DF_NO_FOOTSTEPS ) > 0;

@@ -197,7 +197,7 @@ int			s_entityWavVol_back[MAX_GENTITIES];
 *
 \**************************************************************************************************/
 
-int			s_UseOpenAL	= false;	// Determines if using Open AL or the default software mixer
+int			s_UseOpenAL	= true;	// Determines if using Open AL or the default software mixer
 
 ALfloat		listener_pos[3];		// Listener Position
 ALfloat		listener_ori[6];		// Listener Orientation
@@ -211,6 +211,7 @@ void UpdateLoopingSounds();
 void AL_UpdateRawSamples();
 void S_SetLipSyncs();
 
+#ifdef HAVE_EAX
 // EAX Related
 ALboolean				s_bEAX;				// Is EAX 3.0 support is available
 bool					s_bEALFileLoaded;	// Has an .eal file been loaded for the current level
@@ -249,6 +250,7 @@ const GUID DSPROPSETID_EAX30_ListenerProperties
 
 const GUID DSPROPSETID_EAX30_BufferProperties
 				= { 0xa8fa6881, 0xb476,	0x11d3, { 0xbd, 0xb9, 0x0, 0xc0, 0xf0, 0x2d, 0xdf, 0x87} };
+#endif
 
 /**************************************************************************************************\
 *
@@ -382,7 +384,7 @@ void S_Init( void ) {
 
 	s_CPUType = Cvar_Get("sys_cpuid","",0);
 
-#if !(defined __linux__ && defined __i386__)
+#ifdef _MSC_VER
 #if	!id386
 #else
 	extern unsigned int uiMMXAvailable;
@@ -406,13 +408,9 @@ void S_Init( void ) {
 	Cmd_AddCommand("mp3_calcvols", S_MP3_CalcVols_f);
 	Cmd_AddCommand("s_dynamic", S_SetDynamicMusic_f);
 
-	cv = Cvar_Get("s_UseOpenAL" , "0",CVAR_ARCHIVE|CVAR_LATCH);
-	s_UseOpenAL = !!(cv->integer);
-
-
 	if (s_UseOpenAL)
 	{
-		ALCDevice = alcOpenDevice((ALubyte*)"DirectSound3D");
+		ALCDevice = alcOpenDevice(NULL);
 		if (!ALCDevice)
 			return;
 
@@ -441,7 +439,9 @@ void S_Init( void ) {
 		alListenerfv(AL_VELOCITY,listenerVel);
 		alListenerfv(AL_ORIENTATION,listenerOri);
 
+#ifdef HAVE_EAX
 		InitEAXManager();
+#endif
 
 		memset(s_channels, 0, sizeof(s_channels));
 
@@ -471,7 +471,7 @@ void S_Init( void ) {
 			for (j = 0; j < NUM_STREAMING_BUFFERS; j++)
 			{
 				alGenBuffers(1, &(ch->buffers[j].BufferID));
-				ch->buffers[j].Status = UNQUEUED;
+				ch->buffers[j].status = UNQUEUED;
 				ch->buffers[j].Data = (char *)Z_Malloc(STREAMING_BUFFER_SIZE, TAG_SND_RAWDATA, qfalse);
 			}
 		}
@@ -591,7 +591,7 @@ void S_Shutdown( void )
 			{
 				alDeleteBuffers(1, &(ch->buffers[j].BufferID));
 				ch->buffers[j].BufferID = 0;
-				ch->buffers[j].Status = UNQUEUED;
+				ch->buffers[j].status = UNQUEUED;
 				if (ch->buffers[j].Data)
 				{
 					Z_Free(ch->buffers[j].Data);
@@ -609,7 +609,9 @@ void S_Shutdown( void )
 		// Close device
 		alcCloseDevice(ALCDevice);
 
+#ifdef HAVE_EAX
 		ReleaseEAXManager();
+#endif
 
 		s_numChannels = 0;
 
@@ -820,7 +822,9 @@ void S_BeginRegistration( void )
 	if (s_UseOpenAL)
 	{
 		mapname = Cvar_VariableString( "mapname" );
+#ifdef HAVE_EAX
 		EALFileInit(mapname);
+#endif
 	}
 
 	if (s_numSfx == 0) {
@@ -839,7 +843,7 @@ void S_BeginRegistration( void )
 	}
 }
 
-
+#ifdef HAVE_EAX
 void EALFileInit(char *level)
 {
 	long		lRoom;
@@ -875,6 +879,7 @@ void EALFileInit(char *level)
 		}
 	}
 }
+#endif // HAVE_EAX
 
 
 
@@ -1414,7 +1419,7 @@ void S_StartSound(const vec3_t origin, int entityNum, int entchannel, sfxHandle_
 			ch = s_channels + 1;
 			for (i = 1; i < s_numChannels; i++, ch++)
 			{
-				if ((ch->entnum == entityNum) && (ch->entchannel == CHAN_WEAPON) && (ch->thesfx) && (strstr(strlwr(ch->thesfx->sSoundName), "altcharge") != NULL))
+				if ((ch->entnum == entityNum) && (ch->entchannel == CHAN_WEAPON) && (ch->thesfx) && (strstr(Q_strlwr(ch->thesfx->sSoundName), "altcharge") != NULL))
 				{
 					// Stop this sound
 					alSourceStop(ch->alSource);
@@ -1430,7 +1435,7 @@ void S_StartSound(const vec3_t origin, int entityNum, int entchannel, sfxHandle_
 			ch = s_channels + 1;
 			for (i = 1; i < s_numChannels; i++, ch++)
 			{
-				if ((ch->entnum == entityNum) && (ch->thesfx) && (strstr(strlwr(ch->thesfx->sSoundName), "falling") != NULL))
+				if ((ch->entnum == entityNum) && (ch->thesfx) && (strstr(Q_strlwr(ch->thesfx->sSoundName), "falling") != NULL))
 				{
 					// Stop this sound
 					alSourceStop(ch->alSource);
@@ -2118,10 +2123,12 @@ void S_UpdateEntityPosition( int entityNum, const vec3_t origin )
 				pos[2] = -origin[1];
 				alSourcefv(s_channels[i].alSource, AL_POSITION, pos);
 	
+#ifdef HAVE_EAX
 				if ((s_bEALFileLoaded) && !( ch->entchannel == CHAN_VOICE || ch->entchannel == CHAN_VOICE_ATTEN || ch->entchannel == CHAN_VOICE_GLOBAL ) )
 				{
 					UpdateEAXBuffer(ch);
 				}
+#endif
 			}
 		}
 	}
@@ -2263,7 +2270,9 @@ Change the volumes of all the playing sounds for changes in their positions
 */
 void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], qboolean inwater )
 {
+#ifdef HAVE_EAX
 	EAXOCCLUSIONPROPERTIES eaxOCProp;
+#endif
 	unsigned int ulEnvironment;
 	int			i;
 	channel_t	*ch;
@@ -2288,6 +2297,7 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], qboolean 
 		listener_ori[5] = -axis[2][1];
 		alListenerfv(AL_ORIENTATION, listener_ori);
 
+#ifdef HAVE_EAX
 		// Update EAX effects here
 		if (s_bEALFileLoaded)
 		{
@@ -2340,6 +2350,7 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], qboolean 
 				}
 			}
 		}
+#endif // HAVE_EAX
 	}
 	else
 	{
@@ -2571,8 +2582,10 @@ void S_Update_(void) {
 	int i,j;
 	int			source;
 	float		pos[3];
+#ifdef HAVE_EAX
 	EAXOBSTRUCTIONPROPERTIES eaxOBProp;
 	EAXOCCLUSIONPROPERTIES eaxOCProp;
+#endif
 #ifdef _DEBUG
 	char szString[256];
 #endif
@@ -2637,6 +2650,7 @@ void S_Update_(void) {
 				alSourcef(s_channels[source].alSource, AL_REFERENCE_DISTANCE, 1500.0f);
 				alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volumeVoice->value) / 255.0f);
 
+#ifdef HAVE_EAX
 				if (s_bEAX)
 				{
 					// Switch-off Occlusion + Obstruction
@@ -2654,14 +2668,17 @@ void S_Update_(void) {
 					s_eaxSet(&DSPROPSETID_EAX_BufferProperties, DSPROPERTY_EAXBUFFER_OCCLUSIONPARAMETERS,
 						ch->alSource, &eaxOCProp, sizeof(EAXOCCLUSIONPROPERTIES));
 				}
+#endif
 			}
 			else
 			{
 				alSourcef(s_channels[source].alSource, AL_REFERENCE_DISTANCE, 400.f);
 				alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.f);
 
+#ifdef HAVE_EAX
 				if (s_bEALFileLoaded)
 					UpdateEAXBuffer(ch);
+#endif
 			}
 
 
@@ -2677,7 +2694,7 @@ void S_Update_(void) {
 
 				// Reset streaming buffers status's
 				for (i = 0; i < NUM_STREAMING_BUFFERS; i++)
-					ch->buffers[i].Status = UNQUEUED;
+					ch->buffers[i].status = UNQUEUED;
 
 				// Decode (STREAMING_BUFFER_SIZE / 1152) MP3 frames for each of the NUM_STREAMING_BUFFERS AL Buffers
 				for (i = 0; i < NUM_STREAMING_BUFFERS; i++)
@@ -2730,7 +2747,7 @@ void S_Update_(void) {
 					alSourceQueueBuffers(s_channels[source].alSource, 1, &(ch->buffers[i].BufferID));
 					if (alGetError() == AL_NO_ERROR)
 					{
-						ch->buffers[i].Status = QUEUED;
+						ch->buffers[i].status = QUEUED;
 					}
 				}
 
@@ -2785,7 +2802,9 @@ void S_Update_(void) {
 
 		AL_UpdateRawSamples();
 
+#ifdef HAVE_EAX
 		EAXMorph();
+#endif
 	}
 	else
 	{
@@ -2896,7 +2915,7 @@ void UpdateSingleShotSounds()
 						{
 							if (ch->buffers[j].BufferID == buffer)
 							{
-								ch->buffers[j].Status = UNQUEUED;
+								ch->buffers[j].status = UNQUEUED;
 								break;
 							}
 						}
@@ -2907,7 +2926,7 @@ void UpdateSingleShotSounds()
 
 					for (j = 0; j < NUM_STREAMING_BUFFERS; j++)
 					{
-						if ((ch->buffers[j].Status == UNQUEUED) & (ch->MP3StreamHeader.iSourceBytesRemaining > 0))
+						if ((ch->buffers[j].status == UNQUEUED) & (ch->MP3StreamHeader.iSourceBytesRemaining > 0))
 						{
 							nTotalBytesDecoded = 0;
 		
@@ -2956,7 +2975,7 @@ void UpdateSingleShotSounds()
 								alSourceQueueBuffers(ch->alSource, 1, &(ch->buffers[j].BufferID));
 
 								// Update status of Buffer
-								ch->buffers[j].Status = QUEUED;
+								ch->buffers[j].status = QUEUED;
 
 								break;
 							}
@@ -2969,7 +2988,7 @@ void UpdateSingleShotSounds()
 								alSourceQueueBuffers(ch->alSource, 1, &(ch->buffers[j].BufferID));
 								
 								// Update status of Buffer
-								ch->buffers[j].Status = QUEUED;
+								ch->buffers[j].status = QUEUED;
 							}
 						}
 					}
@@ -3088,8 +3107,10 @@ void UpdateLoopingSounds()
 					ch->master_vol = loop->volume;
 					alSourcef(s_channels[i].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.f);
 
+#ifdef HAVE_EAX
 					if (s_bEALFileLoaded)
 						UpdateEAXBuffer(ch);
+#endif
 
 					ch->bProcessed = true;
 					loop->bProcessed = true;
@@ -3162,8 +3183,10 @@ void UpdateLoopingSounds()
 			alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.0f);
 			alSourcei(s_channels[source].alSource, AL_SOURCE_RELATIVE, ch->fixed_origin ? AL_TRUE : AL_FALSE);
 
+#ifdef HAVE_EAX
 			if (s_bEALFileLoaded)
 				UpdateEAXBuffer(ch);
+#endif
 
 			alGetError();
 			alSourcePlay(s_channels[source].alSource);
@@ -3214,7 +3237,9 @@ void AL_UpdateRawSamples()
 		size = (s_rawend - s_paintedtime)<<2;
 		if (size > (MAX_RAW_SAMPLES<<2))
 		{
+#ifdef _DEBUG
 			OutputDebugString("UpdateRawSamples :- Raw Sample buffer has overflowed !!!\n");
+#endif
 			size = MAX_RAW_SAMPLES<<2;
 			s_paintedtime = s_rawend - MAX_RAW_SAMPLES;
 		}
@@ -3539,28 +3564,28 @@ void S_SoundList_f( void ) {
 
 	if ( Cmd_Argc() == 2 ) 
 	{
-		if (!stricmp(Cmd_Argv(1), "shouldbeMP3"))
+		if (!Q_stricmp(Cmd_Argv(1), "shouldbeMP3"))
 		{
 			bShouldBeMP3 = qtrue;
 		}
 		else
-		if (!stricmp(Cmd_Argv(1), "wavonly"))
+		if (!Q_stricmp(Cmd_Argv(1), "wavonly"))
 		{
 			bWavOnly = qtrue;
 		}
 		else
 		{
-			if (!stricmp(Cmd_Argv(1), "1"))
+			if (!Q_stricmp(Cmd_Argv(1), "1"))
 			{
 				iVariantCap = 1;
 			}
 			else
-			if (!stricmp(Cmd_Argv(1), "2"))
+			if (!Q_stricmp(Cmd_Argv(1), "2"))
 			{
 				iVariantCap = 2;
 			}
 			else
-			if (!stricmp(Cmd_Argv(1), "3"))
+			if (!Q_stricmp(Cmd_Argv(1), "3"))
 			{
 				iVariantCap = 3;
 			}
@@ -3611,7 +3636,7 @@ void S_SoundList_f( void ) {
 						sfx_t *sfx2;
 						for (sfx2 = s_knownSfx, i2=0 ; i2<s_numSfx ; i2++, sfx2++) 
 						{
-							if (!stricmp(sFindName,sfx2->sSoundName))
+							if (!Q_stricmp(sFindName,sfx2->sSoundName))
 							{
 								bDumpThisOne = qfalse;	// found a %1-variant of this, so use variant capping and ignore this sfx_t
 								break;
@@ -4291,7 +4316,8 @@ void S_StartBackgroundTrack( const char *intro, const char *loop, qboolean bCall
 		{
 			extern const char *Music_GetLevelSetName(void);
 			Q_strncpyz(sInfoOnly_CurrentDynamicMusicSet, Music_GetLevelSetName(), sizeof(sInfoOnly_CurrentDynamicMusicSet));
-			for (int i = eBGRNDTRACK_DATABEGIN; i != eBGRNDTRACK_DATAEND; i++)
+			int i;
+			for (i = eBGRNDTRACK_DATABEGIN; i != eBGRNDTRACK_DATAEND; i++)
 			{
 				qboolean bOk = qfalse;
 				LPCSTR psMusicName = Music_GetFileNameForState( (MusicState_e) i);
@@ -4733,7 +4759,7 @@ static void S_UpdateBackgroundTrack( void )
 		// standard / non-dynamic one-track music...
 		//
 		LPCSTR psCommand = S_Music_GetRequestedState();	// special check just for "silence" case...
-		qboolean bShouldBeSilent = (psCommand && !stricmp(psCommand,"silence"));
+		qboolean bShouldBeSilent = (psCommand && !Q_stricmp(psCommand,"silence"));
 		float fDesiredVolume = bShouldBeSilent ? 0.0f : s_musicVolume->value;
 		//
 		// internal to this code is a volume-smoother...
@@ -4923,7 +4949,8 @@ int SND_FreeOldestSound(sfx_t *pButNotThisOne /* = NULL */)
 			{
 				// new bit, we can't throw away any sfx_t struct in use by a channel, else the paint code will crash...
 				//
-				for (int iChannel=0; iChannel<MAX_CHANNELS; iChannel++)
+				int iChannel;
+				for (iChannel=0; iChannel<MAX_CHANNELS; iChannel++)
 				{
 					channel_t *ch = & s_channels[iChannel];
 
@@ -5017,6 +5044,7 @@ qboolean SND_RegisterAudio_LevelLoadEnd(qboolean bDeleteEverythingNotUsedThisLev
 }
 
 
+#ifdef HAVE_EAX
 /****************************************************************************************************\
 *
 *	EAX Related
@@ -5655,4 +5683,4 @@ void Clamp(EAXVECTOR *eaxVector)
 	eaxVector->y *= flInvMagnitude;
 	eaxVector->z *= flInvMagnitude;
 }
-
+#endif // HAVE_EAX

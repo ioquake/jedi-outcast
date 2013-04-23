@@ -2,6 +2,8 @@
 #include "g_headers.h"
 #include "b_local.h"
 #include "g_nav.h"
+#include "g_functions.h"
+#include "../cgame/cg_local.h"
 
 #define	MIN_MELEE_RANGE				320
 #define	MIN_MELEE_RANGE_SQR			( MIN_MELEE_RANGE * MIN_MELEE_RANGE )

@@ -3,8 +3,10 @@
 //	-- jweier
 
 // this include must remain at the top of every Icarus CPP file
+#include "../game/g_local.h"
+#include "../game/q_shared.h"
 #include "icarus.h"
-#include "g_headers.h"
+#include "../game/g_headers.h"
 
 #include "assert.h"
 
@@ -2265,7 +2267,7 @@ int CSequencer::DestroySequence( CSequence *sequence )
 	{
 		if((*tsi).second == sequence)
 		{
-			tsi = m_taskSequences.erase(tsi);
+			m_taskSequences.erase(tsi++);
 		}
 		else
 		{
@@ -2398,7 +2400,8 @@ int	CSequencer::Load( void )
 	m_ie->I_ReadSaveData( 'SQR#', &numSequences, sizeof( numSequences ) );
 
 	//Read in all the sequences
-	for ( int i = 0; i < numSequences; i++ )
+	int i;
+	for ( i = 0; i < numSequences; i++ )
 	{
 		m_ie->I_ReadSaveData( 'SQRI', &seqID, sizeof( seqID ) );
 

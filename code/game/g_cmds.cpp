@@ -5,6 +5,8 @@
 #include "g_local.h"
 #include "objectives.h"
 #include "wp_saber.h"
+#include "g_functions.h"
+#include "../cgame/cg_local.h"
 
 extern	bool		in_camera;
 
@@ -601,7 +603,7 @@ Cmd_Where_f
 */
 void Cmd_Where_f( gentity_t *ent ) {
 	const char *s = gi.argv(1);
-	const len = strlen(s);
+	const int len = strlen(s);
 	gentity_t	*check;
 	
 	if ( gi.argc () < 2 ) {

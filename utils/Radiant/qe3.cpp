@@ -2,7 +2,7 @@
 #include "qe3.h"
 #include "PrefsDlg.h"
 #include <direct.h>  
-#include <sys\stat.h> 
+#include <sys/stat.h> 
 #ifdef SOF
 #include "materials.h"
 #endif

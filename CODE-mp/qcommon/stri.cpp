@@ -7,7 +7,7 @@
 
 /*
 #if !defined(G_LOCAL_H_INC)
-	#include "..\game\g_local.h"
+	#include "../game/g_local.h"
 #endif
 */
 

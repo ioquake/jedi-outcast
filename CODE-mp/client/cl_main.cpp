@@ -1,12 +1,12 @@
 // cl_main.c  -- client main loop
 
 #include "client.h"
-#include "..\qcommon\strip.h"
+#include "../qcommon/strip.h"
 #include <limits.h>
 #include "snd_local.h"
 
 #if !defined(G2_H_INC)
-	#include "..\ghoul2\G2_local.h"
+	#include "../ghoul2/G2_local.h"
 #endif
 
 #ifdef G2_COLLISION_ENABLED

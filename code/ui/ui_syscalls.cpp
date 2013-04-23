@@ -13,25 +13,27 @@
 // this file is only included when building a dll
 // syscalls.asm is included instead when building a qvm
 
-int (*syscall)( int arg, ... ) = (int (*)( int, ...))-1;
+intptr_t (*qsyscall)( intptr_t arg, ... ) = (intptr_t (*)( intptr_t, ...))-1;
 
-void dllEntry( int (*syscallptr)( int arg,... ) ) {
-	syscall = syscallptr;
+extern "C" {
+void dllEntry( intptr_t (*syscallptr)( intptr_t arg,... ) ) {
+	qsyscall = syscallptr;
 //	CG_PreInit();
 }
+} // extern "C"
 
 
-int CL_UISystemCalls( int *args );
+intptr_t CL_UISystemCalls( intptr_t *args );
 
 
 int FloatAsInt( float f );
 
 float trap_Cvar_VariableValue( const char *var_name ) 
 {
-	int temp;
-//	temp = syscall( UI_CVAR_VARIABLEVALUE, var_name );
-	temp = FloatAsInt( Cvar_VariableValue(var_name) );
-	return (*(float*)&temp);
+	floatint_t fi;
+//	fi.i = qsyscall( UI_CVAR_VARIABLEVALUE, var_name );
+	fi.i = FloatAsInt( Cvar_VariableValue(var_name) );
+	return fi.f;
 }
 
 
@@ -47,20 +49,20 @@ void trap_R_AddRefEntityToScene( const refEntity_t *re )
 
 void trap_R_RenderScene( const refdef_t *fd ) 
 {
-//	syscall( UI_R_RENDERSCENE, fd );
+//	qsyscall( UI_R_RENDERSCENE, fd );
 	ui.R_RenderScene(fd);
 }
 
 void trap_R_SetColor( const float *rgba ) 
 {
-//	syscall( UI_R_SETCOLOR, rgba );
+//	qsyscall( UI_R_SETCOLOR, rgba );
 //	re.SetColor( rgba );
 	ui.R_SetColor(rgba);
 }
 
 void trap_R_DrawStretchPic( float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t hShader ) 
 {
-//	syscall( UI_R_DRAWSTRETCHPIC, PASSFLOAT(x), PASSFLOAT(y), PASSFLOAT(w), PASSFLOAT(h), PASSFLOAT(s1), PASSFLOAT(t1), PASSFLOAT(s2), PASSFLOAT(t2), hShader );
+//	qsyscall( UI_R_DRAWSTRETCHPIC, PASSFLOAT(x), PASSFLOAT(y), PASSFLOAT(w), PASSFLOAT(h), PASSFLOAT(s1), PASSFLOAT(t1), PASSFLOAT(s2), PASSFLOAT(t2), hShader );
 //	re.DrawStretchPic( x, y, w, h, s1, t1, s2, t2, hShader  );
 
 	ui.R_DrawStretchPic( x, y, w, h, s1, t1, s2, t2, hShader );
@@ -69,13 +71,13 @@ void trap_R_DrawStretchPic( float x, float y, float w, float h, float s1, float 
 
 void	trap_R_ModelBounds( clipHandle_t model, vec3_t mins, vec3_t maxs ) 
 {
-//	syscall( UI_R_MODELBOUNDS, model, mins, maxs );
+//	qsyscall( UI_R_MODELBOUNDS, model, mins, maxs );
 	ui.R_ModelBounds(model, mins, maxs);
 }
 
 void trap_S_StartLocalSound( sfxHandle_t sfx, int channelNum ) 
 {
-//	syscall( UI_S_STARTLOCALSOUND, sfx, channelNum );
+//	qsyscall( UI_S_STARTLOCALSOUND, sfx, channelNum );
 	S_StartLocalSound( sfx, channelNum );
 }
 
@@ -134,11 +136,11 @@ void trap_Key_SetCatcher( int catcher )
 }
 /*
 void trap_GetClipboardData( char *buf, int bufsize ) {
-	syscall( UI_GETCLIPBOARDDATA, buf, bufsize );
+	qsyscall( UI_GETCLIPBOARDDATA, buf, bufsize );
 }
 
 void trap_GetClientState( uiClientState_t *state ) {
-	syscall( UI_GETCLIENTSTATE, state );
+	qsyscall( UI_GETCLIENTSTATE, state );
 }
 */
 
@@ -146,26 +148,26 @@ void CL_GetGlconfig( glconfig_t *glconfig );
 
 void trap_GetGlconfig( glconfig_t *glconfig ) 
 {
-//	syscall( UI_GETGLCONFIG, glconfig );
+//	qsyscall( UI_GETGLCONFIG, glconfig );
 	CL_GetGlconfig( glconfig );
 }
 
 // this returns a handle.  arg0 is the name in the format "idlogo.roq", set arg1 to NULL, alteredstates to qfalse (do not alter gamestate)
 int trap_CIN_PlayCinematic( const char *arg0, int xpos, int ypos, int width, int height, int bits, const char *psAudioFile) {
-  return syscall(UI_CIN_PLAYCINEMATIC, arg0, xpos, ypos, width, height, bits, psAudioFile);
+  return qsyscall(UI_CIN_PLAYCINEMATIC, arg0, xpos, ypos, width, height, bits, psAudioFile);
 }
  
 // stops playing the cinematic and ends it.  should always return FMV_EOF
 // cinematics must be stopped in reverse order of when they are started
 int trap_CIN_StopCinematic(int handle) 
 {
-  return syscall(UI_CIN_STOPCINEMATIC, handle);
+  return qsyscall(UI_CIN_STOPCINEMATIC, handle);
 }
 
  
 int PASSFLOAT( float x ) 
 {
-	float	floatTemp;
-	floatTemp = x;
-	return *(int *)&floatTemp;
+	floatint_t fi;
+	fi.f = x;
+	return fi.i;
 }

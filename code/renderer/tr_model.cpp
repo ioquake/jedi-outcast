@@ -5,7 +5,7 @@
 #include "../server/exe_headers.h"
 
 #include "tr_local.h"
-#include "MatComp.h"
+#include "matcomp.h"
 #include "../qcommon/sstring.h"
 
 #define	LL(x) x=LittleLong(x)
@@ -279,7 +279,7 @@ qboolean RE_RegisterModels_LevelLoadEnd(qboolean bDeleteEverythingNotUsedThisLev
 					bAtLeastoneModelFreed = qtrue;
 				}
 
-				itModel = CachedModels.erase(itModel);
+				CachedModels.erase(itModel++);
 				bEraseOccured = qtrue;
 
 				iLoadedModelBytes = GetModelDataAllocSize();				
@@ -323,7 +323,7 @@ static void RE_RegisterModels_DeleteAll(void)
 			Z_Free(CachedModel.pModelDiskImage);					
 		}
 
-		itModel = CachedModels.erase(itModel);			
+		CachedModels.erase(itModel++);
 	}
 
 	extern void RE_AnimationCFGs_DeleteAll(void);
@@ -643,7 +643,7 @@ Ghoul2 Insert End
 	mod->npatchable = qfalse;
 	for ( int i = 0; npatchableModels[i]; i++ )
 	{
-		if ( stricmp(name, npatchableModels[i]) == 0 )
+		if ( Q_stricmp(name, npatchableModels[i]) == 0 )
 		{
 			mod->npatchable = qtrue;
 			break;
@@ -808,7 +808,7 @@ qhandle_t RE_RegisterModel( const char *name )
 
 		qhandle_t q = RE_RegisterModel_Actual( name );
 
-if (stricmp(&name[strlen(name)-4],".gla")){
+if (Q_stricmp(&name[strlen(name)-4],".gla")){
 	gbInsideRegisterModel = qfalse;		// GLA files recursively call this, so don't turn off half way. A reference count would be nice, but if any ERR_DROP ever occurs within the load then the refcount will be knackered from then on
 }
 
@@ -1097,7 +1097,7 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name, qbo
 	if (md4->ofsFrames<0) // Compressed .
 	{
 		// swap all the frames
-		frameSize = (int)( &((md4CompFrame_t *)0)->bones[ md4->numBones ] );
+		frameSize = (size_t)( &((md4CompFrame_t *)0)->bones[ md4->numBones ] );
 		for ( i = 0 ; i < md4->numFrames ; i++) {
 			cframe = (md4CompFrame_t *) ( (byte *)md4 - md4->ofsFrames + i * frameSize );
     		cframe->radius = LittleFloat( cframe->radius );
@@ -1114,7 +1114,7 @@ static qboolean R_LoadMD4( model_t *mod, void *buffer, const char *mod_name, qbo
 	else
 	{
 		// swap all the frames
-		frameSize = (int)( &((md4Frame_t *)0)->bones[ md4->numBones ] );
+		frameSize = (size_t)( &((md4Frame_t *)0)->bones[ md4->numBones ] );
 		for ( i = 0 ; i < md4->numFrames ; i++) {
 			frame = (md4Frame_t *) ( (byte *)md4 + md4->ofsFrames + i * frameSize );
     		frame->radius = LittleFloat( frame->radius );
@@ -1392,7 +1392,7 @@ static void R_GetAnimTag( md4Header_t *mod, int framenum, const char *tagName ,m
 		{
 			if (mod->ofsFrames<0)	//compressed model
 			{
-				frameSize = (int)( &((md4CompFrame_t *)0)->bones[ mod->numBones ] );
+				frameSize = (size_t)( &((md4CompFrame_t *)0)->bones[ mod->numBones ] );
 				cframe = (md4CompFrame_t *)((byte *)mod - mod->ofsFrames + framenum * frameSize );
 				MC_UnCompress(tbone.matrix,cframe->bones[tag->boneIndex].Comp);
 				{
@@ -1409,7 +1409,7 @@ static void R_GetAnimTag( md4Header_t *mod, int framenum, const char *tagName ,m
 			}
 			else
 			{
-				frameSize = (int)( &((md4Frame_t *)0)->bones[ mod->numBones ] );
+				frameSize = (size_t)( &((md4Frame_t *)0)->bones[ mod->numBones ] );
 				frame = (md4Frame_t *)((byte *)mod + mod->ofsFrames + framenum * frameSize );
 				{
 					int j,k;

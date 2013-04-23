@@ -4,9 +4,10 @@
 //#include "cg_local.h"
 #include "cg_media.h"
 #include "FxScheduler.h"
-#include "..\game\wp_saber.h"
+#include "../game/wp_saber.h"
 
-#include "..\game\anims.h"
+#include "../game/anims.h"
+#include "../game/g_local.h"
 
 #ifdef _IMMERSION
 #include "../ff/ff.h"
@@ -222,11 +223,11 @@ void CG_RegisterWeapon( int weaponNum ) {
 	// give ourselves the functions if we can
 	if (weaponData[weaponNum].func)
 	{
-		weaponInfo->missileTrailFunc = (void (__cdecl *)(struct centity_s *,const struct weaponInfo_s *))weaponData[weaponNum].func;
+		weaponInfo->missileTrailFunc = (void (QDECL *)(struct centity_s *,const struct weaponInfo_s *))weaponData[weaponNum].func;
 	}
 	if (weaponData[weaponNum].altfunc)
 	{
-		weaponInfo->alt_missileTrailFunc = (void (__cdecl *)(struct centity_s *,const struct weaponInfo_s *))weaponData[weaponNum].altfunc;
+		weaponInfo->alt_missileTrailFunc = (void (QDECL *)(struct centity_s *,const struct weaponInfo_s *))weaponData[weaponNum].altfunc;
 	}
 
 	switch ( weaponNum )	//extra client only stuff
@@ -1151,7 +1152,8 @@ void CG_AddViewWeapon( playerState_t *ps )
 	}
 */
 	// add the spinning barrel[s]
-	for (int i = 0; (i < wData->numBarrels); i++)	
+	int i;
+	for (i = 0; (i < wData->numBarrels); i++)	
 	{
 		refEntity_t	barrel;
 		memset( &barrel, 0, sizeof( barrel ) );

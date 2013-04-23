@@ -7,6 +7,7 @@
 #include "g_functions.h"
 #include "g_items.h"
 #include "wp_saber.h"
+#include "../cgame/cg_local.h"
 
 extern qboolean	missionInfo_Updated;
 

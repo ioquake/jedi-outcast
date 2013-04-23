@@ -3,6 +3,7 @@
 
 
 #include "g_local.h"
+#include "b_local.h"
 #include "g_functions.h"
 
 extern int	G_FindConfigstringIndex( const char *name, int start, int max, qboolean create );

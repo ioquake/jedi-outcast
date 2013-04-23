@@ -11,7 +11,7 @@
 #include "PrefsDlg.h"
 #include "shaderinfo.h"
 #include "oddbits.h"
-#include "..\libs\pakstuff.h"
+#include "../libs/pakstuff.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW

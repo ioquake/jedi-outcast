@@ -5,10 +5,10 @@
 
 
 #include "stdafx.h"
-#include "..\qe3.h"
-#include "..\DialogInfo.h"
-#include "..\CapDialog.h"
-#include "..\groupnames.h"
+#include "../qe3.h"
+#include "../DialogInfo.h"
+#include "../CapDialog.h"
+#include "../groupnames.h"
 
 // externs
 extern void MemFile_fprintf(CMemFile* pMemFile, const char* pText, ...);

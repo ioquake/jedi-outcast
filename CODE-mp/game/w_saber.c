@@ -2,7 +2,7 @@
 #include "bg_local.h" //Only because we use PM_SetAnim here once.
 #include "w_saber.h"
 #include "ai_main.h"
-#include "..\ghoul2\g2.h"
+#include "../ghoul2/g2.h"
 
 #define SABER_BOX_SIZE 16.0f
 

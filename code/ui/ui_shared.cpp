@@ -32,7 +32,7 @@ void		Menus_ShowItems(const char *menuName);
 qboolean	ParseRect(const char **p, rectDef_t *r);
 const char	*String_Alloc(const char *p);
 void		ToWindowCoords(float *x, float *y, windowDef_t *window);
-void		Window_Paint(Window *w, float fadeAmount, float fadeClamp, float fadeCycle);
+void		Window_Paint(qWindow *w, float fadeAmount, float fadeClamp, float fadeCycle);
 int			Item_ListBox_ThumbDrawPosition(itemDef_t *item);
 int			Item_ListBox_ThumbPosition(itemDef_t *item);
 qboolean Rect_ContainsPoint(rectDef_t *rect, float x, float y) ;
@@ -167,7 +167,7 @@ Initializes a window structure ( windowDef_t ) with defaults
  
 ==================
 */
-void Window_Init(Window *w) 
+void Window_Init(qWindow *w) 
 {
 	memset(w, 0, sizeof(windowDef_t));
 	w->borderSize = 1;
@@ -1587,10 +1587,10 @@ void Menu_TransitionItemByName(menuDef_t *menu, const char *p, rectDef_t rectFro
 			item->window.offsetTime = time;
 			memcpy(&item->window.rectClient, &rectFrom, sizeof(rectDef_t));
 			memcpy(&item->window.rectEffects, &rectTo, sizeof(rectDef_t));
-			item->window.rectEffects2.x = abs(rectTo.x - rectFrom.x) / amt;
-			item->window.rectEffects2.y = abs(rectTo.y - rectFrom.y) / amt;
-			item->window.rectEffects2.w = abs(rectTo.w - rectFrom.w) / amt;
-			item->window.rectEffects2.h = abs(rectTo.h - rectFrom.h) / amt;
+			item->window.rectEffects2.x = abs((int)(rectTo.x - rectFrom.x)) / amt;
+			item->window.rectEffects2.y = abs((int)(rectTo.y - rectFrom.y)) / amt;
+			item->window.rectEffects2.w = abs((int)(rectTo.w - rectFrom.w)) / amt;
+			item->window.rectEffects2.h = abs((int)(rectTo.h - rectFrom.h)) / amt;
 			Item_UpdatePosition(item);
 		}
 	}
@@ -3503,7 +3503,7 @@ qboolean ItemParse_cvarStrList( itemDef_t *item)
 			PC_ParseWarning("end of file inside menu item\n");
 			return qfalse;
 		}
-		if ((int)token > 0)	//a normal StringAlloc ptr
+		if ((intptr_t)token > 0)	//a normal StringAlloc ptr
 		{
 			if (*token == '}') 
 			{
@@ -3576,7 +3576,7 @@ qboolean ItemParse_cvarFloatList( itemDef_t *item)
 			PC_ParseWarning("end of file inside menu item\n");
 			return qfalse;
 		}
-		if ((int)token > 0)	//a normal StringAlloc ptr
+		if ((intptr_t)token > 0)	//a normal StringAlloc ptr
 		{
 			if (*token == '}') 
 			{
@@ -4727,7 +4727,7 @@ void Item_SetTextExtents(itemDef_t *item, int *width, int *height, const char *t
 
 	// keeps us from computing the widths and heights more than once
 	if (*width == 0 || (item->type == ITEM_TYPE_OWNERDRAW && item->textalignment == ITEM_ALIGN_CENTER)
-		|| ((int)item->text<0 && item->asset != sp_language->modificationCount )	//string package language changed
+		|| ((intptr_t)item->text<0 && item->asset != sp_language->modificationCount )	//string package language changed
 		) 
 	{
 		int originalWidth;
@@ -4762,7 +4762,7 @@ void Item_SetTextExtents(itemDef_t *item, int *width, int *height, const char *t
 		}
 
 		ToWindowCoords(&item->textRect.x, &item->textRect.y, &item->window);
-		if ((int)item->text<0 )//string package
+		if ((intptr_t)item->text<0 )//string package
 		{//mark language
 			item->asset = sp_language->modificationCount;
 		}
@@ -4851,9 +4851,9 @@ void Item_Text_Wrapped_Paint(itemDef_t *item)
 	else 
 	{
 		textPtr = item->text;
-		if ((int)textPtr < 0)	//string package ID
+		if ((intptr_t)textPtr < 0)	//string package ID
 		{
-			textPtr = SP_GetStringText(-(int)textPtr);
+			textPtr = SP_GetStringText(-(intptr_t)textPtr);
 		}
 	}
 
@@ -4921,9 +4921,9 @@ void Item_Text_Paint(itemDef_t *item)
 	else 
 	{
 		textPtr = item->text;
-		if ((int)textPtr < 0)
+		if ((intptr_t)textPtr < 0)
 		{
-			textPtr = SP_GetStringText(-(int)textPtr);
+			textPtr = SP_GetStringText(-(intptr_t)textPtr);
 		}
 	}
 
@@ -4940,9 +4940,9 @@ void Item_Text_Paint(itemDef_t *item)
 
 	if (item->text2)	// Is there a second line of text?
 	{
-		if ((int)item->text2 < 0)
+		if ((intptr_t)item->text2 < 0)
 		{
-			textPtr = SP_GetStringText(-(int)item->text2);
+			textPtr = SP_GetStringText(-(intptr_t)item->text2);
 		}
 		else
 		{
@@ -5615,9 +5615,9 @@ void Item_Multi_Paint(itemDef_t *item)
 	}
 
 	text = Item_Multi_Setting(item);
-	if ((int)text < 0)	//it's a striped ID
+	if ((intptr_t)text < 0)	//it's a striped ID
 	{
-		text = SP_GetStringText(-(int)text);
+		text = SP_GetStringText(-(intptr_t)text);
 	}
 	assert (text);
 
@@ -5973,9 +5973,9 @@ void Item_Paint(itemDef_t *item)
 			else
 			{	// Draw the desctext
 				const char *textPtr;
-				if ((int)item->descText < 0)
+				if ((intptr_t)item->descText < 0)
 				{
-					textPtr = SP_GetStringText(-(int)item->descText);
+					textPtr = SP_GetStringText(-(intptr_t)item->descText);
 				}
 				else
 				{
@@ -6166,7 +6166,7 @@ void GradientBar_Paint(rectDef_t *rect, vec4_t color)
 Window_Paint
 =================
 */
-void Window_Paint(Window *w, float fadeAmount, float fadeClamp, float fadeCycle) 
+void Window_Paint(qWindow *w, float fadeAmount, float fadeClamp, float fadeCycle) 
 {
   //float bordersize = 0;
   vec4_t color;
@@ -6330,9 +6330,9 @@ void Item_Text_AutoWrapped_Paint(itemDef_t *item)
 	else 
 	{
 		textPtr = item->text;
-		if ((int)textPtr < 0)	//string package ID
+		if ((intptr_t)textPtr < 0)	//string package ID
 		{
-			textPtr = SP_GetStringText(-(int)textPtr);
+			textPtr = SP_GetStringText(-(intptr_t)textPtr);
 		}
 	}
 

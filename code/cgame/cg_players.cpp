@@ -6,9 +6,11 @@
 //#include "cg_local.h"
 #include "cg_media.h"
 #include "FxScheduler.h"
-#include "..\game\ghoul2_shared.h"
-#include "..\game\anims.h"
-#include "..\game\wp_saber.h"
+#include "../game/ghoul2_shared.h"
+#include "../game/anims.h"
+#include "../game/wp_saber.h"
+#include "../game/g_local.h"
+#include "../game/b_local.h"
 
 #define	LOOK_SWING_SCALE	0.5
 
@@ -190,7 +192,7 @@ static const char *GetCustomSound_VariantCapped(const char *ppsTable[], int iEnt
 						//
 						for (int iScanNum=0; iScanNum<iEntryNum; iScanNum++)
 						{
-							if (!stricmp(ppsTable[iScanNum], sName))
+							if (!Q_stricmp(ppsTable[iScanNum], sName))
 							{
 								// yeah, this entry is also present in the table, so ok to return it
 								//

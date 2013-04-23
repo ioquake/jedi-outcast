@@ -8,14 +8,14 @@
 
 
 #include "server.h"
-#include "..\client\vmachine.h"
-#include "..\client\client.h"
-#include "..\renderer\tr_local.h"
+#include "../client/vmachine.h"
+#include "../client/client.h"
+#include "../renderer/tr_local.h"
 /*
 Ghoul2 Insert Start
 */
 #if !defined(G2_H_INC)
-	#include "..\ghoul2\G2.h"
+	#include "../ghoul2/G2.h"
 #endif
 
 /*
@@ -353,7 +353,7 @@ void SV_InitGameProgs (void) {
 	import.unlinkentity = SV_UnlinkEntity;
 	import.EntitiesInBox = SV_AreaEntities;
 	import.EntityContact = SV_EntityContact;
-	import.trace = SV_Trace;
+	import._trace = SV_Trace;
 	import.pointcontents = SV_PointContents;
 	import.SetBrushModel = SV_SetBrushModel;
 
@@ -386,8 +386,8 @@ void SV_InitGameProgs (void) {
 	import.FS_GetFileList = FS_GetFileList;
 
 	import.AppendToSaveGame = SG_Append;
-	import.ReadFromSaveGame	= SG_Read;
-	import.ReadFromSaveGameOptional = SG_ReadOptional;
+	import._ReadFromSaveGame	= SG_Read;
+	import._ReadFromSaveGameOptional = SG_ReadOptional;
 
 	import.AdjustAreaPortalState = SV_AdjustAreaPortalState;
 	import.AreasConnected = CM_AreasConnected;
@@ -412,7 +412,7 @@ Ghoul2 Insert Start
 	import.G2API_GetBoneAnimIndex = G2API_GetBoneAnimIndex;
 	import.G2API_AddSurface = G2API_AddSurface;
 	import.G2API_HaveWeGhoul2Models =G2API_HaveWeGhoul2Models;
-	import.G2API_InitGhoul2Model = G2API_InitGhoul2Model;
+	import._G2API_InitGhoul2Model = G2API_InitGhoul2Model;
 	import.G2API_IsPaused = G2API_IsPaused;
 	import.G2API_ListBones = G2API_ListBones;
 	import.G2API_ListSurfaces = G2API_ListSurfaces;
@@ -422,9 +422,9 @@ Ghoul2 Insert Start
 	import.G2API_RemoveBolt = G2API_RemoveBolt;
 	import.G2API_RemoveBone = G2API_RemoveBone;
 	import.G2API_RemoveGhoul2Model = G2API_RemoveGhoul2Model;
-	import.G2API_SetBoneAngles = G2API_SetBoneAngles;
-	import.G2API_SetBoneAnglesMatrix = G2API_SetBoneAnglesMatrix;
-	import.G2API_SetBoneAnim = G2API_SetBoneAnim;
+	import._G2API_SetBoneAngles = G2API_SetBoneAngles;
+	import._G2API_SetBoneAnglesMatrix = G2API_SetBoneAnglesMatrix;
+	import._G2API_SetBoneAnim = G2API_SetBoneAnim;
 	import.G2API_SetLodBias = G2API_SetLodBias;
 	import.G2API_SetRootSurface = G2API_SetRootSurface;
 	import.G2API_SetShader = G2API_SetShader;
@@ -438,7 +438,7 @@ Ghoul2 Insert Start
 	import.G2API_GetAnimRange = G2API_GetAnimRange;
 	import.G2API_GetAnimRangeIndex = G2API_GetAnimRangeIndex;
 	import.G2API_GiveMeVectorFromMatrix = G2API_GiveMeVectorFromMatrix;
-	import.G2API_CopyGhoul2Instance = G2API_CopyGhoul2Instance;
+	import._G2API_CopyGhoul2Instance = G2API_CopyGhoul2Instance;
 	import.G2API_GetGhoul2ModelFlags = G2API_GetGhoul2ModelFlags;
 	import.G2API_CleanGhoul2Models = G2API_CleanGhoul2Models;
 	import.TheGhoul2InfoArray = TheGhoul2InfoArray;
@@ -450,9 +450,9 @@ Ghoul2 Insert Start
 	import.G2API_GetBoneIndex = G2API_GetBoneIndex;
 	import.G2API_StopBoneAnglesIndex = G2API_StopBoneAnglesIndex;
 	import.G2API_StopBoneAnimIndex = G2API_StopBoneAnimIndex;
-	import.G2API_SetBoneAnglesIndex = G2API_SetBoneAnglesIndex;
+	import._G2API_SetBoneAnglesIndex = G2API_SetBoneAnglesIndex;
 	import.G2API_SetBoneAnglesMatrixIndex = G2API_SetBoneAnglesMatrixIndex;
-	import.G2API_SetBoneAnimIndex = G2API_SetBoneAnimIndex;
+	import._G2API_SetBoneAnimIndex = G2API_SetBoneAnimIndex;
 	import.G2API_SaveGhoul2Models = G2API_SaveGhoul2Models;
 	import.G2API_LoadGhoul2Models = G2API_LoadGhoul2Models;
 	import.G2API_FreeSaveBuffer = G2API_FreeSaveBuffer;

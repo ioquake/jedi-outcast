@@ -4,6 +4,8 @@
 
 
 // this include must remain at the top of every Icarus CPP file
+#include "../game/g_local.h"
+#include "../game/q_shared.h"
 #include "icarus.h"
 
 
@@ -1798,7 +1800,8 @@ void CTaskManager::Load( void )
 	(m_owner->GetInterface())->I_ReadSaveData( 'TSK#', &numTasks, sizeof( numTasks ) );
 	
 	//Reload all the tasks
-	for ( int i = 0; i < numTasks; i++ )
+	int i;
+	for ( i = 0; i < numTasks; i++ )
 	{
 		task = new CTask;
 

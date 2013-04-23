@@ -187,7 +187,7 @@ void ICARUS_FreeEnt( gentity_t *ent )
 		strncpy( (char *) temp, ent->script_targetname, 1023 );
 		temp[ 1023 ] = 0;
 
-		entlist_t::iterator it = ICARUS_EntList.find( strupr(temp) );
+		entlist_t::iterator it = ICARUS_EntList.find( Q_strupr(temp) );
 
 		if (it != ICARUS_EntList.end())
 		{
@@ -252,7 +252,7 @@ void ICARUS_AssociateEnt( gentity_t *ent )
 	strncpy( (char *) temp, ent->script_targetname, 1023 );
 	temp[ 1023 ] = 0;
 
-	ICARUS_EntList[ strupr( (char *) temp ) ] = ent->s.number;
+	ICARUS_EntList[ Q_strupr( (char *) temp ) ] = ent->s.number;
 }
 
 /*
