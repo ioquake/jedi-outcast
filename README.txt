@@ -1,22 +1,28 @@
-Activision and Raven are releasing this code for people to learn from and play with. 
-This code is copyright Activision 2002. This source is released under GNU GPLv2.
+Jedi Outcast with various changes to make it build/run on
+more platforms including amd64/x86_64.
 
+Currently only the single player code is built.
 
-Some source code in this release is not covered by the GPL:
-e.g.
-zlib is Copyright (C) 1995-1998 Jean-loup Gailly and Mark Adler
+The game needs to be patched to 1.04 to work, the data in the
+steam version is already patched.
 
+The single player demo data also seems to be compatible
+and runs seemingly fine.
 
-  This software is provided 'as-is', without any express or implied
-  warranty.  In no event will the authors be held liable for any damages
-  arising from the use of this software.
+	How to build:
 
-  Permission is granted subject to the following restrictions:
+mkdir build-sp && cd build-sp
+cmake ../code/
+make
 
-  1. The origin of this software must not be misrepresented; you must not
-     claim that you wrote the original software. If you use this software
-     in a product, an acknowledgment in the product documentation would be
-     appreciated but is not required.
-  2. Altered source versions must be plainly marked as such, and must not be
-     misrepresented as being the original software.
-  3. This notice may not be removed or altered from any source distribution.
+copy jk2sp and jk2game*.so to your game data directory
+
+	Known issues:
+
+When running windowed the mouse does not work in the menus.
+
+With i386 linux with i965 graphics, levels seem to be zoomed in
+to point where only textures are seen.  Does not seem to
+affect GL rendered cutscenes or OpenBSD/i386 with slightly older mesa.
+
+Save games do not yet work on amd64.
