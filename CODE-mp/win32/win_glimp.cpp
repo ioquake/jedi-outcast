@@ -1271,7 +1271,7 @@ static qboolean GLW_LoadOpenGL( )
 	char buffer[1024];
 	qboolean cdsFullscreen;
 
-	strlwr( strcpy( buffer, OPENGL_DRIVER_NAME ) );
+	Q_strlwr( strcpy( buffer, OPENGL_DRIVER_NAME ) );
 
 	//
 	// load the driver and bind our function pointers to it
@@ -1418,7 +1418,7 @@ void GLimp_Init( void )
 	// chipset specific configuration
 	//
 	Q_strncpyz( buf, glConfig.renderer_string, sizeof(buf) );
-	strlwr( buf );
+	Q_strlwr( buf );
 	
 	//
 	// NOTE: if changing cvars, do it within this block.  This allows them

@@ -205,7 +205,7 @@ int CFxScheduler::RegisterEffect( const char *file, bool bHasCorrectPath /*= fal
 	*/
 	{
 		COM_StripExtension( file, sfile );
-		strlwr(sfile);
+		Q_strlwr(sfile);
 	}
 
 	// see if the specified file is already registered.  If it is, just return the id of that file
