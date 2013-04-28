@@ -322,3 +322,7 @@ char *Sys_GetCurrentUser( void )
 	}
 	return p->pw_name;
 }
+
+void QuickMemTest( void )
+{
+}
