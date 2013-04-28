@@ -2,7 +2,7 @@
 //
 // cg_players.c -- handle the media and animation for player entities
 #include "cg_local.h"
-#include "../ghoul2/g2.h"
+#include "../ghoul2/G2.h"
 
 extern stringID_table_t animTable [MAX_ANIMATIONS+1];
 

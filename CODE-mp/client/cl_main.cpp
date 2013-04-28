@@ -11,7 +11,7 @@
 
 #ifdef G2_COLLISION_ENABLED
 #if !defined (MINIHEAP_H_INC)
-#include "../qcommon/miniheap.h"
+#include "../qcommon/MiniHeap.h"
 #endif
 #endif
 
