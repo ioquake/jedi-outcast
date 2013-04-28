@@ -315,7 +315,7 @@ void CGPValue::Parse(char **dataPtr, CTextPool **textPool)
 		{	// end of data - error!
 			break;
 		}
-		else if (strcmpi(token, "]") == 0)
+		else if (Q_strcmpi(token, "]") == 0)
 		{	// ending brace for this list
 			break;
 		}
@@ -453,7 +453,7 @@ void CGPGroup::SortObject(CGPObject *object, CGPObject **unsortedList, CGPObject
 		last = 0;
 		while(test)
 		{
-			if (strcmpi(object->GetName(), test->GetName()) < 0)
+			if (Q_strcmpi(object->GetName(), test->GetName()) < 0)
 			{
 				break;
 			}
@@ -537,7 +537,7 @@ void CGPGroup::Parse(char **dataPtr, CTextPool **textPool)
 		{	// end of data - error!
 			break;
 		}
-		else if (strcmpi(token, "}") == 0)
+		else if (Q_strcmpi(token, "}") == 0)
 		{	// ending brace for this group
 			break;
 		}
@@ -546,14 +546,14 @@ void CGPGroup::Parse(char **dataPtr, CTextPool **textPool)
 
 		// read ahead to see what we are doing
 		token = GetToken(dataPtr, true, true);
-		if (strcmpi(token, "{") == 0)
+		if (Q_strcmpi(token, "{") == 0)
 		{	// new sub group
 			name = (*textPool)->AllocText(lastToken, true, textPool);
 			newSubGroup = AddGroup(name);
 			newSubGroup->SetWriteable(mWriteable);
 			newSubGroup->Parse(dataPtr, textPool);
 		}
-		else if (strcmpi(token, "[") == 0)
+		else if (Q_strcmpi(token, "[") == 0)
 		{	// new pair list
 			name = (*textPool)->AllocText(lastToken, true, textPool);
 			newPair = AddPair(name, 0);
@@ -620,7 +620,7 @@ const char *CGPGroup::FindPairValue(const char *key, const char *defaultVal)
 
 	while(mPair)
 	{
-		if (strcmpi(mPair->GetName(), key) == 0)
+		if (Q_strcmpi(mPair->GetName(), key) == 0)
 		{
 			return mPair->GetTopValue();
 		}
