@@ -124,7 +124,6 @@ static ID_INLINE float BigFloat(const float *l) { FloatSwap(l); }
 #define MAC_STATIC
 #define __cdecl
 #define __declspec(x)
-#define stricmp strcasecmp
 #define ID_INLINE inline 
 
 #ifdef __ppc__
@@ -200,9 +199,6 @@ static inline float LittleFloat (const float l) { return FloatSwap(&l); }
 // just waste space and make big arrays static...
 #ifdef __linux__
 
-// bk001205 - from Makefile
-#define stricmp strcasecmp
-
 #define	MAC_STATIC // bk: FIXME
 #define ID_INLINE inline 
 
@@ -248,9 +244,6 @@ inline static float LittleFloat (const float *l) { return FloatSwap(l); }
 // just waste space and make big arrays static...
 #ifdef __OpenBSD__
 
-// bk001205 - from Makefile
-#define stricmp strcasecmp
-
 #define	MAC_STATIC // bk: FIXME
 #define ID_INLINE inline 
 
@@ -294,8 +287,6 @@ inline static float LittleFloat (const float *l) { return FloatSwap(l); }
 
 //======================= FreeBSD DEFINES =====================
 #ifdef __FreeBSD__ // rb010123
-
-#define stricmp strcasecmp
 
 #define MAC_STATIC
 #define ID_INLINE inline 
