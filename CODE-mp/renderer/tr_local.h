@@ -1474,10 +1474,12 @@ struct shaderCommands_s
 	qboolean	SSInitializedWind;
 
 };
-#ifndef DEDICATED
+#ifdef _MSVC_VER
 typedef __declspec(align(16)) shaderCommands_s	shaderCommands_t;
-extern	shaderCommands_t	tess;
+#else
+typedef __attribute__((aligned(16))) shaderCommands_s shaderCommands_t;
 #endif
+extern	shaderCommands_t	tess;
 extern	color4ub_t	styleColors[MAX_LIGHT_STYLES];
 
 void RB_BeginSurface(shader_t *shader, int fogNum );
