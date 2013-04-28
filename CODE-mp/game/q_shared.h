@@ -334,6 +334,8 @@ typedef unsigned char 		byte;
 typedef unsigned short		word;
 typedef unsigned long		ulong;
 
+typedef const char *LPCSTR;
+
 typedef enum {qfalse, qtrue}	qboolean;
 
 typedef int		qhandle_t;

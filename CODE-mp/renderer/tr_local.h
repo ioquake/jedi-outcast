@@ -3,10 +3,6 @@
 #ifndef TR_LOCAL_H
 #define TR_LOCAL_H
 
-#ifdef __linux__
-typedef const char * LPCSTR;
-#endif
-
 #include "../game/q_shared.h"
 #include "../qcommon/qfiles.h"
 #include "../qcommon/qcommon.h"
