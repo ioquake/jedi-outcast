@@ -32,9 +32,6 @@
 
 #define assert(exp)     ((void)0)
 
-#define min(x,y) ((x)<(y)?(x):(y))
-#define max(x,y) ((x)>(y)?(x):(y))
-
 #else
 
 #include <assert.h>
@@ -46,6 +43,13 @@
 #include <time.h>
 #include <ctype.h>
 #include <limits.h>
+
+#endif
+
+#if defined(Q3_VM) || defined(CGAME) || defined(QAGAME) || defined(UI_EXPORTS)
+
+#define min(x,y) ((x)<(y)?(x):(y))
+#define max(x,y) ((x)>(y)?(x):(y))
 
 #endif
 
