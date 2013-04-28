@@ -17,7 +17,7 @@ typedef const char * LPCSTR;
 typedef unsigned int glIndex_t;
 
 // fast float to int conversion
-#if id386 && !( (defined __linux__ || defined __FreeBSD__ ) && (defined __i386__ ) ) // rb010123
+#if (defined(_MSC_VER) && defined(__i386__))
 long myftol( float f );
 #else
 #define	myftol(x) ((int)(x))

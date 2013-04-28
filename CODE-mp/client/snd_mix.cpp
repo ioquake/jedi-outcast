@@ -13,8 +13,7 @@ int*     snd_p;
 int      snd_linear_count;
 short*   snd_out;
 
-#if !( (defined __linux__ || __FreeBSD__ ) && (defined __i386__) ) // rb010123
-#if	!id386
+#if !(defined(_MSVC_VER) && defined(__i386__))
 
 
 void S_WriteLinearBlastStereo16 (void)
@@ -129,9 +128,6 @@ LExit:
 	}
 }
 
-#endif
-#else
-void S_WriteLinearBlastStereo16 (void);
 #endif
 
 void S_TransferStereo16 (unsigned long *pbuf, int endtime)

@@ -1049,7 +1049,7 @@ void RB_CalcRotateTexCoords( float degsPerSecond, float *st )
 
 
 
-#if id386 && !( (defined __linux__ || defined __FreeBSD__ ) && (defined __i386__ ) ) // rb010123
+#if (defined(_MSVC_VER) && (defined __i386__))
 #pragma warning (disable: 4035)//no return value
 long myftol( float f ) {
 	static int tmp;
