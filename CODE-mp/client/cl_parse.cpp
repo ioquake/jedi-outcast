@@ -2,7 +2,7 @@
 
 #include "client.h"
 #include "../qcommon/strip.h"
-#include "../ghoul2/g2_local.h"
+#include "../ghoul2/G2_local.h"
 #ifdef _DONETPROFILE_
 #include "../qcommon/INetProfile.h"
 #endif

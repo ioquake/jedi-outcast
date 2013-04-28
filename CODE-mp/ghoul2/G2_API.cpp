@@ -16,7 +16,7 @@
 #include "G2_local.h"
 
 #ifdef G2_COLLISION_ENABLED
-#include "../qcommon/miniheap.h"
+#include "../qcommon/MiniHeap.h"
 #endif
 
 #include <set>

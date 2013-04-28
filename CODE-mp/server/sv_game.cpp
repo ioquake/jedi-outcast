@@ -6,7 +6,7 @@
 #include "../qcommon/strip.h"
 
 #if !defined(CROFFSYSTEM_H_INC)
-	#include "../qcommon/ROFFSystem.h"
+	#include "../qcommon/RoffSystem.h"
 #endif
 
 #if !defined(G2_H_INC)

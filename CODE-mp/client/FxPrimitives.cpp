@@ -1,7 +1,7 @@
 #include "client.h"
 
 #if !defined(G2_H_INC)
-	#include "../ghoul2/g2_local.h"
+	#include "../ghoul2/G2_local.h"
 #endif
 
 #if !defined(FX_SCHEDULER_H_INC)

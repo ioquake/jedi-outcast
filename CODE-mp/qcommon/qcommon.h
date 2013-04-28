@@ -924,7 +924,7 @@ void	Sys_Print( const char *msg );
 // any game related timing information should come from event timestamps
 int		Sys_Milliseconds (void);
 
-#if __linux__
+#ifndef _MSVC_VER
 extern "C" void	Sys_SnapVector( float *v );
 
 #else
