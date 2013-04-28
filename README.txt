@@ -1,7 +1,7 @@
 Jedi Outcast with various changes to make it build/run on
 more platforms including amd64/x86_64.
 
-Currently only the single player code is built.
+Currently only the single player code runs on amd64.
 
 The game needs to be patched to 1.04 to work, the data in the
 steam version is already patched.
@@ -9,13 +9,22 @@ steam version is already patched.
 The single player demo data also seems to be compatible
 and runs seemingly fine.
 
-	How to build:
+	How to build single player:
 
 mkdir build-sp && cd build-sp
 cmake ../code/
 make
 
-copy jk2sp and jk2game*.so to your game data directory
+copy jk2sp and jk2game*.so to the directory containing base or demo
+
+	How to build multiplayer:
+
+mkdir build-mp && cd build-mp
+cmake ../CODE-mp/
+make
+
+copy jk2mp and jk2mpded to the directory containing base
+copy *.so to your base directory
 
 	Known issues:
 
