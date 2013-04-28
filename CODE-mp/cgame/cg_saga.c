@@ -1,5 +1,5 @@
 #include "cg_local.h"
-#include "bg_saga.h"
+#include "../game/bg_saga.h"
 
 #define DEFAULT_WIN_OBJECTIVE		"sound/chars/kyle/prototype/personal.mp3"
 #define DEFAULT_LOSE_OBJECTIVE		"sound/chars/kyle/prototype/isntworking.mp3"

@@ -155,7 +155,7 @@ portable_samplepair_t	s_rawsamples[MAX_RAW_SAMPLES];
 *
 \**************************************************************************************************/
 
-int			s_UseOpenAL	= false;		// Determines if using Open AL or the default software mixer
+int			s_UseOpenAL	= true;		// Determines if using Open AL or the default software mixer
 ALfloat		listener_pos[3];		// Listener Position
 ALfloat		listener_ori[6];		// Listener Orientation
 int			s_numChannels;			// Number of AL Sources == Num of Channels
@@ -167,6 +167,7 @@ void UpdateLoopingSounds();
 void UpdateRawSamples();
 
 // EAX Related
+#ifdef HAVE_EAX
 ALboolean				s_bEAX;				// Is EAX 3.0 support is available
 bool					s_bEALFileLoaded;	// Has an .eal file been loaded for the current level
 bool					s_bInWater;			// Underwater effect currently active 
@@ -203,6 +204,8 @@ const GUID DSPROPSETID_EAX30_ListenerProperties
 
 const GUID DSPROPSETID_EAX30_BufferProperties
 				= { 0xa8fa6881, 0xb476,	0x11d3, { 0xbd, 0xb9, 0x0, 0xc0, 0xf0, 0x2d, 0xdf, 0x87} };
+
+#endif // HAVE_EAX
 
 /**************************************************************************************************\
 *
@@ -304,7 +307,7 @@ void S_Init( void )
 
 // dontcha just love ID's defines sometimes?...
 //
-#if !( (defined __linux__ || __FreeBSD__ ) && (defined __i386__) )
+#ifdef _MSVC_VER
 #if	!id386
 #else
 	extern unsigned int uiMMXAvailable;
@@ -327,12 +330,9 @@ void S_Init( void )
 	Cmd_AddCommand("soundstop", S_StopAllSounds);
 
 
-	cv = Cvar_Get("s_UseOpenAL" , "0",CVAR_ARCHIVE|CVAR_LATCH);
-	s_UseOpenAL = !!(cv->integer);
-
 	if (s_UseOpenAL)
 	{
-		ALCDevice = alcOpenDevice((ALubyte*)"DirectSound3D");
+		ALCDevice = alcOpenDevice(NULL);
 		if (!ALCDevice)
 			return;
  
@@ -357,14 +357,18 @@ void S_Init( void )
 		S_SoundInfo_f();
 
 		// Set default level name
+#ifdef HAVE_EAX
 		memset(s_LevelName, 0, sizeof(s_LevelName));
+#endif
 
 		// Set Listener attributes
 		alListenerfv(AL_POSITION,listenerPos);
 		alListenerfv(AL_VELOCITY,listenerVel);
 		alListenerfv(AL_ORIENTATION,listenerOri);
 
+#ifdef HAVE_EAX
 		InitEAXManager();
+#endif
 
 		memset(s_channels, 0, sizeof(s_channels));
 
@@ -562,7 +566,9 @@ void S_Shutdown( void )
 		// Close device
 		alcCloseDevice(ALCDevice);
 
+#ifdef HAVE_EAX
 		ReleaseEAXManager();
+#endif
 
 		s_numChannels = 0;
 	}
@@ -751,6 +757,7 @@ void S_BeginRegistration( void )
 	}
 }
 
+#ifdef HAVE_EAX
 void EALFileInit(char *level)
 {
 	long		lRoom;
@@ -797,6 +804,7 @@ void EALFileInit(char *level)
 		}
 	}
 }
+#endif // HAVE_EAX
 
 /*
 ==================
@@ -1281,7 +1289,7 @@ void S_StartSound(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxH
 			ch = s_channels + 1;
 			for (i = 1; i < s_numChannels; i++, ch++)
 			{
-				if ((ch->entnum == entityNum) && (ch->entchannel == CHAN_WEAPON) && (ch->thesfx) && (strstr(strlwr(ch->thesfx->sSoundName), "altcharge") != NULL))
+				if ((ch->entnum == entityNum) && (ch->entchannel == CHAN_WEAPON) && (ch->thesfx) && (strstr(Q_strlwr(ch->thesfx->sSoundName), "altcharge") != NULL))
 				{
 					// Stop this sound
 					alSourceStop(ch->alSource);
@@ -1297,7 +1305,7 @@ void S_StartSound(vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxH
 			ch = s_channels + 1;
 			for (i = 1; i < s_numChannels; i++, ch++)
 			{
-				if ((ch->entnum == entityNum) && (ch->thesfx) && (strstr(strlwr(ch->thesfx->sSoundName), "falling") != NULL))
+				if ((ch->entnum == entityNum) && (ch->thesfx) && (strstr(Q_strlwr(ch->thesfx->sSoundName), "falling") != NULL))
 				{
 					// Stop this sound
 					alSourceStop(ch->alSource);
@@ -1946,10 +1954,12 @@ void S_UpdateEntityPosition( int entityNum, const vec3_t origin )
 				pos[2] = -origin[1];
 				alSourcefv(s_channels[i].alSource, AL_POSITION, pos);
 	
+#ifdef HAVE_EAX
 				if (s_bEALFileLoaded)
 				{
 					UpdateEAXBuffer(ch);
 				}
+#endif
 			}
 		}
 	}
@@ -1967,7 +1977,9 @@ Change the volumes of all the playing sounds for changes in their positions
 */
 void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int inwater )
 {
+#ifdef HAVE_EAX
 	EAXOCCLUSIONPROPERTIES eaxOCProp;
+#endif
 	unsigned int ulEnvironment;
 	int			i;
 	channel_t	*ch;
@@ -1982,11 +1994,13 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int inwat
 	{
 		// Check if a new level has been loaded - if so, try and load the appropriate EAL file
 		mapname = cl.mapname;
+#ifdef HAVE_EAX
 		if ((mapname) && (strcmp(mapname, s_LevelName) != 0))
 		{
 			EALFileInit(mapname);
 			strcpy(s_LevelName, mapname);
 		}
+#endif
 
 		listener_number = entityNum;
 		
@@ -2002,7 +2016,7 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int inwat
 		listener_ori[4] = axis[2][2];
 		listener_ori[5] = -axis[2][1];
 		alListenerfv(AL_ORIENTATION, listener_ori);
-
+#ifdef HAVE_EAX
 		// Update EAX effects here
 		if (s_bEALFileLoaded)
 		{
@@ -2055,6 +2069,7 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int inwat
 				}
 			}
 		}
+#endif // HAVE_EAX
 	}
 	else
 	{
@@ -2296,8 +2311,10 @@ void S_Update_(void) {
 			alSourcei(s_channels[source].alSource, AL_LOOPING, AL_FALSE);
 			alSourcef(s_channels[source].alSource, AL_GAIN, ((float)(ch->master_vol) * s_volume->value) / 255.0f);
 
+#ifdef HAVE_EAX
 			if (s_bEALFileLoaded)
 				UpdateEAXBuffer(ch);
+#endif
 
 			int nBytesDecoded = 0;
 			int nTotalBytesDecoded = 0;
@@ -2387,7 +2404,9 @@ void S_Update_(void) {
 
 		UpdateRawSamples();
 
+#ifdef HAVE_EAX
 		EAXMorph();
+#endif
 	}
 	else
 	{
@@ -2667,8 +2686,10 @@ void UpdateLoopingSounds()
 		alSourcei(s_channels[source].alSource, AL_LOOPING, AL_TRUE);
 		alSourcef(s_channels[source].alSource, AL_GAIN, (float)(ch->master_vol) * s_volume->value * fVolume);
 		
+#ifdef HAVE_EAX
 		if (s_bEALFileLoaded)
 			UpdateEAXBuffer(ch);
+#endif
 
 		alGetError();
 		alSourcePlay(s_channels[source].alSource);
@@ -2721,7 +2742,9 @@ void UpdateRawSamples()
 		size = (s_rawend - s_paintedtime)<<2;
 		if (size > (MAX_RAW_SAMPLES<<2))
 		{
+#ifdef _DEBUG
 			OutputDebugString("UpdateRawSamples :- Raw Sample buffer has overflowed !!!\n");
+#endif
 //			s_rawend = s_paintedtime + MAX_RAW_SAMPLES;
 //			size = MAX_RAW_SAMPLES<<2;
 			size = MAX_RAW_SAMPLES<<2;
@@ -3649,6 +3672,7 @@ qboolean SND_RegisterAudio_LevelLoadEnd(qboolean bDeleteEverythingNotUsedThisLev
 	return bAtLeastOneSoundDropped;
 }
 
+#ifdef HAVE_EAX
 /****************************************************************************************************\
 *
 *	EAX Related
@@ -4285,3 +4309,4 @@ void Clamp(EAXVECTOR *eaxVector)
 	eaxVector->y *= flInvMagnitude;
 	eaxVector->z *= flInvMagnitude;
 }
+#endif // HAVE_EAX

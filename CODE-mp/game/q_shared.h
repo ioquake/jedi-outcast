@@ -32,9 +32,6 @@
 
 #define assert(exp)     ((void)0)
 
-#define min(x,y) ((x)<(y)?(x):(y))
-#define max(x,y) ((x)>(y)?(x):(y))
-
 #else
 
 #include <assert.h>
@@ -46,6 +43,13 @@
 #include <time.h>
 #include <ctype.h>
 #include <limits.h>
+
+#endif
+
+#if defined(Q3_VM) || defined(CGAME) || defined(QAGAME) || defined(UI_EXPORTS)
+
+#define min(x,y) ((x)<(y)?(x):(y))
+#define max(x,y) ((x)>(y)?(x):(y))
 
 #endif
 
@@ -120,7 +124,6 @@ static ID_INLINE float BigFloat(const float *l) { FloatSwap(l); }
 #define MAC_STATIC
 #define __cdecl
 #define __declspec(x)
-#define stricmp strcasecmp
 #define ID_INLINE inline 
 
 #ifdef __ppc__
@@ -196,14 +199,13 @@ static inline float LittleFloat (const float l) { return FloatSwap(&l); }
 // just waste space and make big arrays static...
 #ifdef __linux__
 
-// bk001205 - from Makefile
-#define stricmp strcasecmp
-
 #define	MAC_STATIC // bk: FIXME
 #define ID_INLINE inline 
 
 #ifdef __i386__
 #define	CPUSTRING	"linux-i386"
+#elif defined(__amd64__) || defined(__x86_64__)
+#define	CPUSTRING	"linux-amd64"
 #elif defined __axp__
 #define	CPUSTRING	"linux-alpha"
 #else
@@ -238,10 +240,55 @@ inline static float LittleFloat (const float *l) { return FloatSwap(l); }
 
 #endif
 
+//======================= OPENBSD DEFINES =================================
+
+// the mac compiler can't handle >32k of locals, so we
+// just waste space and make big arrays static...
+#ifdef __OpenBSD__
+
+#define	MAC_STATIC // bk: FIXME
+#define ID_INLINE inline 
+
+#ifdef __i386__
+#define	CPUSTRING	"openbsd-i386"
+#elif (defined(__amd64__) || defined(__x86_64__)
+#define	CPUSTRING	"openbsd-amd64"
+#elif defined __axp__
+#define	CPUSTRING	"openbsd-alpha"
+#else
+#define	CPUSTRING	"openbsd-other"
+#endif
+
+#define	PATH_SEP '/'
+
+// bk001205 - try
+#ifdef Q3_STATIC
+#define	GAME_HARD_LINKED
+#define	CGAME_HARD_LINKED
+#define	UI_HARD_LINKED
+#define	BOTLIB_HARD_LINKED
+#endif
+
+#if !idppc
+inline static short BigShort( short l) { return ShortSwap(l); }
+#define LittleShort
+inline static int BigLong(int l) { return LongSwap(l); }
+#define LittleLong
+inline static float BigFloat(const float *l) { return FloatSwap(l); }
+#define LittleFloat
+#else
+#define BigShort
+inline static short LittleShort(short l) { return ShortSwap(l); }
+#define BigLong
+inline static int LittleLong (int l) { return LongSwap(l); }
+#define BigFloat
+inline static float LittleFloat (const float *l) { return FloatSwap(l); }
+#endif
+
+#endif
+
 //======================= FreeBSD DEFINES =====================
 #ifdef __FreeBSD__ // rb010123
-
-#define stricmp strcasecmp
 
 #define MAC_STATIC
 #define ID_INLINE inline 
@@ -283,6 +330,8 @@ static float LittleFloat (const float *l) { return FloatSwap(l); }
 typedef unsigned char 		byte;
 typedef unsigned short		word;
 typedef unsigned long		ulong;
+
+typedef const char *LPCSTR;
 
 typedef enum {qfalse, qtrue}	qboolean;
 
@@ -745,7 +794,7 @@ float Q_rsqrt( float f );		// reciprocal square root
 signed char ClampChar( int i );
 signed short ClampShort( int i );
 
-float powf ( float x, int y );
+float Q_powf ( float x, int y );
 
 // this isn't a real cheap function to call!
 int DirToByte( vec3_t dir );
@@ -1011,6 +1060,15 @@ int		Q_stricmpn (const char *s1, const char *s2, int n);
 char	*Q_strlwr( char *s1 );
 char	*Q_strupr( char *s1 );
 char	*Q_strrchr( const char* string, int c );
+
+// NON-portable (but faster) versions
+#ifdef WIN32
+static inline int	Q_strnicmp (const char *s1, const char *s2, int n) { return strnicmp(s1, s2, n); }
+static inline int	Q_strcmpi (const char *s1, const char *s2) { return strcmpi(s1, s2); }
+#else
+static inline int	Q_strnicmp (const char *s1, const char *s2, int n) { return strncasecmp(s1, s2, n); }
+static inline int	Q_strcmpi (const char *s1, const char *s2) { return strcasecmp(s1, s2); }
+#endif
 
 // buffer size safe library replacements
 void	Q_strncpyz( char *dest, const char *src, int destsize );

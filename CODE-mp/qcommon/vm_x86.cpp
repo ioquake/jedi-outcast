@@ -65,7 +65,7 @@ static	int		asmCallPtr = (int)doAsmCall;
 #endif // !_WIN32
 
 
-static	int		callMask = 0; // bk001213 - init
+int		callMask = 0; // bk001213 - init
 
 static	int		instruction, pass, lastConst;
 static	int		oc0, oc1, pop0, pop1;

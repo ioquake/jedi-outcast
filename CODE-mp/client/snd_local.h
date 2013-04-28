@@ -9,11 +9,18 @@
 #include "../mp3code/mp3struct.h"
 
 // Open AL Specific
+#ifdef _WIN32
 #include "openal/al.h"
 #include "openal/alc.h"
 #include <objbase.h>
+#ifdef HAVE_EAX
 #include "eax/eax.h"
 #include "eax/eaxman.h"
+#endif
+#else
+#include <AL/al.h>
+#include <AL/alc.h>
+#endif
 
 // Added for Open AL to know when to mute all sounds (e.g when app. loses focus)
 void S_MuteAllSounds(bool bMute);

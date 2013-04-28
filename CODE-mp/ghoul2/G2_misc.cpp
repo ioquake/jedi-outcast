@@ -11,14 +11,14 @@
 	#include "../renderer/tr_local.h"
 #endif
 
-#include "../renderer/MatComp.h"
+#include "../renderer/matcomp.h"
 
 #if !defined(G2_H_INC)
 	#include "G2.h"
 #endif
 
 #if !defined (MINIHEAP_H_INC)
-	#include "../qcommon/miniheap.h"
+	#include "../qcommon/MiniHeap.h"
 #endif
 
 #include "../server/server.h"
@@ -1650,7 +1650,7 @@ int G2_FindConfigStringSpace(char *name, int start, int max)
 		{
 			break;
 		}
-		if ( !stricmp( s, name ) ) 
+		if ( !Q_stricmp( s, name ) ) 
 		{
 			return i;
 		}

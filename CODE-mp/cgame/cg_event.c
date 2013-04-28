@@ -4,7 +4,7 @@
 
 #include "cg_local.h"
 #include "fx_local.h"
-#include "../ghoul2/g2.h"
+#include "../ghoul2/G2.h"
 #include "../ui/ui_shared.h"
 
 // for the voice chats

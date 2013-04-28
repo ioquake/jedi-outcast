@@ -3,10 +3,6 @@
 #ifndef TR_LOCAL_H
 #define TR_LOCAL_H
 
-#ifdef __linux__
-typedef const char * LPCSTR;
-#endif
-
 #include "../game/q_shared.h"
 #include "../qcommon/qfiles.h"
 #include "../qcommon/qcommon.h"
@@ -17,7 +13,7 @@ typedef const char * LPCSTR;
 typedef unsigned int glIndex_t;
 
 // fast float to int conversion
-#if id386 && !( (defined __linux__ || defined __FreeBSD__ ) && (defined __i386__ ) ) // rb010123
+#if (defined(_MSC_VER) && defined(__i386__))
 long myftol( float f );
 #else
 #define	myftol(x) ((int)(x))
@@ -1474,10 +1470,12 @@ struct shaderCommands_s
 	qboolean	SSInitializedWind;
 
 };
-#ifndef DEDICATED
+#ifdef _MSVC_VER
 typedef __declspec(align(16)) shaderCommands_s	shaderCommands_t;
-extern	shaderCommands_t	tess;
+#else
+typedef __attribute__((aligned(16))) shaderCommands_s shaderCommands_t;
 #endif
+extern	shaderCommands_t	tess;
 extern	color4ub_t	styleColors[MAX_LIGHT_STYLES];
 
 void RB_BeginSurface(shader_t *shader, int fogNum );

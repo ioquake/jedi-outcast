@@ -5,7 +5,7 @@
 	#include "../ghoul2/G2.h"
 #endif
 #include "../ghoul2/G2_local.h"
-#include "MatComp.h"
+#include "matcomp.h"
 
 #pragma warning (disable: 4512)	//default assignment operator could not be gened
 #include "../qcommon/disablewarnings.h"
@@ -206,7 +206,7 @@ void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 	{
 		CGhoul2Info_v	&ghoul2 = *((CGhoul2Info_v *)ent->ghoul2);
 
-#ifndef __linux__
+#ifdef _WIN32
 		if (!ghoul2[0].mModel)
 		{
 			DebugBreak();

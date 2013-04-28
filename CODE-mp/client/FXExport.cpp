@@ -1,5 +1,5 @@
 #include "client.h"
-#include "FXScheduler.h"
+#include "FxScheduler.h"
 
 
 int	FX_RegisterEffect(const char *file)
