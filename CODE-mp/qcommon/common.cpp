@@ -4,7 +4,7 @@
 #include "qcommon.h"
 #include "strip.h"
 #include "../qcommon/game_version.h"
-#ifndef __linux__
+#ifdef _WIN32
 #include <windows.h>
 #endif
 
