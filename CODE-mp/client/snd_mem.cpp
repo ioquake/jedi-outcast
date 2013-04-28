@@ -391,7 +391,7 @@ static qboolean S_LoadSound_Actual( sfx_t *sfx )
 	sfx->iLastTimeUsed = Com_Milliseconds()+1;	// why +1? Hmmm, leave it for now I guess	
 
 //=========
-	if (strnicmp(psExt,".mp3",4)==0)
+	if (Q_strnicmp(psExt,".mp3",4)==0)
 	{
 		// load MP3 file instead...
 		//		
