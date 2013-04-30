@@ -28,8 +28,6 @@ copy *.so to your base directory
 
 	Known issues:
 
-When running windowed the mouse does not work in the menus.
-
 With i386 linux with i965 graphics, levels seem to be zoomed in
 to point where only textures are seen.  Does not seem to
 affect GL rendered cutscenes or OpenBSD/i386 with slightly older mesa.

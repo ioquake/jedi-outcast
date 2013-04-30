@@ -5,7 +5,17 @@
 #ifndef __QGL_H__
 #define __QGL_H__
 
-#if defined( __LINT__ )
+#ifndef DYNAMIC_LINK_GL
+
+#ifdef USE_LOCAL_HEADERS
+#	include "SDL_opengl.h"
+#else
+#	include <SDL_opengl.h>
+#endif
+
+#include "qgl_linked.h"
+
+#elif defined( __LINT__ )
 
 #include <GL/gl.h>
 
@@ -29,7 +39,7 @@
 #include <GL/gl.h>
 #include <GL/glx.h>
 
-#endif
+#endif // !DYNAMIC_LINK_GL
 
 #ifndef APIENTRY
 #define APIENTRY
@@ -129,6 +139,8 @@ typedef void ( APIENTRY * PFNGLPNTRIANGLESIATIPROC )( GLenum pname, GLint param 
 extern void ( APIENTRY * qglPNTrianglesiATI )( GLenum pname, GLint param );
 //extern void ( APIENTRY * qglPNTrianglesfATI )( GLenum pname, GLfloat param );
 #endif // _NPATCH
+
+#ifdef DYNAMIC_LINK_GL
 
 //===========================================================================
 
@@ -510,4 +522,5 @@ extern void (*qglXSwapBuffers)( Display *dpy, GLXDrawable drawable );
 
 #endif	// _WIN32
 
-#endif
+#endif // DYNAMIC_LINK_GL
+#endif // __QGL_H__
