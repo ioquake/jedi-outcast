@@ -60,6 +60,8 @@ cvar_t	*cl_updateInfoString;
 
 cvar_t	*cl_ingameVideo;
 
+cvar_t	*cl_consoleKeys;
+
 clientActive_t		cl;
 clientConnection_t	clc;
 clientStatic_t		cls;
@@ -1186,6 +1188,9 @@ void CL_Init( void ) {
 	m_filter = Cvar_Get ("m_filter", "0", CVAR_ARCHIVE);
 
 	cl_updateInfoString = Cvar_Get( "cl_updateInfoString", "", CVAR_ROM );
+
+	// ~ and `, as keys and characters
+	cl_consoleKeys = Cvar_Get( "cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE);
 
 	// userinfo
 	Cvar_Get ("name", "Kyle", CVAR_USERINFO | CVAR_ARCHIVE );
