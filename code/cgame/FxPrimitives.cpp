@@ -1706,7 +1706,7 @@ void CPoly::Rotate()
 //----------------------------
 bool CPoly::Update()
 {
-	vec3_t mOldOrigin;
+	vec3_t mOldOrigin = {0, 0, 0};
 	
 	// Game pausing can cause dumb time things to happen, so kill the effect in this instance
 	if ( mTimeStart > theFxHelper.mTime )

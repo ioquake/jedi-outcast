@@ -2088,6 +2088,8 @@ try
 	static int	lastTime;
 	char		msg[MAXPRINTMSG];
 
+	timeBeforeFirstEvents = timeBeforeServer = timeBeforeEvents = timeBeforeClient = 0;
+
 	// write config file if anything changed
 	Com_WriteConfiguration(); 
 
