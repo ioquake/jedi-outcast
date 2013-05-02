@@ -57,7 +57,7 @@ typedef enum //# material_e
 
 #define SP_PODIUM_MODEL		"models/mapobjects/podium/podium4.md3"
 
-typedef enum 
+enum 
 {
 	HL_NONE = 0,
 	HL_FOOT_RT,

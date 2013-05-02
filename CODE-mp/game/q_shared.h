@@ -469,7 +469,7 @@ typedef enum
 	NUM_FORCE_POWERS
 } forcePowers_t;
 
-typedef enum
+enum
 {
 	FORCE_LEVEL_0,
 	FORCE_LEVEL_1,
@@ -2051,7 +2051,7 @@ typedef struct {
 
 // For ghoul2 axis use
 
-typedef enum Eorientations
+enum Eorientations
 {
 	ORIGIN = 0, 
 	POSITIVE_X,
