@@ -201,12 +201,6 @@ set(src_server
 	server/sv_world.cpp
 )
 
-set(src_smartheap
-	smartheap/HEAPAGNT.H
-	smartheap/SMRTHEAP.C
-	smartheap/SMRTHEAP.H
-)
-
 set(src_ui
 	ui/ui_atoms.cpp
 	ui/ui_connect.cpp
@@ -456,7 +450,6 @@ set(src_game
 	game/q_shared.cpp
 	game/wp_saber.cpp
 	qcommon/tri_coll_test.cpp
-	smartheap/SMRTHEAP.C
 	ui/gameinfo.cpp
 )
 
