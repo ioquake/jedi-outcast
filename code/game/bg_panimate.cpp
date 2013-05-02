@@ -284,7 +284,7 @@ int transitionMove[Q_NUM_QUADS][Q_NUM_QUADS] =
 
 void PM_VelocityForSaberMove( playerState_t *ps, vec3_t throwDir )
 {
-	vec3_t	vForward, vRight, vUp, startQ, endQ;
+	vec3_t	vForward, vRight, vUp, startQ = {0, 0, 0}, endQ = {0, 0, 0};
 
 	AngleVectors( ps->viewangles, vForward, vRight, vUp );
 
@@ -2312,7 +2312,7 @@ void PM_SetAnimFinal(int *torsoAnim,int *legsAnim,
 								legAnimSpeed,
 								currentFrame,
 								blendTime);
-#endif^
+#endif
 							if ( oldAnimSpeed != animSpeed 
 								&& ((oldAnimSpeed>0&&animSpeed>0) || (oldAnimSpeed<0&&animSpeed<0)) )
 							{//match the new speed, actually

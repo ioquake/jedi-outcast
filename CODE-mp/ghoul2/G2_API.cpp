@@ -1370,4 +1370,4 @@ void G2API_AddSkinGore(CGhoul2Info_v &ghoul2,SSkinGoreData &gore)
 		G2_TraceModels(ghoul2, transHitLocation, transRayDirection, 0, gore.entNum, 0, lod);
 	}
 }
-#endif _SOF2
+#endif // _SOF2

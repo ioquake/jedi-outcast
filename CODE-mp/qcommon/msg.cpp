@@ -2192,7 +2192,7 @@ void MSG_initHuffman() {
 	Cbuf_AddText( "condump dump.txt\n" );
 }
 
-#endif _USINGNEWHUFFTABLE_
+#endif // _USINGNEWHUFFTABLE_
 
 void MSG_shutdownHuffman()
 {
