@@ -950,7 +950,7 @@ qboolean FS_FilenameCompare( const char *s1, const char *s2 ) {
 FS_ShiftedStrStr
 ===========
 */
-char *FS_ShiftedStrStr(const char *string, const char *substring, int shift) {
+const char *FS_ShiftedStrStr(const char *string, const char *substring, int shift) {
 	char buf[MAX_STRING_TOKENS];
 	int i;
 
