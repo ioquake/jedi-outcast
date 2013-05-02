@@ -870,6 +870,8 @@ void RB_CalcFogTexCoords( float *st ) {
 		eyeT = DotProduct( backEnd.ori.viewOrigin, fogDepthVector ) + fogDepthVector[3];
 	} else {
 		eyeT = 1;	// non-surface fog always has eye inside
+		fogDepthVector[0] = fogDepthVector[1] = fogDepthVector[2] = 0.0f;
+		fogDepthVector[3] = 1.0f;
 	}
 
 	// see if the viewpoint is outside
