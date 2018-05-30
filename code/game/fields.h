@@ -66,7 +66,7 @@ typedef enum
 typedef struct
 {
 	char	*psName;
-	int		iOffset;
+	size_t		iOffset;
 	fieldtypeSAVE_t	eFieldType;
 	int		iFlags;
 } field_t;
