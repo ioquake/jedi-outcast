@@ -2379,7 +2379,7 @@ static qboolean PM_TryRoll( void )
 			return qfalse;
 		}
 	}
-	vec3_t fwd, right, traceto, mins = {pm->mins[0],pm->mins[1],pm->mins[2]+STEPSIZE}, maxs = {pm->maxs[0],pm->maxs[1],pm->gent->client->crouchheight}, fwdAngles = {0, pm->ps->viewangles[YAW], 0};
+	vec3_t fwd, right, traceto, mins = {pm->mins[0],pm->mins[1],pm->mins[2]+STEPSIZE}, maxs = {pm->maxs[0],pm->maxs[1],static_cast<vec_t>(pm->gent->client->crouchheight)}, fwdAngles = {0, pm->ps->viewangles[YAW], 0};
 	trace_t	trace;
 	int		anim = -1;
 	AngleVectors( fwdAngles, fwd, right, NULL );
